@@ -107,15 +107,21 @@ Handles all operations related to divisions and group management. Key routes:
 
 ### 3.4 — `ringRoutes.js` (Ring Operation Routes)
 
-Handles all live-event operations for rings — the primary interface for the Android tablet clients. Key routes:
+Handles all live-event operations for rings — the primary interface for the Android tablet clients. The Android app already depends on the config, bootstrap, heartbeat, completion, and assistance endpoints below, so they are part of the intended server contract even if some remain unimplemented.
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/api/rings/config` | Return ring options available to a tablet client |
 | `GET` | `/api/rings` | List all rings and their current state |
 | `GET` | `/api/rings/:ringId` | Get a single ring's full state |
+| `POST` | `/api/rings/:ringId/heartbeat` | Record periodic client contact and current ring phase |
+| `POST` | `/api/rings/:ringId/bootstrap` | Load the current group and ring assignment for a tablet |
 | `POST` | `/api/rings/:ringId/phase` | Advance the ring phase (scheduled → in progress → complete) |
+| `POST` | `/api/rings/:ringId/complete` | Mark the current group complete |
 | `POST` | `/api/rings/:ringId/checkin` | Submit competitor check-in status |
 | `POST` | `/api/rings/:ringId/score` | Submit a match score/outcome |
+| `POST` | `/api/rings/:ringId/assistance` | Request assistance from the head table |
+| `POST` | `/api/rings/:ringId/assistance/clear` | Clear an active assistance request |
 | `POST` | `/api/rings/:ringId/alert` | Send an assistance alert from a ring volunteer |
 | `GET` | `/api/rings/:ringId/announcements` | Fetch head table announcements for a ring |
 | `POST` | `/api/rings/:ringId/announce` | Broadcast an announcement from head table to a ring |
@@ -243,7 +249,7 @@ The server serves a browser-based admin interface from its static file directory
 
 ## 8 — Open Questions & Decisions
 
-- **OPEN** — **Real-time updates:** The Android app currently polls `/api/rings/:ringId` on a timer. WebSocket or SSE support on the server would enable push notifications. Decision pending.
+- **OPEN** — **Real-time updates:** The Android app currently uses `/api/rings/config` to discover allowed rings and sends periodic heartbeats to `/api/rings/:ringId/heartbeat` on screen/ring change and every 60 seconds while assigned. WebSocket or SSE support on the server would still be a design option for push notifications. Decision pending.
 - **OPEN** — **Data persistence:** All data is in-memory. A crash or restart during an event loses all state. Options: periodic JSON export to disk, SQLite, or a simple file-based store. Decision pending.
 - **OPEN** — **Authentication:** No login or role enforcement. All clients on the LAN can call any API endpoint. Future hardening may require an API key or session token. Decision pending.
 - **OPEN** — **Competitor import format:** Manual entry and CSV import are referenced but the exact CSV schema is not finalized.
@@ -296,13 +302,19 @@ The server serves a browser-based admin interface from its static file directory
 
 - 🔄 Ring state and phase management
   - ✅ `GET /api/rings` — confirmed working (used by Android app ring selection)
-  - ✅ `GET /api/rings/:ringId` — confirmed working (used by Android app dashboard poll)
+  - ✅ `GET /api/rings/:ringId` — confirmed working (used by Android app ring-state sync)
+  - ☐ `GET /api/rings/config` — ring selection config required by Android app
+  - ☐ `POST /api/rings/:ringId/heartbeat` — client keepalive required by Android app
+  - ☐ `POST /api/rings/:ringId/bootstrap` — current assignment load required by Android app
   - ✅ Ring phase field (`scheduled` / `in-progress` / `complete`) confirmed on ring object
   - ☐ `POST /api/rings/:ringId/phase` — advance phase endpoint
+  - ☐ `POST /api/rings/:ringId/complete` — mark group complete endpoint
   - ☐ `POST /api/rings/:ringId/checkin` — check-in submission endpoint
   - ☐ `POST /api/rings/:ringId/score` — score submission endpoint
+  - ☐ `POST /api/rings/:ringId/assistance` — assistance request endpoint
+  - ☐ `POST /api/rings/:ringId/assistance/clear` — clear assistance endpoint
   - ✅ `POST /api/rings/:ringId/alert` — assistance alert endpoint (assistanceType confirmed)
-  - ☐ `GET /api/rings/:ringId/announcements` — announcements poll endpoint
+  - ☐ `GET /api/rings/:ringId/announcements` — announcement retrieval endpoint
   - ☐ `POST /api/rings/:ringId/announce` — head table broadcast endpoint
 
 ### Group Builder (`groupBuilder.js`)
@@ -334,7 +346,7 @@ The server serves a browser-based admin interface from its static file directory
 - ☐ Integration tests
   - ☐ End-to-end: create division → add competitors → build groups → assign to ring → simulate check-in and score submission
 - ☐ Load test
-  - ☐ Simulate 10 concurrent tablet clients polling ring state at 5-second intervals
+  - ☐ Simulate 10 concurrent tablet clients maintaining heartbeat traffic at 60-second intervals
 
 ---
 
