@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ring Assignment</title>
+</head>
+<body>
+<h1>Ring Assignment</h1>
+
+<h2>Groups</h2>
+<button onclick="createTestGroup()">Create Test Group</button>
+<div id="groups"></div>
+
+<h2>Rings</h2>
+<div id="rings"></div>
+
+<script>
+    async function loadData() {
+      const groupsRes = await fetch('/api/groups');
+      const ringsRes = await fetch('/api/rings');
+
+      const groups = (await groupsRes.json()).groups;
+      const rings = (await ringsRes.json()).rings;
+
+      document.getElementById('groups').innerHTML = `
+        <select id="groupSelect">
+          <option value="">-- Select Group --</option>
+          ${groups.map(g => `<option value="${g.groupId}">${g.groupId} — ${g.name}</option>`).join('')}
+        </select>
+      `;
+
+      document.getElementById('rings').innerHTML =
+        rings.map(r => `
+          <div>
+            ${r.ringLabel}
+            <select id="groupSelect-${r.ringId}">
+              <option value="">-- Select Group --</option>
+            </select>
+            <button onclick="assignToRing('${r.ringId}')">Assign</button>
+          </div>
+        `).join('');
+
+      populateRingDropdowns(groups, rings);
+    }
+
+    loadData();
+
+    async function assignToRing(ringId) {
+      const sel = document.getElementById(`groupSelect-${ringId}`);
+      const groupId = sel.value;
+
+      if (!groupId) {
+        alert("Please select a group first.");
+        return;
+      }
+
+      const res = await fetch(`/api/rings/${ringId}/queue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId })
+      });
+
+      if (res.ok) {
+        alert(`Assigned ${groupId} to ${ringId}`);
+        loadData(); // refresh UI
+      } else {
+        alert("Assignment failed.");
+      }
+    }
+
+    function populateRingDropdowns(groups, rings) {
+      rings.forEach(r => {
+        const sel = document.getElementById(`groupSelect-${r.ringId}`);
+        if (!sel) return;
+
+        sel.innerHTML = `
+          <option value="">-- Select Group --</option>
+          ${groups.map(g => `<option value="${g.groupId}">${g.groupId} — ${g.name}</option>`).join('')}
+        `;
+      });
+    }
+
+    async function createTestGroup() {
+      const testGroup = {
+        groupId: "test-" + Math.floor(Math.random() * 10000),
+        name: "Test Group"
+      };
+
+
+      const res = await fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testGroup)
+      });
+
+      if (res.ok) {
+        alert("Test group created.");
+        loadData(); // refresh UI
+      } else {
+        alert("Failed to create test group.");
+      }
+    }
+</script>
+</body>
+</html>

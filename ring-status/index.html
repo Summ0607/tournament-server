@@ -1,0 +1,39 @@
+<!DOCTYPE html>`r`n<html lang="en">`r`n<head>`r`n  <meta charset="UTF-8">`r`n  <meta name="viewport" content="width=device-width, initial-scale=1.0">`r`n  <title>Ring Status Dashboard</title>`r`n  <style>
+        .ring-card {
+            border: 1px solid #ccc;
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 6px;
+            background: #f9f9f9;
+            width: 300px;
+        }
+    </style>
+  </style>`r`n</head>`r`n<body>
+<h1>Ring Status Dashboard</h1>
+
+<div id="rings"></div>
+
+<script>
+    async function loadRings() {
+        const res = await fetch('/api/rings');
+        const data = await res.json();
+
+        const rings = data.rings || [];
+
+        document.getElementById('rings').innerHTML = rings.map(r => `
+            <div class="ring-card">
+                <h2>${r.ringLabel}</h2>
+                <p><strong>Current:</strong> ${r.currentGroupId || '(none)'}</p>
+                <p><strong>Queue:</strong> ${r.queuedGroupIds.join(', ') || '(empty)'}</p>
+                <p><strong>Completed:</strong> ${r.completedGroupIds.join(', ') || '(none)'}</p>
+                <p><strong>Phase:</strong> ${r.phase}</p>
+            </div>
+        `).join('');
+    }
+
+    loadRings();
+</script>
+
+</body>
+</html>
+

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+
+    <style>
+        body {
+          font-family: Arial, sans-serif;
+          margin: 20px;
+        }
+
+        #searchBox {
+          font-size: 16px;
+          padding: 6px;
+          width: 250px;
+        }
+
+        #searchBtn {
+          font-size: 16px;
+          padding: 6px 12px;
+          margin-left: 6px;
+        }
+
+        table {
+          margin-top: 20px;
+          border-collapse: collapse;
+          width: 100%;
+        }
+
+        th {
+          background-color: #f2f2f2;
+          padding: 8px;
+          text-align: left;
+          border-bottom: 2px solid #ccc;
+        }
+
+        td {
+          padding: 6px;
+          border-bottom: 1px solid #ddd;
+        }
+
+        tr:hover {
+          background-color: #f9f9f9;
+        }
+    </style>
+
+    <title>Competitor Search</title>
+</head>
+<body>
+<h1>Competitor Search</h1>
+
+<!-- Search box -->
+<input type="text" id="searchBox" placeholder="Enter at least 2 characters">
+<button id="searchBtn">Search</button>
+
+<!-- Results table -->
+<table id="resultsTable" border="1" cellpadding="4" cellspacing="0"></table>
+
+<script>
+    const searchBox = document.getElementById('searchBox');
+    const searchBtn = document.getElementById('searchBtn');
+    const resultsTable = document.getElementById('resultsTable');
+
+    function runSearch() {
+      const q = searchBox.value.trim();
+
+      const raw = searchBox.value.trim();
+
+        // Determine AND / OR mode
+        let mode = "OR";  // default
+        if (raw.includes("&&")) mode = "AND";
+        if (raw.includes("||")) mode = "OR";
+
+        // Clean operators out of the text
+        const cleaned = raw.replace(/&&|\|\|/g, " ").trim();
+
+
+        if (cleaned.length < 2) {
+            resultsTable.innerHTML = '';
+            return;
+        }
+
+        // Split into name + rank
+        const parts = cleaned.split(/\s+/);
+        const namePart = parts[0] || "";
+        const rankPart = parts[1] || "";
+
+        // Build URL
+        fetch(`/search?name=${encodeURIComponent(namePart)}&rank=${encodeURIComponent(rankPart)}&mode=${mode}`)
+        .then(res => res.json())
+        .then(rows => {
+          // Clear table
+          resultsTable.innerHTML = '';
+
+          if (!Array.isArray(rows) || rows.length === 0) {
+            resultsTable.innerHTML = '<tr><td>No results found</td></tr>';
+            return;
+          }
+
+          // Define the columns you want to show
+          const headers = [
+            'firstName',
+            'lastName',
+            'associationNumber',
+            'rank',
+            'weaponsDivision',
+            'hyungsDivision',
+            'sparringDivision',
+            'ringAssignment'
+          ];
+
+          // Build header row
+          const headerRow = document.createElement('tr');
+          headers.forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            headerRow.appendChild(th);
+          });
+          resultsTable.appendChild(headerRow);
+
+          // Build data rows
+          rows.forEach(row => {
+            const tr = document.createElement('tr');
+
+            // Make the row clickable
+            tr.style.cursor = 'pointer';
+            tr.addEventListener('click', () => {
+              console.log("Selected competitor ID:", row.id);
+              alert(`Selected competitor:\n${row.firstName} ${row.lastName}\nID: ${row.id}`);
+            });
+
+            headers.forEach(h => {
+              const td = document.createElement('td');
+              td.textContent = row[h] ?? '';
+              tr.appendChild(td);
+            });
+
+            resultsTable.appendChild(tr);
+          });
+      });
+    }
+
+    // Search when button is clicked
+    searchBtn.addEventListener('click', runSearch);
+
+    // Search automatically when typing
+    searchBox.addEventListener('input', runSearch);
+</script>
+
+</body>
+</html>

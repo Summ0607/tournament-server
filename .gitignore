@@ -141,3 +141,20 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Runtime data
+/db/
+/events/
+/Results/
+/groups/
+tournament.db
+ring-assignments.json
+
+# Executables
+*.apk
+
+# Event data
+*.csv
+
+# IDE
+/.idea/

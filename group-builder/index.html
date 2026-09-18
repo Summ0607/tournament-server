@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tournament Group Builder</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(180deg, #f3f5f9 0%, #eef2f6 100%);
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: white;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 1px 10px rgba(0,0,0,0.12);
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .header-mark {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(200, 169, 81, 0.18);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      font-size: 22px;
+    }
+
+    .header-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .header-copy p {
+      font-size: 12px;
+      color: rgba(255,255,255,0.68);
+    }
+
+    .badge {
+      background: #c8a951;
+      color: #1a1a2e;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+    }
+
+    main {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      border: 1px solid #e6eaf0;
+      box-shadow: 0 2px 10px rgba(14, 23, 38, 0.04);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #666;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-num {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: #1a1a2e;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* Copy */
+    .section-copy {
+      margin: -6px 0 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #667085;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-primary { background: #1a1a2e; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #2d2d50; }
+    .btn-secondary { background: #f0f2f5; color: #1a1a2e; }
+    .btn-secondary:hover:not(:disabled) { background: #e0e2e8; }
+    .btn-gold { background: #c8a951; color: #1a1a2e; }
+    .btn-gold:hover:not(:disabled) { background: #b89840; }
+    .btn-danger { background: #fee2e2; color: #b91c1c; }
+    .btn-danger:hover:not(:disabled) { background: #fecaca; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Settings */
+    .settings-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      align-items: end;
+    }
+
+    .setting-group { display: flex; flex-direction: column; gap: 6px; }
+    .setting-group label { font-size: 12px; font-weight: 700; color: #5b6475; }
+    .setting-group input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d7deea;
+      border-radius: 10px;
+      font-size: 14px;
+      background: #fff;
+    }
+
+    .info-note {
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #5b6475;
+      background: #f8f9ff;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #dbe2f0;
+      border-left: 4px solid #1a1a2e;
+    }
+
+    /* Preview table */
+    .preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    .preview-table th {
+      background: #f6f7fb;
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #667085;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .preview-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid #eef2f7;
+    }
+
+    .preview-table tr:hover td { background: #fafbff; }
+
+    .validation-table td {
+      vertical-align: top;
+    }
+
+    /* Warning banner */
+    .warn-banner {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #f59e0b;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .err-banner {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #f87171;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      padding: 16px;
+      background: linear-gradient(180deg, #1a1a2e 0%, #20243d 100%);
+      border-radius: 16px;
+      margin-bottom: 20px;
+      color: white;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .stat-value { font-size: 26px; font-weight: 800; line-height: 1; }
+    .stat-label { font-size: 11px; opacity: 0.68; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-warn .stat-value, .stat-warn .stat-label { color: #fbbf24; opacity: 1; }
+
+    /* Action bar */
+    .action-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      padding: 4px 0;
+    }
+
+    /* Groups grid */
+    .groups-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+
+    .group-card {
+      background: white;
+      border-radius: 16px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+
+    .group-card.drop-target {
+      box-shadow: 0 0 0 3px rgba(26, 26, 46, 0.18), 0 2px 10px rgba(0,0,0,0.05);
+      transform: translateY(-1px);
+    }
+
+    .group-card.warn-border { border-color: #f59e0b; }
+    .group-card.ok-border  { border-color: #10b981; }
+
+    .group-header {
+      padding: 14px 16px 12px;
+      background: linear-gradient(180deg, #1a1a2e 0%, #232746 100%);
+      color: white;
+    }
+
+    .group-header.adult { background: #1a4d2e; }
+
+    .group-name-input {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.24);
+      color: white;
+      font-size: 15px;
+      font-weight: 800;
+      width: 100%;
+      outline: none;
+      padding: 4px 0 8px;
+      margin-bottom: 8px;
+    }
+
+    .group-name-input::placeholder { color: rgba(255,255,255,0.4); }
+
+    .group-meta {
+      font-size: 11px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .group-meta span {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 999px;
+      padding: 4px 8px;
+      line-height: 1;
+    }
+
+    .group-warn-strip {
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 16px;
+    }
+
+    .competitor-list {
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .competitor-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      gap: 10px;
+      border-bottom: 1px solid #f3f4f6;
+      cursor: grab;
+    }
+
+    .competitor-row:hover { background: #fafbff; }
+    .competitor-row:active { cursor: grabbing; }
+
+    .competitor-info { flex: 1; min-width: 0; }
+
+    .competitor-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .competitor-sub { font-size: 11px; color: #6b7280; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+
+    .competitor-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .group-footer {
+      padding: 10px 16px;
+      border-top: 1px solid #f0f2f5;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .group-footer .btn-danger {
+      display: none;
+    }
+
+    /* Unassigned pool */
+    .pool {
+      background: linear-gradient(180deg, #fff8f0 0%, #fffaf5 100%);
+      border: 1px solid #f59e0b;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .pool-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #92400e;
+      margin-bottom: 12px;
+    }
+
+    .pool-row { background: white; border-radius: 10px; margin-bottom: 8px; }
+
+    /* Rank badges */
+    .rank-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .rank-gup   { background: #e0e7ff; color: #3730a3; }
+    .rank-black { background: #111827; color: #f9fafb; }
+    .rank-unk   { background: #fee2e2; color: #b91c1c; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      width: 380px;
+      max-width: 92vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+
+    .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+    .modal .sub { font-size: 13px; color: #666; margin-bottom: 16px; }
+
+    .modal select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d7deea;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* Utilities */
+    .hidden { display: none !important; }
+
+    .flex-gap { display: flex; gap: 8px; align-items: center; }
+
+    @media (max-width: 700px) {
+      header { padding: 14px 16px; }
+      .header-copy p { display: none; }
+      main { padding: 12px; }
+      .groups-grid { grid-template-columns: 1fr; }
+      .action-bar .btn { width: 100%; }
+      .action-bar span { display: none; }
+    }
+
+    .status-timestamp {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .status-panel-animate {
+      animation: fadeInStatus 0.25s ease-out;
+    }
+
+    @keyframes fadeInStatus {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .status-error {
+      border: 2px solid #b91c1c;
+      background: #fee2e2;
+    }
+
+    .status-flash {
+      border: 2px solid #c8a951 !important;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <div class="header-mark">🥋</div>
+    <div class="header-copy">
+      <h1>Tournament Group Builder</h1>
+      <p>Import rosters, auto-build balanced groups, then fine-tune and export.</p>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── STEP 1: Load Competitors ── -->
+  <div class="card">
+    <div class="card-title">
+      <div class="step-num">1</div>
+      Load Competitors
+    </div>
+    <p class="section-copy">Load the competitor roster from the server before auto-grouping.</p>
+
+    <div class="flex-gap">
+      <button class="btn btn-primary" onclick="loadCompetitorsFromServer()">Load Competitors</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 2.5: Build Divisions (Backend Logic) ── -->
+  <div class="card">
+    <div class="card-title">
+      <div class="step-num">2.5</div>
+      Build Divisions (Backend Logic)
+    </div>
+    <p class="section-copy">
+      Use the backend TTLD/Special Needs/Youth/Adult/Black Belt logic to generate official divisions.
+    </p>
+
+    <button class="btn btn-primary" onclick="buildAndSaveDivisions()">
+      🛠 Build & Save Divisions
+    </button>
+    </div>
+
+    <div id="groupsContainer"></div>
+
+    <p class="section-copy">Adjust the size and age-span guardrails, then generate groups with one click.</p>
+
+    <div class="settings-row">
+      <div class="setting-group">
+        <label>Min Group Size</label>
+        <input type="number" id="minSize" value="4" min="4" max="4" readonly>
+      </div>
+      <div class="setting-group">
+        <label>Target Max Size</label>
+        <input type="number" id="maxSize" value="6" min="6" max="13">
+      </div>
+      <div class="setting-group">
+        <label>Age Span Under 14 (yrs)</label>
+        <input type="number" id="ageSpanUnder14" value="3" min="1" max="10">
+      </div>
+      <div class="setting-group">
+        <label>Age Span 14-37 (yrs)</label>
+        <input type="number" id="ageSpan14To37" value="4" min="1" max="20">
+      </div>
+      <div class="setting-group">
+        <label>Age Span 38+ (yrs)</label>
+        <input type="number" id="ageSpan38Plus" value="35" min="1" max="60">
+      </div>
+      <button class="btn btn-primary" id="autoGroupBtn" onclick="runAutoGroup()" disabled>
+        ⚡ Auto-Group
+      </button>
+    </div>
+
+    <div class="info-note" id="adultNote" style="display:none;">
+    ℹ️ Groups are separated by <strong>gender</strong> first. The bounded rank rules are: <strong>G10–G5</strong> in 1–2 rank chunks, widening only when needed to fill a <strong>4–6 competitor</strong> group while keeping age spread tight; <strong>G4–G1</strong> in up to 3-rank chunks; and <strong>CDB–D3</strong> as the black-belt pool. <strong>CDB</strong> can sit with either the <strong>G4–G1</strong> pool or the black-belt pool when needed to fill a group, but it should not be stretched beyond a two-rank gap with the G4–G1 pool. Age spans stay tight within each bounded pool.
+    </div>
+    <div class="info-note" id="sizeNote" style="display:none;"></div>
+  </div>
+
+  <!-- ── STEP 3: Review & Adjust ── -->
+  <div id="reviewSection" class="hidden">
+
+    <div class="stats-bar" id="statsBar"></div>
+    <p class="section-copy" style="margin-top:-6px;">Review group balance, move competitors, or export once the layout looks right.</p>
+
+    <div id="unassignedSection" class="hidden pool">
+      <div class="pool-title">⚠️ Unassigned Competitors</div>
+      <div id="unassignedList"></div>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn btn-secondary" onclick="addNewGroup()">+ New Group</button>
+      <button class="btn btn-secondary" onclick="runAutoGroup()">↺ Re-run Auto-Group</button>
+
+      <button class="btn btn-secondary" onclick="loadStatus()">🛈 Load Status</button>
+      <button class="btn btn-secondary" onclick="loadStatus()">⟳ Refresh Status</button>
+      <button class="btn btn-secondary" onclick="clearStatus()">✖ Clear Status</button>
+
+      <span style="flex:1"></span>
+      <button class="btn btn-gold" onclick="exportJSON()">⬇ Export JSON</button>
+    </div>
+
+    <div class="groups-grid" id="groupsGrid"></div>
+
+    <div id="statusPanel" class="card" style="margin-top:20px; padding:16px;">
+      <h3>Ring Status</h3>
+      <pre id="statusOutput" style="font-size:13px;"></pre>
+
+      <div id="statusTimestamp" class="status-timestamp"></div>
+    </div>
+
+  </div>
+
+</main>
+
+<script src="/group-builder/app.js"></script>
+</body>
+</html>
+

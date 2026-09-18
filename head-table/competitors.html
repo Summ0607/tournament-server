@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Competitors Table</title>
+</head>
+<body>
+<h1>Competitors</h1>
+<table id="competitorsTable" border="1" cellpadding="4" cellspacing="0"></table>
+
+<script>
+    fetch('/api/competitors/table')
+      .then(res => res.json())
+      .then(data => {
+        const table = document.getElementById('competitorsTable');
+
+        // Build header row
+        const headerRow = document.createElement('tr');
+        data.headers.forEach(h => {
+          const th = document.createElement('th');
+          th.textContent = h;
+          headerRow.appendChild(th);
+        });
+        table.appendChild(headerRow);
+
+        // Build data rows
+        data.rows.forEach(row => {
+          const tr = document.createElement('tr');
+          data.headers.forEach(h => {
+            const td = document.createElement('td');
+            td.textContent = row[h];
+            tr.appendChild(td);
+          });
+          table.appendChild(tr);
+        });
+      });
+</script>
+</body>
+</html>
