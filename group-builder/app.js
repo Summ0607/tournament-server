@@ -250,6 +250,13 @@
     return `<span class="${cls}">${esc(rank)}</span>`;
   }
 
+  function genderBadge(gender) {
+    const value = String(gender || '').trim().toUpperCase();
+    if (value.startsWith('M')) return '<span class="gender-badge gender-m">M</span>';
+    if (value.startsWith('F')) return '<span class="gender-badge gender-f">F</span>';
+    return `<span class="gender-badge gender-unk">${esc(value || '?')}</span>`;
+  }
+
   function competitorRow(c, groupId) {
     return `
       <div class="competitor-row"
@@ -258,7 +265,7 @@
            ondragend="endCompetitorDrag(event)">
         <div class="competitor-info">
           <div class="competitor-name">${esc(c.fullName)}</div>
-          <div class="competitor-sub">${rankBadge(c.rank)}<span>Age ${c.age}</span></div>
+          <div class="competitor-sub">${genderBadge(c.gender)}${rankBadge(c.rank)}<span>Age ${c.age}</span></div>
         </div>
         <div class="competitor-actions">
           <button class="btn btn-danger btn-sm" onclick="unassign('${c.id}','${groupId}')">✕</button>
@@ -282,7 +289,7 @@
            ondragend="endCompetitorDrag(event)">
         <div class="competitor-info">
           <div class="competitor-name">${esc(c.fullName)}</div>
-          <div class="competitor-sub">${rankBadge(c.rank)}<span>Age ${c.age}</span></div>
+          <div class="competitor-sub">${genderBadge(c.gender)}${rankBadge(c.rank)}<span>Age ${c.age}</span></div>
         </div>
       </div>
     `).join('');
@@ -394,28 +401,38 @@
     }
   }
 
-  function runAutoGroup() {
+  async function runAutoGroup() {
     if (!state.competitors.length) return;
-    const maxSize = parseInt(document.getElementById('maxSize').value, 10) || recommendedMaxSize(state.competitors.length);
-    const groups = [];
-    const sorted = [...state.competitors].sort((a, b) => {
-      if (a.gender !== b.gender) return a.gender.localeCompare(b.gender);
-      if (a.age !== b.age) return a.age - b.age;
-      return a.fullName.localeCompare(b.fullName);
-    });
 
-    for (let i = 0; i < sorted.length; i += maxSize) {
-      groups.push(normalizeGroup({
-        id: `group-${groups.length + 1}`,
-        name: `Group ${groups.length + 1}`,
-        competitors: sorted.slice(i, i + maxSize)
-      }, groups.length));
+    try {
+      const payload = {
+        minGroupSize: Number(document.getElementById('minSize').value || 4),
+        maxGroupSize: Number(document.getElementById('maxSize').value || recommendedMaxSize(state.competitors.length)),
+        ageSpanUnder14: Number(document.getElementById('ageSpanUnder14').value || 3),
+        ageSpan14To37: Number(document.getElementById('ageSpan14To37').value || 4),
+        ageSpan38Plus: Number(document.getElementById('ageSpan38Plus').value || 35),
+        competitors: state.competitors
+      };
+
+      const built = await fetchJson('/api/divisions/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const builtGroups = Array.isArray(built.groups) ? built.groups.map(normalizeGroup) : [];
+      if (!builtGroups.length) {
+        throw new Error('Build response did not include a groups array.');
+      }
+
+      state.groups = builtGroups;
+      state.unassigned = [];
+      document.getElementById('reviewSection').classList.remove('hidden');
+      renderReview();
+    } catch (error) {
+      console.error('Auto-group error:', error);
+      window.alert(`Auto-group failed: ${error.message}`);
     }
-
-    state.groups = groups;
-    state.unassigned = [];
-    document.getElementById('reviewSection').classList.remove('hidden');
-    renderReview();
   }
 
   async function saveGroupsToServer() {

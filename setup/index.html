@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tournament Setup</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6fb;
+      --surface: #ffffff;
+      --surface-soft: #f8fafc;
+      --line: #d9e0ea;
+      --line-strong: #c7cfda;
+      --text: #17212f;
+      --text-soft: #5d6979;
+      --text-faint: #7a8797;
+      --shadow: 0 10px 28px rgba(24, 39, 75, 0.08);
+      --radius: 16px;
+      --good: #0a7c00;
+      --warn: #a86d00;
+      --danger: #b00020;
+      --info: #2257b3;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(34, 87, 179, 0.08), transparent 30%),
+        linear-gradient(180deg, #eef3ff 0%, var(--bg) 34%, var(--bg) 100%);
+    }
+
+    .shell { max-width: 1600px; margin: 0 auto; padding: 20px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+    .title-block, .panel {
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(201, 209, 222, 0.85);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .title-block { padding: 22px; }
+    h1 { margin: 0 0 6px; font-size: clamp(28px, 4vw, 44px); line-height: 1.05; letter-spacing: -0.03em; }
+    .subtitle { color: var(--text-soft); font-size: 13px; line-height: 1.45; max-width: 72ch; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 14px 16px;
+    }
+    .toolbar.panel { backdrop-filter: blur(8px); }
+    button, a.btn, input, select {
+      font: inherit;
+    }
+    button, a.btn {
+      appearance: none;
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    button.primary, a.btn.primary { background: #111827; border-color: #111827; color: #fff; }
+    button.danger { background: #b00020; border-color: #b00020; color: #fff; }
+    button.ghost { background: #fff; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .card {
+      padding: 18px;
+    }
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+    .card p {
+      margin: 0 0 14px;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      color: var(--text-soft);
+      font-size: 13px;
+      margin: 0 0 14px;
+    }
+    .meta span { white-space: nowrap; }
+    .notice {
+      display: none;
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+    .notice.visible { display: block; }
+    .notice.ok { border-color: rgba(10, 124, 0, 0.25); background: #f1fbf1; color: #166116; }
+    .notice.warn { border-color: rgba(168, 109, 0, 0.25); background: #fff8eb; color: #8d5b00; }
+    .notice.error { border-color: rgba(176, 0, 32, 0.25); background: #fff1f4; color: #8c0018; }
+    .notice.info { border-color: rgba(34, 87, 179, 0.25); background: #eef4ff; color: #204a91; }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .field-row.single { grid-template-columns: 1fr; }
+    .field-row.triple { grid-template-columns: minmax(0, 1fr) auto auto; }
+    .field-row input,
+    .field-row select {
+      width: 100%;
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .file-input { display: none; }
+    .file-name {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-faint);
+      word-break: break-all;
+    }
+    .kicker {
+      margin: 0 0 12px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+    .mini-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .step-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: 1fr; }
+      .toolbar { justify-content: flex-start; }
+      .grid, .step-grid { grid-template-columns: 1fr; }
+      .field-row, .field-row.single { grid-template-columns: 1fr; }
+      .field-row button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="hero">
+      <div class="title-block">
+        <h1>Setup</h1>
+        <div class="subtitle">Pre-tournament preparation only: create the event, import the roster, build groups, then move to Ring Assignment or Head Table when tournament time starts.</div>
+      </div>
+      <div class="toolbar panel">
+        <a class="btn" href="/head-table/">Head Table</a>
+        <a class="btn" href="/ring-assignment/">Ring Assignment</a>
+        <a class="btn" href="/group-builder/">Group Builder</a>
+      </div>
+    </div>
+
+    <div class="notice" id="notice" aria-live="polite"></div>
+
+    <div class="grid">
+      <section class="panel card">
+        <div class="kicker">Step 1</div>
+        <h2>Event lifecycle</h2>
+        <p>Create a new tournament event, activate an existing one, or reset the active event before competition starts.</p>
+
+        <div class="field-row single">
+          <input id="eventNameInput" placeholder="New event name (for example: inhouse-winter-2027)">
+        </div>
+        <div class="actions">
+          <button class="primary" id="createEventBtn">Create Event</button>
+          <button class="primary" id="createActivateEventBtn">Create &amp; Activate</button>
+        </div>
+
+        <div class="field-row" style="margin-top:14px;">
+          <select id="eventSelect">
+            <option value="">-- Select Event --</option>
+          </select>
+          <button class="ghost" id="activateEventBtn" disabled>Activate Event</button>
+        </div>
+        <div class="actions">
+          <button class="danger" id="resetEventBtn" disabled>Reset Event</button>
+          <button class="ghost" id="refreshEventsBtn">Refresh Events</button>
+        </div>
+      </section>
+
+      <section class="panel card">
+        <div class="kicker">Step 2</div>
+        <h2>Import roster</h2>
+        <p>Load the competitor CSV into the active event database. Use a local file path on the server machine.</p>
+
+        <div class="field-row triple">
+          <input id="csvPathInput" placeholder="C:\\Karate4\\tournament-server\\generated\\competitor_import_400.csv">
+          <button class="ghost" id="browseCsvBtn" type="button">Browse CSV</button>
+          <button class="ghost" id="clearCsvBtn" type="button">Clear</button>
+        </div>
+        <input class="file-input" id="csvFileInput" type="file" accept=".csv,text/csv">
+        <div class="file-name" id="csvFileName"></div>
+        <div class="field-row">
+          <select id="importTargetSelect">
+            <option value="active">Active event</option>
+            <option value="">Use selected event</option>
+          </select>
+          <button class="primary" id="importCsvBtn">Import CSV</button>
+        </div>
+        <ul class="mini-list">
+          <li>The server import endpoint writes into the selected event DB.</li>
+          <li>Import before building groups.</li>
+        </ul>
+      </section>
+    </div>
+
+    <div class="step-grid">
+      <section class="panel card">
+        <div class="kicker">Step 3</div>
+        <h2>Build groups</h2>
+        <p>After the roster is imported, open the group builder to generate competition groups.</p>
+        <div class="actions">
+          <a class="btn primary" href="/group-builder/">Open Group Builder</a>
+        </div>
+      </section>
+
+      <section class="panel card">
+        <div class="kicker">Step 4</div>
+        <h2>Assign rings</h2>
+        <p>Once groups are ready, move to Ring Assignment. This stays separate from tournament-time monitoring.</p>
+        <div class="actions">
+          <a class="btn primary" href="/ring-assignment/">Open Ring Assignment</a>
+          <a class="btn" href="/head-table/">Open Head Table</a>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      events: [],
+      activeEvent: ''
+    };
+
+    const noticeEl = document.getElementById('notice');
+    const eventSelectEl = document.getElementById('eventSelect');
+    const activateEventBtn = document.getElementById('activateEventBtn');
+    const resetEventBtn = document.getElementById('resetEventBtn');
+    const createEventBtn = document.getElementById('createEventBtn');
+    const createActivateEventBtn = document.getElementById('createActivateEventBtn');
+    const refreshEventsBtn = document.getElementById('refreshEventsBtn');
+    const importCsvBtn = document.getElementById('importCsvBtn');
+    const browseCsvBtn = document.getElementById('browseCsvBtn');
+    const clearCsvBtn = document.getElementById('clearCsvBtn');
+    const csvFileInput = document.getElementById('csvFileInput');
+    const csvFileName = document.getElementById('csvFileName');
+
+    let selectedCsv = {
+      name: '',
+      text: ''
+    };
+
+    function showNotice(message, kind) {
+      if (!message) {
+        noticeEl.className = 'notice';
+        noticeEl.textContent = '';
+        return;
+      }
+      noticeEl.className = `notice visible ${kind || 'info'}`;
+      noticeEl.textContent = message;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, options);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    function updateControls() {
+      const selected = eventSelectEl.value.trim();
+      activateEventBtn.disabled = !selected || selected === state.activeEvent;
+      resetEventBtn.disabled = !selected;
+    }
+
+    async function refreshEvents() {
+      const [eventsData, activeData] = await Promise.all([
+        fetchJson('/api/events/list'),
+        fetchJson('/api/events/active')
+      ]);
+
+      state.events = eventsData.events || [];
+      state.activeEvent = activeData.activeEvent || '';
+
+      eventSelectEl.innerHTML = '<option value="">-- Select Event --</option>';
+      state.events.forEach((eventName) => {
+        const option = document.createElement('option');
+        option.value = eventName;
+        option.textContent = eventName;
+        eventSelectEl.appendChild(option);
+      });
+
+      if (state.activeEvent && state.events.includes(state.activeEvent)) {
+        eventSelectEl.value = state.activeEvent;
+      }
+
+      updateControls();
+      showNotice('', '');
+    }
+
+    async function createEvent(activateAfter) {
+      const eventName = document.getElementById('eventNameInput').value.trim();
+      if (!eventName) {
+        showNotice('Enter an event name first.', 'warn');
+        return;
+      }
+
+      try {
+        showNotice(activateAfter ? 'Creating and activating event...' : 'Creating event...', 'info');
+        const created = await fetchJson('/api/events/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventName })
+        });
+
+        if (activateAfter) {
+          const activated = await fetchJson('/api/events/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventName: created.eventName })
+          });
+          state.activeEvent = activated.activeEvent || created.eventName;
+        }
+
+        document.getElementById('eventNameInput').value = '';
+        await refreshEvents();
+        showNotice('', '');
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    async function activateSelectedEvent() {
+      const eventName = eventSelectEl.value.trim();
+      if (!eventName) {
+        showNotice('Select an event first.', 'warn');
+        return;
+      }
+
+      try {
+        showNotice(`Activating ${eventName}...`, 'info');
+        await fetchJson('/api/events/activate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventName })
+        });
+        await refreshEvents();
+        showNotice('', '');
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    async function resetSelectedEvent() {
+      const eventName = eventSelectEl.value.trim();
+      if (!eventName) {
+        showNotice('Select an event first.', 'warn');
+        return;
+      }
+
+      if (!confirm(`Reset "${eventName}"? This clears its database, groups, results, and ring assignments.`)) {
+        return;
+      }
+
+      try {
+        showNotice(`Resetting ${eventName}...`, 'warn');
+        await fetchJson('/api/events/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventName })
+        });
+        await refreshEvents();
+        showNotice('', '');
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    async function importCsv() {
+      const csvPath = document.getElementById('csvPathInput').value.trim();
+      const targetMode = document.getElementById('importTargetSelect').value;
+      const selectedEvent = eventSelectEl.value.trim();
+      const eventName = targetMode === 'active' ? state.activeEvent : selectedEvent;
+      const hasUploadedCsv = Boolean(selectedCsv.text);
+
+      if (!csvPath && !hasUploadedCsv) {
+        showNotice('Enter a CSV path first.', 'warn');
+        return;
+      }
+      if (!eventName) {
+        showNotice('Select or activate an event first.', 'warn');
+        return;
+      }
+
+      try {
+        showNotice(`Importing CSV into ${eventName}...`, 'info');
+        const body = { eventName };
+        if (hasUploadedCsv) {
+          body.csvText = selectedCsv.text;
+          body.csvName = selectedCsv.name;
+        } else {
+          body.csvPath = csvPath;
+        }
+
+        await fetchJson('/api/events/import-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        showNotice('', '');
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    function setSelectedCsv(name, text) {
+      selectedCsv = {
+        name: name || '',
+        text: text || ''
+      };
+      csvFileName.textContent = selectedCsv.name ? `Selected file: ${selectedCsv.name}` : '';
+    }
+
+    eventSelectEl.addEventListener('change', updateControls);
+    refreshEventsBtn.addEventListener('click', () => {
+      refreshEvents().catch((error) => showNotice(error.message, 'error'));
+    });
+    createEventBtn.addEventListener('click', () => createEvent(false));
+    createActivateEventBtn.addEventListener('click', () => createEvent(true));
+    activateEventBtn.addEventListener('click', activateSelectedEvent);
+    resetEventBtn.addEventListener('click', resetSelectedEvent);
+    importCsvBtn.addEventListener('click', importCsv);
+    browseCsvBtn.addEventListener('click', () => csvFileInput.click());
+    clearCsvBtn.addEventListener('click', () => {
+      document.getElementById('csvPathInput').value = '';
+      csvFileInput.value = '';
+      setSelectedCsv('', '');
+    });
+    csvFileInput.addEventListener('change', async () => {
+      const file = csvFileInput.files && csvFileInput.files[0];
+      if (!file) {
+        setSelectedCsv('', '');
+        return;
+      }
+
+      const text = await file.text();
+      document.getElementById('csvPathInput').value = file.name;
+      setSelectedCsv(file.name, text);
+    });
+
+    refreshEvents().catch((error) => showNotice(error.message, 'error'));
+  </script>
+</body>
+</html>

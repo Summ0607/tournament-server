@@ -23,6 +23,7 @@
       justify-content: space-between;
       gap: 16px;
       box-shadow: 0 1px 10px rgba(0,0,0,0.12);
+      flex-wrap: wrap;
     }
 
     .header-brand {
@@ -59,6 +60,30 @@
     .header-copy p {
       font-size: 12px;
       color: rgba(255,255,255,0.68);
+    }
+
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .header-actions a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color: white;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .header-actions a:hover {
+      background: rgba(255,255,255,0.14);
     }
 
     .badge {
@@ -406,6 +431,16 @@
     .rank-gup   { background: #e0e7ff; color: #3730a3; }
     .rank-black { background: #111827; color: #f9fafb; }
     .rank-unk   { background: #fee2e2; color: #b91c1c; }
+    .gender-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .gender-m { background: #dbeafe; color: #1d4ed8; }
+    .gender-f { background: #fce7f3; color: #be185d; }
+    .gender-unk { background: #f3f4f6; color: #4b5563; }
 
     /* Modal */
     .modal-overlay {
@@ -489,6 +524,11 @@
       <h1>Tournament Group Builder</h1>
       <p>Import rosters, auto-build balanced groups, then fine-tune and export.</p>
     </div>
+  </div>
+  <div class="header-actions">
+    <a href="/setup/">Setup</a>
+    <a href="/ring-assignment/">Ring Assignment</a>
+    <a href="/head-table/">Head Table</a>
   </div>
 </header>
 
@@ -584,7 +624,7 @@
     <div class="groups-grid" id="groupsGrid"></div>
 
     <div id="statusPanel" class="card" style="margin-top:20px; padding:16px;">
-      <h3>Ring Status</h3>
+      <h3>Ring Assignment</h3>
       <pre id="statusOutput" style="font-size:13px;"></pre>
 
       <div id="statusTimestamp" class="status-timestamp"></div>
@@ -597,4 +637,3 @@
 <script src="/group-builder/app.js"></script>
 </body>
 </html>
-

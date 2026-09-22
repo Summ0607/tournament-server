@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const sqlite3 = require('sqlite3').verbose();
 
 require('./db/init');
@@ -28,7 +29,8 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const GROUPS_DIR = path.join(ROOT_DIR, 'groups');
 const RESULTS_DIR = path.join(ROOT_DIR, 'Results');
 const RING_ASSIGNMENTS_FILE = path.join(ROOT_DIR, 'ring-assignments.json');
-const TOURNAMENT_DB_PATH = path.join(ROOT_DIR, 'db', 'tournament.db');
+const DEFAULT_TOURNAMENT_DB_PATH = path.join(ROOT_DIR, 'db', 'tournament.db');
+const TOURNAMENT_DB_PATH = DEFAULT_TOURNAMENT_DB_PATH;
 const EVENTS_ROOT = path.join(ROOT_DIR, 'events');
 //const EVENTS_ROOT = [
 //  path.join(ROOT_DIR, 'event'),
@@ -36,12 +38,57 @@ const EVENTS_ROOT = path.join(ROOT_DIR, 'events');
 //].find((candidate) => fs.existsSync(candidate)) || path.join(ROOT_DIR, 'event');
 const ACTIVE_EVENT_FILE = path.join(EVENTS_ROOT, 'active.json');
 
+function resolveEventDbPath(eventName = readActiveEvent()) {
+  const normalizedEventName = String(eventName || '').trim();
+  if (!normalizedEventName) {
+    return TOURNAMENT_DB_PATH;
+  }
+
+  const eventDbPath = path.join(EVENTS_ROOT, normalizedEventName, 'tournament.db');
+  return fs.existsSync(eventDbPath) ? eventDbPath : TOURNAMENT_DB_PATH;
+}
+
+function resolveEventDirectory(eventName = readActiveEvent()) {
+  const normalizedEventName = String(eventName || '').trim();
+  if (!normalizedEventName) {
+    return '';
+  }
+
+  return path.join(EVENTS_ROOT, normalizedEventName);
+}
+
+function resolveGroupsDir(eventName = readActiveEvent()) {
+  const normalizedEventName = String(eventName || '').trim();
+  if (!normalizedEventName) {
+    return GROUPS_DIR;
+  }
+
+  const eventDir = resolveEventDirectory(normalizedEventName);
+  if (eventDir && fs.existsSync(eventDir)) {
+    return path.join(eventDir, 'groups');
+  }
+
+  return GROUPS_DIR;
+}
 
 // ─────────────────────────────────────────────
 // STORES (NOW USING EVENT PATHS)
 // ─────────────────────────────────────────────
 const competitorStore = createCompetitorStore(TOURNAMENT_DB_PATH);
-const groupStore = createGroupStore(GROUPS_DIR);
+const groupStore = {
+  saveGroups(groups) {
+    return createGroupStore(resolveGroupsDir()).saveGroups(groups);
+  },
+  loadGroups() {
+    return createGroupStore(resolveGroupsDir()).loadGroups();
+  },
+  loadGroup(groupId) {
+    return createGroupStore(resolveGroupsDir()).loadGroup(groupId);
+  },
+  groupExists(groupId) {
+    return createGroupStore(resolveGroupsDir()).groupExists(groupId);
+  }
+};
 const db = new sqlite3.Database(TOURNAMENT_DB_PATH);
 
 // ─────────────────────────────────────────────
@@ -101,6 +148,12 @@ function createEmptyRingState(ringLabel) {
     currentGroupId: '',
     queuedGroupIds: [],
     completedGroupIds: [],
+    assignmentStartedAt: '',
+    checkInCount: 0,
+    checkInTotal: 0,
+    phaseCompletedCount: 0,
+    phaseTotalCount: 0,
+    phaseProgress: 0,
     assistanceType: '',
     assistanceRequestedAt: '',
     tabletLabel: '',
@@ -119,6 +172,14 @@ function normalizeRingState(ringState, ringLabel) {
   normalized.currentGroupId = ringState.currentGroupId || '';
   normalized.queuedGroupIds = Array.isArray(ringState.queuedGroupIds) ? ringState.queuedGroupIds : [];
   normalized.completedGroupIds = Array.isArray(ringState.completedGroupIds) ? ringState.completedGroupIds : [];
+  normalized.assignmentStartedAt = ringState.currentGroupId
+    ? (ringState.assignmentStartedAt || ringState.phaseStartedAt || ringState.lastHeartbeatAt || '')
+    : '';
+  normalized.checkInCount = clampInt(ringState.checkInCount, 0, 0, 9999);
+  normalized.checkInTotal = clampInt(ringState.checkInTotal, 0, 0, 9999);
+  normalized.phaseCompletedCount = clampInt(ringState.phaseCompletedCount, 0, 0, 9999);
+  normalized.phaseTotalCount = clampInt(ringState.phaseTotalCount, 0, 0, 9999);
+  normalized.phaseProgress = clampInt(ringState.phaseProgress, 0, 0, 100);
   normalized.assistanceType = ringState.assistanceType || '';
   normalized.assistanceRequestedAt = ringState.assistanceRequestedAt || '';
   normalized.tabletLabel = ringState.tabletLabel || '';
@@ -154,6 +215,7 @@ function createDefaultAssignments() {
   const config = { letterCount: 1, numberCount: 2 };
   return {
     config,
+    eventStartedAt: '',
     rings: generateRings(config)
   };
 }
@@ -161,9 +223,22 @@ function createDefaultAssignments() {
 function ensureStateStructure(rawState) {
   const state = rawState && typeof rawState === 'object' ? rawState : {};
   const config = normalizeConfig(state.config);
+  const rings = generateRings(config, state.rings || {});
+  const inferredStart = (() => {
+    const timestamps = [];
+    for (const ringState of Object.values(rings)) {
+      const candidate = ringState.phaseStartedAt || ringState.lastHeartbeatAt;
+      if (!candidate) continue;
+      const parsed = Date.parse(candidate);
+      if (Number.isFinite(parsed)) timestamps.push(parsed);
+    }
+    if (!timestamps.length) return '';
+    return new Date(Math.min.apply(null, timestamps)).toISOString();
+  })();
   return {
     config,
-    rings: generateRings(config, state.rings || {})
+    eventStartedAt: String(state.eventStartedAt || inferredStart || '').trim(),
+    rings
   };
 }
 
@@ -195,14 +270,21 @@ function serverBaseUrlForRequest(req) {
   return `${req.protocol}://${req.get('host')}`;
 }
 
-function buildRingResponse(req, ringId, ringState) {
+function buildRingResponse(req, ringId, ringState, state = {}) {
   return {
     ringId,
     ringLabel: ringState.ringLabel,
     serverBaseUrl: serverBaseUrlForRequest(req),
+    eventStartedAt: state.eventStartedAt || '',
     currentGroupId: ringState.currentGroupId,
     queuedGroupIds: ringState.queuedGroupIds,
     completedGroupIds: ringState.completedGroupIds,
+    assignmentStartedAt: ringState.assignmentStartedAt,
+    checkInCount: ringState.checkInCount,
+    checkInTotal: ringState.checkInTotal,
+    phaseCompletedCount: ringState.phaseCompletedCount,
+    phaseTotalCount: ringState.phaseTotalCount,
+    phaseProgress: ringState.phaseProgress,
     assistanceType: ringState.assistanceType,
     assistanceRequestedAt: ringState.assistanceRequestedAt,
     tabletLabel: ringState.tabletLabel,
@@ -231,6 +313,12 @@ function resetRingToScratch(ringState) {
   ringState.currentGroupId = '';
   ringState.queuedGroupIds = [];
   ringState.completedGroupIds = [];
+  ringState.assignmentStartedAt = '';
+  ringState.checkInCount = 0;
+  ringState.checkInTotal = 0;
+  ringState.phaseCompletedCount = 0;
+  ringState.phaseTotalCount = 0;
+  ringState.phaseProgress = 0;
   ringState.assistanceType = '';
   ringState.assistanceRequestedAt = '';
   ringState.tabletLabel = '';
@@ -245,6 +333,7 @@ function applyHeartbeatPolicy() {
 
 function resetAssignments(state) {
   state.rings = generateRings(state.config);
+  state.eventStartedAt = '';
 }
 
 function setRingConfig(state, letterCount, numberCount) {
@@ -343,7 +432,9 @@ app.get('/api/events/active', (req, res) => {
 
 app.get('/api/competitors', async (req, res) => {
   try {
-    const competitors = await competitorStore.loadCompetitors();
+    const activeDbPath = resolveEventDbPath();
+    const activeCompetitorStore = createCompetitorStore(activeDbPath);
+    const competitors = await activeCompetitorStore.loadCompetitors();
     res.json(competitors);
   } catch (err) {
     console.error('Error loading competitors:', err);
@@ -352,7 +443,17 @@ app.get('/api/competitors', async (req, res) => {
 });
 
 app.get('/api/competitors/table', (req, res) => {
-  db.all('SELECT * FROM competitors', [], (err, rows) => {
+  const activeDbPath = resolveEventDbPath();
+  const activeDb = new sqlite3.Database(activeDbPath, sqlite3.OPEN_READONLY, (openErr) => {
+    if (openErr) {
+      console.error(openErr);
+      return res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  activeDb.all('SELECT * FROM competitors', [], (err, rows) => {
+    activeDb.close();
+
     if (err) {
       console.error(err);
       return res.status(500).json({ error: 'Database error' });
@@ -378,6 +479,13 @@ app.get('/search', (req, res) => {
   const rank = req.query.rank || '';
   const mode = req.query.mode || 'OR';
   const nameSearch = `%${name}%`;
+  const activeDbPath = resolveEventDbPath();
+  const activeDb = new sqlite3.Database(activeDbPath, sqlite3.OPEN_READONLY, (openErr) => {
+    if (openErr) {
+      console.error(openErr);
+      return res.status(500).json({ error: 'Database search failed.' });
+    }
+  });
 
   let sql;
   if (mode === 'AND') {
@@ -400,7 +508,9 @@ app.get('/search', (req, res) => {
     `;
   }
 
-  db.all(sql, [nameSearch, nameSearch, nameSearch, rank], (err, rows) => {
+  activeDb.all(sql, [nameSearch, nameSearch, nameSearch, rank], (err, rows) => {
+    activeDb.close();
+
     if (err) {
       console.error('Search error:', err);
       return res.status(500).json({ error: 'Database search failed.' });
@@ -410,7 +520,7 @@ app.get('/search', (req, res) => {
 });
 
 app.use('/api', createDivisionRouter({
-  competitorStore,
+  competitorStore: () => createCompetitorStore(resolveEventDbPath()),
   groupStore,
   buildGroups
 }));
@@ -433,10 +543,62 @@ app.post('/api/events/activate', (req, res) => {
 
   try {
     fs.writeFileSync(ACTIVE_EVENT_FILE, JSON.stringify({ activeEvent: eventName }, null, 2));
-    return res.json({ ok: true, activeEvent: eventName });
+    return res.json({ ok: true, activeEvent: eventName, dbPath: path.join(eventDir, 'tournament.db') });
   } catch (err) {
     console.error('Failed to activate event:', err);
     return res.status(500).json({ error: 'Failed to activate event' });
+  }
+});
+
+app.post('/api/events/import-csv', async (req, res) => {
+  let tempCsvPath = '';
+  try {
+    const body = req.body || {};
+    const csvFilePath = String(body.csvPath || '').trim();
+    const csvText = typeof body.csvText === 'string' ? body.csvText : '';
+    const csvName = path.basename(String(body.csvName || 'uploaded.csv').trim() || 'uploaded.csv').replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+    const eventName = String(body.eventName || readActiveEvent() || '').trim();
+    let importPath = csvFilePath;
+
+    if (!csvFilePath && !csvText) {
+      return res.status(400).json({ error: 'csvPath is required' });
+    }
+
+    if (csvText) {
+      tempCsvPath = path.join(os.tmpdir(), `tournament-import-${Date.now()}-${csvName}`);
+      fs.writeFileSync(tempCsvPath, csvText, 'utf8');
+      importPath = tempCsvPath;
+    }
+
+    if (!fs.existsSync(importPath)) {
+      if (tempCsvPath && fs.existsSync(tempCsvPath)) {
+        fs.unlinkSync(tempCsvPath);
+      }
+      return res.status(404).json({ error: `CSV not found: ${csvFilePath}` });
+    }
+
+    const targetEventName = eventName || readActiveEvent();
+    const targetDbPath = targetEventName
+      ? path.join(EVENTS_ROOT, targetEventName, 'tournament.db')
+      : TOURNAMENT_DB_PATH;
+
+    if (targetEventName && !fs.existsSync(path.dirname(targetDbPath))) {
+      return res.status(404).json({ error: `Event folder not found: ${targetEventName}` });
+    }
+
+    const result = await importCSV(importPath, targetDbPath, { clearExisting: true });
+    return res.json({ ok: true, eventName: targetEventName || 'default', dbPath: targetDbPath, ...result });
+  } catch (err) {
+    console.error('Failed to import CSV for active event:', err);
+    return res.status(500).json({ error: err.message || 'Failed to import CSV' });
+  } finally {
+    if (tempCsvPath && fs.existsSync(tempCsvPath)) {
+      try {
+        fs.unlinkSync(tempCsvPath);
+      } catch (cleanupErr) {
+        console.error('Failed to clean up temporary CSV:', cleanupErr);
+      }
+    }
   }
 });
 
@@ -484,7 +646,8 @@ app.post('/api/events/create', (req, res) => {
       .then(() => {
         const defaultAssignments = {
           config: { letterCount: 1, numberCount: 2 },
-          rings: {}
+          eventStartedAt: '',
+          rings: {},
         };
         fs.writeFileSync(ringAssignmentsFile, JSON.stringify(defaultAssignments, null, 2));
         return res.json({ ok: true, eventName, dbPath});
@@ -538,7 +701,8 @@ async function resetEvent(eventName) {
 
   const defaultAssignments = {
     config: { letterCount: 1, numberCount: 2 },
-    rings: {}
+    eventStartedAt: '',
+    rings: {},
   };
   fs.writeFileSync(ringAssignmentsFile, JSON.stringify(defaultAssignments, null, 2));
   fs.writeFileSync(ACTIVE_EVENT_FILE, JSON.stringify({ activeEvent: normalizedName }, null, 2));
@@ -582,7 +746,7 @@ app.listen(PORT, () => {
   console.log(`Group server running at http://localhost:${PORT}`);
   console.log(`Control board: http://localhost:${PORT}/control-board`);
   console.log(`Group example: http://localhost:${PORT}/api/groups/group-1`);
-  console.log(`Ring bootstrap example: http://localhost:${PORT}/api/rings/ring-a-1/bootstrap`);
+  console.log(`Ring request-group example: http://localhost:${PORT}/api/rings/ring-a-1/request-group`);
 });
 
 if (process.argv.includes('--import')) {

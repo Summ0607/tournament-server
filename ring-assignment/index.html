@@ -1,104 +1,918 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Ring Assignment</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ring Assignment</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef1f4;
+      --surface: #ffffff;
+      --surface-soft: #f5f7fa;
+      --surface-muted: #e9edf2;
+      --line: #c9d1db;
+      --line-strong: #94a3b8;
+      --text: #111827;
+      --text-soft: #374151;
+      --text-faint: #6b7280;
+      --shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+      --radius: 16px;
+      --good: #166534;
+      --warn: #a16207;
+      --danger: #b91c1c;
+      --info: #334155;
+      --idle: #475569;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(15, 23, 42, 0.08), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(15, 23, 42, 0.06), transparent 35%),
+        linear-gradient(180deg, #f4f6f8 0%, #eef1f4 18%, #e4e8ee 100%);
+    }
+
+    .shell { max-width: 1800px; margin: 0 auto; padding: 20px; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .title-block, .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .title-block {
+      position: relative;
+      padding: 16px 132px 14px 20px;
+      min-height: 108px;
+      background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
+    }
+
+    .tournament-name {
+      margin: 0 0 6px;
+      font-size: clamp(30px, 4vw, 46px);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+      font-weight: 750;
+      color: var(--text);
+    }
+
+    .title-secondary {
+      color: var(--text-soft);
+      font-size: 14px;
+      line-height: 1.4;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .title-meta {
+      margin-top: 4px;
+      color: var(--text-soft);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .title-logo {
+      position: absolute;
+      top: -1px;
+      right: 1px;
+      width: 108px;
+      height: 108px;
+      object-fit: contain;
+      object-position: center;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.10);
+      padding: 4px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      padding: 14px 16px;
+    }
+
+    .toolbar.panel { background: var(--surface); }
+
+    button, a.btn {
+      appearance: none;
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button.primary, a.btn.primary { background: #111827; border-color: #111827; color: #fff; }
+    button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+    button.ghost { background: var(--surface); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+    .notice {
+      display: none;
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+    .notice.visible { display: block; }
+    .notice.ok { border-color: rgba(22, 101, 52, 0.28); background: #ecfdf3; color: #14532d; }
+    .notice.warn { border-color: rgba(161, 98, 7, 0.28); background: #fff7e0; color: #7c2d12; }
+    .notice.error { border-color: rgba(185, 28, 28, 0.28); background: #fef2f2; color: #7f1d1d; }
+    .notice.info { border-color: rgba(51, 65, 85, 0.28); background: #eef2f7; color: #1f2937; }
+
+    .board {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .ring-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(90px, 108px) minmax(150px, 0.85fr) minmax(220px, 1fr) minmax(340px, 1.35fr);
+      gap: 10px;
+      align-items: start;
+      padding: 10px 12px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+    }
+
+    .ring-row::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 6px;
+      background: var(--ring-accent, var(--line));
+    }
+
+    .ring-row.idle { --ring-accent: var(--idle); }
+    .ring-row.active { --ring-accent: var(--good); }
+    .ring-row.waiting { --ring-accent: var(--warn); }
+    .ring-row.down { --ring-accent: var(--danger); }
+
+    .ring-id-cell {
+      min-width: 0;
+      padding-left: 2px;
+    }
+
+    .ring-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .ring-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #1d4ed8;
+      font: inherit;
+      font-weight: 900;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .ring-reset-btn {
+      flex: 0 0 auto;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      line-height: 1;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .ring-status {
+      margin-top: 3px;
+      display: flex;
+      align-items: center;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      padding: 4px 8px;
+      color: var(--text-soft);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .status-chip.ok { background: #dcfce7; border-color: #86efac; color: #14532d; }
+    .status-chip.warn { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+    .status-chip.down { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
+    .status-chip.idle { background: #e5e7eb; border-color: #cbd5e1; color: #334155; }
+
+    .group-box {
+      min-width: 0;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+      padding: 8px 10px;
+      height: 100%;
+    }
+
+    .group-box.active {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    .group-box span {
+      display: block;
+      color: var(--text-faint);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 800;
+      margin-bottom: 2px;
+    }
+
+    .group-box strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.2;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .group-links, .queued-list {
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .group-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 4px 8px;
+      max-width: 100%;
+    }
+
+    .group-link {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      color: #1d4ed8;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .queue-remove {
+      border: 0;
+      background: transparent;
+      color: var(--danger);
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1;
+      padding: 0 2px 0 4px;
+      cursor: pointer;
+    }
+
+    .empty {
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .actions {
+      min-width: 0;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+      padding: 8px 10px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      height: 100%;
+    }
+
+    .actions span {
+      display: block;
+      color: var(--text-faint);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 800;
+      margin-bottom: 0;
+    }
+
+    .action-line {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .action-line select {
+      width: 100%;
+      min-width: 0;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .actions .action-line button {
+      min-width: 126px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.5);
+      z-index: 50;
+    }
+
+    .modal.visible { display: flex; }
+
+    .modal-dialog {
+      width: min(840px, 100%);
+      background: #fff;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22);
+      overflow: hidden;
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 16px 18px;
+      border-bottom: 1px solid #e5eaf2;
+      background: #eef2f6;
+    }
+
+    .modal-title h3 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .modal-title .sub {
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .modal-close {
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: var(--text);
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .modal-body {
+      padding: 16px 18px 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .modal-section {
+      border: 1px solid #e5eaf2;
+      border-radius: 14px;
+      background: var(--surface-soft);
+      padding: 12px 14px;
+    }
+
+    .modal-section h4 {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
+
+    .modal-section .meta-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      color: var(--text-soft);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .modal-section .meta-line span { white-space: nowrap; }
+
+    .modal-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 4px;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .foot {
+      color: var(--text-soft);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 1240px) {
+      .ring-row { grid-template-columns: 1fr 1fr; }
+      .actions { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 780px) {
+      .shell { padding: 14px; }
+      .hero { grid-template-columns: 1fr; }
+      .toolbar { justify-content: flex-start; }
+      .title-block { padding-right: 20px; min-height: 0; }
+      .title-logo { position: static; width: 88px; height: 88px; margin-top: 12px; }
+      .ring-row { grid-template-columns: 1fr; }
+      .actions { grid-template-columns: 1fr; }
+      .action-line { grid-template-columns: 1fr; }
+      .modal-head { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
 </head>
 <body>
-<h1>Ring Assignment</h1>
+  <div class="shell">
+    <div class="hero">
+      <div class="title-block">
+        <h1 class="tournament-name" id="tournamentName">Tournament</h1>
+        <div class="title-secondary">Ring Assignment</div>
+        <div class="title-meta" id="competitorCountLabel">0 competitors</div>
+        <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
+      </div>
+      <div class="toolbar panel">
+        <a class="btn" href="/setup/">Setup</a>
+        <a class="btn" href="/head-table/">Head Table</a>
+        <button id="refreshBtn">Refresh</button>
+        <div style="margin-left:auto; color: var(--text-soft); font-weight: 700;">Event Timer: <strong id="eventTimer" style="color: var(--text);">--:--:--</strong></div>
+      </div>
+    </div>
 
-<h2>Groups</h2>
-<button onclick="createTestGroup()">Create Test Group</button>
-<div id="groups"></div>
+    <div class="notice" id="notice" aria-live="polite"></div>
+    <div class="board" id="board"></div>
+    <div class="foot">Click a group id for details. Use x to remove a group from a queue.</div>
+  </div>
 
-<h2>Rings</h2>
-<div id="rings"></div>
+  <div class="modal" id="groupModal" aria-hidden="true">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle">
+      <div class="modal-head">
+        <div class="modal-title">
+          <h3 id="groupModalTitle">Group details</h3>
+          <div class="sub" id="groupModalSubtitle">Select a group</div>
+        </div>
+        <button class="modal-close" id="groupModalClose" aria-label="Close group details">×</button>
+      </div>
+      <div class="modal-body" id="groupModalBody"></div>
+    </div>
+  </div>
 
-<script>
-    async function loadData() {
-      const groupsRes = await fetch('/api/groups');
-      const ringsRes = await fetch('/api/rings');
+  <script>
+    const state = {
+      activeEvent: '',
+      eventStartedAt: '',
+      groups: [],
+      rings: [],
+      lastLoadedAt: null,
+      heartbeatPolicy: { disconnectAfterSeconds: 90, resetMode: 'manual' },
+      activeGroupId: ''
+    };
 
-      const groups = (await groupsRes.json()).groups;
-      const rings = (await ringsRes.json()).rings;
+    const noticeEl = document.getElementById('notice');
+    const boardEl = document.getElementById('board');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const tournamentNameEl = document.getElementById('tournamentName');
+    const competitorCountLabelEl = document.getElementById('competitorCountLabel');
+    const eventTimerEl = document.getElementById('eventTimer');
+    const groupModalEl = document.getElementById('groupModal');
+    const groupModalTitleEl = document.getElementById('groupModalTitle');
+    const groupModalSubtitleEl = document.getElementById('groupModalSubtitle');
+    const groupModalBodyEl = document.getElementById('groupModalBody');
+    const groupModalCloseEl = document.getElementById('groupModalClose');
 
-      document.getElementById('groups').innerHTML = `
-        <select id="groupSelect">
-          <option value="">-- Select Group --</option>
-          ${groups.map(g => `<option value="${g.groupId}">${g.groupId} — ${g.name}</option>`).join('')}
-        </select>
-      `;
-
-      document.getElementById('rings').innerHTML =
-        rings.map(r => `
-          <div>
-            ${r.ringLabel}
-            <select id="groupSelect-${r.ringId}">
-              <option value="">-- Select Group --</option>
-            </select>
-            <button onclick="assignToRing('${r.ringId}')">Assign</button>
-          </div>
-        `).join('');
-
-      populateRingDropdowns(groups, rings);
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
-    loadData();
+    function fmtDuration(ms) {
+      if (!Number.isFinite(ms) || ms < 0) return '0:00';
+      var totalSeconds = Math.floor(ms / 1000);
+      var hours = Math.floor(totalSeconds / 3600);
+      var minutes = Math.floor((totalSeconds % 3600) / 60);
+      var seconds = totalSeconds % 60;
+      if (hours > 0) {
+        return hours + ':' + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+      }
+      return minutes + ':' + String(seconds).padStart(2, '0');
+    }
 
-    async function assignToRing(ringId) {
-      const sel = document.getElementById(`groupSelect-${ringId}`);
-      const groupId = sel.value;
+    function groupById(groupId) {
+      if (!groupId) return null;
+      for (var i = 0; i < state.groups.length; i += 1) {
+        if (state.groups[i].groupId === groupId) return state.groups[i];
+      }
+      return null;
+    }
 
-      if (!groupId) {
-        alert("Please select a group first.");
+    function groupLabel(groupId) {
+      var group = groupById(groupId);
+      return group ? group.groupId + ' - ' + group.name : (groupId || 'Unassigned');
+    }
+
+    function groupSummary(group) {
+      var competitors = group && Array.isArray(group.competitors) ? group.competitors : [];
+      var ages = competitors.map(function (competitor) { return Number.parseInt(competitor.age, 10); }).filter(Number.isFinite);
+      var ranks = competitors.map(function (competitor) { return String(competitor.rank || competitor.rankCode || '').trim(); }).filter(Boolean);
+      var genders = competitors.map(function (competitor) { return String(competitor.gender || '').trim(); }).filter(Boolean);
+      var ageRange = 'Age unknown';
+      var rankRange = 'Rank unknown';
+      var gender = 'Unknown';
+      var order = ['TTLD', 'G10', 'G9', 'G8', 'G7', 'G6', 'G5', 'G4', 'G3', 'G2', 'G1', 'CDB', 'D1', 'D2', 'D3'];
+
+      if (ages.length) {
+        var lo = Math.min.apply(null, ages);
+        var hi = Math.max.apply(null, ages);
+        ageRange = lo === hi ? 'Age ' + lo : 'Age ' + lo + '-' + hi;
+      }
+
+      var indexes = ranks.map(function (rank) { return order.indexOf(rank); }).filter(function (index) { return index >= 0; });
+      if (indexes.length) {
+        var rlo = Math.min.apply(null, indexes);
+        var rhi = Math.max.apply(null, indexes);
+        rankRange = rlo === rhi ? order[rlo] : order[rlo] + ' - ' + order[rhi];
+      }
+
+      if (genders.length) {
+        var distinct = Array.from(new Set(genders));
+        gender = distinct.length === 1 ? distinct[0] : 'Mixed';
+      }
+
+      return {
+        count: competitors.length,
+        ageRange: ageRange,
+        rankRange: rankRange,
+        gender: gender
+      };
+    }
+
+    function heartbeatStatus(ring) {
+      var ageMs = ring.lastHeartbeatAt ? Date.now() - new Date(ring.lastHeartbeatAt).getTime() : Number.POSITIVE_INFINITY;
+      var threshold = state.heartbeatPolicy.disconnectAfterSeconds * 1000;
+      var hasAssignment = !!ring.currentGroupId || (ring.queuedGroupIds || []).length > 0;
+      var hasTablet = !!ring.tabletLabel;
+
+      if (!hasTablet) {
+        return hasAssignment
+          ? { label: 'Waiting', tone: 'waiting', chip: 'warn' }
+          : { label: 'Unassigned', tone: 'idle', chip: 'idle' };
+      }
+
+      if (!Number.isFinite(ageMs) || ageMs < threshold) {
+        return { label: hasAssignment ? 'Active' : 'Connected', tone: 'active', chip: 'ok' };
+      }
+
+      return {
+        label: 'Disconnected',
+        tone: 'down',
+        chip: 'down'
+      };
+    }
+
+    function buildRingView(ring) {
+      var currentGroup = groupById(ring.currentGroupId);
+      var queuedGroup = ring.queuedGroupIds && ring.queuedGroupIds.length ? groupById(ring.queuedGroupIds[0]) : null;
+      var status = heartbeatStatus(ring);
+      var hasCurrent = !!ring.currentGroupId;
+      var hasQueue = (ring.queuedGroupIds || []).length > 0;
+      var statusLabel = !hasCurrent && !hasQueue
+        ? 'Unassigned'
+        : (!hasCurrent && hasQueue
+          ? 'Waiting'
+          : (status.label === 'Connected' ? 'Active' : status.label));
+      var statusTone = !hasCurrent && !hasQueue
+        ? 'idle'
+        : (!hasCurrent && hasQueue
+          ? 'waiting'
+          : (status.label === 'Connected' ? 'ok' : status.chip));
+      return {
+        ring: ring,
+        status: status,
+        statusLabel: statusLabel,
+        statusTone: statusTone,
+        currentGroup: currentGroup,
+        queuedGroup: queuedGroup
+      };
+    }
+
+    function availableGroupsForRing(ring) {
+      var unavailable = new Set();
+      for (var i = 0; i < state.rings.length; i += 1) {
+        var other = state.rings[i];
+        if (other.ringId === ring.ringId) continue;
+        if (other.currentGroupId) unavailable.add(other.currentGroupId);
+        (other.queuedGroupIds || []).forEach(function (gid) { unavailable.add(gid); });
+      }
+      var currentAndQueue = new Set([ring.currentGroupId].concat(ring.queuedGroupIds || []).filter(Boolean));
+      return state.groups.filter(function (group) { return !unavailable.has(group.groupId) || currentAndQueue.has(group.groupId); });
+    }
+
+    function renderNotice(message, kind) {
+      if (!message) {
+        noticeEl.className = 'notice';
+        noticeEl.textContent = '';
         return;
       }
+      noticeEl.className = 'notice visible ' + (kind || 'info');
+      noticeEl.textContent = message;
+    }
 
-      const res = await fetch(`/api/rings/${ringId}/queue`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId })
-      });
+    function renderGroupDetails(group) {
+      if (!group) {
+        return '<div class="modal-section"><h4>No group assigned</h4><div class="meta-line"><span>Nothing to show yet.</span></div></div>';
+      }
 
-      if (res.ok) {
-        alert(`Assigned ${groupId} to ${ringId}`);
-        loadData(); // refresh UI
+      var competitors = Array.isArray(group.competitors) ? group.competitors : [];
+      var list = competitors.length
+        ? '<ol class="modal-list">' + competitors.map(function (competitor) {
+            var firstName = String(competitor.firstName || '').trim();
+            var lastName = String(competitor.lastName || '').trim();
+            var rank = String(competitor.rank || competitor.rankCode || 'Unknown').trim();
+            var age = String(competitor.age || '').trim() || 'Unknown';
+            var studio = String(competitor.studio || competitor.school || '').trim() || 'Unknown';
+            var name = [firstName, lastName].filter(Boolean).join(' ') || competitor.fullName || competitor.name || 'Unknown';
+            return '<li>' + escapeHtml(name) + ' - ' + escapeHtml(rank) + ' - ' + escapeHtml(age) + ' - ' + escapeHtml(studio) + '</li>';
+          }).join('') + '</ol>'
+        : '<div class="meta-line"><span>No competitors in this group.</span></div>';
+
+      return (
+        '<div class="modal-section">' +
+          list +
+        '</div>'
+      );
+    }
+
+    function openGroupModal(groupId) {
+      state.activeGroupId = groupId;
+      var group = groupById(groupId);
+      groupModalTitleEl.textContent = group ? group.groupId : 'Group details';
+      groupModalSubtitleEl.textContent = group ? (groupSummary(group).count + ' competitors') : 'Group not found';
+      groupModalBodyEl.innerHTML = renderGroupDetails(group);
+      groupModalEl.classList.add('visible');
+      groupModalEl.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeGroupModal() {
+      state.activeGroupId = '';
+      groupModalEl.classList.remove('visible');
+      groupModalEl.setAttribute('aria-hidden', 'true');
+      groupModalBodyEl.innerHTML = '';
+    }
+
+    function renderRingRow(ring) {
+      var view = buildRingView(ring);
+      var currentGroup = view.currentGroup;
+      var queue = Array.isArray(ring.queuedGroupIds) ? ring.queuedGroupIds : [];
+      var queueOptions = availableGroupsForRing(ring).map(function (group) {
+        return '<option value="' + escapeHtml(group.groupId) + '">' + escapeHtml(group.groupId) + ' - ' + escapeHtml(group.name) + '</option>';
+      }).join('');
+      var activeHtml = currentGroup
+        ? '<button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(currentGroup.groupId) + '">' + escapeHtml(currentGroup.groupId) + '</button>'
+        : '<span class="empty">Unassigned</span>';
+      var queuedHtml = queue.length
+        ? queue.map(function (groupId) {
+            var label = groupLabel(groupId);
+            return '<span class="group-chip"><button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(groupId) + '">' + escapeHtml(groupId) + '</button><button class="queue-remove" data-action="remove-queue" data-ring-id="' + escapeHtml(ring.ringId) + '" data-group-id="' + escapeHtml(groupId) + '" aria-label="Remove ' + escapeHtml(groupId) + ' from queue">×</button></span>';
+          }).join('')
+        : '<span class="empty">Empty</span>';
+
+      return [
+        '<section class="ring-row ' + view.status.tone + '" data-ring-id="' + escapeHtml(ring.ringId) + '">',
+          '<div class="ring-id-cell">',
+            '<div class="ring-header-row">',
+              '<strong class="ring-id" style="color:#0f172a;text-decoration:none;">' + escapeHtml(ring.ringLabel) + '</strong>',
+              '<button class="ghost ring-reset-btn" data-action="reset-ring" data-ring-id="' + escapeHtml(ring.ringId) + '">Reset Ring</button>',
+            '</div>',
+            '<div class="ring-status"><span class="status-chip ' + view.status.chip + '">' + escapeHtml(view.status.label) + '</span></div>',
+          '</div>',
+          '<div class="group-box active">',
+            '<span>Active group</span>',
+            '<strong>' + (currentGroup ? '<button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(currentGroup.groupId) + '">' + escapeHtml(currentGroup.groupId) + '</button>' : 'Unassigned') + '</strong>',
+          '</div>',
+          '<div class="group-box">',
+            '<span>Queued groups</span>',
+            '<div class="queued-list">' + queuedHtml + '</div>',
+          '</div>',
+          '<div class="actions">',
+            '<span>Queue group</span>',
+            '<div class="action-line">',
+              '<select data-role="queue-select" id="queue-' + escapeHtml(ring.ringId) + '">',
+                '<option value="">Select a group to queue</option>',
+                queueOptions,
+              '</select>',
+              '<button class="primary" data-action="queue" data-ring-id="' + escapeHtml(ring.ringId) + '">Queue Group</button>',
+            '</div>',
+          '</div>',
+        '</section>'
+      ].join('');
+    }
+
+    function renderBoard() {
+      tournamentNameEl.textContent = state.activeEvent || 'Tournament';
+      competitorCountLabelEl.textContent = state.groups.reduce(function (sum, group) {
+        return sum + (Array.isArray(group.competitors) ? group.competitors.length : 0);
+      }, 0) + ' competitors';
+      eventTimerEl.textContent = state.eventStartedAt ? fmtDuration(Date.now() - new Date(state.eventStartedAt).getTime()) : '--:--:--';
+      var loadedAt = state.lastLoadedAt ? new Date(state.lastLoadedAt).toLocaleTimeString() : '--';
+      noticeEl.dataset.loadedAt = loadedAt;
+
+      var rings = state.rings.slice().sort(function (a, b) { return a.ringLabel.localeCompare(b.ringLabel); });
+      boardEl.innerHTML = rings.map(renderRingRow).join('');
+
+      if (state.activeGroupId) {
+        var activeGroup = groupById(state.activeGroupId);
+        if (activeGroup) {
+          openGroupModal(activeGroup.groupId);
+        } else {
+          closeGroupModal();
+        }
       } else {
-        alert("Assignment failed.");
+        closeGroupModal();
       }
     }
 
-    function populateRingDropdowns(groups, rings) {
-      rings.forEach(r => {
-        const sel = document.getElementById(`groupSelect-${r.ringId}`);
-        if (!sel) return;
-
-        sel.innerHTML = `
-          <option value="">-- Select Group --</option>
-          ${groups.map(g => `<option value="${g.groupId}">${g.groupId} — ${g.name}</option>`).join('')}
-        `;
-      });
+    function updateTimerOnly() {
+      eventTimerEl.textContent = state.eventStartedAt ? fmtDuration(Date.now() - new Date(state.eventStartedAt).getTime()) : '--:--:--';
     }
 
-    async function createTestGroup() {
-      const testGroup = {
-        groupId: "test-" + Math.floor(Math.random() * 10000),
-        name: "Test Group"
-      };
+    async function fetchJson(url, options) {
+      var response = await fetch(url, options);
+      var data = await response.json();
+      if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+      return data;
+    }
 
+    async function loadBoard() {
+      var results = await Promise.all([
+        fetchJson('/api/events/active'),
+        fetchJson('/api/groups'),
+        fetchJson('/api/rings')
+      ]);
 
-      const res = await fetch('/api/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(testGroup)
-      });
+      state.activeEvent = results[0] && results[0].activeEvent ? String(results[0].activeEvent) : '';
+      state.groups = results[1].groups || [];
+      state.rings = results[2].rings || [];
+      state.eventStartedAt = results[2].eventStartedAt || state.eventStartedAt || '';
+      state.heartbeatPolicy = results[2].heartbeatPolicy || state.heartbeatPolicy;
+      state.lastLoadedAt = new Date().toISOString();
+      renderBoard();
+      renderNotice('', '');
+    }
 
-      if (res.ok) {
-        alert("Test group created.");
-        loadData(); // refresh UI
-      } else {
-        alert("Failed to create test group.");
+    async function refreshAll() {
+      try {
+        await loadBoard();
+      } catch (error) {
+        renderNotice('Refresh failed: ' + error.message, 'error');
       }
     }
-</script>
+
+    async function queueGroup(ringId, groupId) {
+      await fetchJson('/api/rings/' + ringId + '/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId: groupId })
+      });
+    }
+
+    async function removeQueuedGroup(ringId, groupId) {
+      await fetchJson('/api/rings/' + ringId + '/queue/' + groupId, { method: 'DELETE' });
+    }
+
+    refreshBtn.addEventListener('click', function () {
+      refreshAll().catch(function (error) { renderNotice(error.message, 'error'); });
+    });
+
+    boardEl.addEventListener('click', async function (event) {
+      var button = event.target instanceof Element ? event.target.closest('button[data-action]') : null;
+      if (!button) return;
+      var action = button.getAttribute('data-action');
+      var ringId = button.getAttribute('data-ring-id');
+      var groupId = button.getAttribute('data-group-id');
+
+      try {
+        if (action === 'group-details') {
+          openGroupModal(groupId);
+          return;
+        }
+        if (action === 'queue') {
+          var select = document.getElementById('queue-' + ringId);
+          var nextGroupId = select && select.value;
+          if (!nextGroupId) throw new Error('Select a group to queue first.');
+          await queueGroup(ringId, nextGroupId);
+          select.value = '';
+          await refreshAll();
+          renderNotice('Ring updated.', 'ok');
+          return;
+        }
+        if (action === 'reset-ring') {
+          if (!confirm('Reset this ring? This clears the current group, queue, tablet, and assistance state.')) return;
+          await fetchJson('/api/rings/' + ringId + '/reset', { method: 'POST' });
+          await refreshAll();
+          renderNotice('Ring reset complete.', 'ok');
+          return;
+        }
+        if (action === 'remove-queue') {
+          await removeQueuedGroup(ringId, groupId);
+          await refreshAll();
+          renderNotice('Queued group removed.', 'ok');
+        }
+      } catch (error) {
+        renderNotice('Update failed: ' + error.message, 'error');
+      }
+    });
+
+    groupModalCloseEl.addEventListener('click', closeGroupModal);
+    groupModalEl.addEventListener('click', function (event) {
+      if (event.target === groupModalEl) closeGroupModal();
+    });
+
+    window.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && groupModalEl.classList.contains('visible')) {
+        closeGroupModal();
+      }
+    });
+
+    refreshAll().catch(function (error) { renderNotice('Initial load failed: ' + error.message, 'error'); });
+    window.setInterval(updateTimerOnly, 1000);
+    window.setInterval(refreshAll, 10000);
+  </script>
 </body>
 </html>

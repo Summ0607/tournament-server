@@ -7,20 +7,22 @@
   <style>
     :root {
       color-scheme: light;
-      --bg: #f4f6fb;
+      --bg: #eef1f4;
       --surface: #ffffff;
-      --surface-soft: #f8fafc;
-      --line: #d9e0ea;
-      --line-strong: #c7cfda;
-      --text: #17212f;
-      --text-soft: #5d6979;
-      --text-faint: #7a8797;
-      --shadow: 0 10px 28px rgba(24, 39, 75, 0.08);
+      --surface-soft: #f5f7fa;
+      --surface-muted: #e9edf2;
+      --line: #c9d1db;
+      --line-strong: #94a3b8;
+      --text: #111827;
+      --text-soft: #374151;
+      --text-faint: #6b7280;
+      --shadow: 0 10px 26px rgba(15, 23, 42, 0.10);
       --radius: 16px;
-      --good: #0a7c00;
-      --warn: #a86d00;
-      --danger: #b00020;
-      --info: #2257b3;
+      --good: #166534;
+      --warn: #a16207;
+      --danger: #b91c1c;
+      --info: #334155;
+      --idle: #475569;
     }
 
     * { box-sizing: border-box; }
@@ -30,8 +32,9 @@
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--text);
       background:
-        radial-gradient(circle at top left, rgba(34, 87, 179, 0.08), transparent 30%),
-        linear-gradient(180deg, #eef3ff 0%, var(--bg) 34%, var(--bg) 100%);
+        radial-gradient(circle at top left, rgba(15, 23, 42, 0.08), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(15, 23, 42, 0.06), transparent 35%),
+        linear-gradient(180deg, #f4f6f8 0%, #eef1f4 18%, #e4e8ee 100%);
     }
 
     .shell {
@@ -42,32 +45,61 @@
 
     .hero {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 14px;
-      align-items: start;
+      grid-template-columns: 1fr;
+      gap: 12px;
       margin-bottom: 14px;
     }
 
     .title-block {
-      background: rgba(255,255,255,0.82);
+      position: relative;
+      background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
       backdrop-filter: blur(8px);
-      border: 1px solid rgba(201, 209, 222, 0.8);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 18px 18px 16px;
+      box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
+      padding: 16px 132px 14px 20px;
+      min-height: 108px;
     }
 
-    h1 {
+    .tournament-name {
       margin: 0 0 6px;
-      font-size: clamp(26px, 3vw, 38px);
-      line-height: 1.05;
-      letter-spacing: -0.03em;
+      font-size: clamp(30px, 4vw, 46px);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+      font-weight: 750;
+      color: var(--text);
+    }
+
+    .title-secondary {
+      color: var(--text-soft);
+      font-size: 14px;
+      line-height: 1.4;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .title-logo {
+      position: absolute;
+      top: -1px;
+      right: 1px;
+      width: 108px;
+      height: 108px;
+      object-fit: contain;
+      object-position: center;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.10);
+      padding: 4px;
     }
 
     .subtitle {
-      color: var(--text-soft);
-      font-size: 13px;
+      color: #0f172a;
+      font-size: 15px;
       line-height: 1.45;
+      font-weight: 800;
+      letter-spacing: 0.01em;
     }
 
     .toolbar {
@@ -75,13 +107,22 @@
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      justify-content: flex-end;
+      justify-content: flex-start;
+      padding: 14px 16px;
+    }
+
+    .toolbar.panel {
+      background: var(--surface);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
     }
 
     button {
       appearance: none;
       border: 1px solid var(--line-strong);
-      background: #fff;
+      background: var(--surface);
       color: var(--text);
       padding: 10px 14px;
       border-radius: 12px;
@@ -94,15 +135,21 @@
     button:hover { box-shadow: var(--shadow); }
     button:active { transform: translateY(1px); }
     button.primary { background: #111827; border-color: #111827; color: #fff; }
-    button.danger { background: #b00020; border-color: #b00020; color: #fff; }
-    button.ghost { background: #fff; }
+    button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+    button.ghost { background: var(--surface); }
     button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+    .hidden { display: none !important; }
 
     .panel {
-      background: rgba(255,255,255,0.92);
-      border: 1px solid rgba(201, 209, 222, 0.85);
+      background: var(--surface);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
-      box-shadow: var(--shadow);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+    }
+
+    .section-card {
+      padding: 16px;
+      margin-bottom: 14px;
     }
 
     .summary {
@@ -111,6 +158,7 @@
       gap: 10px;
       margin-bottom: 14px;
     }
+    .summary, .meta { display: none; }
 
     .summary-card {
       position: relative;
@@ -142,10 +190,10 @@
     }
 
     .summary-card.active { --card-accent: #0a7c00; }
-    .summary-card.waiting { --card-accent: #a86d00; }
-    .summary-card.down { --card-accent: #b00020; }
-    .summary-card.help { --card-accent: #2257b3; }
-    .summary-card.idle { --card-accent: #768294; }
+    .summary-card.waiting { --card-accent: var(--warn); }
+    .summary-card.down { --card-accent: var(--danger); }
+    .summary-card.help { --card-accent: var(--info); }
+    .summary-card.idle { --card-accent: var(--idle); }
 
     .meta {
       display: flex;
@@ -170,22 +218,25 @@
     }
 
     .notice.visible { display: block; }
-    .notice.ok { border-color: rgba(10, 124, 0, 0.25); background: #f1fbf1; color: #166116; }
-    .notice.warn { border-color: rgba(168, 109, 0, 0.25); background: #fff8eb; color: #8d5b00; }
-    .notice.error { border-color: rgba(176, 0, 32, 0.25); background: #fff1f4; color: #8c0018; }
-    .notice.info { border-color: rgba(34, 87, 179, 0.25); background: #eef4ff; color: #204a91; }
+    .notice.ok { border-color: rgba(22, 101, 52, 0.28); background: #ecfdf3; color: #14532d; }
+    .notice.warn { border-color: rgba(161, 98, 7, 0.28); background: #fff7e0; color: #7c2d12; }
+    .notice.error { border-color: rgba(185, 28, 28, 0.28); background: #fef2f2; color: #7f1d1d; }
+    .notice.info { border-color: rgba(51, 65, 85, 0.28); background: #eef2f7; color: #1f2937; }
 
     .board {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 14px;
+      gap: 12px;
       margin-bottom: 14px;
     }
 
     .ring-card {
       position: relative;
       overflow: hidden;
-      padding: 16px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
     }
 
     .ring-card::before {
@@ -196,13 +247,13 @@
       background: var(--ring-accent, var(--line));
     }
 
-    .ring-card.help-medical { --ring-accent: #b00020; }
-    .ring-card.help-arbitrator { --ring-accent: #7c4dff; }
-    .ring-card.help-general { --ring-accent: #2257b3; }
-    .ring-card.active { --ring-accent: #0a7c00; }
-    .ring-card.waiting { --ring-accent: #a86d00; }
-    .ring-card.down { --ring-accent: #b00020; }
-    .ring-card.idle { --ring-accent: #768294; }
+    .ring-card.help-medical { --ring-accent: var(--danger); }
+    .ring-card.help-arbitrator { --ring-accent: var(--warn); }
+    .ring-card.help-general { --ring-accent: var(--info); }
+    .ring-card.active { --ring-accent: var(--good); }
+    .ring-card.waiting { --ring-accent: var(--warn); }
+    .ring-card.down { --ring-accent: var(--danger); }
+    .ring-card.idle { --ring-accent: var(--idle); }
 
     .ring-header {
       display: flex;
@@ -248,12 +299,12 @@
       border: 1px solid transparent;
     }
 
-    .chip.ok { background: #e4f6e4; border-color: #bfe2bf; color: var(--good); }
-    .chip.warn { background: #fff4db; border-color: #f0d596; color: var(--warn); }
-    .chip.down { background: #fff0f3; border-color: #f0b9c4; color: var(--danger); }
-    .chip.idle { background: #f1f4f7; border-color: #dbe2eb; color: #5f6b79; }
-    .chip.help { background: #eef4ff; border-color: #ccd9f7; color: var(--info); }
-    .chip.phase { background: #f3f5f9; border-color: #dee4ee; color: #475569; }
+    .chip.ok { background: #dcfce7; border-color: #86efac; color: #14532d; }
+    .chip.warn { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+    .chip.down { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
+    .chip.idle { background: #e5e7eb; border-color: #cbd5e1; color: #334155; }
+    .chip.help { background: #e2e8f0; border-color: #cbd5e1; color: #1f2937; }
+    .chip.phase { background: #e5e7eb; border-color: #cbd5e1; color: #334155; }
 
     .grid {
       display: grid;
@@ -264,7 +315,7 @@
 
     .stat {
       border-radius: 12px;
-      border: 1px solid #e5eaf2;
+      border: 1px solid var(--line);
       background: var(--surface-soft);
       padding: 10px 11px;
       min-width: 0;
@@ -305,6 +356,254 @@
       gap: 6px;
     }
 
+    .ring-row {
+      display: grid;
+      grid-template-columns: minmax(90px, 118px) minmax(0, 1fr) minmax(86px, 108px);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .ring-id-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .ring-status {
+      display: flex;
+      align-items: center;
+      min-height: 18px;
+    }
+
+    .ring-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #0f3da1;
+      font: inherit;
+      font-weight: 900;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .ring-link:hover { text-decoration-thickness: 2px; }
+
+    .progress-box {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text-soft);
+      white-space: nowrap;
+    }
+    .status-chip.ok { background: #dcfce7; border-color: #86efac; color: #14532d; }
+    .status-chip.warn { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+    .status-chip.down { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
+    .status-chip.idle { background: #e5e7eb; border-color: #cbd5e1; color: #334155; }
+    .status-chip.waiting { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+
+    .progress-track {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .segment {
+      position: relative;
+      min-height: 16px;
+    border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background:
+      linear-gradient(90deg, rgba(51, 65, 85, 0.44) 0, rgba(51, 65, 85, 0.44) calc(var(--fill, 0) * 100%), #e5e7eb calc(var(--fill, 0) * 100%), #e5e7eb 100%);
+      overflow: hidden;
+    }
+
+    .segment.complete {
+      background:
+      linear-gradient(90deg, rgba(22, 101, 52, 0.36) 0, rgba(22, 101, 52, 0.36) calc(var(--fill, 0) * 100%), #dcfce7 calc(var(--fill, 0) * 100%), #dcfce7 100%);
+    }
+
+    .segment.active {
+      background:
+      linear-gradient(90deg, rgba(22, 101, 52, 0.5) 0, rgba(22, 101, 52, 0.5) calc(var(--fill, 0) * 100%), #dcfce7 calc(var(--fill, 0) * 100%), #dcfce7 100%);
+    }
+
+    .segment.upcoming {
+    background: #d1d5db;
+    }
+
+    .segment.warn {
+      background:
+      linear-gradient(90deg, rgba(185, 28, 28, 0.4) 0, rgba(185, 28, 28, 0.4) calc(var(--fill, 0) * 100%), #fee2e2 calc(var(--fill, 0) * 100%), #fee2e2 100%);
+    }
+
+    .segment span {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text);
+    }
+
+    .timer-box {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 100%;
+    }
+
+    .timer-box strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+
+    .timer-box small {
+      display: block;
+      margin-top: 4px;
+      color: var(--text-soft);
+      font-size: 11px;
+    }
+
+    .event-timer {
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--text-soft);
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .event-timer strong {
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .ring-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.5);
+      z-index: 50;
+    }
+
+    .ring-modal.visible { display: flex; }
+
+    .ring-modal-dialog {
+      width: min(840px, 100%);
+      background: #fff;
+      border-radius: 18px;
+      border: 1px solid rgba(201, 209, 222, 0.9);
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22);
+      overflow: hidden;
+    }
+
+    .ring-modal-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 16px 18px;
+      border-bottom: 1px solid #e5eaf2;
+      background: #f8fafc;
+    }
+
+    .ring-modal-title h3 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .ring-modal-title .sub {
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .ring-modal-close {
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: var(--text);
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .ring-modal-body {
+      padding: 16px 18px 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .ring-modal-section {
+      border: 1px solid #e5eaf2;
+      border-radius: 14px;
+      background: var(--surface-soft);
+      padding: 12px 14px;
+    }
+
+    .ring-modal-section h4 {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
+
+    .ring-modal-section .meta-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      color: var(--text-soft);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .ring-modal-section .meta-line span {
+      white-space: nowrap;
+    }
+
+    .ring-modal-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 4px;
+      color: var(--text);
+      font-size: 13px;
+    }
+
     .queue-list li {
       display: flex;
       justify-content: space-between;
@@ -339,7 +638,7 @@
 
     .assist.medical { background: #fff0f2; border-color: rgba(176, 0, 32, 0.22); color: #8c0018; }
     .assist.arbitrator { background: #f5efff; border-color: rgba(124, 77, 255, 0.22); color: #5a34aa; }
-    .assist.general { background: #eef4ff; border-color: rgba(34, 87, 179, 0.22); color: #204a91; }
+    .assist.general { background: #eef2f7; border-color: rgba(148, 163, 184, 0.4); color: #1f2937; }
 
     .actions {
       display: grid;
@@ -410,7 +709,7 @@
 
     .status-state.ok { background: #e8f7e8; border-color: #bfe2bf; color: var(--good); }
     .status-state.error { background: #fff0f3; border-color: #f0b9c4; color: var(--danger); }
-    .status-state.loading { background: #eef4ff; border-color: #ccd9f7; color: var(--info); }
+    .status-state.loading { background: #eef2f7; border-color: #cbd5e1; color: #334155; }
 
     .status-output {
       margin: 0;
@@ -448,14 +747,16 @@
 
     @media (max-width: 760px) {
       .shell { padding: 14px; }
-      .hero { grid-template-columns: 1fr; }
       .toolbar { justify-content: flex-start; }
       .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .board { grid-template-columns: 1fr; }
+      .ring-row { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr; }
       .action-line, .action-line.reset { grid-template-columns: 1fr; }
       .action-line button { width: 100%; min-width: 0; }
       .status-panel-head { align-items: flex-start; flex-direction: column; }
+      .event-timer { margin-left: 0; }
+      .timer-box { text-align: left; }
     }
   </style>
 </head>
@@ -463,52 +764,48 @@
   <div class="shell">
     <div class="hero">
       <div class="title-block">
-        <h1>Head Table Dashboard</h1>
-        <div class="subtitle">Live ring and group control for operators. Auto-refreshes every 10 seconds.</div>
+        <h1 class="tournament-name" id="tournamentName">Tournament</h1>
+        <div class="title-secondary">Head Table</div>
+        <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
-      <div class="toolbar">
+      <div class="toolbar panel">
         <button class="ghost" id="refreshBtn">Refresh Board</button>
         <button class="danger" id="resetTournamentBtn">Reset Tournament</button>
-
-        <!-- ⭐ NEW EVENT MANAGEMENT BUTTONS ⭐ -->
-        <button class="ghost" id="listEventsBtn">List Events</button>
-
-        <input id="eventNameInput" placeholder="Event name" style="padding:8px; border-radius:10px; border:1px solid #ccc;">
-
-        <button class="primary" id="createEventBtn">Create Event</button>
-
-        <button class="primary" id="createActivateEventBtn">
-          Create &amp; Activate
-        </button>
-
-        <select id="eventSelect" style="padding:8px; border-radius:10px; border:1px solid #ccc;">
-          <option value="">-- Select Event --</option>
-        </select>
-
-        <button class="ghost" id="activateEventBtn" disabled>
-          Activate Event
-        </button>
-
-        <button class="danger" id="resetEventBtn" disabled>
-          Reset Event
-        </button>      </div>
+        <button class="ghost" id="openSetupBtn" onclick="location.href='/setup/'">Setup</button>
+        <button class="ghost" id="openRingAssignmentBtn" onclick="location.href='/ring-assignment/'">Ring Assignment</button>
+        <button class="ghost" id="debugToggleBtn">Show Debug</button>
+        <div class="event-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
+      </div>
     </div>
 
     <div class="summary" id="summaryCards"></div>
     <div class="meta" id="metaLine">Loading dashboard...</div>
     <div class="notice" id="notice" aria-live="polite"></div>
 
-    <div class="board" id="board"></div>
-
-    <div class="panel status-panel" id="statusPanel">
+    <div class="panel status-panel hidden" id="statusPanel">
       <div class="status-panel-head">
-        <h3>Status Panel</h3>
-        <span class="status-state loading" id="statusState">Loading</span>
+        <h3>Debug Status</h3>
+        <span class="status-state loading" id="statusState">Hidden</span>
       </div>
       <pre class="status-output" id="statusOutput">{}</pre>
       <div class="status-foot">
         <span id="statusTimestamp">Timestamp: --</span>
         <span id="statusError">Error state: --</span>
+      </div>
+    </div>
+
+    <div id="board" class="board"></div>
+
+    <div class="ring-modal" id="ringModal" aria-hidden="true">
+      <div class="ring-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="ringModalTitle">
+        <div class="ring-modal-head">
+          <div class="ring-modal-title">
+            <h3 id="ringModalTitle">Ring details</h3>
+            <div class="sub" id="ringModalSubtitle">Select a ring</div>
+          </div>
+          <button class="ring-modal-close" id="ringModalClose" aria-label="Close ring details">×</button>
+        </div>
+        <div class="ring-modal-body" id="ringModalBody"></div>
       </div>
     </div>
   </div>
@@ -521,23 +818,34 @@
       heartbeatPolicy: { disconnectAfterSeconds: 90, resetMode: 'manual' },
       serverBaseUrl: '',
       activeEvent: '',
+      eventStartedAt: '',
       lastBoardLoadedAt: null,
       statusData: null,
       statusLoadedAt: null,
-      statusError: ''
+      statusError: '',
+      debugVisible: false,
+      activeRingId: ''
     };
 
     const summaryCardsEl = document.getElementById('summaryCards');
     const metaLineEl = document.getElementById('metaLine');
     const noticeEl = document.getElementById('notice');
     const boardEl = document.getElementById('board');
+    const tournamentNameEl = document.getElementById('tournamentName');
     const statusPanelEl = document.getElementById('statusPanel');
     const statusOutputEl = document.getElementById('statusOutput');
     const statusStateEl = document.getElementById('statusState');
     const statusTimestampEl = document.getElementById('statusTimestamp');
     const statusErrorEl = document.getElementById('statusError');
+    const eventTimerEl = document.getElementById('eventTimer');
+    const ringModalEl = document.getElementById('ringModal');
+    const ringModalTitleEl = document.getElementById('ringModalTitle');
+    const ringModalSubtitleEl = document.getElementById('ringModalSubtitle');
+    const ringModalBodyEl = document.getElementById('ringModalBody');
+    const ringModalCloseEl = document.getElementById('ringModalClose');
     const refreshBtn = document.getElementById('refreshBtn');
     const resetTournamentBtn = document.getElementById('resetTournamentBtn');
+    const debugToggleBtn = document.getElementById('debugToggleBtn');
 
     function escapeHtml(value) {
       return String(value)
@@ -636,30 +944,6 @@
       return state.groups.filter((group) => !unavailable.has(group.groupId) || currentAndQueue.has(group.groupId));
     }
 
-    function renderSummary() {
-      const counts = summaryCounts();
-      summaryCardsEl.innerHTML = `
-        <div class="panel summary-card active"><strong>${counts.active}</strong><span>Active</span></div>
-        <div class="panel summary-card waiting"><strong>${counts.waiting}</strong><span>Waiting</span></div>
-        <div class="panel summary-card down"><strong>${counts.down}</strong><span>Down</span></div>
-        <div class="panel summary-card help"><strong>${counts.help}</strong><span>Help</span></div>
-        <div class="panel summary-card idle"><strong>${counts.idle}</strong><span>Idle</span></div>
-      `;
-    }
-
-    function renderMeta() {
-      const loadedAt = state.lastBoardLoadedAt ? new Date(state.lastBoardLoadedAt).toLocaleTimeString() : '--';
-      metaLineEl.innerHTML = `
-        <span>Server: ${escapeHtml(state.serverBaseUrl || location.origin)}</span>
-        <span>Rings: ${state.rings.length}</span>
-        <span>Groups: ${state.groups.length}</span>
-        <span>Config: ${state.ringConfig.letterCount} x ${state.ringConfig.numberCount}</span>
-        <span>Reset mode: ${escapeHtml(state.heartbeatPolicy.resetMode || 'manual')}</span>
-        <span>Active Event: ${escapeHtml(state.activeEvent || '--')}</span>
-        <span>Last board refresh: ${escapeHtml(loadedAt)}</span>
-      `;
-    }
-
     function renderNotice(message, kind) {
       if (!message) {
         noticeEl.className = 'notice';
@@ -670,87 +954,258 @@
       noticeEl.textContent = message;
     }
 
+    function formatAgeRange(group) {
+      const ages = (group && Array.isArray(group.competitors) ? group.competitors : [])
+        .map((competitor) => Number.parseInt(competitor.age, 10))
+        .filter((age) => Number.isFinite(age));
+      if (!ages.length) return 'Age unknown';
+      const lo = Math.min.apply(null, ages);
+      const hi = Math.max.apply(null, ages);
+      return lo === hi ? `Age ${lo}` : `Age ${lo}-${hi}`;
+    }
+
+    function formatRankRange(group) {
+      const ranks = (group && Array.isArray(group.competitors) ? group.competitors : [])
+        .map((competitor) => String(competitor.rank || competitor.rankCode || '').trim())
+        .filter(Boolean);
+      if (!ranks.length) return 'Rank unknown';
+      const order = ['TTLD', 'G10', 'G9', 'G8', 'G7', 'G6', 'G5', 'G4', 'G3', 'G2', 'G1', 'CDB', 'D1', 'D2', 'D3'];
+      const indexes = ranks.map((rank) => order.indexOf(rank)).filter((index) => index >= 0);
+      if (!indexes.length) return 'Rank unknown';
+      const lo = Math.min.apply(null, indexes);
+      const hi = Math.max.apply(null, indexes);
+      return lo === hi ? order[lo] : `${order[lo]} - ${order[hi]}`;
+    }
+
+    function formatGender(group) {
+      const genders = (group && Array.isArray(group.competitors) ? group.competitors : [])
+        .map((competitor) => String(competitor.gender || '').trim())
+        .filter(Boolean);
+      if (!genders.length) return 'Unknown';
+      const distinct = Array.from(new Set(genders));
+      return distinct.length === 1 ? distinct[0] : 'Mixed';
+    }
+
+    function groupSummary(group) {
+      return {
+        count: group && Array.isArray(group.competitors) ? group.competitors.length : 0,
+        ageRange: formatAgeRange(group),
+        rankRange: formatRankRange(group),
+        gender: formatGender(group)
+      };
+    }
+
+    function getGroup(groupId) {
+      if (!groupId) return null;
+      return state.groups.find((group) => group.groupId === groupId) || null;
+    }
+
+    function elapsedMsForRing(ring) {
+      const source = ring.assignmentStartedAt || ring.phaseStartedAt || ring.lastHeartbeatAt || state.eventStartedAt;
+      if (!source) return 0;
+      const time = new Date(source).getTime();
+      if (Number.isNaN(time)) return 0;
+      return Math.max(0, Date.now() - time);
+    }
+
+    function estimateMsForGroup(group) {
+      const count = group && Array.isArray(group.competitors) ? group.competitors.length : 0;
+      return Math.max(count, 1) * 7 * 60 * 1000;
+    }
+
+    function buildRingView(ring) {
+      const currentGroup = getGroup(ring.currentGroupId);
+      const queuedGroup = ring.queuedGroupIds && ring.queuedGroupIds.length ? getGroup(ring.queuedGroupIds[0]) : null;
+      const hasCurrent = !!ring.currentGroupId;
+      const hasQueue = (ring.queuedGroupIds || []).length > 0;
+      const estimateMs = hasCurrent ? estimateMsForGroup(currentGroup) : 0;
+      const elapsedMs = hasCurrent ? elapsedMsForRing(ring) : 0;
+      const ratio = estimateMs > 0 ? elapsedMs / estimateMs : 0;
+      const heartbeat = heartbeatStatus(ring);
+      const statusLabel = !hasCurrent && !hasQueue
+        ? 'Unassigned'
+        : (!hasCurrent && hasQueue
+          ? 'Waiting'
+          : (heartbeat.label === 'Connected' ? 'Active' : heartbeat.label));
+      const statusTone = !hasCurrent && !hasQueue
+        ? 'idle'
+        : (!hasCurrent && hasQueue
+          ? 'waiting'
+          : (heartbeat.label === 'Connected' ? 'ok' : heartbeat.chip));
+      let tone = heartbeat.tone;
+      if (hasCurrent && heartbeat.label === 'Connected') {
+        if (ratio >= 1.2) tone = 'down';
+        else if (ratio >= 1.1) tone = 'warn';
+        else tone = 'active';
+      }
+      const detail = !hasCurrent
+        ? (hasQueue ? `${groupLabel(ring.queuedGroupIds[0])}${ring.queuedGroupIds.length > 1 ? ` +${ring.queuedGroupIds.length - 1} more` : ''}` : 'No active or queued group.')
+        : (heartbeat.label === 'Connected'
+          ? (ratio >= 1.2 ? `Past estimate by ${fmtDuration(elapsedMs - estimateMs)}` : (ratio >= 1.1 ? `Near the edge by ${fmtDuration(elapsedMs - estimateMs)}` : 'Within estimate.'))
+          : heartbeat.detail);
+      const phasePlan = ring.phasePlan && Array.isArray(ring.phasePlan.phases) ? ring.phasePlan : { phases: [] };
+      const phases = phasePlan.phases.length ? phasePlan.phases : defaultPhasePlan(ring, currentGroup);
+
+      return {
+        ring,
+        tone,
+        statusTone,
+        statusLabel,
+        detail,
+        currentGroup,
+        queuedGroup,
+        hasCurrent,
+        hasQueue,
+        elapsedMs,
+        estimateMs,
+        elapsedText: hasCurrent ? fmtDuration(elapsedMs) : '--:--',
+        estimateText: hasCurrent ? fmtDuration(estimateMs) : '--:--',
+        phases
+      };
+    }
+
+    function normalizePhaseFill(value) {
+      const parsed = Number.parseFloat(value);
+      if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+      if (parsed <= 1) return Math.max(0, Math.min(1, parsed));
+      return Math.max(0, Math.min(100, parsed)) / 100;
+    }
+
+    function phaseFillForSegment(phase) {
+      if (!phase) return 0;
+      if (phase.state === 'complete') return 1;
+      if (phase.state !== 'active') return 0;
+
+      const explicitFill = normalizePhaseFill(phase.progress);
+      if (explicitFill > 0) return explicitFill;
+
+      const completed = Number.parseFloat(phase.completedCount);
+      const total = Number.parseFloat(phase.totalCount);
+      if (Number.isFinite(completed) && Number.isFinite(total) && total > 0) {
+        return Math.max(0, Math.min(1, completed / total));
+      }
+
+      return 0;
+    }
+
+    function defaultPhasePlan(ring, group) {
+      const phaseNames = ['setup', 'weapons', 'hyungs', 'sparring', 'awards'];
+      const visible = [];
+      const plan = ring.phasePlan && ring.phasePlan.phases ? ring.phasePlan.phases : [];
+      if (plan.length) return plan;
+      phaseNames.forEach((key) => {
+        visible.push({ key, label: key.charAt(0).toUpperCase() + key.slice(1), state: 'idle', progress: 0 });
+      });
+      return visible;
+    }
+
+    function fmtDuration(ms) {
+      if (!Number.isFinite(ms) || ms < 0) return '0:00';
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      }
+      return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function renderRingDetails(title, group) {
+      if (!group) {
+        return `<div class="ring-modal-section"><h4>${escapeHtml(title)}</h4><div class="meta-line"><span>No group assigned</span></div></div>`;
+      }
+
+      const competitors = Array.isArray(group.competitors) ? group.competitors : [];
+      const competitorList = competitors.length
+        ? `<ol class="ring-modal-list">${competitors.map((competitor) => `<li>${escapeHtml(competitor.fullName || competitor.name || 'Unknown')} — ${escapeHtml(String(competitor.rank || competitor.rankCode || 'Unknown'))}</li>`).join('')}</ol>`
+        : '<div class="meta-line"><span>No competitors in this group.</span></div>';
+
+      return `
+        <div class="ring-modal-section">
+          <h4>${escapeHtml(title)}: ${escapeHtml(group.groupId)} - ${escapeHtml(group.name || group.groupId)}</h4>
+          ${competitorList}
+        </div>
+      `;
+    }
+
+    function renderRingModal(view) {
+      if (!state.activeRingId || !view) {
+        ringModalEl.classList.remove('visible');
+        ringModalEl.setAttribute('aria-hidden', 'true');
+        ringModalBodyEl.innerHTML = '';
+        return;
+      }
+
+      const currentGroup = view.currentGroup;
+      const queuedGroup = view.queuedGroup;
+      ringModalTitleEl.textContent = `${view.ring.ringLabel} details`;
+      ringModalSubtitleEl.textContent = `${view.ring.ringId} • ${view.statusLabel}`;
+      ringModalBodyEl.innerHTML = [
+        `<div class="ring-modal-section"><h4>Ring status</h4><div class="meta-line"><span>${escapeHtml(view.statusLabel)}</span><span>${escapeHtml(view.elapsedText)} elapsed</span><span>${escapeHtml(view.estimateText)} est</span></div></div>`,
+        renderRingDetails('Active group', currentGroup),
+        renderRingDetails('Queued group', queuedGroup)
+      ].join('');
+      ringModalEl.classList.add('visible');
+      ringModalEl.setAttribute('aria-hidden', 'false');
+    }
+
+    function openRingDetails(ringId) {
+      state.activeRingId = ringId;
+      renderBoard();
+    }
+
+    function closeRingDetails() {
+      state.activeRingId = '';
+      renderBoard();
+    }
+
     function renderBoard() {
-      renderSummary();
-      renderMeta();
+      tournamentNameEl.textContent = state.activeEvent || 'Tournament';
+      const loadedAt = state.lastBoardLoadedAt ? new Date(state.lastBoardLoadedAt).toLocaleTimeString() : '--';
+      metaLineEl.innerHTML = `<span>Last board refresh: ${escapeHtml(loadedAt)}</span>`;
+      eventTimerEl.textContent = state.eventStartedAt ? fmtDuration(Date.now() - new Date(state.eventStartedAt).getTime()) : '--:--:--';
 
       const rings = [...state.rings].sort((a, b) => a.ringLabel.localeCompare(b.ringLabel));
       boardEl.innerHTML = rings.map((ring) => {
-        const health = heartbeatStatus(ring);
-        const tone = ringTone(ring);
-        const queueItems = (ring.queuedGroupIds || []).map((gid, index) => `
-          <li>
-            <span>${index + 1}. ${escapeHtml(groupLabel(gid))}</span>
-            <button class="ghost" data-action="dequeue" data-ring="${escapeHtml(ring.ringId)}" data-group="${escapeHtml(gid)}">Remove</button>
-          </li>
-        `).join('');
-        const queueOptions = availableGroupsForRing(ring)
-          .map((group) => `<option value="${escapeHtml(group.groupId)}">${escapeHtml(group.groupId)} - ${escapeHtml(group.name)}</option>`)
-          .join('');
-        const assistanceType = String(ring.assistanceType || '').toLowerCase();
-        const queueCount = (ring.queuedGroupIds || []).length;
+        const view = buildRingView(ring);
+        const statusLabel = view.hasCurrent ? view.statusLabel : (view.hasQueue ? 'Waiting' : 'Unassigned');
+        const timeValue = view.hasCurrent ? view.elapsedText : '--:--';
+        const estValue = view.hasCurrent ? view.estimateText : '--:--';
+        const phases = Array.isArray(view.phases) ? view.phases : [];
 
-        return `
-          <section class="panel ring-card ${tone}">
-            <div class="ring-header">
-              <div class="ring-title">
-                <h2>${escapeHtml(ring.ringLabel)} <span class="badge">${escapeHtml(ring.ringId)}</span></h2>
-                <div class="badge">Heartbeat ${escapeHtml(health.label)}</div>
+          return `
+            <section class="ring-card ${view.tone}" data-ring-id="${escapeHtml(ring.ringId)}">
+              <div class="ring-row">
+                <div class="ring-id-cell">
+                  <button class="ring-link" data-action="open-ring" data-ring-id="${escapeHtml(ring.ringId)}">${escapeHtml(ring.ringLabel)}</button>
+                  <div class="ring-status"><span class="status-chip ${view.statusTone}">${escapeHtml(statusLabel)}</span></div>
+                </div>
+                <div class="progress-box">
+                  <div class="progress-track">
+                    ${phases.map((phase) => `<div class="segment ${phase.state}" style="--fill:${phaseFillForSegment(phase).toFixed(3)}"><span>${escapeHtml(phase.label)}</span></div>`).join('')}
+                  </div>
+                </div>
+                <div class="timer-box">
+                  <strong>${escapeHtml(timeValue)}</strong>
+                  <small>EST ${escapeHtml(estValue)}</small>
+                </div>
               </div>
-              <span class="chip ${health.chip}">${escapeHtml(ring.assistanceType ? `Help: ${ring.assistanceType}` : health.label)}</span>
-            </div>
-
-            <div class="grid">
-              <div class="stat">
-                <span>Current group</span>
-                <strong>${escapeHtml(groupLabel(ring.currentGroupId))}</strong>
-              </div>
-              <div class="stat">
-                <span>Queue</span>
-                <strong>${queueCount} queued</strong>
-              </div>
-              <div class="stat">
-                <span>Phase</span>
-                <strong>${escapeHtml(ring.phase || 'idle')}</strong>
-              </div>
-              <div class="stat">
-                <span>Heartbeat</span>
-                <strong>${escapeHtml(fmtAgo(ring.lastHeartbeatAt))}</strong>
-              </div>
-            </div>
-
-            <div class="section-label">Assistance alerts</div>
-            ${ring.assistanceType ? `
-              <div class="assist ${escapeHtml(assistanceType)}">
-                <strong>${escapeHtml(ring.assistanceType)} assistance requested</strong>
-                <span>Requested ${escapeHtml(fmtTime(ring.assistanceRequestedAt))}</span>
-              </div>
-            ` : '<div class="empty">No assistance alerts.</div>'}
-
-            <div class="section-label">Queue</div>
-            ${queueCount ? `<ul class="queue-list">${queueItems}</ul>` : '<div class="empty">Queue is clear.</div>'}
-
-            <div class="actions">
-              <div class="action-line">
-                <select id="queue-${escapeHtml(ring.ringId)}">
-                  <option value="">Select a group to queue</option>
-                  ${queueOptions}
-                </select>
-                <button class="ghost" data-action="queue" data-ring="${escapeHtml(ring.ringId)}">Queue Group</button>
-              </div>
-              <div class="action-line">
-                <button class="ghost" data-action="clear-assistance" data-ring="${escapeHtml(ring.ringId)}" ${ring.assistanceType ? '' : 'disabled'}>Clear Assistance Alerts</button>
-                <span class="subtitle">Clears the alert without changing the ring assignment.</span>
-              </div>
-              <div class="action-line reset">
-                <button class="danger" data-action="reset-ring" data-ring="${escapeHtml(ring.ringId)}">Reset Ring</button>
-              </div>
-            </div>
-          </section>
-        `;
+            </section>
+          `;
       }).join('');
-    }
 
+      if (state.activeRingId) {
+        const activeRing = state.rings.find((ring) => ring.ringId === state.activeRingId);
+        if (activeRing) {
+          renderRingModal(buildRingView(activeRing));
+        } else {
+          closeRingDetails();
+        }
+      } else {
+        renderRingModal(null);
+      }
+    }
     function renderStatusPanel(ok, message) {
       if (ok) {
         statusStateEl.textContent = 'OK';
@@ -769,6 +1224,14 @@
       window.setTimeout(() => statusPanelEl.classList.remove('status-flash'), 300);
     }
 
+    function applyDebugVisibility() {
+      statusPanelEl.classList.toggle('hidden', !state.debugVisible);
+      debugToggleBtn.textContent = state.debugVisible ? 'Hide Debug' : 'Show Debug';
+      if (state.debugVisible) {
+        loadStatus().catch((error) => renderStatusPanel(false, error.message));
+      }
+    }
+
     async function fetchJson(url, options) {
       const response = await fetch(url, options);
       const data = await response.json();
@@ -777,23 +1240,21 @@
     }
 
     async function loadDashboard() {
-      renderNotice('Refreshing dashboard...', 'info');
-      const [groupsResult, ringsResult] = await Promise.all([
+      const [activeResult, groupsResult, ringsResult] = await Promise.all([
+        fetchJson('/api/events/active'),
         fetchJson('/api/groups'),
         fetchJson('/api/rings')
       ]);
 
-      const active = await fetchJson('/api/events/active');
-      state.activeEvent = active.activeEvent || '';
-
+      state.activeEvent = activeResult && activeResult.activeEvent ? String(activeResult.activeEvent) : '';
       state.groups = groupsResult.groups || [];
       state.rings = ringsResult.rings || [];
       state.serverBaseUrl = ringsResult.serverBaseUrl || location.origin;
       state.ringConfig = ringsResult.ringConfig || state.ringConfig;
       state.heartbeatPolicy = ringsResult.heartbeatPolicy || state.heartbeatPolicy;
+      state.eventStartedAt = ringsResult.eventStartedAt || state.eventStartedAt || '';
       state.lastBoardLoadedAt = new Date().toISOString();
       renderBoard();
-      renderNotice(`Loaded ${state.rings.length} ring(s) and ${state.groups.length} group(s).`, 'ok');
     }
 
     async function loadStatus() {
@@ -818,10 +1279,12 @@
         renderNotice(`Dashboard refresh failed: ${error.message}`, 'error');
       }
 
-      try {
-        await loadStatus();
-      } catch (error) {
-        renderStatusPanel(false, error.message);
+      if (state.debugVisible) {
+        try {
+          await loadStatus();
+        } catch (error) {
+          renderStatusPanel(false, error.message);
+        }
       }
     }
 
@@ -858,6 +1321,25 @@
       refreshAll().catch((error) => renderNotice(error.message, 'error'));
     });
 
+    boardEl.addEventListener('click', (event) => {
+      const link = event.target instanceof Element ? event.target.closest('button[data-action="open-ring"]') : null;
+      if (!link) return;
+      const ringId = link.getAttribute('data-ring-id');
+      if (!ringId) return;
+      event.preventDefault();
+      openRingDetails(ringId);
+    });
+
+    ringModalCloseEl.addEventListener('click', closeRingDetails);
+    ringModalEl.addEventListener('click', (event) => {
+      if (event.target === ringModalEl) closeRingDetails();
+    });
+
+    debugToggleBtn.addEventListener('click', () => {
+      state.debugVisible = !state.debugVisible;
+      applyDebugVisibility();
+    });
+
     resetTournamentBtn.addEventListener('click', async () => {
       if (!confirm('Reset the tournament? This clears all ring assignments and queues.')) return;
       try {
@@ -870,243 +1352,24 @@
       }
     });
 
-    boardEl.addEventListener('click', async (event) => {
-      const button = event.target instanceof Element ? event.target.closest('button[data-action]') : null;
-      if (!button) return;
-
-      const action = button.getAttribute('data-action');
-      const ringId = button.getAttribute('data-ring');
-      const groupId = button.getAttribute('data-group');
-
-      try {
-        renderNotice('Updating ring...', 'info');
-        await mutateRing(ringId, action, groupId);
-        await refreshAll();
-        renderNotice('Ring updated.', 'ok');
-      } catch (error) {
-        renderNotice(`Update failed: ${error.message}`, 'error');
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && state.activeRingId) {
+        closeRingDetails();
+        return;
+      }
+      if (event.key === 'F12') {
+        event.preventDefault();
+        state.debugVisible = !state.debugVisible;
+        applyDebugVisibility();
       }
     });
 
-    // ─────────────────────────────────────────────
-    // EVENT MANAGEMENT FUNCTIONS
-    // ─────────────────────────────────────────────
-
-      function updateEventActionButtons() {
-        const eventSelect = document.getElementById('eventSelect');
-        const activateEventBtn = document.getElementById('activateEventBtn');
-        const resetEventBtn = document.getElementById('resetEventBtn');
-
-        const selectedEvent = eventSelect.value.trim();
-        const hasSelection = Boolean(selectedEvent);
-        const selectedEventIsActive = selectedEvent === state.activeEvent;
-
-        // Can activate only a selected event that is not already active.
-        activateEventBtn.disabled = !hasSelection || selectedEventIsActive;
-
-        // Reset requires a selected event.
-        resetEventBtn.disabled = !hasSelection;
-      }
-
-      async function listEvents() {
-      const [eventsData, activeData] = await Promise.all([
-        fetchJson('/api/events/list'),
-        fetchJson('/api/events/active')
-      ]);
-
-      state.activeEvent = activeData.activeEvent || '';
-
-      const sel = document.getElementById('eventSelect');
-      sel.innerHTML = '<option value="">-- Select Event --</option>';
-
-      eventsData.events.forEach((eventName) => {
-        const option = document.createElement('option');
-
-        option.value = eventName;
-
-        if (eventName === state.activeEvent) {
-          option.textContent = `${eventName} — ACTIVE`;
-        } else {
-          option.textContent = eventName;
-        }
-
-        sel.appendChild(option);
-      });
-
-      if (state.activeEvent && eventsData.events.includes(state.activeEvent)) {
-        sel.value = state.activeEvent;
-
-      }
-      updateEventActionButtons();
-
-      renderNotice(
-        `Loaded ${eventsData.events.length} event(s). Active event: ${state.activeEvent || 'none'}.`,
-        'ok'
-      );
-    }
-
-    async function createEvent() {
-      const name = document.getElementById('eventNameInput').value.trim();
-      if (!name) return renderNotice('Enter an event name.', 'warn');
-
-      const data = await fetchJson('/api/events/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventName: name })
-      });
-
-      renderNotice(`Created event: ${data.eventName}`, 'ok');
-      listEvents();
-    }
-
-    async function createAndActivateEvent() {
-      const name = document.getElementById('eventNameInput').value.trim();
-
-      if (!name) {
-        return renderNotice('Enter an event name first.', 'warn');
-      }
-
-      const confirmed = confirm(
-        `Create and activate "${name}"?\n\n` +
-        'This will create a new event and make it the active event.'
-      );
-
-      if (!confirmed) {
-        renderNotice(`Create and activate cancelled for: ${name}`, 'info');
-        return;
-      }
-
-      try {
-        renderNotice(`Creating and activating event: ${name}...`, 'info');
-
-        const created = await fetchJson('/api/events/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventName: name })
-        });
-
-        const activated = await fetchJson('/api/events/activate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventName: created.eventName })
-        });
-
-        state.activeEvent = activated.activeEvent || created.eventName;
-
-        document.getElementById('eventNameInput').value = '';
-
-        // Update all visible event-related UI without generic notices.
-        await listEvents({ quiet: true });
-        await refreshAll({ quiet: true });
-
-        renderNotice(
-          `Created and activated event: ${state.activeEvent}`,
-          'ok'
-        );
-      } catch (error) {
-        renderNotice(
-          `Could not create and activate event: ${error.message}`,
-          'error'
-        );
-      }
-    }
-
-    async function activateEvent() {
-      const sel = document.getElementById('eventSelect');
-      const eventName = sel.value;
-
-      if (!eventName) {
-        return renderNotice('Select an event first.', 'warn');
-      }
-
-      renderNotice(`Activating event: ${eventName}...`, 'info');
-
-      const data = await fetchJson('/api/events/activate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventName })
-      });
-
-      // Update state now, before rebuilding the event dropdown.
-      state.activeEvent = data.activeEvent || eventName;
-
-      // Rebuild dropdown so the ACTIVE marker moves immediately.
-      await listEvents();
-
-      // Rebuild board/meta line so the displayed active event changes now.
-      await refreshAll();
-
-      renderNotice(`Activated event: ${state.activeEvent}`, 'ok');
-    }
-
-    async function resetEvent() {
-      const sel = document.getElementById('eventSelect');
-      const eventName = sel.value;
-
-      if (!eventName) {
-        return renderNotice('Select an event first.', 'warn');
-      }
-
-      const confirmed = confirm(
-        `Are you sure you want to reset "${eventName}"?\n\n` +
-        'This permanently clears this event’s database, groups, results, and ring assignments. This cannot be undone.'
-      );
-
-      if (!confirmed) {
-        renderNotice(`Reset cancelled for: ${eventName}`, 'info');
-        return;
-      }
-
-      const resetButton = document.getElementById('resetEventBtn');
-
-      try {
-        resetButton.disabled = true;
-
-        // Display this before beginning the destructive reset request.
-        renderNotice(`Resetting event: ${eventName}...`, 'warn');
-
-        // Gives the operator a brief visual confirmation before the POST occurs.
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        const data = await fetchJson('/api/events/reset', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventName })
-        });
-
-        state.activeEvent = data.activeEvent || eventName;
-
-        // Rebuild dropdown and board silently so their generic notices do not
-        // overwrite the reset workflow message.
-        await listEvents({ quiet: true });
-        await refreshAll({ quiet: true });
-
-        renderNotice(`Reset complete for event: ${data.eventName}`, 'ok');
-      } catch (error) {
-        renderNotice(`Event reset failed: ${error.message}`, 'error');
-      } finally {
-        updateEventActionButtons();
-      }
-    }
-
-    // ─────────────────────────────────────────────
-    // EVENT BUTTON WIRING
-    // ─────────────────────────────────────────────
-
-    document.getElementById('listEventsBtn').onclick = listEvents;
-    document.getElementById('createEventBtn').onclick = createEvent;
-    document.getElementById('createActivateEventBtn').onclick = createAndActivateEvent;
-    document.getElementById('activateEventBtn').onclick = activateEvent;
-    document.getElementById('resetEventBtn').onclick = resetEvent;
-    document.getElementById('eventSelect').addEventListener('change', () => {
-      updateEventActionButtons();
-    });
-
-    // Load events on startup
-    listEvents();
-
+    applyDebugVisibility();
     refreshAll().catch((error) => renderNotice(`Initial load failed: ${error.message}`, 'error'));
 
+    window.setInterval(() => {
+      renderBoard();
+    }, 1000);
     window.setInterval(refreshAll, 10000);
   </script>
 </body>

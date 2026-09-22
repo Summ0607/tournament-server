@@ -30,9 +30,13 @@ function createDivisionRouter(deps) {
         return res.json({ groups: explicitGroups });
       }
 
+      const activeCompetitorStore = typeof competitorStore === 'function'
+        ? competitorStore()
+        : competitorStore;
+
       const competitors = Array.isArray(payload.competitors)
         ? payload.competitors
-        : await competitorStore.loadCompetitors();
+        : await activeCompetitorStore.loadCompetitors();
       const groups = normalizeGroups(buildGroups(competitors, payload));
       return res.json({ groups });
     } catch (err) {
