@@ -28,7 +28,7 @@ This document describes the **server-side component** of the Tournament Manageme
 > **Scope Boundary**
 > This document covers the server only: its modules, data models, API routes, non-functional requirements, open design questions, and build checklist. Android client details are out of scope here and are addressed in the companion HLD.
 
-All checklist items in Section 9 begin as **Not Started (☐)** unless explicitly marked with ✅ (confirmed from prior code review) or 🔄 (in progress).
+All checklist items in Section 9 begin as **Not Started ([ ])** unless explicitly marked as `[x]` (confirmed from prior code review) or `[~]` (in progress).
 
 ---
 
@@ -46,7 +46,7 @@ The **Tournament Management System server** (`tournament-server`) is a Node.js +
 
 - **Language:** JavaScript (Node.js)
 - **Framework:** Express.js
-- **Persistence:** SQLite roster database plus event-scoped JSON files for groups and ring state. Core event data survives restart when the active event folder is present.
+- **Persistence:** SQLite roster database for roster/group division data plus event-scoped JSON files for ring state. Group data is reconstructed from SQLite and cached in memory at runtime.
 - **Transport:** HTTP REST (JSON). No WebSocket or SSE implemented yet — see Section 8.
 - **Entry point:** `group-server.js`
 
@@ -58,20 +58,20 @@ The server is organized into a main entry point, a `backend/` directory containi
 
 ```
 tournament-server/
-├── group-server.js          # Entry point — Express app setup, static files, route mounting
-├── db/
-│   ├── init.js              # Initializes the SQLite schema
-│   └── import-csv.js        # Imports roster CSV data into SQLite
-├── backend/
-│   ├── competitorStore.js   # SQLite-backed competitor read store
-│   ├── divisionRoutes.js    # Routes: group retrieval/build/save
-│   ├── groupContract.js     # Normalizes group and competitor shapes
-│   ├── groupStore.js        # Event-scoped JSON persistence for groups
-│   ├── pages.js             # Static/admin page routes
-│   ├── ringRoutes.js        # Routes: ring state, assignments, heartbeat, assistance
-│   └── groupBuilder.js      # Logic: builds match groups from competitor lists
-└── docs/
-    └── HLD-server.md        # This document
+|-- group-server.js          # Entry point - Express app setup, static files, route mounting
+|-- db/
+|   |-- init.js              # Initializes the SQLite schema
+|   `-- import-csv.js        # Imports roster CSV data into SQLite
+|-- backend/
+|   |-- competitorStore.js   # SQLite-backed competitor read store
+|   |-- divisionRoutes.js    # Routes: group retrieval/build/save
+|   |-- groupContract.js     # Normalizes group and competitor shapes
+|   |-- groupStore.js        # Event-scoped in-memory cache for saved groups
+|   |-- pages.js             # Static/admin page routes
+|   |-- ringRoutes.js        # Routes: ring state, assignments, heartbeat, assistance
+|   `-- groupBuilder.js      # Logic: builds match groups from competitor lists
+`-- docs/
+    `-- HLD-server.md        # This document
 ```
 
 ### 3.1 — `group-server.js` (Entry Point)
@@ -88,7 +88,8 @@ Bootstraps the Express application. Responsibilities:
 The server uses a mixed persistence model:
 
 - `db/tournament.db` (or the active event's `tournament.db`) stores competitor roster data.
-- `backend/groupStore.js` writes normalized groups to event-scoped JSON files.
+- SQLite indexes are maintained for `firstName`, `lastName`, `associationNumber`, `rank`, `groupDivisionId`, and `groupDivisionNumber` to support search and ring lookup paths.
+- `backend/groupStore.js` keeps the latest saved groups in an event-scoped cache and serves them dynamically to ring requests.
 - `ring-assignments.json` (or the active event's copy) stores ring assignment/heartbeat state.
 
 These stores are shared so route handlers read and write the same event state.
@@ -136,7 +137,7 @@ Contains the algorithm that takes a division's competitor list and produces orde
 
 ## 4 — Data Model
 
-Roster data is stored in SQLite and the event-facing group/ring state is persisted as JSON files. The shapes below describe the de facto payloads used throughout the system.
+Roster data and division assignments are stored in SQLite. Ring state is persisted as JSON files, while saved group structures are reconstructed from the database and cached in memory. The shapes below describe the de facto payloads used throughout the system.
 
 ### Competitor
 
@@ -151,6 +152,10 @@ school             string    Competitor's school/club name
 divisionIds        string[]  Divisions this competitor is enrolled in
 checkInStatus      string    Current check-in state
 competitionEntries object    Per-discipline enrollment/status
+groupDivisionId    string    Group identifier used for ring assignment
+groupDivisionName  string    Denormalized group label
+groupDivisionNumber number   First division number for the group
+competitionDivisionNumber number Unique competition number within the group
 ```
 
 ### Division
@@ -175,6 +180,7 @@ divisionName       string    Denormalized for display
 groupName          string    e.g. "Ring 2 - Group A"
 competitors        Competitor[]
 scoringMode        string    Inherited from division eventType
+groupDivisionNumber number   First division number used for this group
 assignedRingId     string | null
 status             string    "unassigned" | "queued" | "in-progress" | "complete"
 ```
@@ -245,8 +251,8 @@ The server serves a browser-based admin interface from its static file directory
 | Requirement | Target |
 |---|---|
 | **Availability** | Must run fully offline on venue LAN. No internet dependency. |
-| **Performance** | API responses must complete within 200ms on a local LAN under normal load (≤ 10 tablet clients). |
-| **Persistence** | SQLite roster data and event-scoped JSON files preserve state across restarts for the active event. |
+| **Performance** | API responses must complete within 200ms on a local LAN under normal load (<= 10 tablet clients). |
+| **Persistence** | SQLite roster data preserves competitor and division state across restarts; ring state persists as event-scoped JSON. |
 | **Scalability** | Designed for single-venue, single-event use. No multi-event or multi-venue support required. |
 | **Compatibility** | Runs on Node.js LTS. No OS-specific dependencies. Should run on Windows laptop available at venue. |
 | **Security** | No authentication currently. Physical access control assumed. See Section 8. |
@@ -256,7 +262,7 @@ The server serves a browser-based admin interface from its static file directory
 
 ## 8 — Open Questions & Decisions
 
-- **OPEN** — **Real-time updates:** The Android app uses `/api/rings/config`, `/api/rings/:ringId/request-group`, and `/api/rings/:ringId/heartbeat` on screen/ring change and every 5 seconds while assigned. WebSocket or SSE would still be a design option for push notifications.
+- **OPEN** — **Real-time updates:** The Android app uses `/api/rings/config`, `/api/rings/:ringId/request-group`, and `/api/rings/:ringId/heartbeat` on screen/ring change and every 60 seconds while assigned. WebSocket or SSE would still be a design option for push notifications.
 - **OPEN** — **Data persistence/backup:** Roster data and ring/group state now persist to SQLite and event files, but the backup/export story for completed events is still not formalized.
 - **OPEN** — **Authentication:** No login or role enforcement. All clients on the LAN can call any API endpoint. Future hardening may require an API key or session token. Decision pending.
 - **OPEN** — **Competitor import format:** Manual entry and CSV import are referenced but the exact CSV schema is not finalized.
@@ -264,89 +270,91 @@ The server serves a browser-based admin interface from its static file directory
 - **OPEN** — **Export/backup:** No formal end-of-event export/archive workflow is defined yet.
 - **RESOLVED** — Runtime: Node.js + Express confirmed.
 - **RESOLVED** — Transport: LAN-only HTTP REST. No cloud dependency.
-- **RESOLVED** — Data store: SQLite roster DB plus event-scoped JSON files. Active event data is persisted on disk.
+- **RESOLVED** — Data store: SQLite roster DB plus event-scoped JSON for ring state. Group data is reconstructed from SQLite after restart.
 
 ---
 
 ## 9 — Component Checklist
 
-**Legend:** ✅ Complete · 🔄 In Progress · ☐ Not Started
-**Sub-task ✅** = confirmed from prior code review.
+**Legend:** `[x]` Complete / confirmed · `[~]` In Progress · `[ ]` Not Started
+**Sub-task `[x]`** = confirmed from prior code review.
 
 ### Server Bootstrap (`group-server.js`)
 
-- 🔄 Express app setup and middleware
-  - ✅ `group-server.js` exists and starts an HTTP server
-  - ✅ JSON body parser middleware configured
-  - ☐ CORS headers configured for tablet client access
-  - ✅ Route modules mounted under `/api/`
-  - ☐ Static file serving for admin web UI confirmed working
-  - ☐ Graceful shutdown handler (SIGTERM/SIGINT)
+- [~] Express app setup and middleware
+  - [x] `group-server.js` exists and starts an HTTP server
+  - [x] JSON body parser middleware configured
+  - [ ] CORS headers configured for tablet client access
+  - [x] Route modules mounted under `/api/`
+  - [ ] Static file serving for admin web UI confirmed working
+  - [ ] Graceful shutdown handler (SIGTERM/SIGINT)
 
 ### Persistence Layer (`competitorStore.js`, `groupStore.js`)
 
-- 🔄 Core data store implementation
-  - ✅ `competitorStore.js` exists and reads from SQLite
-  - ✅ `groupStore.js` persists event groups to JSON
-  - ✅ Ring state persists to event-scoped JSON
-  - ✅ Competitor, Division, Group, Ring entities defined
-  - ✅ Ring `assistanceType`, `assistanceRequestedAt`, `assignmentStartedAt`, and heartbeat fields confirmed on ring objects
+- [~] Core data store implementation
+  - [x] `competitorStore.js` exists and reads from SQLite
+  - [x] `groupStore.js` caches event groups in memory for dynamic ring downloads
+  - [x] Ring state persists to event-scoped JSON
+  - [x] Competitor, Division, Group, Ring entities defined
+  - [x] Ring `assistanceType`, `assistanceRequestedAt`, `assignmentStartedAt`, and heartbeat fields confirmed on ring objects
+  - [x] SQLite indexes exist for search fields and group-division lookup
 
 ### Division & Group Management (`divisionRoutes.js`)
 
-- 🔄 Group operations
-  - ✅ `GET /api/groups` — list all groups
-  - ✅ `GET /api/groups/:groupId` — get group with competitor list
-  - ✅ `POST /api/divisions/build` — trigger group builder
-  - ✅ `POST /api/divisions/save` — persist normalized groups
+- [~] Group operations
+  - [x] `GET /api/groups` - list all groups
+  - [x] `GET /api/groups/:groupId` - get group with competitor list
+  - [x] `POST /api/divisions/build` - trigger group builder and assign division numbers starting at 20
+  - [x] `POST /api/divisions/save` - persist normalized groups and write group + discipline division numbers back to SQLite
 
 ### Ring Operations (`ringRoutes.js`)
 
-- 🔄 Ring state and phase management
-  - ✅ `GET /api/rings/config` — ring selection config required by Android app
-  - ✅ `POST /api/rings/config` — ring count/config update
-  - ✅ `GET /api/rings` — ring board summary used by head table
-  - ✅ `GET /api/rings/:ringId/bootstrap` — current assignment load required by Android app
-  - ✅ `POST /api/rings/:ringId/request-group` — current assignment load required by Android app
-  - ✅ `GET /api/rings/:ringId/current` — ring-state sync
-  - ✅ `POST /api/rings/:ringId/queue` — queue a group on a ring
-  - ✅ `DELETE /api/rings/:ringId/queue/:groupId` — remove a queued group
-  - ✅ `POST /api/rings/:ringId/heartbeat` — client keepalive with phase progress
-  - ✅ `POST /api/rings/:ringId/complete` — mark group complete and advance
-  - ✅ `POST /api/rings/:ringId/reset` — clear ring to scratch
-  - ✅ `POST /api/rings/:ringId/assistance` — assistance request endpoint
-  - ✅ `POST /api/rings/:ringId/assistance/clear` — clear assistance endpoint
+- [~] Ring state and phase management
+  - [x] `GET /api/rings/config` - ring selection config required by Android app
+  - [x] `POST /api/rings/config` - ring count/config update
+  - [x] `GET /api/rings` - ring board summary used by head table
+  - [x] `GET /api/rings/:ringId/bootstrap` - current assignment load required by Android app
+  - [x] `POST /api/rings/:ringId/request-group` - current assignment load required by Android app
+  - [x] `GET /api/rings/:ringId/current` - ring-state sync
+  - [x] `POST /api/rings/:ringId/queue` - queue a group on a ring
+  - [x] `DELETE /api/rings/:ringId/queue/:groupId` - remove a queued group
+  - [x] `POST /api/rings/:ringId/heartbeat` - client keepalive with phase progress
+  - [x] `POST /api/rings/:ringId/complete` - mark group complete and advance
+  - [x] `POST /api/rings/:ringId/reset` - clear ring to scratch
+  - [x] `POST /api/rings/:ringId/assistance` - assistance request endpoint
+  - [x] `POST /api/rings/:ringId/assistance/clear` - clear assistance endpoint
 
 ### Group Builder (`groupBuilder.js`)
 
-- 🔄 Group building algorithm
-  - ✅ `groupBuilder.js` exists
-  - ✅ Point-sparring bracket/round-robin logic confirmed
-  - ☐ Flag-sparring group logic confirmed
-  - ☐ Forms/kata group logic confirmed
-  - ✅ Bye handling for odd-numbered competitor lists
+- [~] Group building algorithm
+  - [x] `groupBuilder.js` exists
+  - [x] Point-sparring bracket/round-robin logic confirmed
+  - [ ] Flag-sparring group logic confirmed
+  - [ ] Forms/kata group logic confirmed
+  - [x] Bye handling for odd-numbered competitor lists
+  - [x] Group and competition division numbers are assigned sequentially from 20
 
 ### Admin Web UI
 
-- 🔄 Head table interface
-  - ✅ Competitor import (CSV) working end-to-end
-  - ✅ Division configuration UI
-  - ✅ Group build trigger UI
-  - ✅ Ring assignment UI
-  - ✅ Ring status monitor (all rings at a glance)
-  - ✅ Assistance acknowledgement UI
-  - ✅ Queue management and ring progress display
+- [~] Head table interface
+  - [x] Competitor import (CSV) working end-to-end
+  - [x] Division configuration UI
+  - [x] Group build trigger UI
+  - [x] Ring assignment UI
+  - [x] Ring status monitor (all rings at a glance)
+  - [x] Assistance acknowledgement UI
+  - [x] Queue management and ring progress display
 
 ### Testing & Quality
 
-- ☐ Unit tests
-  - ☐ `competitorStore.js` — CRUD operations
-  - ☐ `groupBuilder.js` — group building with even/odd competitor counts
-  - ☐ Route handlers — mock store, verify response shapes
-- ☐ Integration tests
-  - ☐ End-to-end: create division → add competitors → build groups → assign to ring → simulate check-in and score submission
-- ☐ Load test
-  - ☐ Simulate 10 concurrent tablet clients maintaining heartbeat traffic at 5-second intervals
+- [ ] Unit tests
+  - [ ] `competitorStore.js` - CRUD operations
+  - [ ] `groupBuilder.js` - group building with even/odd competitor counts
+  - [ ] Route handlers - mock store, verify response shapes
+- [ ] Integration tests
+  - [ ] End-to-end: create division -> add competitors -> build groups -> assign to ring -> simulate check-in and score submission
+- [ ] Load test
+  - [ ] Simulate 10 concurrent tablet clients maintaining heartbeat traffic at 60-second intervals
 
 ---
 

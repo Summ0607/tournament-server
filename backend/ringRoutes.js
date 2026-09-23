@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { appendDivisionTrace, summarizeGroupDivisionNumbers } = require('./groupDivisionAssignments');
 
 const HEARTBEAT_TRACE_PATH = path.join(__dirname, 'ring-progress-trace.log');
 
@@ -257,6 +258,13 @@ function createRingRouter(deps) {
         setRingPhase(ringState, 'check-in');
         touchHeartbeat(ringState);
         touchEventStart(state);
+        appendDivisionTrace('ring-activate', {
+          ringId,
+          ringLabel: ringState.ringLabel,
+          source: 'bootstrap',
+          groupId: ringState.currentGroupId,
+          group: summarizeGroupDivisionNumbers([loadGroup(ringState.currentGroupId)])[0] || null
+        });
       }
     }
 
@@ -312,6 +320,13 @@ function createRingRouter(deps) {
     setRingPhase(ringState, ringState.currentGroupId ? 'check-in' : 'idle');
     if (ringState.currentGroupId) {
       touchAssignmentStart(ringState);
+      appendDivisionTrace('ring-activate', {
+        ringId,
+        ringLabel: ringState.ringLabel,
+        source: 'complete',
+        groupId: ringState.currentGroupId,
+        group: summarizeGroupDivisionNumbers([loadGroup(ringState.currentGroupId)])[0] || null
+      });
     } else {
       ringState.assignmentStartedAt = '';
     }
@@ -369,6 +384,13 @@ function createRingRouter(deps) {
 
     ringState.queuedGroupIds.push(groupId);
     touchHeartbeat(ringState);
+    const queuedGroup = loadGroup(groupId);
+    appendDivisionTrace('ring-queue', {
+      ringId,
+      groupId,
+      ringLabel: ringState.ringLabel,
+      group: queuedGroup ? summarizeGroupDivisionNumbers([queuedGroup])[0] : null
+    });
     writeAssignmentsState(state);
     return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
   });

@@ -1,151 +1,90 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-
-    <style>
-        body {
-          font-family: Arial, sans-serif;
-          margin: 20px;
-        }
-
-        #searchBox {
-          font-size: 16px;
-          padding: 6px;
-          width: 250px;
-        }
-
-        #searchBtn {
-          font-size: 16px;
-          padding: 6px 12px;
-          margin-left: 6px;
-        }
-
-        table {
-          margin-top: 20px;
-          border-collapse: collapse;
-          width: 100%;
-        }
-
-        th {
-          background-color: #f2f2f2;
-          padding: 8px;
-          text-align: left;
-          border-bottom: 2px solid #ccc;
-        }
-
-        td {
-          padding: 6px;
-          border-bottom: 1px solid #ddd;
-        }
-
-        tr:hover {
-          background-color: #f9f9f9;
-        }
-    </style>
-
-    <title>Competitor Search</title>
+  <meta charset="UTF-8">
+  <title>Competitor Search</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .row { margin-bottom: 10px; }
+    label { display: inline-block; width: 150px; }
+    input { font-size: 16px; padding: 6px; width: 240px; }
+    button { font-size: 16px; padding: 6px 12px; margin-top: 8px; }
+    table { margin-top: 20px; border-collapse: collapse; width: 100%; }
+    th { background-color: #f2f2f2; padding: 8px; text-align: left; border-bottom: 2px solid #ccc; }
+    td { padding: 6px; border-bottom: 1px solid #ddd; }
+    tr:hover { background-color: #f9f9f9; }
+  </style>
 </head>
 <body>
-<h1>Competitor Search</h1>
+  <h1>Competitor Search</h1>
+  <div class="row"><label for="firstName">First name</label><input id="firstName" type="text" placeholder="Prefix search"></div>
+  <div class="row"><label for="lastName">Last name</label><input id="lastName" type="text" placeholder="Prefix search"></div>
+  <div class="row"><label for="associationNumber">Association #</label><input id="associationNumber" type="text" placeholder="Exact match"></div>
+  <div class="row"><label for="groupDivisionNumber">Group division #</label><input id="groupDivisionNumber" type="number" min="0" step="1" placeholder="Exact match"></div>
+  <div class="row"><label for="rank">Rank</label><input id="rank" type="text" placeholder="Exact match"></div>
+  <button id="searchBtn">Search</button>
+  <table id="resultsTable" border="1" cellpadding="4" cellspacing="0"></table>
 
-<!-- Search box -->
-<input type="text" id="searchBox" placeholder="Enter at least 2 characters">
-<button id="searchBtn">Search</button>
-
-<!-- Results table -->
-<table id="resultsTable" border="1" cellpadding="4" cellspacing="0"></table>
-
-<script>
-    const searchBox = document.getElementById('searchBox');
+  <script>
+    const firstName = document.getElementById('firstName');
+    const lastName = document.getElementById('lastName');
+    const associationNumber = document.getElementById('associationNumber');
+    const groupDivisionNumber = document.getElementById('groupDivisionNumber');
+    const rank = document.getElementById('rank');
     const searchBtn = document.getElementById('searchBtn');
     const resultsTable = document.getElementById('resultsTable');
 
     function runSearch() {
-      const q = searchBox.value.trim();
+      const params = new URLSearchParams();
+      if (firstName.value.trim()) params.set('firstName', firstName.value.trim());
+      if (lastName.value.trim()) params.set('lastName', lastName.value.trim());
+      if (associationNumber.value.trim()) params.set('associationNumber', associationNumber.value.trim());
+      if (groupDivisionNumber.value.trim()) params.set('groupDivisionNumber', groupDivisionNumber.value.trim());
+      if (rank.value.trim()) params.set('rank', rank.value.trim());
 
-      const raw = searchBox.value.trim();
+      if (!params.toString()) {
+        resultsTable.innerHTML = '';
+        return;
+      }
 
-        // Determine AND / OR mode
-        let mode = "OR";  // default
-        if (raw.includes("&&")) mode = "AND";
-        if (raw.includes("||")) mode = "OR";
-
-        // Clean operators out of the text
-        const cleaned = raw.replace(/&&|\|\|/g, " ").trim();
-
-
-        if (cleaned.length < 2) {
-            resultsTable.innerHTML = '';
-            return;
-        }
-
-        // Split into name + rank
-        const parts = cleaned.split(/\s+/);
-        const namePart = parts[0] || "";
-        const rankPart = parts[1] || "";
-
-        // Build URL
-        fetch(`/search?name=${encodeURIComponent(namePart)}&rank=${encodeURIComponent(rankPart)}&mode=${mode}`)
-        .then(res => res.json())
-        .then(rows => {
-          // Clear table
+      fetch(`/search?${params.toString()}`)
+        .then((res) => res.json())
+        .then((rows) => {
           resultsTable.innerHTML = '';
-
           if (!Array.isArray(rows) || rows.length === 0) {
             resultsTable.innerHTML = '<tr><td>No results found</td></tr>';
             return;
           }
 
-          // Define the columns you want to show
-          const headers = [
-            'firstName',
-            'lastName',
-            'associationNumber',
-            'rank',
-            'weaponsDivision',
-            'hyungsDivision',
-            'sparringDivision',
-            'ringAssignment'
-          ];
-
-          // Build header row
+          const headers = ['firstName', 'lastName', 'associationNumber', 'rank', 'groupDivisionNumber', 'weaponsDivision', 'hyungsDivision', 'sparringDivision', 'ringAssignment'];
           const headerRow = document.createElement('tr');
-          headers.forEach(h => {
+          headers.forEach((h) => {
             const th = document.createElement('th');
             th.textContent = h;
             headerRow.appendChild(th);
           });
           resultsTable.appendChild(headerRow);
 
-          // Build data rows
-          rows.forEach(row => {
+          rows.forEach((row) => {
             const tr = document.createElement('tr');
-
-            // Make the row clickable
             tr.style.cursor = 'pointer';
             tr.addEventListener('click', () => {
-              console.log("Selected competitor ID:", row.id);
               alert(`Selected competitor:\n${row.firstName} ${row.lastName}\nID: ${row.id}`);
             });
-
-            headers.forEach(h => {
+            headers.forEach((h) => {
               const td = document.createElement('td');
               td.textContent = row[h] ?? '';
               tr.appendChild(td);
             });
-
             resultsTable.appendChild(tr);
           });
-      });
+        });
     }
 
-    // Search when button is clicked
     searchBtn.addEventListener('click', runSearch);
-
-    // Search automatically when typing
-    searchBox.addEventListener('input', runSearch);
-</script>
-
+    [firstName, lastName, associationNumber, groupDivisionNumber, rank].forEach((input) => {
+      input.addEventListener('input', runSearch);
+    });
+  </script>
 </body>
 </html>

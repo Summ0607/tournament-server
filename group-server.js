@@ -75,20 +75,100 @@ function resolveGroupsDir(eventName = readActiveEvent()) {
 // STORES (NOW USING EVENT PATHS)
 // ─────────────────────────────────────────────
 const competitorStore = createCompetitorStore(TOURNAMENT_DB_PATH);
+const groupStoresByEvent = new Map();
+function currentGroupStore() {
+  const cacheKey = resolveGroupsDir() || '__default__';
+  if (!groupStoresByEvent.has(cacheKey)) {
+    groupStoresByEvent.set(cacheKey, createGroupStore());
+  }
+  return groupStoresByEvent.get(cacheKey);
+}
 const groupStore = {
   saveGroups(groups) {
-    return createGroupStore(resolveGroupsDir()).saveGroups(groups);
+    return currentGroupStore().saveGroups(groups);
   },
   loadGroups() {
-    return createGroupStore(resolveGroupsDir()).loadGroups();
+    return currentGroupStore().loadGroups();
   },
   loadGroup(groupId) {
-    return createGroupStore(resolveGroupsDir()).loadGroup(groupId);
+    return currentGroupStore().loadGroup(groupId);
   },
   groupExists(groupId) {
-    return createGroupStore(resolveGroupsDir()).groupExists(groupId);
+    return currentGroupStore().groupExists(groupId);
+  },
+  clearGroups() {
+    return currentGroupStore().clearGroups();
   }
 };
+
+async function primeGroupCacheFromDatabase() {
+  const activeDbPath = resolveEventDbPath();
+  const groups = await loadGroupsFromDatabase(activeDbPath);
+  currentGroupStore().saveGroups(groups);
+}
+
+function groupRowsToGroups(rows) {
+  const groupsByKey = new Map();
+  for (const row of rows) {
+    const groupDivisionNumber = Number.parseInt(row.groupDivisionNumber, 10);
+    const key = Number.isFinite(groupDivisionNumber) ? `num-${groupDivisionNumber}` : `id-${String(row.groupDivisionId || '').trim()}`;
+    if (!groupsByKey.has(key)) {
+      groupsByKey.set(key, {
+        groupId: String(row.groupDivisionId || `group-${groupDivisionNumber || groupsByKey.size + 1}`),
+        id: String(row.groupDivisionId || `group-${groupDivisionNumber || groupsByKey.size + 1}`),
+        name: String(row.groupDivisionName || row.groupDivisionId || `Group ${groupDivisionNumber || groupsByKey.size + 1}`),
+        groupDivisionNumber: Number.isFinite(groupDivisionNumber) ? groupDivisionNumber : undefined,
+        competitors: []
+      });
+    }
+
+    const group = groupsByKey.get(key);
+    group.competitors.push({
+      ...row,
+      id: String(row.id),
+      firstName: row.firstName || '',
+      lastName: row.lastName || '',
+      fullName: [row.firstName, row.lastName].filter(Boolean).join(' ') || '',
+      gender: row.gender || 'Unknown',
+      rank: row.rank || '',
+      age: Number.isFinite(Number(row.age)) ? Number(row.age) : 0
+    });
+  }
+
+  return Array.from(groupsByKey.values()).map((group) => ({
+    ...group,
+    competitors: group.competitors.sort((a, b) => {
+      const aDivision = Number.parseInt(a.competitionDivisionNumber, 10);
+      const bDivision = Number.parseInt(b.competitionDivisionNumber, 10);
+      if (Number.isFinite(aDivision) && Number.isFinite(bDivision) && aDivision !== bDivision) {
+        return aDivision - bDivision;
+      }
+      return Number.parseInt(a.id, 10) - Number.parseInt(b.id, 10);
+    })
+  }));
+}
+
+async function loadGroupsFromDatabase(dbPath) {
+  if (!dbPath || !fs.existsSync(dbPath)) {
+    return [];
+  }
+
+  const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
+  try {
+    const rows = await new Promise((resolve, reject) => {
+      db.all('SELECT * FROM competitors WHERE groupDivisionNumber IS NOT NULL ORDER BY groupDivisionNumber ASC, competitionDivisionNumber ASC, id ASC', (err, result) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(result || []);
+      });
+    });
+    return groupRowsToGroups(rows);
+  } finally {
+    await new Promise((resolve) => db.close(() => resolve()));
+  }
+}
 const db = new sqlite3.Database(TOURNAMENT_DB_PATH);
 
 // ─────────────────────────────────────────────
@@ -475,45 +555,56 @@ app.get('/download-app', (req, res) => {
 });
 
 app.get('/search', (req, res) => {
-  const name = req.query.name || '';
-  const rank = req.query.rank || '';
-  const mode = req.query.mode || 'OR';
-  const nameSearch = `%${name}%`;
+  const firstName = String(req.query.firstName || req.query.name || '').trim();
+  const lastName = String(req.query.lastName || '').trim();
+  const associationNumber = String(req.query.associationNumber || '').trim();
+  const groupDivisionNumber = String(req.query.groupDivisionNumber || '').trim();
+  const rank = String(req.query.rank || '').trim();
   const activeDbPath = resolveEventDbPath();
   const activeDb = new sqlite3.Database(activeDbPath, sqlite3.OPEN_READONLY, (openErr) => {
-    if (openErr) {
-      console.error(openErr);
-      return res.status(500).json({ error: 'Database search failed.' });
-    }
+   if (openErr) {
+     console.error(openErr);
+     return res.status(500).json({ error: 'Database search failed.' });
+   }
   });
 
-  let sql;
-  if (mode === 'AND') {
-    sql = `
-      SELECT *
-      FROM competitors
-      WHERE (firstName LIKE ?
-          OR lastName LIKE ?
-          OR associationNumber LIKE ?)
-        AND (LOWER(rank) = LOWER(?))
-    `;
-  } else {
-    sql = `
-      SELECT *
-      FROM competitors
-      WHERE firstName LIKE ?
-         OR lastName LIKE ?
-         OR associationNumber LIKE ?
-         OR LOWER(rank) = LOWER(?)
-    `;
+  const clauses = [];
+  const params = [];
+
+  if (firstName) {
+   clauses.push('firstName LIKE ?');
+   params.push(`${firstName}%`);
+  }
+  if (lastName) {
+   clauses.push('lastName LIKE ?');
+   params.push(`${lastName}%`);
+  }
+  if (associationNumber) {
+   clauses.push('associationNumber = ?');
+   params.push(associationNumber);
+  }
+  if (groupDivisionNumber) {
+   const parsedGroupDivision = Number.parseInt(groupDivisionNumber, 10);
+   if (Number.isFinite(parsedGroupDivision)) {
+     clauses.push('groupDivisionNumber = ?');
+     params.push(parsedGroupDivision);
+   }
+  }
+  if (rank) {
+   clauses.push('rank = ?');
+   params.push(rank);
   }
 
-  activeDb.all(sql, [nameSearch, nameSearch, nameSearch, rank], (err, rows) => {
-    activeDb.close();
+  const sql = clauses.length
+   ? `SELECT * FROM competitors WHERE ${clauses.join(' AND ')} ORDER BY lastName ASC, firstName ASC, id ASC`
+   : 'SELECT * FROM competitors ORDER BY lastName ASC, firstName ASC, id ASC LIMIT 0';
 
-    if (err) {
-      console.error('Search error:', err);
-      return res.status(500).json({ error: 'Database search failed.' });
+  activeDb.all(sql, params, (err, rows) => {
+   activeDb.close();
+
+   if (err) {
+     console.error('Search error:', err);
+     return res.status(500).json({ error: 'Database search failed.' });
     }
     return res.json(rows);
   });
@@ -525,7 +616,7 @@ app.use('/api', createDivisionRouter({
   buildGroups
 }));
 
-app.post('/api/events/activate', (req, res) => {
+app.post('/api/events/activate', async (req, res) => {
   const body = req.body || {};
   const eventName = String(body.eventName || '').trim();
   if (!eventName) {
@@ -542,7 +633,9 @@ app.post('/api/events/activate', (req, res) => {
   }
 
   try {
+    currentGroupStore().clearGroups();
     fs.writeFileSync(ACTIVE_EVENT_FILE, JSON.stringify({ activeEvent: eventName }, null, 2));
+    await primeGroupCacheFromDatabase();
     return res.json({ ok: true, activeEvent: eventName, dbPath: path.join(eventDir, 'tournament.db') });
   } catch (err) {
     console.error('Failed to activate event:', err);
@@ -640,6 +733,7 @@ app.post('/api/events/create', (req, res) => {
     fs.mkdirSync(eventDir, { recursive: true });
     fs.mkdirSync(groupsDir, { recursive: true });
     fs.mkdirSync(resultsDir, { recursive: true });
+    currentGroupStore().clearGroups();
 
     const initializeDatabase = require('./db/init');
     initializeDatabase(dbPath)
@@ -693,6 +787,8 @@ async function resetEvent(eventName) {
     fs.unlinkSync(ringAssignmentsFile);
   }
 
+  currentGroupStore().clearGroups();
+
   fs.mkdirSync(groupsDir, { recursive: true });
   fs.mkdirSync(resultsDir, { recursive: true });
 
@@ -742,12 +838,22 @@ app.use('/api', createRingRouter({
   saveUploadedDivisionPacket
 }));
 
-app.listen(PORT, () => {
-  console.log(`Group server running at http://localhost:${PORT}`);
-  console.log(`Control board: http://localhost:${PORT}/control-board`);
-  console.log(`Group example: http://localhost:${PORT}/api/groups/group-1`);
-  console.log(`Ring request-group example: http://localhost:${PORT}/api/rings/ring-a-1/request-group`);
-});
+async function startServer() {
+  try {
+    await primeGroupCacheFromDatabase();
+  } catch (err) {
+    console.error('Failed to prime group cache from database:', err);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Group server running at http://localhost:${PORT}`);
+    console.log(`Control board: http://localhost:${PORT}/control-board`);
+    console.log(`Group example: http://localhost:${PORT}/api/groups/group-1`);
+    console.log(`Ring request-group example: http://localhost:${PORT}/api/rings/ring-a-1/request-group`);
+  });
+}
+
+startServer();
 
 if (process.argv.includes('--import')) {
   setTimeout(() => {

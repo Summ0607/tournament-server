@@ -1,3 +1,5 @@
+const { assignDivisionNumbers } = require('./groupDivisionAssignments');
+
 function normalizeAge(competitor) {
   if (Number.isFinite(Number(competitor.age))) {
     return Number(competitor.age);
@@ -209,11 +211,11 @@ function buildRankBandGroups(competitors, maxGroupSize, minGroupSize) {
 
 function buildGroups(competitors, params = {}) {
   if (Array.isArray(params.groups) && params.groups.length) {
-    return params.groups.map((group, index) => ({
+    return assignDivisionNumbers(params.groups.map((group, index) => ({
       groupId: group.groupId || group.id || `group-${index + 1}`,
       name: group.name || `Group ${index + 1}`,
       competitors: Array.isArray(group.competitors) ? group.competitors : []
-    }));
+    })), params.startingDivisionNumber ?? 20);
   }
 
   const list = Array.isArray(competitors) ? competitors : [];
@@ -284,7 +286,7 @@ function buildGroups(competitors, params = {}) {
     groupCounter += 1;
   }
 
-  return groups;
+  return assignDivisionNumbers(groups, params.startingDivisionNumber ?? 20);
 }
 
-module.exports = { buildGroups };
+module.exports = { buildGroups, assignDivisionNumbers };

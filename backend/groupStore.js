@@ -1,63 +1,41 @@
-const fs = require('fs');
-const path = require('path');
 const { normalizeGroup, normalizeGroups } = require('./groupContract');
 
-function createGroupStore(groupsDir) {
-  function ensureGroupsDir() {
-    fs.mkdirSync(groupsDir, { recursive: true });
-  }
+function createGroupStore() {
+  const groupsById = new Map();
 
-  function getGroupFilePath(groupId) {
-    return path.join(groupsDir, `${groupId}.json`);
-  }
-
-  function saveGroups(groups) {
+  function rememberGroups(groups) {
     const normalized = normalizeGroups(groups);
-    ensureGroupsDir();
-
-    const existing = fs.existsSync(groupsDir)
-      ? fs.readdirSync(groupsDir).filter((fileName) => fileName.endsWith('.json'))
-      : [];
-
-    for (const fileName of existing) {
-      fs.unlinkSync(path.join(groupsDir, fileName));
-    }
-
+    groupsById.clear();
     normalized.forEach((group) => {
-      fs.writeFileSync(getGroupFilePath(group.groupId), JSON.stringify(group, null, 2));
+      groupsById.set(group.groupId, group);
     });
-
     return normalized;
   }
 
   function loadGroups() {
-    if (!fs.existsSync(groupsDir)) return [];
-
-    return fs.readdirSync(groupsDir)
-      .filter((fileName) => fileName.endsWith('.json'))
-      .sort()
-      .map((fileName, index) => {
-        const raw = JSON.parse(fs.readFileSync(path.join(groupsDir, fileName), 'utf8'));
-        return normalizeGroup(raw, index);
-      });
+    return Array.from(groupsById.values()).map((group, index) => normalizeGroup(group, index));
   }
 
   function loadGroup(groupId) {
     if (!groupId) return null;
-    const filePath = getGroupFilePath(groupId);
-    if (!fs.existsSync(filePath)) return null;
-    return normalizeGroup(JSON.parse(fs.readFileSync(filePath, 'utf8')), 0);
+    const group = groupsById.get(String(groupId));
+    return group ? normalizeGroup(group, 0) : null;
   }
 
   function groupExists(groupId) {
     return !!loadGroup(groupId);
   }
 
+  function clearGroups() {
+    groupsById.clear();
+  }
+
   return {
-    saveGroups,
+    saveGroups: rememberGroups,
     loadGroups,
     loadGroup,
-    groupExists
+    groupExists,
+    clearGroups
   };
 }
 

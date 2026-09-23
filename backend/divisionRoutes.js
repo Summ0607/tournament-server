@@ -1,5 +1,6 @@
 const express = require('express');
 const { normalizeGroups } = require('./groupContract');
+const { assignDivisionNumbers, appendDivisionTrace, summarizeGroupDivisionNumbers } = require('./groupDivisionAssignments');
 
 function createDivisionRouter(deps) {
   const router = express.Router();
@@ -27,7 +28,13 @@ function createDivisionRouter(deps) {
       const payload = req.body || {};
       const explicitGroups = normalizeGroups(payload.groups);
       if (explicitGroups.length) {
-        return res.json({ groups: explicitGroups });
+        const assignedGroups = assignDivisionNumbers(explicitGroups, payload.startingDivisionNumber ?? 20);
+        appendDivisionTrace('division-build', {
+          source: 'explicit',
+          groupCount: assignedGroups.length,
+          groups: summarizeGroupDivisionNumbers(assignedGroups)
+        });
+        return res.json({ groups: assignedGroups });
       }
 
       const activeCompetitorStore = typeof competitorStore === 'function'
@@ -38,6 +45,11 @@ function createDivisionRouter(deps) {
         ? payload.competitors
         : await activeCompetitorStore.loadCompetitors();
       const groups = normalizeGroups(buildGroups(competitors, payload));
+      appendDivisionTrace('division-build', {
+        source: 'generated',
+        groupCount: groups.length,
+        groups: summarizeGroupDivisionNumbers(groups)
+      });
       return res.json({ groups });
     } catch (err) {
       console.error('BUILD ERROR:', err);
@@ -47,13 +59,23 @@ function createDivisionRouter(deps) {
 
   router.post('/divisions/save', async (req, res) => {
     try {
-      const groups = normalizeGroups(req.body && req.body.groups);
+      const groups = assignDivisionNumbers(normalizeGroups(req.body && req.body.groups), req.body && req.body.startingDivisionNumber != null ? req.body.startingDivisionNumber : 20);
       if (!Array.isArray(req.body && req.body.groups)) {
         return res.status(400).json({ error: 'Invalid groups payload' });
       }
 
-      const savedGroups = groupStore.saveGroups(groups);
-      return res.json({ success: true, saved: savedGroups.length, groups: savedGroups });
+      const activeCompetitorStore = typeof competitorStore === 'function'
+        ? competitorStore()
+        : competitorStore;
+
+      const persisted = await activeCompetitorStore.saveDivisionAssignments(groups);
+      const savedGroups = groupStore.saveGroups(persisted.groups);
+      appendDivisionTrace('division-save', {
+        groupCount: savedGroups.length,
+        updatedCompetitors: persisted.updatedCompetitors,
+        groups: summarizeGroupDivisionNumbers(savedGroups)
+      });
+      return res.json({ success: true, saved: savedGroups.length, updatedCompetitors: persisted.updatedCompetitors, groups: savedGroups });
     } catch (err) {
       console.error('SAVE ERROR:', err);
       return res.status(500).json({ error: 'Failed to save divisions' });

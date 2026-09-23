@@ -95,6 +95,11 @@
     return capitalizeWords(String(value || '').trim());
   }
 
+  function parseOptionalInt(value) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
   function normalizeCompetitor(row) {
     const firstName = String(row.firstName || '').trim();
     const lastName = String(row.lastName || '').trim();
@@ -125,7 +130,11 @@
       weaponsDivision: row.weaponsDivision || 'unassigned',
       hyungsDivision: row.hyungsDivision || 'unassigned',
       sparringDivision: row.sparringDivision || 'unassigned',
-      ringAssignment: row.ringAssignment || 'unassigned'
+      ringAssignment: row.ringAssignment || 'unassigned',
+      groupDivisionId: row.groupDivisionId || '',
+      groupDivisionName: row.groupDivisionName || '',
+      groupDivisionNumber: parseOptionalInt(row.groupDivisionNumber),
+      competitionDivisionNumber: parseOptionalInt(row.competitionDivisionNumber)
     };
   }
 
@@ -135,6 +144,7 @@
       id: String(group.id || group.groupId || `group-${index + 1}`),
       groupId: String(group.groupId || group.id || `group-${index + 1}`),
       name: String(group.name || group.groupId || group.id || `Group ${index + 1}`),
+      groupDivisionNumber: parseOptionalInt(group.groupDivisionNumber),
       competitors
     };
     syncGroupDisplayMetadata(normalized);
@@ -493,13 +503,19 @@
       groupDiv.className = 'group-block';
 
       const header = document.createElement('h3');
-      header.textContent = group.name || `Group ${index + 1}`;
+      const divisionLabel = Number.isFinite(Number(group.groupDivisionNumber))
+        ? ` (Division ${Number(group.groupDivisionNumber)})`
+        : '';
+      header.textContent = `${group.name || `Group ${index + 1}`}${divisionLabel}`;
       groupDiv.appendChild(header);
 
       const list = document.createElement('ul');
       (Array.isArray(group.competitors) ? group.competitors : []).forEach((comp) => {
         const li = document.createElement('li');
-        li.textContent = `${comp.fullName || `${comp.firstName || ''} ${comp.lastName || ''}`.trim() || 'Unknown'} — ${comp.age} — ${comp.gender || ''} — ${comp.rank || ''}`;
+        const compDivision = Number.isFinite(Number(comp.competitionDivisionNumber))
+          ? ` — #${Number(comp.competitionDivisionNumber)}`
+          : '';
+        li.textContent = `${comp.fullName || `${comp.firstName || ''} ${comp.lastName || ''}`.trim() || 'Unknown'}${compDivision} — ${comp.age} — ${comp.gender || ''} — ${comp.rank || ''}`;
         list.appendChild(li);
       });
       groupDiv.appendChild(list);
