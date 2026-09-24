@@ -210,12 +210,16 @@ function buildRankBandGroups(competitors, maxGroupSize, minGroupSize) {
 }
 
 function buildGroups(competitors, params = {}) {
+  // If explicit groups were passed in, trust them as-is
   if (Array.isArray(params.groups) && params.groups.length) {
-    return assignDivisionNumbers(params.groups.map((group, index) => ({
-      groupId: group.groupId || group.id || `group-${index + 1}`,
-      name: group.name || `Group ${index + 1}`,
-      competitors: Array.isArray(group.competitors) ? group.competitors : []
-    })), params.startingDivisionNumber ?? 20);
+    return assignDivisionNumbers(
+      params.groups.map((group) => ({
+        groupId: String(group.groupId),
+        name: group.name,
+        competitors: Array.isArray(group.competitors) ? group.competitors : []
+      })),
+      params.startingDivisionNumber ?? 20
+    );
   }
 
   const list = Array.isArray(competitors) ? competitors : [];
@@ -224,15 +228,50 @@ function buildGroups(competitors, params = {}) {
   const maxGroupSize = Number(params.maxGroupSize ?? params.maxSize ?? 6);
   const minGroupSize = Number(params.minGroupSize ?? params.minSize ?? 4);
 
-  const normalized = list.map((competitor, index) => ({
-    ...competitor,
-    id: competitor.id ?? competitor.competitorId ?? `competitor-${index + 1}`,
-    age: normalizeAge(competitor),
-    firstName: competitor.firstName || '',
-    lastName: competitor.lastName || '',
-    fullName: [competitor.firstName, competitor.lastName].filter(Boolean).join(' ') || `Competitor ${index + 1}`,
-    gender: String(competitor.gender || 'Unknown').trim() || 'Unknown'
-  }));
+  // Competitors are already normalized by CSV ingestion + GroupContract
+  const normalized = list;
+
+  // ---------------------------------------------------------
+  // From here down, KEEP your existing grouping logic exactly:
+  // ---------------------------------------------------------
+
+  // 1. TTLD extraction
+  const ttld = normalized.filter(c => c.age < 7);
+
+  // 2. Special needs extraction
+  const specialNeeds = normalized.filter(c =>
+    String(c.specialNeeds || '').trim().toUpperCase() === 'YES'
+  );
+
+  // 3. Remove TTLD + special needs from main list
+  const remaining = normalized.filter(c =>
+    c.age >= 7 &&
+    String(c.specialNeeds || '').trim().toUpperCase() !== 'YES'
+  );
+
+  // 4. Build TTLD groups (your existing logic)
+  const ttldGroups = buildTTLDGroups(ttld, params);
+
+
+  // 5. Build special needs groups (your existing logic)
+  const specialGroups = buildSpecialNeedsGroups(specialNeeds, params);
+
+  // 6. Build standard groups (your existing logic)
+  const standardGroups = buildStandardGroups(remaining, {
+    maxGroupSize,
+    minGroupSize
+  });
+
+  // 7. Combine all groups
+  const allGroups = [
+    ...ttldGroups,
+    ...specialGroups,
+    ...standardGroups
+  ];
+
+  // 8. Assign division numbers
+  return assignDivisionNumbers(allGroups, params.startingDivisionNumber ?? 20);
+}
 
   const buckets = {
     Male: [],

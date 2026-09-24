@@ -4,363 +4,418 @@
 |---|---|
 | Document Type | High-Level Design (HLD) |
 | Status | Draft |
-| Version | 0.2 Draft |
-| Date | 22 September 2026 |
+| Version | 0.3 |
+| Date | 24 September 2026 |
 | Author | Scott |
 | Runtime | Node.js + Express |
 | Entry Point | `group-server.js` |
-| Companion | Tournament Scoring App — HLD (Android Client) |
+| Companion | Tournament Scoring App — High-Level Design (Android Client) |
 | Audience | Developers, Collaborators, Technical Stakeholders |
 
 ---
 
-## 1 — Document Purpose & How to Use This Document
+## 1 — Purpose and Scope
 
-This document describes the **server-side component** of the Tournament Management System — a Node.js/Express application hosted locally on the venue LAN during a live martial arts tournament. It is the companion to the *Tournament Scoring App — HLD (Android Client)*, which covers the Android tablet application used by ring volunteers.
+This document describes the server component of the Tournament Management System: a Node.js/Express application that runs on the venue LAN and supports tournament setup, event selection, roster import, grouping, ring operations, head-table monitoring, and receipt of completed ring result packets.
 
-**How to use this document:**
+It is the companion to the Android client HLD. This document records behavior verified from the supplied server source and identifies gaps between server and Android client contracts that should be resolved before live-event deployment.
 
-- **As LLM context:** Paste this document at the start of a new session to give a language model full architectural context without re-explaining from scratch.
-- **As a collaborator briefing:** Share with any developer or stakeholder joining the project.
-- **As a personal reference:** Use Section 9 as a living build checklist. Mark items as the work progresses.
-- **As a design record:** Decisions made and questions still open are captured explicitly so context is not lost between sessions.
+### Scope boundary
 
-> **Scope Boundary**
-> This document covers the server only: its modules, data models, API routes, non-functional requirements, open design questions, and build checklist. Android client details are out of scope here and are addressed in the companion HLD.
+This HLD covers server-side routes, data ownership, persistence, static web UI hosting, and the server-facing integration contract. It does not describe Android UI implementation in detail.
 
-All checklist items in Section 9 begin as **Not Started ([ ])** unless explicitly marked as `[x]` (confirmed from prior code review) or `[~]` (in progress).
+### Status terms
+
+- **Implemented/confirmed:** directly evidenced in the reviewed server source.
+- **Partially integrated:** server support exists, but the Android caller or complete workflow is not evidenced in the reviewed client source.
+- **Planned:** desired functionality not fully implemented or not fully verified.
 
 ---
 
 ## 2 — System Overview
 
-The **Tournament Management System server** (`tournament-server`) is a Node.js + Express application that acts as the single source of truth for all tournament data during a live event. It runs on a laptop or dedicated machine connected to the venue's Wi-Fi router and is accessed by:
+The tournament server is a Node.js/Express application hosted locally on a tournament laptop or other venue machine. It listens on port 3000, accepts JSON payloads up to 50 MB, exposes permissive CORS headers, and serves both REST APIs and browser-based administration pages. It is designed for LAN-only operation and does not depend on cloud services or internet connectivity.
 
-- **Admin web UI** — a browser-based interface (served by the same Express app) used by the head table to set up the tournament, build groups, assign rings, and manage the event.
-- **Android tablet clients** — the Tournament Scoring App running on volunteer tablets, connecting via HTTP REST on the LAN.
+The server serves three principal audiences:
 
-> **No Internet Required**
-> The server is designed for fully offline, LAN-only operation. No cloud services, external APIs, or internet connectivity are required or expected during a tournament.
-
-**Key technology choices:**
-
-- **Language:** JavaScript (Node.js)
-- **Framework:** Express.js
-- **Persistence:** SQLite roster database for roster/group division data plus event-scoped JSON files for ring state. Group data is reconstructed from SQLite and cached in memory at runtime.
-- **Transport:** HTTP REST (JSON). No WebSocket or SSE implemented yet — see Section 8.
-- **Entry point:** `group-server.js`
-
----
-
-## 3 — Module Architecture
-
-The server is organized into a main entry point, a `backend/` directory containing route handlers and shared stores, and a `db/` directory for schema/import helpers.
-
-```
-tournament-server/
-|-- group-server.js          # Entry point - Express app setup, static files, route mounting
-|-- db/
-|   |-- init.js              # Initializes the SQLite schema
-|   `-- import-csv.js        # Imports roster CSV data into SQLite
-|-- backend/
-|   |-- competitorStore.js   # SQLite-backed competitor read store
-|   |-- divisionRoutes.js    # Routes: group retrieval/build/save
-|   |-- groupContract.js     # Normalizes group and competitor shapes
-|   |-- groupStore.js        # Event-scoped in-memory cache for saved groups
-|   |-- pages.js             # Static/admin page routes
-|   |-- ringRoutes.js        # Routes: ring state, assignments, heartbeat, assistance
-|   `-- groupBuilder.js      # Logic: builds match groups from competitor lists
-`-- docs/
-    `-- HLD-server.md        # This document
-```
-
-### 3.1 — `group-server.js` (Entry Point)
-
-Bootstraps the Express application. Responsibilities:
-
-- Initializes the Express app and configures middleware (JSON body parser, CORS, static file serving).
-- Mounts route modules: `divisionRoutes` and `ringRoutes` under `/api/`.
-- Registers the admin/head-table and ring-assignment pages.
-- Starts the HTTP server on the configured port (default: `3000`).
-
-### 3.2 — Persistence & Store Modules
-
-The server uses a mixed persistence model:
-
-- `db/tournament.db` (or the active event's `tournament.db`) stores competitor roster data.
-- SQLite indexes are maintained for `firstName`, `lastName`, `associationNumber`, `rank`, `groupDivisionId`, and `groupDivisionNumber` to support search and ring lookup paths.
-- `backend/groupStore.js` keeps the latest saved groups in an event-scoped cache and serves them dynamically to ring requests.
-- `ring-assignments.json` (or the active event's copy) stores ring assignment/heartbeat state.
-
-These stores are shared so route handlers read and write the same event state.
-
-### 3.3 — `divisionRoutes.js` (Group Routes)
-
-Handles group retrieval/build/save operations. Key routes:
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/groups` | List all groups |
-| `GET` | `/api/groups/:groupId` | Get a group with its competitor list |
-| `POST` | `/api/divisions/build` | Build groups from roster input |
-| `POST` | `/api/divisions/save` | Persist normalized groups for the active event |
-
-### 3.4 — `ringRoutes.js` (Ring Operation Routes)
-
-Handles all live-event operations for rings — the primary interface for the Android tablet clients and the head table dashboard. The current implementation persists ring assignments, queue state, check-in progress, phase progress, and assistance flags.
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/rings/config` | Return ring options available to a tablet client |
-| `POST` | `/api/rings/config` | Apply ring count/configuration |
-| `GET` | `/api/rings` | List all rings and their current state |
-| `GET` | `/api/rings/:ringId/bootstrap` | Load the current assignment for a ring |
-| `POST` | `/api/rings/:ringId/request-group` | Load the current assignment for a ring |
-| `GET` | `/api/rings/:ringId/current` | Return the current ring state |
-| `POST` | `/api/rings/:ringId/queue` | Queue a group to a ring |
-| `DELETE` | `/api/rings/:ringId/queue/:groupId` | Remove a group from the queue |
-| `POST` | `/api/rings/:ringId/heartbeat` | Record periodic client contact and progress counters |
-| `POST` | `/api/rings/:ringId/complete` | Mark the current group complete and advance to the next |
-| `POST` | `/api/rings/:ringId/reset` | Clear the ring back to scratch |
-| `POST` | `/api/rings/:ringId/assistance` | Request assistance from the head table |
-| `POST` | `/api/rings/:ringId/assistance/clear` | Clear an active assistance request |
-
-### 3.5 — `groupBuilder.js` (Group Building Logic)
-
-Contains the algorithm that takes a division's competitor list and produces ordered match groups. Responsibilities:
-
-- Accept a list of competitors and a scoring mode.
-- Apply seeding, randomization, or bracket logic to produce a match schedule.
-- Return an ordered list of groups ready to be assigned to rings.
-
----
-
-## 4 — Data Model
-
-Roster data and division assignments are stored in SQLite. Ring state is persisted as JSON files, while saved group structures are reconstructed from the database and cached in memory. The shapes below describe the de facto payloads used throughout the system.
-
-### Competitor
-
-```
-competitorId       string    Unique identifier
-firstName          string
-lastName           string
-beltRank           string    e.g. "White", "Brown", "Black"
-ageGroup           string    e.g. "Adult", "Junior"
-gender             string    "M" | "F" | "X"
-school             string    Competitor's school/club name
-divisionIds        string[]  Divisions this competitor is enrolled in
-checkInStatus      string    Current check-in state
-competitionEntries object    Per-discipline enrollment/status
-groupDivisionId    string    Group identifier used for ring assignment
-groupDivisionName  string    Denormalized group label
-groupDivisionNumber number   First division number for the group
-competitionDivisionNumber number Unique competition number within the group
-```
-
-### Division
-
-```
-divisionId         string    Unique identifier
-name               string    Human-readable label
-ageGroup           string
-gender             string
-beltRankRange      string    e.g. "White-Yellow" or "Black"
-eventType          string    "point-sparring" | "flag-sparring" | "forms"
-competitors        string[]  Competitor IDs enrolled
-groups             string[]  Group IDs built from this division
-```
-
-### Group
-
-```
-groupId            string    Unique identifier
-divisionId         string    Parent division
-divisionName       string    Denormalized for display
-groupName          string    e.g. "Ring 2 - Group A"
-competitors        Competitor[]
-scoringMode        string    Inherited from division eventType
-groupDivisionNumber number   First division number used for this group
-assignedRingId     string | null
-status             string    "unassigned" | "queued" | "in-progress" | "complete"
-```
-
-### Ring
-
-```
-ringId             string    Unique identifier
-ringLabel          string    e.g. "Ring 1"
-phase              string    "idle" | "check-in" | "weapons" | "hyungs" | "sparring" | "awards"
-currentGroupId     string | null
-currentGroupName   string | null
-queuedGroupIds     string[]  Upcoming groups assigned to this ring
-completedGroupIds  string[]  Groups already completed on this ring
-assignmentStartedAt string | null ISO timestamp for ring runtime
-checkInCount       number    Completed check-ins
-checkInTotal       number    Expected check-ins
-phaseCompletedCount number   Completed items in the active phase
-phaseTotalCount    number    Expected items in the active phase
-phaseProgress      number    0-100 progress snapshot
-assistanceType     string | null   "medical" | "arbitrator" | "general"
-assistanceRequestedAt  string | null   ISO timestamp
-tabletLabel        string | null
-lastHeartbeatAt    string | null
-```
-
-### MatchResult
-
-```
-matchId            string
-groupId            string
-ringId             string
-redCornerCompetitorId   string
-blueCornerCompetitorId  string
-redScore           number
-blueScore          number
-scoringMode        string
-outcome            string    "red-win" | "blue-win" | "bye" | "DQ" | "walkover"
-submittedAt        string    ISO timestamp
-```
-
----
-
-## 5 — API Summary
-
-All endpoints are prefixed `/api/`. The server accepts and returns JSON. No authentication is implemented in the current version.
-
-See Sections 3.3 and 3.4 for full route tables. The Android client consumes the ring routes exclusively; the admin web UI consumes both division and ring routes.
-
----
-
-## 6 — Admin Web UI
-
-The server serves a browser-based admin interface from its static file directory. This UI is used exclusively by the head table operator. It is not documented in detail here — it is a thin client over the same REST API described above.
-
-**Known capabilities:**
-- Import competitor list (CSV or manual entry)
-- Configure divisions
-- Trigger group building
-- Assign groups to rings
-- Monitor ring status across all rings
-- Manage queue, assistance, and ring progress state
-
----
-
-## 7 — Non-Functional Requirements
-
-| Requirement | Target |
+| Audience | Primary responsibility |
 |---|---|
-| **Availability** | Must run fully offline on venue LAN. No internet dependency. |
-| **Performance** | API responses must complete within 200ms on a local LAN under normal load (<= 10 tablet clients). |
-| **Persistence** | SQLite roster data preserves competitor and division state across restarts; ring state persists as event-scoped JSON. |
-| **Scalability** | Designed for single-venue, single-event use. No multi-event or multi-venue support required. |
-| **Compatibility** | Runs on Node.js LTS. No OS-specific dependencies. Should run on Windows laptop available at venue. |
-| **Security** | No authentication currently. Physical access control assumed. See Section 8. |
-| **Recoverability** | Event roster, group, and ring assignment data persist on disk. After a restart, live tablet clients must reconnect and resend current heartbeat/progress state. |
+| Head-table staff | Create/select/reset events, import rosters, build and save groups, configure rings, queue groups, monitor progress, and respond to assistance requests |
+| Android ring tablets | Discover/select a ring, request or restore a group assignment, send heartbeat/progress updates, and eventually submit a final division packet |
+| Browser/admin tools | Use static pages for setup, group building, ring assignment, ring progress, dashboard/head-table operations, and status viewing |
+
+### Architectural roles
+
+- **SQLite** stores imported competitor roster data and persisted group/division assignments.
+- **Event directories** separate event databases, groups, results, and ring-assignment state.
+- **In-memory group cache** serves the currently active event’s saved groups after they are loaded from SQLite.
+- **Event JSON files** retain active-event selection and per-event ring-assignment state.
+- **Results JSON files** retain uploaded division/ring result packets.
+- **Trace logs** record group-division and heartbeat/ring-progress diagnostics.
+
+The server is authoritative for roster, assigned group/ring state, event state, and uploaded result history. The Android app currently performs local operational scoring and communicates ring status/progress to the server.
 
 ---
 
-## 8 — Open Questions & Decisions
+## 3 — Modules and Persistence
 
-- **OPEN** — **Real-time updates:** The Android app uses `/api/rings/config`, `/api/rings/:ringId/request-group`, and `/api/rings/:ringId/heartbeat` on screen/ring change and every 60 seconds while assigned. WebSocket or SSE would still be a design option for push notifications.
-- **OPEN** — **Data persistence/backup:** Roster data and ring/group state now persist to SQLite and event files, but the backup/export story for completed events is still not formalized.
-- **OPEN** — **Authentication:** No login or role enforcement. All clients on the LAN can call any API endpoint. Future hardening may require an API key or session token. Decision pending.
-- **OPEN** — **Competitor import format:** Manual entry and CSV import are referenced but the exact CSV schema is not finalized.
-- **OPEN** — **Scoring mode support:** Point sparring is the primary confirmed mode. Flag sparring and forms/kata support still needs validation against tournament rules.
-- **OPEN** — **Export/backup:** No formal end-of-event export/archive workflow is defined yet.
-- **RESOLVED** — Runtime: Node.js + Express confirmed.
-- **RESOLVED** — Transport: LAN-only HTTP REST. No cloud dependency.
-- **RESOLVED** — Data store: SQLite roster DB plus event-scoped JSON for ring state. Group data is reconstructed from SQLite after restart.
+### Server modules
 
----
+| Module | Confirmed responsibility |
+|---|---|
+| `group-server.js` | Express bootstrap, CORS/JSON middleware, event lifecycle routes, health/version/APK routes, CSV import, competitor search, route mounting, active-event handling, state helpers, and result-packet persistence |
+| `db/init.js` | Creates/migrates the SQLite `competitors` table and indexes |
+| `db/import-csv.js` | Imports roster CSV rows, normalizes fields, calculates age, and identifies weapons eligibility |
+| `backend/competitorStore.js` | Reads competitors and transactionally saves group/division assignments back to SQLite |
+| `backend/groupBuilder.js` | Builds age/rank/gender-oriented tournament groups and assigns division numbers |
+| `backend/groupStore.js` | In-memory cache for groups in the active event context |
+| `backend/divisionRoutes.js` | Lists, builds, and saves groups/divisions |
+| `backend/ringRoutes.js` | Ring configuration, assignment, queueing, heartbeat/progress, completion, reset, and assistance endpoints |
+| `backend/pages.js` | Static browser routes and redirects for setup, group builder, ring assignment/progress, dashboard, head table, and status pages |
+| `backend/groupDivisionAssignments.js` | Sequential group/competition division numbering and division trace logging |
 
-## 9 — Component Checklist
+### Event directory model
 
-**Legend:** `[x]` Complete / confirmed · `[~]` In Progress · `[ ]` Not Started
-**Sub-task `[x]`** = confirmed from prior code review.
+The code supports an active event selected through `events/active.json`. For an event name, the server expects or creates:
 
-### Server Bootstrap (`group-server.js`)
+```text
+events/<eventName>/
+├── tournament.db
+├── groups/
+├── results/
+└── ring-assignments.json
+```
 
-- [~] Express app setup and middleware
-  - [x] `group-server.js` exists and starts an HTTP server
-  - [x] JSON body parser middleware configured
-  - [ ] CORS headers configured for tablet client access
-  - [x] Route modules mounted under `/api/`
-  - [ ] Static file serving for admin web UI confirmed working
-  - [ ] Graceful shutdown handler (SIGTERM/SIGINT)
+When no active event is selected, the server falls back to its root/default database and group/ring locations. This fallback is useful for development but should be treated carefully in operations because event isolation depends on correctly selecting an event.
 
-### Persistence Layer (`competitorStore.js`, `groupStore.js`)
+### SQLite competitor data
 
-- [~] Core data store implementation
-  - [x] `competitorStore.js` exists and reads from SQLite
-  - [x] `groupStore.js` caches event groups in memory for dynamic ring downloads
-  - [x] Ring state persists to event-scoped JSON
-  - [x] Competitor, Division, Group, Ring entities defined
-  - [x] Ring `assistanceType`, `assistanceRequestedAt`, `assignmentStartedAt`, and heartbeat fields confirmed on ring objects
-  - [x] SQLite indexes exist for search fields and group-division lookup
+The verified `competitors` table includes identity/contact/import fields plus tournament fields:
 
-### Division & Group Management (`divisionRoutes.js`)
+```text
+id                          INTEGER primary key
+firstName, lastName         TEXT
+parentFirstName, parentLastName, email, phone, dob
+associationNumber           TEXT
+gender, rank, studio        TEXT
+specialNeeds                INTEGER
+height                      INTEGER
+weaponsDivision             TEXT; default unassigned
+hyungsDivision              TEXT; default unassigned
+sparringDivision            TEXT; default unassigned
+ringAssignment              TEXT; default unassigned
+groupDivisionId             TEXT
+groupDivisionName           TEXT
+groupDivisionNumber         INTEGER
+competitionDivisionNumber   INTEGER
+```
 
-- [~] Group operations
-  - [x] `GET /api/groups` - list all groups
-  - [x] `GET /api/groups/:groupId` - get group with competitor list
-  - [x] `POST /api/divisions/build` - trigger group builder and assign division numbers starting at 20
-  - [x] `POST /api/divisions/save` - persist normalized groups and write group + discipline division numbers back to SQLite
+Indexes are maintained for first name, last name, association number, rank, group division number, and group division ID.
 
-### Ring Operations (`ringRoutes.js`)
+### Ring state
 
-- [~] Ring state and phase management
-  - [x] `GET /api/rings/config` - ring selection config required by Android app
-  - [x] `POST /api/rings/config` - ring count/config update
-  - [x] `GET /api/rings` - ring board summary used by head table
-  - [x] `GET /api/rings/:ringId/bootstrap` - current assignment load required by Android app
-  - [x] `POST /api/rings/:ringId/request-group` - current assignment load required by Android app
-  - [x] `GET /api/rings/:ringId/current` - ring-state sync
-  - [x] `POST /api/rings/:ringId/queue` - queue a group on a ring
-  - [x] `DELETE /api/rings/:ringId/queue/:groupId` - remove a queued group
-  - [x] `POST /api/rings/:ringId/heartbeat` - client keepalive with phase progress
-  - [x] `POST /api/rings/:ringId/complete` - mark group complete and advance
-  - [x] `POST /api/rings/:ringId/reset` - clear ring to scratch
-  - [x] `POST /api/rings/:ringId/assistance` - assistance request endpoint
-  - [x] `POST /api/rings/:ringId/assistance/clear` - clear assistance endpoint
+A ring state records the current group, queued/completed groups, assignment timestamp, check-in and phase progress counters, assistance state, tablet identity, heartbeat time, phase start time, and phase. Supported phases are `idle`, `check-in`, `weapons`, `hyungs`, `sparring`, and `awards`; ring responses expose a normalized phase plan that uses `setup` as the display key for check-in.
 
-### Group Builder (`groupBuilder.js`)
+### Result history
 
-- [~] Group building algorithm
-  - [x] `groupBuilder.js` exists
-  - [x] Point-sparring bracket/round-robin logic confirmed
-  - [ ] Flag-sparring group logic confirmed
-  - [ ] Forms/kata group logic confirmed
-  - [x] Bye handling for odd-numbered competitor lists
-  - [x] Group and competition division numbers are assigned sequentially from 20
+`POST /api/rings/:ringId/complete` invokes `saveUploadedDivisionPacket(ringId, req.body)`. The packet is saved as JSON in the current results directory using a sanitized `divisionId`, `groupId`, or ring ID as the filename basis. This is the implemented foundation for durable ring-result history.
 
-### Admin Web UI
+Current limitations:
 
-- [~] Head table interface
-  - [x] Competitor import (CSV) working end-to-end
-  - [x] Division configuration UI
-  - [x] Group build trigger UI
-  - [x] Ring assignment UI
-  - [x] Ring status monitor (all rings at a glance)
-  - [x] Assistance acknowledgement UI
-  - [x] Queue management and ring progress display
-
-### Testing & Quality
-
-- [ ] Unit tests
-  - [ ] `competitorStore.js` - CRUD operations
-  - [ ] `groupBuilder.js` - group building with even/odd competitor counts
-  - [ ] Route handlers - mock store, verify response shapes
-- [ ] Integration tests
-  - [ ] End-to-end: create division -> add competitors -> build groups -> assign to ring -> simulate check-in and score submission
-- [ ] Load test
-  - [ ] Simulate 10 concurrent tablet clients maintaining heartbeat traffic at 60-second intervals
+- The server stores the supplied packet without a formal schema/version validation.
+- The result filename can collide if the same division/group identifier is submitted again, replacing the existing file.
+- The server code supplied does not expose a results-listing or results-retrieval API.
+- The reviewed Android networking code does not yet expose a completion/packet-upload caller.
 
 ---
 
-## 10 — Revision History
+## 4 — API Contract
+
+All APIs are under `/api`. Requests and responses are JSON unless a route serves an APK download.
+
+### Health, version, app distribution, and events
+
+| Method | Path | Implemented behavior |
+|---|---|---|
+| GET | `/api/health` | Returns `{ ok: true, message: "Group server is running" }` |
+| GET | `/api/version` | Reads Android Gradle metadata when present and returns `versionCode` and `versionName`; returns zero values if unavailable |
+| GET | `/download-app` | Serves `app-debug.apk` as an Android package download when present |
+| GET | `/api/events/list` | Lists event directories |
+| GET | `/api/events/active` | Returns the active event name |
+| POST | `/api/events/create` | Creates an event directory, SQLite database, groups/results directories, and initial ring-assignment file |
+| POST | `/api/events/activate` | Selects an existing event and primes group cache from its database |
+| POST | `/api/events/reset` | Deletes/recreates the selected event’s database, groups, results, and ring state |
+| POST | `/api/events/import-csv` | Imports a CSV from a server path or uploaded text into the selected/active event database |
+
+### Competitors and group/division management
+
+| Method | Path | Implemented behavior |
+|---|---|---|
+| GET | `/api/competitors` | Returns competitors from the active-event database |
+| GET | `/api/competitors/table` | Returns database rows plus header names |
+| GET | `/api/search` | Searches competitors by first name, last name, association number, group division number, or rank |
+| GET | `/api/groups` | Returns groups from the active in-memory group store |
+| GET | `/api/groups/:groupId` | Returns one cached group or 404 |
+| POST | `/api/divisions/build` | Builds groups from payload competitors or active-event database roster; explicit groups may also be numbered/returned |
+| POST | `/api/divisions/save` | Assigns sequential division numbers, writes assignments to SQLite transactionally, saves groups in cache, and emits a trace entry |
+
+### Ring operations
+
+| Method | Path | Implemented behavior |
+|---|---|---|
+| GET | `/api/rings/config` | Returns rings allowed/available for a tablet; accepts optional `tabletLabel` |
+| POST | `/api/rings/config` | Sets letter/number ring configuration and regenerates ring states |
+| GET | `/api/rings` | Returns current ring board/state summary |
+| GET | `/api/rings/:ringId/bootstrap` | Retrieves existing ring assignment/state without forcing group advancement |
+| POST | `/api/rings/:ringId/request-group` | Associates tablet/progress information and, when idle with queued work, advances the next queued group into current assignment |
+| GET | `/api/rings/:ringId/current` | Retrieves ring state/current assignment |
+| POST | `/api/rings/:ringId/queue` | Adds an existing group to a ring queue; prevents duplicate cross-ring use |
+| DELETE | `/api/rings/:ringId/queue/:groupId` | Removes a group from a ring queue |
+| POST | `/api/rings/:ringId/heartbeat` | Updates tablet label, phase, check-in counts, active-phase counts, and progress; writes heartbeat trace |
+| POST | `/api/rings/:ringId/complete` | Saves posted result packet, marks current group complete, activates next queued group if any, and returns updated state |
+| POST | `/api/rings/:ringId/reset` | Clears one ring to scratch state |
+| POST | `/api/rings/reset` | Resets all ring assignments to configured empty rings |
+| POST | `/api/rings/:ringId/assistance` | Records an assistance type and timestamp |
+| POST | `/api/rings/:ringId/assistance/clear` | Clears the active assistance request |
+
+### Ring request/response semantics
+
+`request-group` and `heartbeat` recognize these request fields when present:
+
+```json
+{
+  "tabletLabel": "manufacturer model",
+  "phase": "check-in | weapons | hyungs | sparring | awards",
+  "checkInCount": 0,
+  "checkInTotal": 0,
+  "phaseCompletedCount": 0,
+  "phaseTotalCount": 0,
+  "phaseProgress": 0
+}
+```
+
+For compatibility, the server also recognizes `checkedInCount`, `completedCount`, `totalCount`, and `progress` aliases in relevant paths. Progress values in the range 0–1 are converted to percentages; other values are bounded to 0–100.
+
+A ring response includes identity, server base URL, event start time, current/queued/completed group IDs, assignment and phase metadata, assistance status, tablet/heartbeat information, current group data, and computed `phasePlan` details.
+
+### Phase-plan behavior
+
+The server exposes the visible phases in the order Setup, Weapons when eligible competitors exist, Hyungs, Sparring, and Awards. Internally, the server maps the Android/client value `check-in` to the UI plan key `setup`. A weapon phase is shown if any member has `weaponsEligible` true or has a non-`unassigned` `weaponsDivision`.
+
+---
+
+## 5 — Grouping, Eligibility, and Workflow
+
+### Roster import and normalization
+
+CSV import maps human-readable headers such as First Name, Last Name, DOB, Association Number, Gender, Current Rank, Studio, Special Needs, and Height. It normalizes gender, uppercases rank, derives age from DOB where possible, supplies a competitor ID when none exists, and identifies server-side weapons eligibility.
+
+### Group building
+
+The group builder is oriented around tournament-operational groups, not individual event-type brackets. It:
+
+- Treats TTLD as a dedicated grouping category.
+- Separates or groups competitors using gender, rank bands, and age buckets.
+- Uses a default target range of four to six competitors unless parameters override it.
+- Handles TTLD groups specially, splitting by gender only when both male and female counts reach four.
+- Assigns sequential `groupDivisionNumber` values, defaulting to a starting value of 20.
+- Assigns sequential `competitionDivisionNumber` values within/after groups.
+
+When groups are saved, every group member receives hyungs and sparring division values based on the group division number. Weapons division is assigned only to server-eligible ranks.
+
+### Live ring workflow
+
+1. Head-table staff create or activate an event and import competitors.
+2. Staff build/review/save groups, thereby persisting group and division assignments.
+3. Staff configure rings and queue groups to rings.
+4. A tablet retrieves available ring configuration and posts to `request-group` for a selected ring.
+5. The server activates the next queued group where appropriate and returns group/ring/phase state.
+6. The tablet sends heartbeats as the ring progresses through check-in, weapons where applicable, hyungs, sparring, and awards.
+7. The tablet posts a final result packet to `complete`; the server saves the packet and advances the queue.
+8. Head-table staff monitor ring status, progress, assistance, and later event-result history.
+
+Steps 1–6 are server-supported and partially client-supported in the reviewed Android code. Step 7 is server-supported but requires Android client completion-upload integration and a formal result-packet contract.
+
+---
+
+## 6 — Client/Server Inconsistencies
+
+The following issues need an explicit decision and should not be treated as merely documentation differences.
+
+### 6.1 Rank vocabulary mismatch — high priority
+
+The server stores/normalizes ranks as `TTLD`, `G10` through `G1`, `CDB`, and `D1` through `D3`. The Android engine’s form catalog and rank parser use labels such as `10th Gup` through `1st Gup`, `Cho Dan Bo`, `Cho Dan`, `E Dan`, and `Sam Dan`.
+
+The Android remote parser passes the server’s `rank` value directly into the app’s rank-level/form logic. Without a shared rank-normalization contract, values such as `G2`, `CDB`, and `D1` can be unrecognized on the Android side, causing invalid rank levels, incorrect range labels, and failures when requesting allowed forms.
+
+**Required resolution:** establish one canonical wire format or implement bidirectional normalization at the API boundary. Recommended wire values are the server’s compact codes, with one shared mapping on Android and server/admin UI.
+
+### 6.2 Weapons eligibility mismatch — high priority
+
+Server import and assignment logic grant weapons eligibility only to `G2`, `G1`, `CDB`, `D1`, `D2`, and `D3`, which corresponds to 2nd Gup and above. The Android form catalog offers a weapons form beginning at 4th Gup and allows 4th and 3rd Gup competitors to enter weapons.
+
+This produces a direct operational disagreement: the server may omit the Weapons phase for a group containing 4th/3rd Gup competitors, while the Android app considers them eligible.
+
+**Required resolution:** decide the governing tournament rule, then update both the server eligibility set and Android catalog/tests together.
+
+### 6.3 Missing rank/eligibility fields in Android remote model — high priority
+
+Server groups carry discipline fields such as `weaponsEligible`, `weaponsDivision`, `hyungsDivision`, and `sparringDivision`. The Android `RemoteCompetitor` model only retains ID, name, studio, rank, age, and height. When converted to local competitors, it initializes an empty competition-entry map.
+
+Consequently, the Android app cannot use server-assigned discipline enrollment as authoritative input. It instead relies on client-derived eligibility and local registration state.
+
+**Required resolution:** extend the Android wire model and parser to preserve server eligibility/division fields, then initialize `CompetitionEntry` values from those fields; or formally declare the client as the eligibility authority and simplify server fields accordingly.
+
+### 6.4 Group payload metadata gap — medium priority
+
+The Android client supports group age range, rank range, rank range label, and `matNumber`. The server’s cached group shape shown in source carries group ID/name/division number and competitor data, but does not reliably emit `ageRange`, `rankRange`, `rankRangeLabel`, or `matNumber`.
+
+Android handles these absences with defaults or derives rank range from competitor ranks, but default age range `0..0` and mat number `1` are not meaningful operational metadata.
+
+**Required resolution:** either have the server emit explicit group metadata or have Android intentionally derive/display it rather than represent it as server-provided.
+
+### 6.5 Phase nomenclature mismatch — medium priority
+
+The Android heartbeat maps its check-in screen to `check-in`. The server stores `check-in` but exposes `setup` in `phasePlan.currentPhase`. Android currently parses `currentPhase` as a raw string and serializes `phasePlan` to a string rather than a typed structure.
+
+**Required resolution:** choose a single wire phase vocabulary. The lowest-impact option is to retain `check-in` in all API fields and use “Setup” only as a presentation label.
+
+### 6.6 Result-history workflow is only half connected — high priority
+
+The server does implement packet receipt on `POST /api/rings/:ringId/complete` and writes JSON under event results. The reviewed Android repository/view-model exposes no `complete` method and no result-packet upload function.
+
+**Required resolution:** define a versioned division-result packet, add Android upload/retry/acknowledgement behavior, and add server validation plus result retrieval/export routes.
+
+### 6.7 Version/update route mismatch — medium priority
+
+The Android client checks `GET /api/version` and has a helper to install a local APK. The server provides `GET /api/version` and serves the APK from `/download-app`. The Android code reviewed does not contain a downloader or a call to `/download-app`.
+
+**Required resolution:** retain the update feature and add download/verification/install UX, or remove/update the HLD references if APK distribution will be manual or managed externally.
+
+### 6.8 Heartbeat cadence statement is not code-confirmed — medium priority
+
+The server supports heartbeats and keeps disconnection policy disabled; it does not automatically reclaim a ring after 90 seconds. The earlier HLD describes a 60-second tablet cadence, but the reviewed Android source includes the heartbeat function without the omitted UI/scheduler implementation.
+
+**Required resolution:** document the actual cadence only after verifying the Compose caller, and decide whether the 90-second constant should become an active stale-client policy or be removed.
+
+### 6.9 Result persistence path naming requires clarification — low priority
+
+The server has an event-specific `results/` directory in event lifecycle code and a root `Results/` constant used by packet saving in the supplied entry point excerpt. Confirm that packet saving resolves to the active event’s result directory; otherwise result history may escape event isolation.
+
+### 6.10 HTTP status handling mismatch — low priority
+
+The Android generic JSON client currently treats only HTTP 200 as a successful JSON response. Express routes may validly return other 2xx statuses as the API evolves. The health probe accepts all 2xx responses, but generic data calls do not.
+
+**Required resolution:** make Android generic JSON handling accept the 200–299 range or standardize all server JSON success responses to 200.
+
+---
+
+## 7 — Non-Functional Characteristics
+
+### Availability and recovery
+
+- LAN-only HTTP operation is intentional.
+- Ring state and event metadata are stored on disk as JSON.
+- Competitors and saved division assignments are persisted in SQLite.
+- On event activation, the server primes the active group cache from the active event’s database.
+- Tablet reconnects can recover server-side ring assignment via bootstrap/current/request-group endpoints.
+- Current heartbeat policy intentionally does not auto-release disconnected rings; an operator must reset a ring manually.
+
+### Observability
+
+- Group build/save, queue activation, and related division activity are written to `group-division-trace.log`.
+- Heartbeat snapshots are written to `ring-progress-trace.log`.
+- Server errors are written to standard console output.
+
+### Security
+
+- No authentication or authorization is implemented.
+- CORS allows all origins.
+- HTTP is unencrypted.
+- The operating assumption is a controlled private venue LAN and physical operator access.
+
+Before use on an untrusted network, introduce authentication, access restrictions, HTTPS or an equivalent protected network posture, and input validation/auditing appropriate to personally identifiable roster data.
+
+### Performance and scale
+
+The implementation is designed for a single venue and one active event at a time. SQLite and local JSON storage are appropriate for the expected small number of rings/tablets, but load, restart, and multi-tablet conflict testing should be completed before operational reliance.
+
+---
+
+## 8 — Implementation Checklist
+
+Legend: ✅ confirmed in reviewed source; 🔄 partially integrated or needs end-to-end verification; ☐ planned or not verified.
+
+### Bootstrap and event lifecycle
+
+- ✅ Express server on port 3000
+- ✅ JSON body parsing with 50 MB limit
+- ✅ Permissive CORS middleware
+- ✅ Health endpoint
+- ✅ Version endpoint derived from Android Gradle metadata when available
+- ✅ APK file serving endpoint
+- ✅ Event create, list, activate, active-event query, and reset routes
+- ✅ Event-specific database/groups/results/ring-state directory creation
+- 🔄 Verify active-event results persistence consistently uses event-specific directory
+
+### Roster and group management
+
+- ✅ SQLite schema migration and indexes
+- ✅ CSV roster import with normalization, age derivation, and weapons eligibility calculation
+- ✅ Competitor retrieval/table/search endpoints
+- ✅ Group build and explicit-group numbering
+- ✅ Transactional persistence of group/competition division numbers
+- ✅ In-memory group cache for active event
+- ✅ Group division trace logging
+- 🔄 Verify all group-cache behavior after server restart and event activation
+
+### Ring operations
+
+- ✅ Ring count/configuration and label generation
+- ✅ Ring queue management with cross-ring duplicate prevention
+- ✅ Bootstrap/current/request-group endpoints
+- ✅ Current group activation from queue
+- ✅ Ring phase and progress tracking
+- ✅ Heartbeat recording and trace logging
+- ✅ Assistance request and clear endpoints
+- ✅ Ring completion advances queue and persists submitted packet
+- ✅ Individual and global ring reset routes
+- 🔄 Confirm dashboard/admin pages exercise every intended endpoint
+- ☐ Formal stale-client/reclaim policy
+
+### Result history
+
+- ✅ Server receives and writes a result packet during ring completion
+- ☐ Versioned JSON schema for result packet
+- ☐ Server-side packet validation and duplicate/idempotency behavior
+- ☐ Result retrieval/listing/export APIs and head-table history UI
+- ☐ Android final-result upload, acknowledgement, retry, and reconciliation
+- ☐ End-of-event archive/export/backup procedure
+
+### Cross-client contract
+
+- ☐ Canonical rank-code mapping shared by server and Android client
+- ☐ Harmonized weapons eligibility rule
+- ☐ Server discipline assignments preserved by Android parser/model
+- ☐ Explicit group metadata contract for age/rank ranges and mat/ring number
+- ☐ Unified wire vocabulary for check-in/setup phase
+- ☐ Typed phase-plan parsing on Android where the UI needs it
+- ☐ Confirmed heartbeat interval and disconnect policy
+
+### Testing and operations
+
+- ☐ Unit tests for rank mapping, eligibility, CSV normalization, group building, packet validation, and ring progression
+- ☐ Route tests for normal, invalid, duplicate, and concurrent requests
+- ☐ Android/server contract tests using captured JSON fixtures
+- ☐ Multi-tablet LAN integration test including reconnect, queue progression, assistance, and result upload
+- ☐ Backup/restore rehearsal for a completed event
+
+---
+
+## 9 — Revision History
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
-| 0.1 | 2026-09-18 | Scott | Initial server-side HLD. All sections drafted; checklist items reflect confirmed state from prior code review sessions. |
-| 0.2 | 2026-09-22 | Copilot | Updated for SQLite/event-file persistence, current ring routes, assignment timers, and head-table/ring-assignment UI revisions. |
+| 0.3 | 24 September 2026 | Scott | Rewritten from current server and Android source review. Adds event lifecycle, confirmed result-packet receipt/persistence, concrete route contract, group/SQLite behavior, trace logging, and a cross-client inconsistency register. |
+| 0.2 | 22 September 2026 | Copilot | Updated for SQLite/event-file persistence, ring routes, assignment timers, and head-table/ring-assignment UI revisions. |
+| 0.1 | 18 September 2026 | Scott | Initial server-side HLD. |

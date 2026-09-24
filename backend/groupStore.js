@@ -4,22 +4,20 @@ function createGroupStore() {
   const groupsById = new Map();
 
   function rememberGroups(groups) {
-    const normalized = normalizeGroups(groups);
     groupsById.clear();
-    normalized.forEach((group) => {
+    groups.forEach((group) => {
       groupsById.set(group.groupId, group);
     });
-    return normalized;
+    return groups;
   }
 
   function loadGroups() {
-    return Array.from(groupsById.values()).map((group, index) => normalizeGroup(group, index));
+    return Array.from(groupsById.values());
   }
 
   function loadGroup(groupId) {
     if (!groupId) return null;
-    const group = groupsById.get(String(groupId));
-    return group ? normalizeGroup(group, 0) : null;
+    return groupsById.get(String(groupId)) || null;
   }
 
   function groupExists(groupId) {

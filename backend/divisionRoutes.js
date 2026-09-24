@@ -8,7 +8,7 @@ function createDivisionRouter(deps) {
 
   router.get('/groups', async (req, res) => {
     const groups = groupStore.loadGroups();
-    res.json({ groups: normalizeGroups(groups) });
+    res.json({ groups });
   });
 
   router.get('/groups/:groupId', (req, res) => {
@@ -26,7 +26,7 @@ function createDivisionRouter(deps) {
   router.post('/divisions/build', async (req, res) => {
     try {
       const payload = req.body || {};
-      const explicitGroups = normalizeGroups(payload.groups);
+      const explicitGroups = payload.groups || [];
       if (explicitGroups.length) {
         const assignedGroups = assignDivisionNumbers(explicitGroups, payload.startingDivisionNumber ?? 20);
         appendDivisionTrace('division-build', {
@@ -44,7 +44,7 @@ function createDivisionRouter(deps) {
       const competitors = Array.isArray(payload.competitors)
         ? payload.competitors
         : await activeCompetitorStore.loadCompetitors();
-      const groups = normalizeGroups(buildGroups(competitors, payload));
+      const groups = buildGroups(competitors, payload);
       appendDivisionTrace('division-build', {
         source: 'generated',
         groupCount: groups.length,
@@ -59,10 +59,14 @@ function createDivisionRouter(deps) {
 
   router.post('/divisions/save', async (req, res) => {
     try {
-      const groups = assignDivisionNumbers(normalizeGroups(req.body && req.body.groups), req.body && req.body.startingDivisionNumber != null ? req.body.startingDivisionNumber : 20);
-      if (!Array.isArray(req.body && req.body.groups)) {
+      if (!Array.isArray(req.body.groups)) {
         return res.status(400).json({ error: 'Invalid groups payload' });
       }
+
+      const groups = assignDivisionNumbers(
+        req.body.groups,
+        req.body.startingDivisionNumber ?? 20
+      );
 
       const activeCompetitorStore = typeof competitorStore === 'function'
         ? competitorStore()
