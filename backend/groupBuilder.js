@@ -231,48 +231,6 @@ function buildGroups(competitors, params = {}) {
   // Competitors are already normalized by CSV ingestion + GroupContract
   const normalized = list;
 
-  // ---------------------------------------------------------
-  // From here down, KEEP your existing grouping logic exactly:
-  // ---------------------------------------------------------
-
-  // 1. TTLD extraction
-  const ttld = normalized.filter(c => c.age < 7);
-
-  // 2. Special needs extraction
-  const specialNeeds = normalized.filter(c =>
-    String(c.specialNeeds || '').trim().toUpperCase() === 'YES'
-  );
-
-  // 3. Remove TTLD + special needs from main list
-  const remaining = normalized.filter(c =>
-    c.age >= 7 &&
-    String(c.specialNeeds || '').trim().toUpperCase() !== 'YES'
-  );
-
-  // 4. Build TTLD groups (your existing logic)
-  const ttldGroups = buildTTLDGroups(ttld, params);
-
-
-  // 5. Build special needs groups (your existing logic)
-  const specialGroups = buildSpecialNeedsGroups(specialNeeds, params);
-
-  // 6. Build standard groups (your existing logic)
-  const standardGroups = buildStandardGroups(remaining, {
-    maxGroupSize,
-    minGroupSize
-  });
-
-  // 7. Combine all groups
-  const allGroups = [
-    ...ttldGroups,
-    ...specialGroups,
-    ...standardGroups
-  ];
-
-  // 8. Assign division numbers
-  return assignDivisionNumbers(allGroups, params.startingDivisionNumber ?? 20);
-}
-
   const buckets = {
     Male: [],
     Female: [],

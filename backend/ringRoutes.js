@@ -33,7 +33,9 @@ function createRingRouter(deps) {
     loadGroup,
     serverBaseUrlForRequest,
     DISCONNECT_AFTER_MS,
-    saveUploadedDivisionPacket
+    saveUploadedDivisionPacket,
+    resultPacketStore,
+    readActiveEvent
   } = deps;
 
   function touchEventStart(state) {
@@ -216,6 +218,90 @@ function createRingRouter(deps) {
     return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
   }
 
+  router.get('/rings/config', (req, res) => {
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    return res.json({
+      config: state.config,
+      heartbeatPolicy: {
+        disconnectAfterSeconds: DISCONNECT_AFTER_MS / 1000,
+        resetMode: 'manual'
+      },
+      allowedRings: Object.entries(state.rings).map(([ringId, ringState]) => ({
+        ringId,
+        ringLabel: ringState.ringLabel
+      }))
+    });
+  });
+
+  router.post('/rings/config', (req, res) => {
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    const { letterCount, numberCount } = req.body || {};
+    setRingConfig(state, letterCount, numberCount);
+    writeAssignmentsState(state);
+    return res.json({
+      ok: true,
+      config: state.config,
+      message: 'Ring configuration applied. All rings reset to unassigned.'
+    });
+  });
+
+  router.get('/rings', (req, res) => {
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    const rings = Object.entries(state.rings).map(([ringId, ringState]) => ({
+      ringId,
+      ringLabel: ringState.ringLabel,
+      currentGroupId: ringState.currentGroupId,
+      queuedGroupIds: ringState.queuedGroupIds,
+      completedGroupIds: ringState.completedGroupIds,
+      assistanceType: ringState.assistanceType,
+      assistanceRequestedAt: ringState.assistanceRequestedAt,
+      tabletLabel: ringState.tabletLabel,
+      lastHeartbeatAt: ringState.lastHeartbeatAt,
+      phaseStartedAt: ringState.phaseStartedAt,
+      phase: ringState.phase,
+      phasePlan: buildPhasePlan(ringState, loadGroup(ringState.currentGroupId)),
+      currentPhase: String(ringState.phase || '').trim().toLowerCase() === 'check-in'
+        ? 'setup'
+        : String(ringState.phase || '').trim().toLowerCase(),
+      checkInCount: ringState.checkInCount || 0,
+      checkInTotal: ringState.checkInTotal || 0,
+      phaseCompletedCount: ringState.phaseCompletedCount || 0,
+      phaseTotalCount: ringState.phaseTotalCount || 0,
+      phaseProgress: ringState.phaseProgress || 0,
+      currentGroupName: (loadGroup(ringState.currentGroupId) || {}).name || ''
+    }));
+
+    return res.json({
+      serverBaseUrl: serverBaseUrlForRequest(req),
+      ringConfig: state.config,
+      eventStartedAt: state.eventStartedAt || '',
+      heartbeatPolicy: {
+        disconnectAfterSeconds: DISCONNECT_AFTER_MS / 1000,
+        resetMode: 'manual'
+      },
+      rings
+    });
+  });
+
+  router.get('/rings/:ringId/bootstrap', handleRequestGroup);
+  router.post('/rings/:ringId/request-group', handleRequestGroup);
+
+  router.get('/rings/:ringId/current', (req, res) => {
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    const ringId = String(req.params.ringId || '').trim();
+    const ringState = getRingState(state, ringId);
+    if (!ringState) {
+      return res.status(400).json({
+        error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
+      });
+    }
+    return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
+  });
+
   router.post('/rings/:ringId/complete', (req, res) => {
     const state = readAssignmentsState();
     if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
@@ -227,10 +313,37 @@ function createRingRouter(deps) {
       });
     }
 
-    saveUploadedDivisionPacket(ringId, req.body);
+    const packet = req.body;
+    const submissionId = packet && typeof packet.submissionId === 'string'
+      ? packet.submissionId.trim()
+      : '';
+    const existingSubmission = submissionId ? resultPacketStore.findBySubmissionId(submissionId) : null;
+    if (existingSubmission) {
+      return res.json(existingSubmission.receipt.acknowledgement);
+    }
 
-    if (ringState.currentGroupId) {
-      ringState.completedGroupIds.push(ringState.currentGroupId);
+    const validationErrors = resultPacketStore.validate(packet, ringId, readActiveEvent());
+    if (validationErrors.length) {
+      return res.status(400).json({ errors: validationErrors });
+    }
+
+    const currentGroupId = String(ringState.currentGroupId || '').trim();
+    const existingGroupRecords = resultPacketStore.findByGroupId(packet.groupId);
+    if (existingGroupRecords.length) {
+      return res.status(409).json({
+        error: `Group already has an accepted result: ${packet.groupId}`,
+        receipt: existingGroupRecords[existingGroupRecords.length - 1].receipt
+      });
+    }
+    if (!currentGroupId || packet.groupId !== currentGroupId) {
+      return res.status(409).json({
+        error: `Packet group does not match the active group for ring ${ringId}`,
+        currentGroupId
+      });
+    }
+
+    if (currentGroupId) {
+      ringState.completedGroupIds.push(currentGroupId);
     }
     ringState.currentGroupId = ringState.queuedGroupIds.shift() || '';
     setRingPhase(ringState, ringState.currentGroupId ? 'check-in' : 'idle');
@@ -248,8 +361,40 @@ function createRingRouter(deps) {
     }
     touchHeartbeat(ringState);
     touchEventStart(state);
+    const ringAssignment = attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState);
+    const receipt = {
+      receivedAt: new Date().toISOString(),
+      status: 'ACCEPTED',
+      acknowledgement: {
+        ok: true,
+        status: 'accepted',
+        serverRecordId: null,
+        submissionId: packet.submissionId,
+        receivedAt: null,
+        ringAssignment
+      }
+    };
+    const record = resultPacketStore.store(packet, receipt);
+    receipt.acknowledgement.serverRecordId = record.serverRecordId;
+    receipt.acknowledgement.receivedAt = receipt.receivedAt;
     writeAssignmentsState(state);
 
+    return res.json(receipt.acknowledgement);
+  });
+
+  router.post('/rings/:ringId/reset', (req, res) => {
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    const ringId = String(req.params.ringId || '').trim();
+    const ringState = getRingState(state, ringId);
+    if (!ringState) {
+      return res.status(400).json({
+        error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
+      });
+    }
+
+    resetRingToScratch(ringState);
+    writeAssignmentsState(state);
     return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
   });
 
@@ -291,6 +436,129 @@ function createRingRouter(deps) {
       ringLabel: ringState.ringLabel,
       group: queuedGroup ? summarizeGroupDivisionNumbers([queuedGroup])[0] : null
     });
+    writeAssignmentsState(state);
+    return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
+  });
+
+  router.post('/rings/:ringId/heartbeat', (req, res) => {
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    const ringId = String(req.params.ringId || '').trim();
+    const ringState = getRingState(state, ringId);
+    if (!ringState) {
+      return res.status(400).json({
+        error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
+      });
+    }
+
+    const tabletLabel = String(req.body.tabletLabel || '').trim();
+    const phase = String(req.body.phase || '').trim();
+    const checkInCount = Number.parseInt(req.body && (req.body.checkInCount ?? req.body.checkedInCount ?? ''), 10);
+    const checkInTotal = Number.parseInt(req.body && (req.body.checkInTotal ?? req.body.checkedInTotal ?? ''), 10);
+    const phaseCompletedCount = Number.parseInt(req.body && (req.body.phaseCompletedCount ?? req.body.completedCount ?? ''), 10);
+    const phaseTotalCount = Number.parseInt(req.body && (req.body.phaseTotalCount ?? req.body.totalCount ?? ''), 10);
+    const phaseProgress = Number.parseFloat(req.body && (req.body.phaseProgress ?? req.body.progress ?? ''));
+    if (tabletLabel) ringState.tabletLabel = tabletLabel;
+    if (phase) setRingPhase(ringState, phase);
+    if (Number.isFinite(checkInCount)) ringState.checkInCount = Math.max(0, checkInCount);
+    if (Number.isFinite(checkInTotal)) ringState.checkInTotal = Math.max(0, checkInTotal);
+    if (Number.isFinite(phaseCompletedCount)) ringState.phaseCompletedCount = Math.max(0, phaseCompletedCount);
+    if (Number.isFinite(phaseTotalCount)) ringState.phaseTotalCount = Math.max(0, phaseTotalCount);
+    if (Number.isFinite(phaseProgress)) {
+      ringState.phaseProgress = Math.max(0, Math.min(100, phaseProgress > 1 ? phaseProgress : phaseProgress * 100));
+    } else if (Number.isFinite(phaseCompletedCount) && Number.isFinite(phaseTotalCount) && phaseTotalCount > 0) {
+      ringState.phaseProgress = Math.max(0, Math.min(100, (phaseCompletedCount / phaseTotalCount) * 100));
+    } else if (Number.isFinite(checkInCount) && Number.isFinite(checkInTotal) && checkInTotal > 0) {
+      ringState.phaseProgress = Math.max(0, Math.min(100, (checkInCount / checkInTotal) * 100));
+    }
+    touchHeartbeat(ringState);
+    appendHeartbeatTrace(ringId, {
+      phase: ringState.phase,
+      checkInCount: ringState.checkInCount,
+      checkInTotal: ringState.checkInTotal,
+      phaseCompletedCount: ringState.phaseCompletedCount,
+      phaseTotalCount: ringState.phaseTotalCount,
+      phaseProgress: ringState.phaseProgress,
+      lastHeartbeatAt: ringState.lastHeartbeatAt,
+      body: {
+        phase,
+        checkInCount,
+        checkInTotal,
+        phaseCompletedCount,
+        phaseTotalCount,
+        phaseProgress
+      }
+    });
+    touchEventStart(state);
+    writeAssignmentsState(state);
+    return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
+  });
+
+  router.post('/rings/:ringId/assistance', (req, res) => {
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    const ringId = String(req.params.ringId || '').trim();
+    const ringState = getRingState(state, ringId);
+    if (!ringState) {
+      return res.status(400).json({
+        error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
+      });
+    }
+
+    const assistanceType = String(req.body.type || '').trim().toLowerCase();
+    if (!['medical', 'arbitrator', 'general'].includes(assistanceType)) {
+      return res.status(400).json({ error: 'type must be one of: medical, arbitrator, general' });
+    }
+
+    ringState.assistanceType = assistanceType;
+    ringState.assistanceRequestedAt = new Date().toISOString();
+    touchHeartbeat(ringState);
+    writeAssignmentsState(state);
+    return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
+  });
+
+  router.post('/rings/:ringId/assistance/clear', (req, res) => {
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    const ringId = String(req.params.ringId || '').trim();
+    const ringState = getRingState(state, ringId);
+    if (!ringState) {
+      return res.status(400).json({
+        error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
+      });
+    }
+
+    ringState.assistanceType = '';
+    ringState.assistanceRequestedAt = '';
+    writeAssignmentsState(state);
+    return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
+  });
+
+  router.post('/reset', (req, res) => {
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    resetAssignments(state);
+    writeAssignmentsState(state);
+    return res.json({ ok: true, message: 'Tournament reset. All rings cleared.' });
+  });
+
+  router.delete('/rings/:ringId/queue/:groupId', (req, res) => {
+    const { ringId, groupId } = req.params;
+    const state = readAssignmentsState();
+    if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
+    const ringState = getRingState(state, ringId);
+    if (!ringState) {
+      return res.status(400).json({
+        error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
+      });
+    }
+
+    const before = ringState.queuedGroupIds.length;
+    ringState.queuedGroupIds = ringState.queuedGroupIds.filter((id) => id !== groupId);
+    if (ringState.queuedGroupIds.length === before) {
+      return res.status(404).json({ error: `Group not in queue: ${groupId}` });
+    }
+
     writeAssignmentsState(state);
     return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
   });

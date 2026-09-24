@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "submissionId": "550e8400-e29b-41d4-a716-446655440000",
+  "eventName": "spring-championship",
+  "groupId": "group-12",
+  "groupDivisionNumber": 12,
+  "groupName": "G3-G1 Male 10-13",
+  "ringId": "ring-a-1",
+  "ringLabel": "A1",
+  "completedAt": "2026-09-24T18:00:00.000Z",
+  "participants": [
+    {
+      "participantId": "competitor-1",
+      "competitionDivisionNumber": 1201,
+      "name": "Alex Example",
+      "studio": "Example Studio",
+      "rankCode": "G2",
+      "rankLabel": "2nd Gup",
+      "age": 11,
+      "heightInInches": 58,
+      "checkInStatus": "CHECKED_IN",
+      "entries": {
+        "weapons": "COMPLETED",
+        "hyungs": "COMPLETED",
+        "sparring": "COMPLETED"
+      }
+    }
+  ],
+  "disciplines": {
+    "weapons": {
+      "status": "COMPLETED",
+      "judgeCount": 3,
+      "results": [
+        {
+          "participantId": "competitor-1",
+          "scores": [8.5, 8.7, 8.6],
+          "total": 25.8,
+          "place": "1st",
+          "tieBreakDetail": ""
+        }
+      ]
+    },
+    "hyungs": {
+      "status": "COMPLETED",
+      "judgeCount": 3,
+      "results": [
+        {
+          "participantId": "competitor-1",
+          "scores": [9, 9.1, 9.2],
+          "total": 27.3,
+          "place": "1st",
+          "tieBreakDetail": ""
+        }
+      ]
+    },
+    "sparring": {
+      "status": "NOT_HELD",
+      "bracketSize": 0,
+      "awards": [],
+      "rounds": []
+    }
+  },
+  "overallAwards": {
+    "weapons": [{"place": "1st", "participantId": "competitor-1"}],
+    "hyungs": [{"place": "1st", "participantId": "competitor-1"}],
+    "sparring": []
+  },
+  "signatures": [],
+  "source": {
+    "client": "TournamentScoringApp",
+    "appVersionName": "1.0.0",
+    "appVersionCode": 1,
+    "tabletLabel": "Tablet A1",
+    "createdAt": "2026-09-24T18:00:00.000Z"
+  }
+}

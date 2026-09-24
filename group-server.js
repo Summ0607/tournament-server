@@ -12,6 +12,7 @@ const { createCompetitorStore } = require('./backend/competitorStore');
 const { createGroupStore } = require('./backend/groupStore');
 const { createDivisionRouter } = require('./backend/divisionRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
+const { createResultPacketStore } = require('./backend/resultPacket');
 const { registerPageRoutes } = require('./backend/pages');
 
 const app = express();
@@ -56,6 +57,15 @@ function resolveEventDirectory(eventName = readActiveEvent()) {
 
   return path.join(EVENTS_ROOT, normalizedEventName);
 }
+
+const resultPacketStore = createResultPacketStore({
+  getResultsDirectory: () => {
+    const activeEvent = readActiveEvent();
+    return activeEvent
+      ? path.join(EVENTS_ROOT, activeEvent, 'results')
+      : RESULTS_DIR;
+  }
+});
 
 function resolveGroupsDir(eventName = readActiveEvent()) {
   const normalizedEventName = String(eventName || '').trim();
@@ -183,6 +193,12 @@ app.use((req, res, next) => {
     return res.sendStatus(204);
   }
   next();
+});
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ errors: ['payload: malformed JSON'] });
+  }
+  return next(err);
 });
 
 function clampInt(value, fallback, min, max) {
@@ -507,6 +523,41 @@ app.get('/api/events/active', (req, res) => {
     return res.status(500).json({
       error: 'Failed to read active event'
     });
+  }
+});
+
+app.get('/api/results', (req, res) => {
+  try {
+    return res.json(resultPacketStore.listSummaries());
+  } catch (err) {
+    console.error('Failed to list result records:', err);
+    return res.status(500).json({ error: 'Failed to list result records' });
+  }
+});
+
+app.get('/api/results/group/:groupId', (req, res) => {
+  try {
+    const records = resultPacketStore.findByGroupId(String(req.params.groupId || '').trim());
+    if (!records.length) {
+      return res.status(404).json({ error: `Result not found for group: ${req.params.groupId}` });
+    }
+    return res.json(records);
+  } catch (err) {
+    console.error('Failed to load group result history:', err);
+    return res.status(500).json({ error: 'Failed to load group result history' });
+  }
+});
+
+app.get('/api/results/:serverRecordId', (req, res) => {
+  try {
+    const record = resultPacketStore.get(String(req.params.serverRecordId || '').trim());
+    if (!record) {
+      return res.status(404).json({ error: `Result not found: ${req.params.serverRecordId}` });
+    }
+    return res.json(record);
+  } catch (err) {
+    console.error('Failed to load result record:', err);
+    return res.status(500).json({ error: 'Failed to load result record' });
   }
 });
 
@@ -835,7 +886,9 @@ app.use('/api', createRingRouter({
   loadGroup: groupStore.loadGroup,
   serverBaseUrlForRequest,
   DISCONNECT_AFTER_MS,
-  saveUploadedDivisionPacket
+  saveUploadedDivisionPacket,
+  resultPacketStore,
+  readActiveEvent
 }));
 
 async function startServer() {
