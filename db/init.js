@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
+const { normalizeRank, isCanonicalRank } = require('./rankNormalization');
 
 const DEFAULT_DB_PATH = path.join(__dirname, 'tournament.db');
 
@@ -73,6 +74,45 @@ function ensureCompetitorIndexes(db) {
   });
 }
 
+function normalizeExistingRanks(db) {
+  return new Promise((resolve, reject) => {
+    db.all('SELECT id, rank FROM competitors', (selectErr, rows) => {
+      if (selectErr) {
+        reject(selectErr);
+        return;
+      }
+
+      const updates = [];
+      for (const row of rows || []) {
+        const current = row.rank === null || row.rank === undefined ? '' : String(row.rank);
+        if (isCanonicalRank(current)) continue;
+        const result = normalizeRank(current);
+        if (result.recognized) {
+          updates.push([result.code, row.id]);
+        } else if (current.trim()) {
+          console.warn(`[db-init] Competitor ${row.id} has unrecognized rank "${current}" (${result.reason}); left unchanged for review.`);
+        }
+      }
+
+      const updateNext = (index) => {
+        if (index >= updates.length) {
+          resolve(updates.length);
+          return;
+        }
+        db.run('UPDATE competitors SET rank = ? WHERE id = ?', updates[index], (updateErr) => {
+          if (updateErr) {
+            reject(updateErr);
+            return;
+          }
+          updateNext(index + 1);
+        });
+      };
+
+      updateNext(0);
+    });
+  });
+}
+
 function initializeDatabase(targetDbPath = DEFAULT_DB_PATH) {
   const directory = path.dirname(targetDbPath);
   if (!fs.existsSync(directory)) {
@@ -121,7 +161,7 @@ function initializeDatabase(targetDbPath = DEFAULT_DB_PATH) {
           }
 
           ensureCompetitorColumns(db).then(() => {
-            ensureCompetitorIndexes(db).then(() => {
+            ensureCompetitorIndexes(db).then(() => normalizeExistingRanks(db)).then(() => {
               db.close((closeErr) => {
                 if (closeErr) {
                   reject(closeErr);

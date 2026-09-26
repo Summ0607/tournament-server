@@ -419,6 +419,111 @@
 
     .pool-row { background: white; border-radius: 10px; margin-bottom: 8px; }
 
+    /* Review roster */
+    .review-roster {
+      background: linear-gradient(180deg, #fff1f2 0%, #fff7f8 100%);
+      border: 1px solid #fb7185;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .review-roster-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .review-roster-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #9f1239;
+    }
+
+    .review-roster-sub {
+      font-size: 12px;
+      color: #9f1239;
+      opacity: 0.85;
+      margin-bottom: 12px;
+    }
+
+    .review-row {
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #fecdd3;
+      padding: 12px;
+      margin-bottom: 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .review-row-main { min-width: 0; }
+    .review-row-title {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .review-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .review-chip-alert { background: #fce7f3; color: #9f1239; }
+
+    .review-row-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: #4b5563;
+      margin-bottom: 10px;
+    }
+
+    .review-row-note {
+      display: grid;
+      gap: 6px;
+    }
+
+    .review-row-note label,
+    .review-row-actions label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #7a2543;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .review-row-note input,
+    .review-row-actions select {
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid #f9a8d4;
+      border-radius: 10px;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .review-row-actions {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
     /* Rank badges */
     .rank-badge {
       display: inline-block;
@@ -513,6 +618,12 @@
     .status-flash {
       border: 2px solid #c8a951 !important;
     }
+
+    .review-empty {
+      font-size: 13px;
+      color: #9f1239;
+      padding: 8px 0 2px;
+    }
   </style>
 </head>
 <body>
@@ -603,6 +714,19 @@
 
     <div class="stats-bar" id="statsBar"></div>
     <p class="section-copy" style="margin-top:-6px;">Review group balance, move competitors, or export once the layout looks right.</p>
+
+    <div id="reviewRosterSection" class="review-roster hidden">
+      <div class="review-roster-head">
+        <div class="review-roster-title">Review Roster / Flagged Entries</div>
+        <div class="review-chip review-chip-alert" id="reviewRosterCount">0 flagged entries</div>
+      </div>
+      <div class="review-roster-sub">
+        These entries were excluded by the server build step because their rank could not be grouped as-is.
+        Correct the rank inline, add a note, then apply the change to re-queue the competitor without re-importing the CSV.
+      </div>
+      <div id="reviewRosterList"></div>
+      <div class="review-empty hidden" id="reviewRosterEmpty">No flagged entries remain.</div>
+    </div>
 
     <div id="unassignedSection" class="hidden pool">
       <div class="pool-title">⚠️ Unassigned Competitors</div>

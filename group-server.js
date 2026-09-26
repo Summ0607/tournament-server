@@ -7,7 +7,7 @@ const sqlite3 = require('sqlite3').verbose();
 require('./db/init');
 
 const importCSV = require('./db/import-csv');
-const { buildGroups } = require('./backend/groupBuilder');
+const { buildGroups, buildGroupsWithReview } = require('./backend/groupBuilder');
 const { createCompetitorStore } = require('./backend/competitorStore');
 const { createGroupStore } = require('./backend/groupStore');
 const { createDivisionRouter } = require('./backend/divisionRoutes');
@@ -664,7 +664,8 @@ app.get('/search', (req, res) => {
 app.use('/api', createDivisionRouter({
   competitorStore: () => createCompetitorStore(resolveEventDbPath()),
   groupStore,
-  buildGroups
+  buildGroups,
+  buildGroupsWithReview
 }));
 
 app.post('/api/events/activate', async (req, res) => {

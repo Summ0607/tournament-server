@@ -4,7 +4,7 @@ const { assignDivisionNumbers, appendDivisionTrace, summarizeGroupDivisionNumber
 
 function createDivisionRouter(deps) {
   const router = express.Router();
-  const { competitorStore, groupStore, buildGroups } = deps;
+  const { competitorStore, groupStore, buildGroups, buildGroupsWithReview } = deps;
 
   router.get('/groups', async (req, res) => {
     const groups = groupStore.loadGroups();
@@ -44,13 +44,16 @@ function createDivisionRouter(deps) {
       const competitors = Array.isArray(payload.competitors)
         ? payload.competitors
         : await activeCompetitorStore.loadCompetitors();
-      const groups = buildGroups(competitors, payload);
+      const { groups, reviewCompetitors } = typeof buildGroupsWithReview === 'function'
+        ? buildGroupsWithReview(competitors, payload)
+        : { groups: buildGroups(competitors, payload), reviewCompetitors: [] };
       appendDivisionTrace('division-build', {
         source: 'generated',
         groupCount: groups.length,
+        reviewCount: reviewCompetitors.length,
         groups: summarizeGroupDivisionNumbers(groups)
       });
-      return res.json({ groups });
+      return res.json({ groups, reviewCompetitors });
     } catch (err) {
       console.error('BUILD ERROR:', err);
       return res.status(500).json({ error: 'Failed to build divisions' });

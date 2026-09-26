@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const csv = require('csv-parser');
 const sqlite3 = require('sqlite3').verbose();
+const { normalizeRank } = require('./rankNormalization');
 
 const defaultDbPath = path.join(__dirname, 'tournament.db');
 const weaponsEligibleRanks = new Set(['G2', 'G1', 'CDB', 'D1', 'D2', 'D3']);
@@ -28,9 +29,6 @@ function normalizeGender(value) {
   return 'Unknown';
 }
 
-function normalizeRank(value) {
-  return normalizeString(value).toUpperCase();
-}
 
 function normalizeDob(value) {
   const trimmed = normalizeString(value);
@@ -124,7 +122,8 @@ function normalizeCompetitorRow(rawRow, generatedSequence = 1) {
   const dobInfo = normalizeDob(row.dob);
   const associationNumber = normalizeString(row.associationNumber) || null;
   const gender = normalizeGender(row.gender);
-  const rank = normalizeRank(row.rank);
+  const rankResult = normalizeRank(row.rank);
+  const rank = rankResult.code;
   const studio = normalizeString(row.studio) || 'Unknown Studio';
   const specialNeeds = normalizeSpecialNeeds(row.specialNeeds);
   const height = normalizeHeight(row.height);
@@ -151,7 +150,12 @@ function normalizeCompetitorRow(rawRow, generatedSequence = 1) {
     height,
     age: dobInfo.age,
     fullName,
-    weaponsEligible
+    weaponsEligible,
+    rankWarning: !rankResult.recognized
+      ? { rawRank: rankResult.raw, reason: rankResult.reason, storedRank: '' }
+      : (/^D(\d{1,2})$/.test(rank) && Number(rank.slice(1)) >= 4
+        ? { rawRank: rankResult.raw, reason: 'rank not eligible to compete', storedRank: rank }
+        : null)
   };
 }
 
@@ -175,7 +179,9 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
       }
 
       const normalizedCompetitors = [];
+      const rankWarnings = [];
       let generatedSequence = 1;
+      let csvLineNumber = 1;
 
       const finish = () => {
         db.close((closeErr) => {
@@ -183,7 +189,7 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
             reject(closeErr);
             return;
           }
-          resolve({ csvFilePath, targetDbPath, imported: true, normalizedCompetitors });
+          resolve({ csvFilePath, targetDbPath, imported: true, normalizedCompetitors, rankWarnings });
         });
       };
 
@@ -215,6 +221,20 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
             const normalized = normalizeCompetitorRow(mapped, generatedSequence);
             if (!readRawCompetitorId(mapped)) {
               generatedSequence += 1;
+            }
+            csvLineNumber += 1;
+            if (normalized.rankWarning) {
+              const warning = {
+                csvLine: csvLineNumber,
+                competitorId: normalized.id,
+                name: normalized.fullName,
+                ...normalized.rankWarning
+              };
+              rankWarnings.push(warning);
+              console.warn(
+                `[import-csv] Rank flagged for review on CSV line ${warning.csvLine} (${warning.name || warning.competitorId}): ` +
+                `"${warning.rawRank}" (${warning.reason}); stored as ${warning.storedRank ? `"${warning.storedRank}"` : 'blank rank'} for review.`
+              );
             }
 
             normalizedCompetitors.push(normalized);

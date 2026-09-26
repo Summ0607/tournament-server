@@ -27,6 +27,20 @@ function isTtldRank(rank) {
   return String(rank || '').trim().toUpperCase() === 'TTLD';
 }
 
+// Canonical Dan ranks above the competing range (D4+) are valid but not eligible to compete.
+function isNonCompetingDanRank(rank) {
+  const match = /^D(\d{1,2})$/.exec(String(rank || '').trim().toUpperCase());
+  return Boolean(match) && Number(match[1]) >= 4;
+}
+
+function reviewReasonFor(competitor) {
+  const rank = String(competitor && competitor.rank != null ? competitor.rank : '').trim();
+  if (!rank) return 'missing rank';
+  if (isTtldRank(rank) || rankBandKey(rank) !== 'unknown') return '';
+  if (isNonCompetingDanRank(rank)) return 'rank not eligible to compete';
+  return 'unrecognized rank';
+}
+
 function rankBandKey(rank) {
   const value = String(rank || '').trim().toUpperCase();
   if (value === 'TTLD') return 'ttld';
@@ -59,7 +73,7 @@ function genderKey(value) {
 function sortCompetitorsByAgeAndName(list) {
   return [...list].sort((a, b) => {
     if (a.age !== b.age) return a.age - b.age;
-    return a.fullName.localeCompare(b.fullName);
+    return String(a.fullName || '').localeCompare(String(b.fullName || ''));
   });
 }
 
@@ -209,21 +223,25 @@ function buildRankBandGroups(competitors, maxGroupSize, minGroupSize) {
   return groups;
 }
 
-function buildGroups(competitors, params = {}) {
+function buildGroupsWithReview(competitors, params = {}) {
   // If explicit groups were passed in, trust them as-is
   if (Array.isArray(params.groups) && params.groups.length) {
-    return assignDivisionNumbers(
-      params.groups.map((group) => ({
-        groupId: String(group.groupId),
-        name: group.name,
-        competitors: Array.isArray(group.competitors) ? group.competitors : []
-      })),
-      params.startingDivisionNumber ?? 20
-    );
+    return {
+      groups: assignDivisionNumbers(
+        params.groups.map((group) => ({
+          groupId: String(group.groupId),
+          name: group.name,
+          competitors: Array.isArray(group.competitors) ? group.competitors : []
+        })),
+        params.startingDivisionNumber ?? 20
+      ),
+      reviewCompetitors: []
+    };
   }
 
-  const list = Array.isArray(competitors) ? competitors : [];
-  if (!list.length) return [];
+  const list = (Array.isArray(competitors) ? competitors : [])
+    .filter((competitor) => competitor && typeof competitor === 'object');
+  if (!list.length) return { groups: [], reviewCompetitors: [] };
 
   const maxGroupSize = Number(params.maxGroupSize ?? params.maxSize ?? 6);
   const minGroupSize = Number(params.minGroupSize ?? params.minSize ?? 4);
@@ -236,18 +254,34 @@ function buildGroups(competitors, params = {}) {
     Female: [],
     Unknown: []
   };
+  const ttldCompetitors = [];
+  const reviewCompetitors = [];
 
   for (const competitor of normalized) {
-    const key = competitor.gender === 'Male' || competitor.gender === 'Female' ? competitor.gender : 'Unknown';
-    if (isTtldRank(competitor.rank)) {
-      buckets.Unknown.push(competitor);
+    const reviewReason = reviewReasonFor(competitor);
+    if (reviewReason) {
+      reviewCompetitors.push({ ...competitor, reviewReason });
       continue;
     }
+    if (isTtldRank(competitor.rank)) {
+      ttldCompetitors.push(competitor);
+      continue;
+    }
+    const key = competitor.gender === 'Male' || competitor.gender === 'Female' ? competitor.gender : 'Unknown';
     buckets[key].push(competitor);
   }
 
+  if (reviewCompetitors.length) {
+    console.warn(
+      `[groupBuilder] ${reviewCompetitors.length} competitor(s) excluded from groups for review: ` +
+      reviewCompetitors
+        .map((competitor) => `${competitor.id ?? '?'} "${competitor.rank ?? ''}" (${competitor.reviewReason})`)
+        .join('; ')
+    );
+  }
+
   const groups = [];
-  const ttldGroups = buildTtldGroups(buckets.Unknown, maxGroupSize);
+  const ttldGroups = buildTtldGroups(ttldCompetitors, maxGroupSize);
   let groupCounter = 1;
 
   for (const group of ttldGroups) {
@@ -283,7 +317,14 @@ function buildGroups(competitors, params = {}) {
     groupCounter += 1;
   }
 
-  return assignDivisionNumbers(groups, params.startingDivisionNumber ?? 20);
+  return {
+    groups: assignDivisionNumbers(groups, params.startingDivisionNumber ?? 20),
+    reviewCompetitors
+  };
 }
 
-module.exports = { buildGroups, assignDivisionNumbers };
+function buildGroups(competitors, params = {}) {
+  return buildGroupsWithReview(competitors, params).groups;
+}
+
+module.exports = { buildGroups, buildGroupsWithReview, assignDivisionNumbers };

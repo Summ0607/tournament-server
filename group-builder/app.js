@@ -2,7 +2,8 @@
   const state = {
     competitors: [],
     groups: [],
-    unassigned: []
+    unassigned: [],
+    reviewCompetitors: []
   };
 
   let dragCtx = null;
@@ -25,6 +26,12 @@
     { key: 'bb', label: 'D1-D3', minIdx: 12, maxIdx: 14 }
   ];
   const MIN_GROUP_SIZE = 4;
+  const CORRECTABLE_RANKS = [
+    'TTLD',
+    'G10', 'G9', 'G8', 'G7', 'G6',
+    'G5', 'G4', 'G3', 'G2', 'G1',
+    'CDB', 'D1', 'D2', 'D3'
+  ];
 
   function genId() {
     return Math.random().toString(36).substr(2, 9);
@@ -134,8 +141,30 @@
       groupDivisionId: row.groupDivisionId || '',
       groupDivisionName: row.groupDivisionName || '',
       groupDivisionNumber: parseOptionalInt(row.groupDivisionNumber),
-      competitionDivisionNumber: parseOptionalInt(row.competitionDivisionNumber)
+      competitionDivisionNumber: parseOptionalInt(row.competitionDivisionNumber),
+      reviewReason: String(row.reviewReason || '').trim(),
+      reviewNote: String(row.reviewNote || '').trim()
     };
+  }
+
+  function reviewRankOptionsMarkup(selectedRank) {
+    const selected = String(selectedRank || '').trim().toUpperCase();
+    return ['<option value="">Select corrected rank…</option>']
+      .concat(CORRECTABLE_RANKS.map((rank) => {
+        const chosen = rank === selected ? ' selected' : '';
+        return `<option value="${esc(rank)}"${chosen}>${esc(rank)}</option>`;
+      }))
+      .join('');
+  }
+
+  function updateReviewSectionVisibility() {
+    const section = document.getElementById('reviewSection');
+    if (!section) return;
+    if (state.groups.length || state.reviewCompetitors.length) {
+      section.classList.remove('hidden');
+    } else {
+      section.classList.add('hidden');
+    }
   }
 
   function normalizeGroup(group, index) {
@@ -239,17 +268,18 @@
 
   function renderStats() {
     const minSize = Math.max(MIN_GROUP_SIZE, parseInt(document.getElementById('minSize').value || MIN_GROUP_SIZE, 10));
-    const total = state.groups.reduce((sum, group) => sum + group.competitors.length, 0) + state.unassigned.length;
+    const total = state.groups.reduce((sum, group) => sum + group.competitors.length, 0) + state.unassigned.length + state.reviewCompetitors.length;
     const nGroups = state.groups.length;
     const nWarn = state.groups.filter((group) => group.competitors.length < minSize).length;
     const nAdults = state.groups.filter((group) => group.isAdult).reduce((sum, group) => sum + group.competitors.length, 0);
-    const nJuniors = total - nAdults - state.unassigned.length;
+    const nJuniors = total - nAdults - state.unassigned.length - state.reviewCompetitors.length;
 
     document.getElementById('statsBar').innerHTML = `
       <div class="stat"><span class="stat-value">${total}</span><span class="stat-label">Competitors</span></div>
       <div class="stat"><span class="stat-value">${nGroups}</span><span class="stat-label">Groups</span></div>
       <div class="stat"><span class="stat-value">${nAdults}</span><span class="stat-label">Adults</span></div>
       <div class="stat"><span class="stat-value">${nJuniors}</span><span class="stat-label">Juniors</span></div>
+      ${state.reviewCompetitors.length ? `<div class="stat stat-warn"><span class="stat-value">⚑ ${state.reviewCompetitors.length}</span><span class="stat-label">Flagged</span></div>` : ''}
       ${nWarn ? `<div class="stat stat-warn"><span class="stat-value">⚠ ${nWarn}</span><span class="stat-label">Undersized</span></div>` : ''}
     `;
   }
@@ -305,6 +335,52 @@
     `).join('');
   }
 
+  function renderReviewRoster() {
+    const section = document.getElementById('reviewRosterSection');
+    const list = document.getElementById('reviewRosterList');
+    const count = document.getElementById('reviewRosterCount');
+    if (!section || !list || !count) return;
+
+    if (!state.reviewCompetitors.length) {
+      section.classList.add('hidden');
+      list.innerHTML = '';
+      count.textContent = '0 flagged entries';
+      return;
+    }
+
+    section.classList.remove('hidden');
+    count.textContent = `${state.reviewCompetitors.length} flagged entr${state.reviewCompetitors.length === 1 ? 'y' : 'ies'}`;
+    list.innerHTML = state.reviewCompetitors.map((competitor) => {
+      const noteValue = String(competitor.reviewNote || '').trim();
+      return `
+        <div class="review-row" data-competitor-id="${esc(competitor.id)}">
+          <div class="review-row-main">
+            <div class="review-row-title">
+              <strong>${esc(competitor.fullName || 'Unknown')}</strong>
+              <span class="review-chip review-chip-alert">${esc(competitor.reviewReason || 'review required')}</span>
+            </div>
+            <div class="review-row-meta">
+              <span><strong>Studio:</strong> ${esc(competitor.studio || 'Unknown')}</span>
+              <span><strong>Rank:</strong> ${esc(competitor.rank || '') || 'Blank'}</span>
+              <span><strong>Age:</strong> ${esc(String(competitor.age || 0))}</span>
+            </div>
+            <div class="review-row-note">
+              <label for="review-note-${esc(competitor.id)}">Note</label>
+              <input id="review-note-${esc(competitor.id)}" type="text" value="${esc(noteValue)}" placeholder="Optional note for head table staff">
+            </div>
+          </div>
+          <div class="review-row-actions">
+            <label for="review-rank-${esc(competitor.id)}">Corrected rank</label>
+            <select id="review-rank-${esc(competitor.id)}">
+              ${reviewRankOptionsMarkup(competitor.rank)}
+            </select>
+            <button class="btn btn-gold btn-sm" onclick="applyReviewCorrection('${esc(competitor.id)}')">Apply & Requeue</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   function renderGroups() {
     const minSize = Math.max(MIN_GROUP_SIZE, parseInt(document.getElementById('minSize').value || MIN_GROUP_SIZE, 10));
     const grid = document.getElementById('groupsGrid');
@@ -339,6 +415,41 @@
     renderStats();
     renderUnassigned();
     renderGroups();
+    renderReviewRoster();
+    updateReviewSectionVisibility();
+  }
+
+  function applyReviewCorrection(compId) {
+    const reviewCompetitor = state.reviewCompetitors.find((candidate) => candidate.id === compId);
+    if (!reviewCompetitor) return;
+
+    const rankInput = document.getElementById(`review-rank-${compId}`);
+    const noteInput = document.getElementById(`review-note-${compId}`);
+    const correctedRank = String(rankInput && rankInput.value || '').trim().toUpperCase();
+    if (!correctedRank) {
+      window.alert('Choose a corrected rank before re-queuing this competitor.');
+      return;
+    }
+
+    const competitorIndex = state.competitors.findIndex((candidate) => candidate.id === compId);
+    const correctedNote = String(noteInput && noteInput.value || '').trim();
+    const updated = {
+      ...(competitorIndex >= 0 ? state.competitors[competitorIndex] : reviewCompetitor),
+      rank: correctedRank,
+      rankCode: correctedRank,
+      reviewReason: '',
+      reviewNote: correctedNote
+    };
+
+    if (competitorIndex >= 0) {
+      state.competitors[competitorIndex] = updated;
+    } else {
+      state.competitors.push(updated);
+    }
+
+    state.reviewCompetitors = state.reviewCompetitors.filter((candidate) => candidate.id !== compId);
+    window.alert(`${updated.fullName || 'Competitor'} updated to ${correctedRank} and returned to the main roster.`);
+    renderReview();
   }
 
   function canAcceptMove(group, competitor) {
@@ -386,10 +497,8 @@
     const data = await fetchJson('/api/groups');
     state.groups = Array.isArray(data.groups) ? data.groups.map(normalizeGroup) : [];
     state.unassigned = [];
-    if (state.groups.length) {
-      document.getElementById('reviewSection').classList.remove('hidden');
-      renderReview();
-    }
+    state.reviewCompetitors = [];
+    renderReview();
   }
 
   async function loadCompetitorsFromServer() {
@@ -399,7 +508,8 @@
       state.competitors = rawCompetitors.map(normalizeCompetitor);
       state.groups = [];
       state.unassigned = [];
-      document.getElementById('reviewSection').classList.add('hidden');
+      state.reviewCompetitors = [];
+      updateReviewSectionVisibility();
       document.getElementById('autoGroupBtn').disabled = state.competitors.length === 0;
       if (state.competitors.length) {
         applyRecommendedSizeSettings(state.competitors.length);
@@ -431,13 +541,18 @@
       });
 
       const builtGroups = Array.isArray(built.groups) ? built.groups.map(normalizeGroup) : [];
+
       if (!builtGroups.length) {
-        throw new Error('Build response did not include a groups array.');
+        state.groups = [];
+        state.unassigned = [];
+        renderReview();
+        window.alert('Auto-group returned no standard groups. Review flagged entries and retry.');
+        return;
       }
 
       state.groups = builtGroups;
       state.unassigned = [];
-      document.getElementById('reviewSection').classList.remove('hidden');
+      state.reviewCompetitors = Array.isArray(built.reviewCompetitors) ? built.reviewCompetitors.map(normalizeCompetitor) : [];
       renderReview();
     } catch (error) {
       console.error('Auto-group error:', error);
@@ -472,8 +587,13 @@
       });
 
       const builtGroups = Array.isArray(built.groups) ? built.groups.map(normalizeGroup) : [];
+      state.reviewCompetitors = Array.isArray(built.reviewCompetitors) ? built.reviewCompetitors.map(normalizeCompetitor) : [];
       if (!builtGroups.length) {
-        throw new Error('Build response did not include a groups array.');
+        state.groups = [];
+        state.unassigned = [];
+        renderReview();
+        window.alert('Build returned no standard groups. Review flagged entries and retry.');
+        return;
       }
 
       const saved = await fetchJson('/api/divisions/save', {
@@ -483,7 +603,6 @@
       });
 
       state.groups = Array.isArray(saved.groups) ? saved.groups.map(normalizeGroup) : builtGroups;
-      document.getElementById('reviewSection').classList.remove('hidden');
       renderReview();
       displayGroups(state.groups);
       window.alert(`Divisions built and saved successfully (${state.groups.length} groups).`);
@@ -628,6 +747,7 @@
   window.loadStatus = loadStatus;
   window.clearStatus = clearStatus;
   window.addNewGroup = addNewGroup;
+  window.applyReviewCorrection = applyReviewCorrection;
   window.unassign = unassign;
   window.startCompetitorDrag = startCompetitorDrag;
   window.endCompetitorDrag = endCompetitorDrag;
