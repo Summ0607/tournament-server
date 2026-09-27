@@ -69,6 +69,24 @@ function createRingRouter(deps) {
     }
   }
 
+  function promoteQueuedGroupIfIdle(state, ringId, ringState, source) {
+    if (ringState.currentGroupId || ringState.queuedGroupIds.length === 0) return false;
+    ringState.currentGroupId = ringState.queuedGroupIds.shift() || '';
+    if (!ringState.currentGroupId) return false;
+    touchAssignmentStart(ringState);
+    setRingPhase(ringState, 'check-in');
+    touchHeartbeat(ringState);
+    touchEventStart(state);
+    appendDivisionTrace('ring-activate', {
+      ringId,
+      ringLabel: ringState.ringLabel,
+      source,
+      groupId: ringState.currentGroupId,
+      group: summarizeGroupDivisionNumbers([loadGroup(ringState.currentGroupId)])[0] || null
+    });
+    return true;
+  }
+
   function phaseOrder(key) {
     const order = { setup: 0, weapons: 1, hyungs: 2, sparring: 3, awards: 4 };
     return Object.prototype.hasOwnProperty.call(order, key) ? order[key] : 99;
@@ -185,21 +203,8 @@ function createRingRouter(deps) {
       }
     }
 
-    if (isConnectRequest && !ringState.currentGroupId && ringState.queuedGroupIds.length > 0) {
-      ringState.currentGroupId = ringState.queuedGroupIds.shift() || '';
-      if (ringState.currentGroupId) {
-        touchAssignmentStart(ringState);
-        setRingPhase(ringState, 'check-in');
-        touchHeartbeat(ringState);
-        touchEventStart(state);
-        appendDivisionTrace('ring-activate', {
-          ringId,
-          ringLabel: ringState.ringLabel,
-          source: 'bootstrap',
-          groupId: ringState.currentGroupId,
-          group: summarizeGroupDivisionNumbers([loadGroup(ringState.currentGroupId)])[0] || null
-        });
-      }
+    if (isConnectRequest) {
+      promoteQueuedGroupIfIdle(state, ringId, ringState, 'bootstrap');
     }
 
     if (ringState.currentGroupId) {
@@ -436,6 +441,10 @@ function createRingRouter(deps) {
       ringLabel: ringState.ringLabel,
       group: queuedGroup ? summarizeGroupDivisionNumbers([queuedGroup])[0] : null
     });
+    // A tablet is already attached and idle, so activate immediately instead of waiting for a reconnect.
+    if (ringState.tabletLabel) {
+      promoteQueuedGroupIfIdle(state, ringId, ringState, 'queue');
+    }
     writeAssignmentsState(state);
     return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
   });
@@ -459,7 +468,8 @@ function createRingRouter(deps) {
     const phaseTotalCount = Number.parseInt(req.body && (req.body.phaseTotalCount ?? req.body.totalCount ?? ''), 10);
     const phaseProgress = Number.parseFloat(req.body && (req.body.phaseProgress ?? req.body.progress ?? ''));
     if (tabletLabel) ringState.tabletLabel = tabletLabel;
-    if (phase) setRingPhase(ringState, phase);
+    const promoted = promoteQueuedGroupIfIdle(state, ringId, ringState, 'heartbeat');
+    if (phase && !promoted) setRingPhase(ringState, phase);
     if (Number.isFinite(checkInCount)) ringState.checkInCount = Math.max(0, checkInCount);
     if (Number.isFinite(checkInTotal)) ringState.checkInTotal = Math.max(0, checkInTotal);
     if (Number.isFinite(phaseCompletedCount)) ringState.phaseCompletedCount = Math.max(0, phaseCompletedCount);

@@ -77,8 +77,14 @@
       text-transform: uppercase;
     }
 
+    .title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 14px;
+    }
+
     .title-meta {
-      margin-top: 4px;
       color: var(--text-soft);
       font-size: 13px;
       font-weight: 700;
@@ -500,8 +506,10 @@
     <div class="hero">
       <div class="title-block">
         <h1 class="tournament-name" id="tournamentName">Tournament</h1>
-        <div class="title-secondary">Ring Assignment</div>
-        <div class="title-meta" id="competitorCountLabel">0 competitors</div>
+        <div class="title-row">
+          <div class="title-secondary">Ring Assignment</div>
+          <div class="title-meta" id="competitorCountLabel">0 competitors</div>
+        </div>
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
       <div class="toolbar panel">
