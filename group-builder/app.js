@@ -138,7 +138,6 @@
       hyungsDivision: row.hyungsDivision || 'unassigned',
       sparringDivision: row.sparringDivision || 'unassigned',
       ringAssignment: row.ringAssignment || 'unassigned',
-      groupDivisionId: row.groupDivisionId || '',
       groupDivisionName: row.groupDivisionName || '',
       groupDivisionNumber: parseOptionalInt(row.groupDivisionNumber),
       competitionDivisionNumber: parseOptionalInt(row.competitionDivisionNumber),
@@ -174,6 +173,8 @@
       groupId: String(group.groupId || group.id || `group-${index + 1}`),
       name: String(group.name || group.groupId || group.id || `Group ${index + 1}`),
       groupDivisionNumber: parseOptionalInt(group.groupDivisionNumber),
+      minGroupSize: parseOptionalInt(group.minGroupSize),
+      maxGroupSize: parseOptionalInt(group.maxGroupSize),
       competitors
     };
     syncGroupDisplayMetadata(normalized);
@@ -530,6 +531,7 @@
         maxGroupSize: Number(document.getElementById('maxSize').value || recommendedMaxSize(state.competitors.length)),
         ageSpanUnder14: Number(document.getElementById('ageSpanUnder14').value || 3),
         ageSpan14To37: Number(document.getElementById('ageSpan14To37').value || 4),
+        ageSpan18To37: Number(document.getElementById('ageSpan18To37').value || 4),
         ageSpan38Plus: Number(document.getElementById('ageSpan38Plus').value || 35),
         competitors: state.competitors
       };
@@ -564,17 +566,25 @@
     return fetchJson('/api/divisions/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups: state.groups })
+      body: JSON.stringify({
+        groups: state.groups,
+        minGroupSize: Number(document.getElementById('minSize').value || 4),
+        maxGroupSize: Number(document.getElementById('maxSize').value || recommendedMaxSize(state.competitors.length)),
+        startingDivisionNumber: 20
+      })
     });
   }
 
   async function buildAndSaveDivisions() {
     try {
+      const minGroupSize = Number(document.getElementById('minSize').value || 4);
+      const maxGroupSize = Number(document.getElementById('maxSize').value || 6);
       const payload = {
-        minGroupSize: Number(document.getElementById('minSize').value || 4),
-        maxGroupSize: Number(document.getElementById('maxSize').value || 6),
+        minGroupSize,
+        maxGroupSize,
         ageSpanUnder14: Number(document.getElementById('ageSpanUnder14').value || 3),
         ageSpan14To37: Number(document.getElementById('ageSpan14To37').value || 4),
+        ageSpan18To37: Number(document.getElementById('ageSpan18To37').value || 4),
         ageSpan38Plus: Number(document.getElementById('ageSpan38Plus').value || 35),
         competitors: state.competitors,
         groups: state.groups
@@ -599,7 +609,12 @@
       const saved = await fetchJson('/api/divisions/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groups: builtGroups })
+        body: JSON.stringify({
+          groups: builtGroups,
+          minGroupSize,
+          maxGroupSize,
+          startingDivisionNumber: 20
+        })
       });
 
       state.groups = Array.isArray(saved.groups) ? saved.groups.map(normalizeGroup) : builtGroups;

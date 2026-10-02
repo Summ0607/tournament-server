@@ -14,88 +14,90 @@
       min-height: 100vh;
     }
 
-    header {
-      background: #1a1a2e;
-      color: white;
-      padding: 18px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      box-shadow: 0 1px 10px rgba(0,0,0,0.12);
-      flex-wrap: wrap;
-    }
-
-    .header-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      min-width: 0;
-    }
-
-    .header-mark {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      background: rgba(200, 169, 81, 0.18);
+    /* Shared page banner (matches Head Table / Ring Assignment) */
+    .page-hero {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 20px 24px 0;
       display: grid;
-      place-items: center;
-      flex-shrink: 0;
-      font-size: 22px;
+      grid-template-columns: 1fr;
+      gap: 12px;
     }
 
-    .header-copy {
+    .page-hero .title-block,
+    .page-hero .toolbar {
+      background: #ffffff;
+      border: 1px solid #c9d1db;
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+    }
+
+    .page-hero .title-block {
+      position: relative;
+      padding: 16px 132px 14px 20px;
+      min-height: 108px;
+      background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
+    }
+
+    .page-hero .tournament-name {
+      margin: 0 0 6px;
+      font-size: clamp(30px, 4vw, 46px);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+      font-weight: 750;
+      color: #111827;
+    }
+
+    .page-hero .title-secondary {
+      color: #374151;
+      font-size: 14px;
+      line-height: 1.4;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .page-hero .title-logo {
+      position: absolute;
+      top: -1px;
+      right: 1px;
+      width: 108px;
+      height: 108px;
+      object-fit: contain;
+      object-position: center;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid #c9d1db;
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.10);
+      padding: 4px;
+    }
+
+    .page-hero .toolbar {
       display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    header h1 {
-      font-size: 20px;
-      font-weight: 800;
-      line-height: 1.1;
-    }
-
-    .header-copy p {
-      font-size: 12px;
-      color: rgba(255,255,255,0.68);
-    }
-
-    .header-actions {
-      display: flex;
-      flex-wrap: wrap;
       gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      padding: 14px 16px;
     }
 
-    .header-actions a {
+    .page-hero .nav-btn {
+      appearance: none;
+      border: 1px solid #94a3b8;
+      background: #ffffff;
+      color: #111827;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 9px 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(255,255,255,0.08);
-      color: white;
-      text-decoration: none;
-      font-size: 13px;
-      font-weight: 700;
     }
 
-    .header-actions a:hover {
-      background: rgba(255,255,255,0.14);
-    }
-
-    .badge {
-      background: #c8a951;
-      color: #1a1a2e;
-      padding: 5px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-      flex-shrink: 0;
-    }
+    .page-hero .event-timer { margin-left: auto; color: #374151; font-weight: 700; }
+    .page-hero .event-timer strong { color: #111827; }
 
     main {
       max-width: 1320px;
@@ -587,8 +589,10 @@
     .flex-gap { display: flex; gap: 8px; align-items: center; }
 
     @media (max-width: 700px) {
-      header { padding: 14px 16px; }
-      .header-copy p { display: none; }
+      .page-hero { padding: 12px 12px 0; }
+      .page-hero .title-block { padding-right: 20px; min-height: 0; }
+      .page-hero .title-logo { position: static; width: 88px; height: 88px; margin-top: 12px; }
+      .page-hero .event-timer { margin-left: 0; }
       main { padding: 12px; }
       .groups-grid { grid-template-columns: 1fr; }
       .action-bar .btn { width: 100%; }
@@ -628,20 +632,19 @@
 </head>
 <body>
 
-<header>
-  <div class="header-brand">
-    <div class="header-mark">🥋</div>
-    <div class="header-copy">
-      <h1>Tournament Group Builder</h1>
-      <p>Import rosters, auto-build balanced groups, then fine-tune and export.</p>
-    </div>
+<div class="page-hero">
+  <div class="title-block">
+    <h1 class="tournament-name" id="tournamentName">Tournament</h1>
+    <div class="title-secondary">Group Builder</div>
+    <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
   </div>
-  <div class="header-actions">
-    <a href="/setup/">Setup</a>
-    <a href="/ring-assignment/">Ring Assignment</a>
-    <a href="/head-table/">Head Table</a>
+  <div class="toolbar">
+    <a class="nav-btn" href="/setup/">Setup</a>
+    <a class="nav-btn" href="/ring-assignment/">Ring Assignment</a>
+    <a class="nav-btn" href="/head-table/">Head Table</a>
+    <div class="event-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
   </div>
-</header>
+</div>
 
 <main>
 
@@ -693,6 +696,10 @@
       <div class="setting-group">
         <label>Age Span 14-37 (yrs)</label>
         <input type="number" id="ageSpan14To37" value="4" min="1" max="20">
+      </div>
+      <div class="setting-group">
+        <label>Age Span 18-37 (yrs)</label>
+        <input type="number" id="ageSpan18To37" value="4" min="1" max="20">
       </div>
       <div class="setting-group">
         <label>Age Span 38+ (yrs)</label>
@@ -759,5 +766,47 @@
 </main>
 
 <script src="/group-builder/app.js"></script>
+<script>
+  (function () {
+    const tournamentNameEl = document.getElementById('tournamentName');
+    const eventTimerEl = document.getElementById('eventTimer');
+    let eventStartedAt = '';
+
+    function fmtDuration(ms) {
+      if (!Number.isFinite(ms) || ms < 0) return '0:00';
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      }
+      return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function updateTimer() {
+      eventTimerEl.textContent = eventStartedAt
+        ? fmtDuration(Date.now() - new Date(eventStartedAt).getTime())
+        : '--:--:--';
+    }
+
+    async function loadBanner() {
+      try {
+        const [activeRes, ringsRes] = await Promise.all([
+          fetch('/api/events/active').then((r) => r.json()),
+          fetch('/api/rings').then((r) => r.json())
+        ]);
+        tournamentNameEl.textContent = (activeRes && activeRes.activeEvent) || 'Tournament';
+        eventStartedAt = (ringsRes && ringsRes.eventStartedAt) || '';
+      } catch (error) {
+        eventStartedAt = '';
+      }
+      updateTimer();
+    }
+
+    loadBanner();
+    window.setInterval(updateTimer, 1000);
+  })();
+</script>
 </body>
 </html>

@@ -606,6 +606,61 @@
       font-size: 13px;
     }
 
+    .ring-modal-stats {
+      display: grid;
+      gap: 8px;
+    }
+
+    .ring-modal-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px 14px;
+      color: var(--text-soft);
+      font-size: 12px;
+    }
+
+    .ring-modal-row strong {
+      color: var(--text);
+    }
+
+    .ring-modal-history {
+      display: grid;
+      gap: 8px;
+    }
+
+    .ring-modal-history details {
+      border: 1px solid #dbe3ee;
+      border-radius: 12px;
+      background: #fff;
+      padding: 8px 10px;
+    }
+
+    .ring-modal-history summary {
+      cursor: pointer;
+      font-weight: 800;
+      color: var(--text-soft);
+    }
+
+    .ring-modal-history-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .ring-modal-history-item {
+      border: 1px solid #e5eaf2;
+      border-radius: 10px;
+      background: #f8fafc;
+      padding: 8px 10px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .ring-modal-history-item .meta-line {
+      margin: 0;
+    }
+
     .queue-list li {
       display: flex;
       justify-content: space-between;
@@ -826,7 +881,8 @@
       statusLoadedAt: null,
       statusError: '',
       debugVisible: false,
-      activeRingId: ''
+      activeRingId: '',
+      phaseHistoryExpanded: false
     };
 
     const summaryCardsEl = document.getElementById('summaryCards');
@@ -877,16 +933,37 @@
       return `${hours}h ${minutes % 60}m ago`;
     }
 
+    function groupAnchor(group) {
+      if (!group) return '';
+      const divisionNumber = Number.parseInt(group.groupDivisionNumber, 10);
+      if (Number.isFinite(divisionNumber)) return String(divisionNumber);
+      return String(group.groupId || '').trim();
+    }
+
     function groupLabel(groupId) {
       if (!groupId) return 'Unassigned';
-      const group = state.groups.find((item) => item.groupId === groupId);
-      return group ? `${group.groupId} - ${group.name}` : groupId;
+      const group = getGroup(groupId);
+      if (!group) return groupId;
+      const anchor = groupAnchor(group);
+      return anchor ? `Division ${anchor} - ${group.name}` : `${group.groupId} - ${group.name}`;
+    }
+
+    function ringCurrentDivisionNumber(ring) {
+      if (!ring) return '';
+      return String(ring.currentGroupDivisionNumber || ring.currentGroupId || '').trim();
+    }
+
+    function ringQueuedDivisionNumbers(ring) {
+      if (!ring) return [];
+      return Array.isArray(ring.queuedGroupDivisionNumbers)
+        ? ring.queuedGroupDivisionNumbers
+        : (Array.isArray(ring.queuedGroupIds) ? ring.queuedGroupIds : []);
     }
 
     function heartbeatStatus(ring) {
       const ageMs = ring.lastHeartbeatAt ? Date.now() - new Date(ring.lastHeartbeatAt).getTime() : Number.POSITIVE_INFINITY;
       const threshold = state.heartbeatPolicy.disconnectAfterSeconds * 1000;
-      const hasAssignment = !!ring.currentGroupId || (ring.queuedGroupIds || []).length > 0;
+      const hasAssignment = !!ringCurrentDivisionNumber(ring) || ringQueuedDivisionNumbers(ring).length > 0;
       const hasTablet = !!ring.tabletLabel;
 
       if (!hasTablet) {
@@ -934,16 +1011,19 @@
       const ids = new Set();
       for (const ring of state.rings) {
         if (ring.ringId === currentRingId) continue;
-        if (ring.currentGroupId) ids.add(ring.currentGroupId);
-        for (const gid of ring.queuedGroupIds || []) ids.add(gid);
+        if (ringCurrentDivisionNumber(ring)) ids.add(ringCurrentDivisionNumber(ring));
+        for (const gid of ringQueuedDivisionNumbers(ring)) ids.add(String(gid));
       }
       return ids;
     }
 
     function availableGroupsForRing(ring) {
       const unavailable = ringUnavailableIds(ring.ringId);
-      const currentAndQueue = new Set([ring.currentGroupId, ...(ring.queuedGroupIds || [])].filter(Boolean));
-      return state.groups.filter((group) => !unavailable.has(group.groupId) || currentAndQueue.has(group.groupId));
+      const currentAndQueue = new Set([ringCurrentDivisionNumber(ring), ...ringQueuedDivisionNumbers(ring)].filter(Boolean).map((value) => String(value)));
+      return state.groups.filter((group) => {
+        const anchor = groupAnchor(group);
+        return !unavailable.has(anchor) || currentAndQueue.has(anchor);
+      });
     }
 
     function renderNotice(message, kind) {
@@ -999,7 +1079,12 @@
 
     function getGroup(groupId) {
       if (!groupId) return null;
-      return state.groups.find((group) => group.groupId === groupId) || null;
+      const normalized = String(groupId).trim();
+      const numeric = Number.parseInt(normalized, 10);
+      return state.groups.find((group) => {
+        if (Number.isFinite(numeric) && String(group.groupDivisionNumber) === String(numeric)) return true;
+        return group.groupId === normalized;
+      }) || null;
     }
 
     function elapsedMsForRing(ring) {
@@ -1016,10 +1101,11 @@
     }
 
     function buildRingView(ring) {
-      const currentGroup = getGroup(ring.currentGroupId);
-      const queuedGroup = ring.queuedGroupIds && ring.queuedGroupIds.length ? getGroup(ring.queuedGroupIds[0]) : null;
-      const hasCurrent = !!ring.currentGroupId;
-      const hasQueue = (ring.queuedGroupIds || []).length > 0;
+      const currentGroup = getGroup(ringCurrentDivisionNumber(ring));
+      const queuedDivisionNumbers = ringQueuedDivisionNumbers(ring);
+      const queuedGroup = queuedDivisionNumbers.length ? getGroup(queuedDivisionNumbers[0]) : null;
+      const hasCurrent = !!ringCurrentDivisionNumber(ring);
+      const hasQueue = queuedDivisionNumbers.length > 0;
       const estimateMs = hasCurrent ? estimateMsForGroup(currentGroup) : 0;
       const elapsedMs = hasCurrent ? elapsedMsForRing(ring) : 0;
       const ratio = estimateMs > 0 ? elapsedMs / estimateMs : 0;
@@ -1041,12 +1127,13 @@
         else tone = 'active';
       }
       const detail = !hasCurrent
-        ? (hasQueue ? `${groupLabel(ring.queuedGroupIds[0])}${ring.queuedGroupIds.length > 1 ? ` +${ring.queuedGroupIds.length - 1} more` : ''}` : 'No active or queued group.')
+        ? (hasQueue ? `${groupLabel(queuedDivisionNumbers[0])}${queuedDivisionNumbers.length > 1 ? ` +${queuedDivisionNumbers.length - 1} more` : ''}` : 'No active or queued group.')
         : (heartbeat.label === 'Connected'
           ? (ratio >= 1.2 ? `Past estimate by ${fmtDuration(elapsedMs - estimateMs)}` : (ratio >= 1.1 ? `Near the edge by ${fmtDuration(elapsedMs - estimateMs)}` : 'Within estimate.'))
           : heartbeat.detail);
       const phasePlan = ring.phasePlan && Array.isArray(ring.phasePlan.phases) ? ring.phasePlan : { phases: [] };
       const phases = phasePlan.phases.length ? phasePlan.phases : defaultPhasePlan(ring, currentGroup);
+      const currentPhaseName = String(ring.currentPhaseName || ring.currentPhase || phasePlan.currentPhase || '').trim();
 
       return {
         ring,
@@ -1060,9 +1147,23 @@
         hasQueue,
         elapsedMs,
         estimateMs,
-        elapsedText: hasCurrent ? fmtDuration(elapsedMs) : '--:--',
-        estimateText: hasCurrent ? fmtDuration(estimateMs) : '--:--',
-        phases
+        elapsedText: ring.ringElapsed || (hasCurrent ? fmtDuration(elapsedMs) : '--:--'),
+        estimateText: ring.ringEstimated || (hasCurrent ? fmtDuration(estimateMs) : '--:--'),
+        phases,
+        currentPhaseName,
+        currentPhaseStartTime: ring.currentPhaseStartTime || '',
+        currentPhaseEndTime: ring.currentPhaseEndTime || null,
+        currentPhaseElapsed: ring.currentPhaseElapsed || '',
+        currentPhaseEstimated: ring.currentPhaseEstimated || '',
+        currentPhaseCompletedCount: Number.parseInt(ring.currentPhaseCompletedCount, 10) || 0,
+        currentPhaseTotalCount: Number.parseInt(ring.currentPhaseTotalCount, 10) || 0,
+        sparringByeCount: Number.parseInt(ring.sparringByeCount, 10) || 0,
+        sparringActualBoutCount: Number.parseInt(ring.sparringActualBoutCount, 10) || 0,
+        sparringCompletedBoutCount: Number.parseInt(ring.sparringCompletedBoutCount, 10) || 0,
+        ringElapsed: ring.ringElapsed || '',
+        ringEstimated: ring.ringEstimated || '',
+        ringPacePercent: Number.parseFloat(ring.ringPacePercent),
+        phaseHistory: Array.isArray(ring.phaseHistory) ? ring.phaseHistory : []
       };
     }
 
@@ -1113,6 +1214,53 @@
       return `${minutes}:${String(seconds).padStart(2, '0')}`;
     }
 
+    function fmtPacePercent(value) {
+      const percent = Number.parseFloat(value);
+      if (!Number.isFinite(percent)) return 'On Time';
+      if (percent <= -15) return 'Ahead of schedule';
+      if (percent <= 14) return 'On Time';
+      if (percent <= 35) return 'Running Late';
+      return 'Significant Problem - Please Check';
+    }
+
+    function displayPhaseName(value) {
+      const text = String(value || '').trim();
+      if (!text) return 'Unknown';
+      return text.split('-').map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1) : part).join(' ');
+    }
+
+    function renderTimingRow(label, value) {
+      return `<div class="ring-modal-row"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`;
+    }
+
+    function renderPhaseHistory(history) {
+      const items = Array.isArray(history) ? history : [];
+      if (!items.length) {
+        return '<div class="meta-line"><span>No phase history yet.</span></div>';
+      }
+
+      return `
+        <div class="ring-modal-history-list">
+          ${items.map((entry) => {
+            const endTime = entry && entry.endTime ? fmtTime(entry.endTime) : 'Active';
+            return `
+              <div class="ring-modal-history-item">
+                <div class="meta-line">
+                  <span><strong>${escapeHtml(String(entry && entry.name ? entry.name : 'Phase'))}</strong></span>
+                  <span>${escapeHtml(fmtTime(entry && entry.startTime ? entry.startTime : ''))}</span>
+                  <span>${escapeHtml(endTime)}</span>
+                </div>
+                <div class="meta-line">
+                  <span>${escapeHtml(String(entry && entry.elapsed ? entry.elapsed : '0:00'))} elapsed</span>
+                  <span>${escapeHtml(String(entry && entry.estimated ? entry.estimated : '--:--'))} est</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
     function renderRingDetails(title, group) {
       if (!group) {
         return `<div class="ring-modal-section"><h4>${escapeHtml(title)}</h4><div class="meta-line"><span>No group assigned</span></div></div>`;
@@ -1125,7 +1273,7 @@
 
       return `
         <div class="ring-modal-section">
-          <h4>${escapeHtml(title)}: ${escapeHtml(group.groupId)} - ${escapeHtml(group.name || group.groupId)}</h4>
+          <h4>${escapeHtml(title)}: ${escapeHtml(groupAnchor(group) ? `Division ${groupAnchor(group)}` : group.groupId)} - ${escapeHtml(group.name || group.groupId)}</h4>
           ${competitorList}
         </div>
       `;
@@ -1143,22 +1291,75 @@
       const queuedGroup = view.queuedGroup;
       ringModalTitleEl.textContent = `${view.ring.ringLabel} details`;
       ringModalSubtitleEl.textContent = `${view.ring.ringId} • ${view.statusLabel}`;
+      const phaseName = String(view.currentPhaseName || view.currentPhase || '').trim() || 'idle';
+      const isSparringPhase = phaseName.toLowerCase().indexOf('sparring') >= 0;
+      const hasSparringMetrics = Number(view.sparringActualBoutCount) > 0 || Number(view.sparringCompletedBoutCount) > 0;
+      const phaseHistoryOpen = state.phaseHistoryExpanded ? ' open' : '';
+      const ringPacePercent = Number.parseFloat(view.ringPacePercent);
+      const ringPaceText = !Number.isFinite(ringPacePercent)
+        ? 'On Time'
+        : (ringPacePercent <= -15
+          ? 'Ahead of schedule'
+          : (ringPacePercent <= 14
+            ? 'On Time'
+            : (ringPacePercent <= 35
+              ? 'Running Late'
+              : 'Significant Problem - Please Check')));
+      const sparringSection = (isSparringPhase && hasSparringMetrics)
+        ? `
+          <div class="ring-modal-section">
+            <h4>Sparring</h4>
+            ${renderTimingRow('BYEs', String(view.sparringByeCount || 0))}
+            ${renderTimingRow('Bouts', `${String(view.sparringCompletedBoutCount || 0)} / ${String(view.sparringActualBoutCount || 0)}`)}
+          </div>
+        `
+        : '';
+      const phaseHistory = Array.isArray(view.phaseHistory) ? view.phaseHistory : [];
       ringModalBodyEl.innerHTML = [
-        `<div class="ring-modal-section"><h4>Ring status</h4><div class="meta-line"><span>${escapeHtml(view.statusLabel)}</span><span>${escapeHtml(view.elapsedText)} elapsed</span><span>${escapeHtml(view.estimateText)} est</span></div></div>`,
+        `<div class="ring-modal-section">
+          <h4>Ring status</h4>
+          <div class="ring-modal-stats">
+            ${renderTimingRow('Status', String(view.statusLabel || 'Unknown'))}
+            ${renderTimingRow('Ring elapsed', `${String(view.ringElapsed || view.elapsedText || '--:--')} / ${String(view.ringEstimated || view.estimateText || '--:--')} est`)}
+            ${renderTimingRow('Ring pace', ringPaceText)}
+          </div>
+        </div>`,
+        `<div class="ring-modal-section">
+          <h4>Phase</h4>
+          <div class="ring-modal-stats">
+            ${renderTimingRow('Phase', displayPhaseName(phaseName))}
+            ${renderTimingRow('Phase elapsed', `${String(view.currentPhaseElapsed || '--:--')} / ${String(view.currentPhaseEstimated || '--:--')} est`)}
+            ${renderTimingRow('Phase completion', `${String(view.currentPhaseCompletedCount || 0)} / ${String(view.currentPhaseTotalCount || 0)}`)}
+            ${view.currentPhaseEndTime ? renderTimingRow('Phase ended', fmtTime(view.currentPhaseEndTime)) : ''}
+            ${view.currentPhaseStartTime ? renderTimingRow('Phase started', fmtTime(view.currentPhaseStartTime)) : ''}
+          </div>
+        </div>`,
+        sparringSection,
+        `<div class="ring-modal-section">
+          <h4>Phase history</h4>
+          <div class="ring-modal-history">
+            <details${phaseHistoryOpen}>
+              <summary>Show phase history</summary>
+              ${renderPhaseHistory(phaseHistory)}
+            </details>
+          </div>
+        </div>`,
         renderRingDetails('Active group', currentGroup),
         renderRingDetails('Queued group', queuedGroup)
-      ].join('');
+      ].filter(Boolean).join('');
       ringModalEl.classList.add('visible');
       ringModalEl.setAttribute('aria-hidden', 'false');
     }
 
     function openRingDetails(ringId) {
       state.activeRingId = ringId;
+      state.phaseHistoryExpanded = false;
       renderBoard();
     }
 
     function closeRingDetails() {
       state.activeRingId = '';
+      state.phaseHistoryExpanded = false;
       renderBoard();
     }
 
@@ -1298,7 +1499,7 @@
         await fetchJson(`/api/rings/${ringId}/queue`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ groupId: nextGroupId })
+          body: JSON.stringify({ groupDivisionNumber: nextGroupId })
         });
         return;
       }
@@ -1333,6 +1534,10 @@
     });
 
     ringModalCloseEl.addEventListener('click', closeRingDetails);
+    ringModalBodyEl.addEventListener('toggle', (event) => {
+      if (!(event.target instanceof HTMLDetailsElement)) return;
+      state.phaseHistoryExpanded = event.target.open;
+    }, true);
     ringModalEl.addEventListener('click', (event) => {
       if (event.target === ringModalEl) closeRingDetails();
     });

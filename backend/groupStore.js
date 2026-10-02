@@ -1,4 +1,12 @@
-const { normalizeGroup, normalizeGroups } = require('./groupContract');
+const { normalizeGroup } = require('./groupContract');
+
+function groupAnchor(group) {
+  const divisionNumber = Number.parseInt(group && group.groupDivisionNumber, 10);
+  if (Number.isFinite(divisionNumber)) {
+    return String(divisionNumber);
+  }
+  return String(group && (group.groupId || group.id) ? (group.groupId || group.id) : '').trim();
+}
 
 function createGroupStore() {
   const groupsById = new Map();
@@ -6,7 +14,11 @@ function createGroupStore() {
   function rememberGroups(groups) {
     groupsById.clear();
     groups.forEach((group) => {
-      groupsById.set(group.groupId, group);
+      const normalized = normalizeGroup(group);
+      const anchor = groupAnchor(normalized);
+      if (anchor) {
+        groupsById.set(anchor, normalized);
+      }
     });
     return groups;
   }
@@ -17,7 +29,15 @@ function createGroupStore() {
 
   function loadGroup(groupId) {
     if (!groupId) return null;
-    return groupsById.get(String(groupId)) || null;
+    const trimmed = String(groupId).trim();
+    const numeric = Number.parseInt(trimmed, 10);
+    if (Number.isFinite(numeric) && groupsById.has(String(numeric))) {
+      return groupsById.get(String(numeric)) || null;
+    }
+    const byLegacyId = Array.from(groupsById.values()).find((group) => {
+      return String(group && (group.groupId || group.id) ? (group.groupId || group.id) : '').trim() === trimmed;
+    });
+    return byLegacyId || null;
   }
 
   function groupExists(groupId) {

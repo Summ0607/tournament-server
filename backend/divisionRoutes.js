@@ -28,7 +28,9 @@ function createDivisionRouter(deps) {
       const payload = req.body || {};
       const explicitGroups = payload.groups || [];
       if (explicitGroups.length) {
-        const assignedGroups = assignDivisionNumbers(explicitGroups, payload.startingDivisionNumber ?? 20);
+        const { groups: assignedGroups } = typeof buildGroupsWithReview === 'function'
+          ? buildGroupsWithReview([], { ...payload, groups: explicitGroups })
+          : { groups: assignDivisionNumbers(explicitGroups, payload.startingDivisionNumber ?? 20) };
         appendDivisionTrace('division-build', {
           source: 'explicit',
           groupCount: assignedGroups.length,
@@ -75,7 +77,11 @@ function createDivisionRouter(deps) {
         ? competitorStore()
         : competitorStore;
 
-      const persisted = await activeCompetitorStore.saveDivisionAssignments(groups);
+      const persisted = await activeCompetitorStore.saveDivisionAssignments(groups, {
+        maxGroupSize: req.body.maxGroupSize,
+        minGroupSize: req.body.minGroupSize,
+        startingDivisionNumber: req.body.startingDivisionNumber
+      });
       const savedGroups = groupStore.saveGroups(persisted.groups);
       appendDivisionTrace('division-save', {
         groupCount: savedGroups.length,

@@ -37,10 +37,9 @@
     .shell { max-width: 1600px; margin: 0 auto; padding: 20px; }
     .hero {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 14px;
-      align-items: start;
-      margin-bottom: 16px;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
     }
     .title-block, .panel {
       background: rgba(255,255,255,0.92);
@@ -48,18 +47,54 @@
       border-radius: var(--radius);
       box-shadow: var(--shadow);
     }
-    .title-block { padding: 22px; }
-    h1 { margin: 0 0 6px; font-size: clamp(28px, 4vw, 44px); line-height: 1.05; letter-spacing: -0.03em; }
-    .subtitle { color: var(--text-soft); font-size: 13px; line-height: 1.45; max-width: 72ch; }
+    .title-block {
+      position: relative;
+      padding: 16px 132px 14px 20px;
+      min-height: 108px;
+      background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
+    }
+    .tournament-name {
+      margin: 0 0 6px;
+      font-size: clamp(30px, 4vw, 46px);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+      font-weight: 750;
+      color: var(--text);
+    }
+    .title-secondary {
+      color: var(--text-soft);
+      font-size: 14px;
+      line-height: 1.4;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .title-logo {
+      position: absolute;
+      top: -1px;
+      right: 1px;
+      width: 108px;
+      height: 108px;
+      object-fit: contain;
+      object-position: center;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.10);
+      padding: 4px;
+    }
     .toolbar {
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: flex-start;
       padding: 14px 16px;
     }
-    .toolbar.panel { backdrop-filter: blur(8px); }
+    .toolbar.panel { background: var(--surface); }
+    .event-timer { margin-left: auto; color: var(--text-soft); font-weight: 700; }
+    .event-timer strong { color: var(--text); }
+    .page-intro { color: var(--text-soft); font-size: 13px; line-height: 1.45; margin: 0 0 14px; }
     button, a.btn, input, select {
       font: inherit;
     }
@@ -180,8 +215,9 @@
       margin-top: 14px;
     }
     @media (max-width: 860px) {
-      .hero { grid-template-columns: 1fr; }
-      .toolbar { justify-content: flex-start; }
+      .title-block { padding-right: 20px; min-height: 0; }
+      .title-logo { position: static; width: 88px; height: 88px; margin-top: 12px; }
+      .event-timer { margin-left: 0; }
       .grid, .step-grid { grid-template-columns: 1fr; }
       .field-row, .field-row.single { grid-template-columns: 1fr; }
       .field-row button { width: 100%; }
@@ -192,15 +228,19 @@
   <div class="shell">
     <div class="hero">
       <div class="title-block">
-        <h1>Setup</h1>
-        <div class="subtitle">Pre-tournament preparation only: create the event, import the roster, build groups, then move to Ring Assignment or Head Table when tournament time starts.</div>
+        <h1 class="tournament-name" id="tournamentName">Tournament</h1>
+        <div class="title-secondary">Setup</div>
+        <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
       <div class="toolbar panel">
-        <a class="btn" href="/head-table/">Head Table</a>
-        <a class="btn" href="/ring-assignment/">Ring Assignment</a>
         <a class="btn" href="/group-builder/">Group Builder</a>
+        <a class="btn" href="/ring-assignment/">Ring Assignment</a>
+        <a class="btn" href="/head-table/">Head Table</a>
+        <div class="event-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
       </div>
     </div>
+
+    <p class="page-intro">Pre-tournament preparation only: create the event, import the roster, build groups, then move to Ring Assignment or Head Table when tournament time starts.</p>
 
     <div class="notice" id="notice" aria-live="polite"></div>
 
@@ -281,9 +321,12 @@
   <script>
     const state = {
       events: [],
-      activeEvent: ''
+      activeEvent: '',
+      eventStartedAt: ''
     };
 
+    const tournamentNameEl = document.getElementById('tournamentName');
+    const eventTimerEl = document.getElementById('eventTimer');
     const noticeEl = document.getElementById('notice');
     const eventSelectEl = document.getElementById('eventSelect');
     const activateEventBtn = document.getElementById('activateEventBtn');
@@ -328,6 +371,34 @@
       return data;
     }
 
+    function fmtDuration(ms) {
+      if (!Number.isFinite(ms) || ms < 0) return '0:00';
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      }
+      return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function updateTimerOnly() {
+      eventTimerEl.textContent = state.eventStartedAt
+        ? fmtDuration(Date.now() - new Date(state.eventStartedAt).getTime())
+        : '--:--:--';
+    }
+
+    async function loadEventStartedAt() {
+      try {
+        const data = await fetchJson('/api/rings');
+        state.eventStartedAt = data.eventStartedAt || '';
+      } catch (error) {
+        state.eventStartedAt = '';
+      }
+      updateTimerOnly();
+    }
+
     function updateControls() {
       const selected = eventSelectEl.value.trim();
       activateEventBtn.disabled = !selected || selected === state.activeEvent;
@@ -342,6 +413,8 @@
 
       state.events = eventsData.events || [];
       state.activeEvent = activeData.activeEvent || '';
+      tournamentNameEl.textContent = state.activeEvent || 'Tournament';
+      loadEventStartedAt();
 
       eventSelectEl.innerHTML = '<option value="">-- Select Event --</option>';
       state.events.forEach((eventName) => {
@@ -510,6 +583,7 @@
     });
 
     refreshEvents().catch((error) => showNotice(error.message, 'error'));
+    window.setInterval(updateTimerOnly, 1000);
   </script>
 </body>
 </html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Competitors Directory</title>
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --primary: #334155;
+            --primary-hover: #1e293b;
+            --accent: #f1f5f9;
+            --radius: 10px;
+        }
+
+        body {
+            margin: 0;
+            padding: 30px;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .search-box {
+            padding: 10px 14px;
+            width: 280px;
+            font-size: 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: var(--surface);
+        }
+
+        .search-box:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(51, 65, 85, 0.1);
+        }
+
+        .counter {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .table-wrapper {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            overflow-x: auto;
+            max-height: 75vh;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: var(--primary);
+            color: #ffffff;
+            font-weight: 600;
+            padding: 12px 16px;
+            white-space: nowrap;
+            z-index: 10;
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            color: var(--text);
+        }
+
+        tbody tr {
+            transition: background-color 0.15s ease;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #fafbfc;
+        }
+
+        tbody tr:hover {
+            background-color: var(--accent);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Competitors Roster</h1>
+        <div class="controls">
+            <span id="rowCounter" class="counter">Loading competitors...</span>
+            <input type="text" id="searchInput" class="search-box" placeholder="Search by name, rank, studio..." onkeyup="filterTable()">
+        </div>
+    </header>
+
+    <div class="table-wrapper">
+        <table id="competitorsTable">
+            <thead id="tableHeader"></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let allRows = [];
+    let tableHeaders = [];
+
+    fetch('/api/competitors/table')
+      .then(res => res.json())
+      .then(data => {
+        tableHeaders = data.headers || [];
+        allRows = data.rows || [];
+        
+        renderTable(allRows);
+      })
+      .catch(err => {
+        console.error('Failed to load competitors table:', err);
+        document.getElementById('rowCounter').textContent = 'Error loading data.';
+      });
+
+    function renderTable(rows) {
+        const headerEl = document.getElementById('tableHeader');
+        const bodyEl = document.getElementById('tableBody');
+        const counterEl = document.getElementById('rowCounter');
+
+        // Build headers once
+        if (headerEl.innerHTML === '' && tableHeaders.length > 0) {
+            const tr = document.createElement('tr');
+            tableHeaders.forEach(h => {
+              const th = document.createElement('th');
+              // Make header text clean (e.g. capitalize or remove underscores)
+              th.textContent = h;
+              tr.appendChild(th);
+            });
+            headerEl.appendChild(tr);
+        }
+
+        // Build body rows
+        bodyEl.innerHTML = '';
+        
+        if (rows.length === 0) {
+            bodyEl.innerHTML = `<tr><td colspan="${tableHeaders.length || 1}" class="empty-state">No matching competitors found.</td></tr>`;
+            counterEl.textContent = `0 entries`;
+            return;
+        }
+
+        rows.forEach(row => {
+          const tr = document.createElement('tr');
+          tableHeaders.forEach(h => {
+            const td = document.createElement('td');
+            td.textContent = row[h] !== null && row[h] !== undefined ? row[h] : '';
+            tr.appendChild(td);
+          });
+          bodyEl.appendChild(tr);
+        });
+
+        counterEl.textContent = `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`;
+    }
+
+    function filterTable() {
+        const query = document.getElementById('searchInput').value.toLowerCase().trim();
+        if (!query) {
+            renderTable(allRows);
+            return;
+        }
+
+        const filtered = allRows.filter(row => {
+            return tableHeaders.some(h => {
+                const val = String(row[h] || '').toLowerCase();
+                return val.includes(query);
+            });
+        });
+
+        renderTable(filtered);
+    }
+</script>
+
+</body>
+</html>

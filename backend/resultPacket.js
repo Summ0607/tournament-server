@@ -272,8 +272,9 @@ function createResultPacketStore({ getResultsDirectory }) {
   }
 
   function findByGroupId(groupId) {
+    const normalized = String(groupId || '').trim();
     return readRecords()
-      .filter((record) => record.groupId === groupId)
+      .filter((record) => record.groupId === normalized || String(record.groupDivisionNumber) === normalized)
       .sort((a, b) => String(a.receivedAt).localeCompare(String(b.receivedAt)));
   }
 
@@ -300,7 +301,11 @@ function createResultPacketStore({ getResultsDirectory }) {
     const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
     fs.writeFileSync(tempPath, JSON.stringify(record, null, 2), { encoding: 'utf8', flag: 'wx' });
     fs.renameSync(tempPath, filePath);
-    return record;
+    return {
+      ...record,
+      filePath,
+      directory
+    };
   }
 
   return {

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
-const { assignDivisionNumbers } = require('./groupDivisionAssignments');
+const { assignDivisionNumbers, rebalanceGroupsToSoftMax } = require('./groupDivisionAssignments');
 
 function openDatabase(dbFilePath, mode) {
   const resolvedMode = mode == null ? sqlite3.OPEN_READWRITE : mode;
@@ -123,8 +123,11 @@ function createCompetitorStore(dbFilePath) {
     });
   }
 
-  async function saveDivisionAssignments(groups) {
-    const assignedGroups = assignDivisionNumbers(groups);
+  async function saveDivisionAssignments(groups, options = {}) {
+    const assignedGroups = assignDivisionNumbers(
+      rebalanceGroupsToSoftMax(groups, options),
+      options.startingDivisionNumber ?? 20
+    );
     if (!fs.existsSync(dbFilePath)) {
       throw new Error(`Database not found: ${dbFilePath}`);
     }
@@ -152,19 +155,33 @@ function createCompetitorStore(dbFilePath) {
 
       let updatedCompetitors = 0;
       for (const group of assignedGroups) {
-        const groupId = String(group.groupId || '').trim();
-        const groupName = String(group.name || groupId || '').trim();
         const groupDivisionNumber = Number.parseInt(group.groupDivisionNumber, 10);
+        const groupName = String(group.groupDivisionName || group.name || `Division ${Number.isFinite(groupDivisionNumber) ? groupDivisionNumber : ''}`).trim();
         const competitors = Array.isArray(group.competitors) ? group.competitors : [];
+        const groupAnchor = Number.isFinite(groupDivisionNumber) ? groupDivisionNumber : null;
 
         for (const competitor of competitors) {
           const competitorId = Number.parseInt(competitor.id, 10);
-          const competitionDivisionNumber = Number.parseInt(competitor.competitionDivisionNumber, 10);
-          const sparringDivision = divisionText(groupDivisionNumber);
-          const hyungsDivision = divisionText(groupDivisionNumber);
-          const weaponsDivision = isWeaponsEligible(competitor) ? divisionText(groupDivisionNumber) : 'unassigned';
+
+          const weaponsDivision = isWeaponsEligible(competitor) && competitor.weaponsDivisionNumber != null
+            ? String(competitor.weaponsDivisionNumber)
+            : 'unassigned';
+
+          const hyungsDivision = competitor.hyungsDivisionNumber != null
+            ? String(competitor.hyungsDivisionNumber)
+            : divisionText(groupDivisionNumber);
+
+          const sparringDivision = competitor.sparringDivisionNumber != null
+            ? String(competitor.sparringDivisionNumber)
+            : divisionText(groupDivisionNumber);
+
+          const competitionDivisionNumber = Number.parseInt(
+            competitor.competitionDivisionNumber ?? competitor.hyungsDivisionNumber ?? groupDivisionNumber,
+            10
+          );
+
           if (!Number.isFinite(competitorId)) {
-            throw new Error(`Cannot persist division number for competitor without a numeric id in ${groupId || 'unknown group'}`);
+            throw new Error(`Cannot persist division number for competitor without a numeric id in division ${groupAnchor != null ? groupAnchor : 'unknown'}`);
           }
           if (!Number.isFinite(competitionDivisionNumber)) {
             throw new Error(`Cannot persist competition division number for competitor ${competitorId}`);
@@ -184,9 +201,9 @@ function createCompetitorStore(dbFilePath) {
               WHERE id = ?
             `,
             [
-              groupId,
+              null,
               groupName,
-              Number.isFinite(groupDivisionNumber) ? groupDivisionNumber : null,
+              groupAnchor,
               competitionDivisionNumber,
               weaponsDivision,
               hyungsDivision,
@@ -199,9 +216,9 @@ function createCompetitorStore(dbFilePath) {
             throw new Error(`Failed to update competitor ${competitorId} with division numbers`);
           }
 
-          competitor.groupDivisionId = groupId;
           competitor.groupDivisionName = groupName;
-          competitor.groupDivisionNumber = Number.isFinite(groupDivisionNumber) ? groupDivisionNumber : null;
+          competitor.groupDivisionId = '';
+          competitor.groupDivisionNumber = groupAnchor;
           competitor.competitionDivisionNumber = competitionDivisionNumber;
           competitor.weaponsDivision = weaponsDivision;
           competitor.hyungsDivision = hyungsDivision;

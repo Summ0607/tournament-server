@@ -582,17 +582,42 @@
       return minutes + ':' + String(seconds).padStart(2, '0');
     }
 
+    function groupAnchor(group) {
+      if (!group) return '';
+      var divisionNumber = Number.parseInt(group.groupDivisionNumber, 10);
+      if (Number.isFinite(divisionNumber)) return String(divisionNumber);
+      return String(group.groupId || '').trim();
+    }
+
     function groupById(groupId) {
       if (!groupId) return null;
+      var normalized = String(groupId).trim();
+      var numeric = Number.parseInt(normalized, 10);
       for (var i = 0; i < state.groups.length; i += 1) {
-        if (state.groups[i].groupId === groupId) return state.groups[i];
+        var group = state.groups[i];
+        if (Number.isFinite(numeric) && String(group.groupDivisionNumber) === String(numeric)) return group;
+        if (group.groupId === normalized) return group;
       }
       return null;
     }
 
+    function ringCurrentDivisionNumber(ring) {
+      if (!ring) return '';
+      return String(ring.currentGroupDivisionNumber || ring.currentGroupId || '').trim();
+    }
+
+    function ringQueuedDivisionNumbers(ring) {
+      if (!ring) return [];
+      return Array.isArray(ring.queuedGroupDivisionNumbers)
+        ? ring.queuedGroupDivisionNumbers
+        : (Array.isArray(ring.queuedGroupIds) ? ring.queuedGroupIds : []);
+    }
+
     function groupLabel(groupId) {
       var group = groupById(groupId);
-      return group ? group.groupId + ' - ' + group.name : (groupId || 'Unassigned');
+      if (!group) return groupId || 'Unassigned';
+      var anchor = groupAnchor(group);
+      return anchor ? 'Division ' + anchor + ' - ' + group.name : (group.groupId + ' - ' + group.name);
     }
 
     function groupSummary(group) {
@@ -634,7 +659,7 @@
     function heartbeatStatus(ring) {
       var ageMs = ring.lastHeartbeatAt ? Date.now() - new Date(ring.lastHeartbeatAt).getTime() : Number.POSITIVE_INFINITY;
       var threshold = state.heartbeatPolicy.disconnectAfterSeconds * 1000;
-      var hasAssignment = !!ring.currentGroupId || (ring.queuedGroupIds || []).length > 0;
+      var hasAssignment = !!ringCurrentDivisionNumber(ring) || ringQueuedDivisionNumbers(ring).length > 0;
       var hasTablet = !!ring.tabletLabel;
 
       if (!hasTablet) {
@@ -655,11 +680,12 @@
     }
 
     function buildRingView(ring) {
-      var currentGroup = groupById(ring.currentGroupId);
-      var queuedGroup = ring.queuedGroupIds && ring.queuedGroupIds.length ? groupById(ring.queuedGroupIds[0]) : null;
+      var currentGroup = groupById(ringCurrentDivisionNumber(ring));
+      var queuedDivisionNumbers = ringQueuedDivisionNumbers(ring);
+      var queuedGroup = queuedDivisionNumbers.length ? groupById(queuedDivisionNumbers[0]) : null;
       var status = heartbeatStatus(ring);
-      var hasCurrent = !!ring.currentGroupId;
-      var hasQueue = (ring.queuedGroupIds || []).length > 0;
+      var hasCurrent = !!ringCurrentDivisionNumber(ring);
+      var hasQueue = queuedDivisionNumbers.length > 0;
       var statusLabel = !hasCurrent && !hasQueue
         ? 'Unassigned'
         : (!hasCurrent && hasQueue
@@ -685,11 +711,14 @@
       for (var i = 0; i < state.rings.length; i += 1) {
         var other = state.rings[i];
         if (other.ringId === ring.ringId) continue;
-        if (other.currentGroupId) unavailable.add(other.currentGroupId);
-        (other.queuedGroupIds || []).forEach(function (gid) { unavailable.add(gid); });
+        if (ringCurrentDivisionNumber(other)) unavailable.add(ringCurrentDivisionNumber(other));
+        ringQueuedDivisionNumbers(other).forEach(function (gid) { unavailable.add(String(gid)); });
       }
-      var currentAndQueue = new Set([ring.currentGroupId].concat(ring.queuedGroupIds || []).filter(Boolean));
-      return state.groups.filter(function (group) { return !unavailable.has(group.groupId) || currentAndQueue.has(group.groupId); });
+      var currentAndQueue = new Set([ringCurrentDivisionNumber(ring)].concat(ringQueuedDivisionNumbers(ring)).filter(Boolean).map(function (value) { return String(value); }));
+      return state.groups.filter(function (group) {
+        var anchor = groupAnchor(group);
+        return !unavailable.has(anchor) || currentAndQueue.has(anchor);
+      });
     }
 
     function renderNotice(message, kind) {
@@ -730,7 +759,7 @@
     function openGroupModal(groupId) {
       state.activeGroupId = groupId;
       var group = groupById(groupId);
-      groupModalTitleEl.textContent = group ? group.groupId : 'Group details';
+      groupModalTitleEl.textContent = group ? ('Division ' + groupAnchor(group)) : 'Group details';
       groupModalSubtitleEl.textContent = group ? (groupSummary(group).count + ' competitors') : 'Group not found';
       groupModalBodyEl.innerHTML = renderGroupDetails(group);
       groupModalEl.classList.add('visible');
@@ -747,17 +776,18 @@
     function renderRingRow(ring) {
       var view = buildRingView(ring);
       var currentGroup = view.currentGroup;
-      var queue = Array.isArray(ring.queuedGroupIds) ? ring.queuedGroupIds : [];
+      var queue = ringQueuedDivisionNumbers(ring);
       var queueOptions = availableGroupsForRing(ring).map(function (group) {
-        return '<option value="' + escapeHtml(group.groupId) + '">' + escapeHtml(group.groupId) + ' - ' + escapeHtml(group.name) + '</option>';
+        var anchor = groupAnchor(group);
+        return '<option value="' + escapeHtml(anchor) + '">' + escapeHtml('Division ' + anchor) + ' - ' + escapeHtml(group.name) + '</option>';
       }).join('');
       var activeHtml = currentGroup
-        ? '<button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(currentGroup.groupId) + '">' + escapeHtml(currentGroup.groupId) + '</button>'
+        ? '<button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(groupAnchor(currentGroup)) + '">' + escapeHtml('Division ' + groupAnchor(currentGroup)) + '</button>'
         : '<span class="empty">Unassigned</span>';
       var queuedHtml = queue.length
         ? queue.map(function (groupId) {
             var label = groupLabel(groupId);
-            return '<span class="group-chip"><button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(groupId) + '">' + escapeHtml(groupId) + '</button><button class="queue-remove" data-action="remove-queue" data-ring-id="' + escapeHtml(ring.ringId) + '" data-group-id="' + escapeHtml(groupId) + '" aria-label="Remove ' + escapeHtml(groupId) + ' from queue">×</button></span>';
+            return '<span class="group-chip"><button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(groupId) + '">' + escapeHtml(label) + '</button><button class="queue-remove" data-action="remove-queue" data-ring-id="' + escapeHtml(ring.ringId) + '" data-group-id="' + escapeHtml(groupId) + '" aria-label="Remove ' + escapeHtml(label) + ' from queue">×</button></span>';
           }).join('')
         : '<span class="empty">Empty</span>';
 
@@ -772,7 +802,7 @@
           '</div>',
           '<div class="group-box active">',
             '<span>Active group</span>',
-            '<strong>' + (currentGroup ? '<button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(currentGroup.groupId) + '">' + escapeHtml(currentGroup.groupId) + '</button>' : 'Unassigned') + '</strong>',
+            '<strong>' + (currentGroup ? '<button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(groupAnchor(currentGroup)) + '">' + escapeHtml('Division ' + groupAnchor(currentGroup)) + '</button>' : 'Unassigned') + '</strong>',
           '</div>',
           '<div class="group-box">',
             '<span>Queued groups</span>',
@@ -856,7 +886,7 @@
       await fetchJson('/api/rings/' + ringId + '/queue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId: groupId })
+        body: JSON.stringify({ groupDivisionNumber: groupId })
       });
     }
 
