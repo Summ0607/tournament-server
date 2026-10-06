@@ -52,6 +52,9 @@
 
     .title-block {
       position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
       backdrop-filter: blur(8px);
       border: 1px solid var(--line);
@@ -62,17 +65,22 @@
     }
 
     .tournament-name {
-      margin: 0 0 6px;
+      width: 100%;
+      margin: 0;
       font-size: clamp(30px, 4vw, 46px);
       line-height: 1.02;
       letter-spacing: -0.04em;
       font-weight: 750;
       color: var(--text);
+      text-align: center;
     }
 
     .title-secondary {
+      position: absolute;
+      top: 16px;
+      left: 20px;
       color: var(--text-soft);
-      font-size: 14px;
+      font-size: 21px;
       line-height: 1.4;
       font-weight: 700;
       letter-spacing: 0.02em;
@@ -950,14 +958,12 @@
 
     function ringCurrentDivisionNumber(ring) {
       if (!ring) return '';
-      return String(ring.currentGroupDivisionNumber || ring.currentGroupId || '').trim();
+      return String(ring.groupDivisionNumber || '').trim();
     }
 
     function ringQueuedDivisionNumbers(ring) {
       if (!ring) return [];
-      return Array.isArray(ring.queuedGroupDivisionNumbers)
-        ? ring.queuedGroupDivisionNumbers
-        : (Array.isArray(ring.queuedGroupIds) ? ring.queuedGroupIds : []);
+      return Array.isArray(ring.queuedGroupDivisionNumbers) ? ring.queuedGroupDivisionNumbers : [];
     }
 
     function heartbeatStatus(ring) {

@@ -35,8 +35,109 @@ function safeFileIdentifier(value) {
     .slice(0, 120) || 'result';
 }
 
+const COMPLETION_SNAPSHOT_FIELDS = [
+  'checkInCount',
+  'checkInTotal',
+  'phaseCompletedCount',
+  'phaseTotalCount',
+  'phaseProgress',
+  'assistanceType',
+  'assistanceRequestedAt',
+  'ringElapsed',
+  'ringEstimated',
+  'ringPacePercent'
+];
+
+const PACKET_BLOCK_FIELDS = [
+  'schemaVersion',
+  'eventName',
+  'groupId',
+  'groupDivisionNumber',
+  'groupName',
+  'ringId',
+  'ringLabel',
+  'completedAt',
+  'participants',
+  'disciplines',
+  'overallAwards',
+  'signatures',
+  'source'
+];
+
 function isIsoTimestamp(value) {
   return nonEmpty(value) && Number.isFinite(Date.parse(value));
+}
+
+function sanitizePhaseHistory(phaseHistory) {
+  if (!Array.isArray(phaseHistory)) return [];
+  return phaseHistory.map((entry) => {
+    if (!entry || typeof entry !== 'object') return null;
+    const sanitized = {
+      name: String(entry.name || '').trim(),
+      startTime: String(entry.startTime || '').trim(),
+      endTime: entry.endTime ? String(entry.endTime).trim() : null,
+      elapsed: String(entry.elapsed || '').trim(),
+      estimated: String(entry.estimated || '').trim()
+    };
+    return sanitized.name && sanitized.startTime ? sanitized : null;
+  }).filter(Boolean);
+}
+
+function resolvePhaseHistory(packet) {
+  const source = packet && typeof packet === 'object' ? packet : {};
+  const snapshotSource = source.completionSnapshot && typeof source.completionSnapshot === 'object'
+    ? source.completionSnapshot
+    : source;
+  return sanitizePhaseHistory(snapshotSource.phaseHistory);
+}
+
+function resolveCompletionSnapshot(packet) {
+  const source = packet && typeof packet === 'object' ? packet : {};
+  const snapshotSource = source.completionSnapshot && typeof source.completionSnapshot === 'object'
+    ? source.completionSnapshot
+    : source;
+  const completionSnapshot = {};
+  COMPLETION_SNAPSHOT_FIELDS.forEach((field) => {
+    if (field === 'phaseHistory') return;
+    if (Object.prototype.hasOwnProperty.call(snapshotSource, field)) {
+      completionSnapshot[field] = snapshotSource[field];
+    }
+  });
+  completionSnapshot.phaseHistory = sanitizePhaseHistory(snapshotSource.phaseHistory);
+  return completionSnapshot;
+}
+
+function resolvePacketBlock(packet) {
+  const source = packet && typeof packet === 'object' ? packet : {};
+  const blockSource = source.packetBlock && typeof source.packetBlock === 'object'
+    ? source.packetBlock
+    : source;
+  const packetBlock = {};
+  PACKET_BLOCK_FIELDS.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(blockSource, field)) {
+      packetBlock[field] = blockSource[field];
+    }
+  });
+  return packetBlock;
+}
+
+function resolveSubmissionRecord(packet, receipt) {
+  const completionSnapshot = resolveCompletionSnapshot(packet);
+  const record = {
+    serverRecordId: `result-${crypto.randomUUID()}`,
+    submissionId: packet.submissionId,
+    groupId: packet.groupId,
+    groupDivisionNumber: packet.groupDivisionNumber,
+    groupName: packet.groupName,
+    ringId: packet.ringId,
+    ringLabel: packet.ringLabel,
+    completedAt: packet.completedAt,
+    receivedAt: receipt.receivedAt,
+    status: 'ACCEPTED',
+    completionSnapshot,
+    packetBlock: resolvePacketBlock(packet)
+  };
+  return record;
 }
 
 function addError(errors, pathName, message) {
@@ -242,6 +343,31 @@ function validateResultPacket(packet, ringId, activeEventName) {
   if (JSON.stringify(packet).includes('"IN_PROGRESS"')) {
     addError(errors, 'payload', 'must not contain an unresolved IN_PROGRESS state');
   }
+  if (packet.completionSnapshot != null && (typeof packet.completionSnapshot !== 'object' || Array.isArray(packet.completionSnapshot))) {
+    addError(errors, 'completionSnapshot', 'must be an object when present');
+  } else if (packet.completionSnapshot && typeof packet.completionSnapshot === 'object') {
+    for (const field of COMPLETION_SNAPSHOT_FIELDS) {
+      if (field === 'phaseHistory') continue;
+      const value = packet.completionSnapshot[field];
+      if (field === 'assistanceType' || field === 'assistanceRequestedAt' || field === 'ringElapsed' || field === 'ringEstimated') {
+        if (value != null && typeof value !== 'string') {
+          addError(errors, `completionSnapshot.${field}`, 'must be a string when present');
+        }
+      } else if (field === 'phaseProgress' || field === 'ringPacePercent') {
+        if (value != null && (!Number.isFinite(value) || value < 0)) {
+          addError(errors, `completionSnapshot.${field}`, 'must be a nonnegative number when present');
+        }
+      } else if (value != null && (!Number.isInteger(value) || value < 0)) {
+        addError(errors, `completionSnapshot.${field}`, 'must be a nonnegative integer when present');
+      }
+    }
+    if (packet.completionSnapshot.phaseHistory != null && !Array.isArray(packet.completionSnapshot.phaseHistory)) {
+      addError(errors, 'completionSnapshot.phaseHistory', 'must be an array when present');
+    }
+  }
+  if (packet.packetBlock != null && (typeof packet.packetBlock !== 'object' || Array.isArray(packet.packetBlock))) {
+    addError(errors, 'packetBlock', 'must be an object when present');
+  }
   return errors;
 }
 
@@ -279,25 +405,9 @@ function createResultPacketStore({ getResultsDirectory }) {
   }
 
   function store(packet, receipt) {
-    const serverRecordId = `result-${crypto.randomUUID()}`;
-    receipt.acknowledgement.serverRecordId = serverRecordId;
-    receipt.acknowledgement.receivedAt = receipt.receivedAt;
-    const record = {
-      serverRecordId,
-      submissionId: packet.submissionId,
-      groupId: packet.groupId,
-      groupDivisionNumber: packet.groupDivisionNumber,
-      groupName: packet.groupName,
-      ringId: packet.ringId,
-      ringLabel: packet.ringLabel,
-      completedAt: packet.completedAt,
-      receivedAt: receipt.receivedAt,
-      status: 'ACCEPTED',
-      receipt,
-      packet
-    };
+    const record = resolveSubmissionRecord(packet, receipt);
     const directory = resultsDirectory();
-    const filePath = path.join(directory, `${safeFileIdentifier(serverRecordId)}.json`);
+    const filePath = path.join(directory, `${safeFileIdentifier(record.serverRecordId)}.json`);
     const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
     fs.writeFileSync(tempPath, JSON.stringify(record, null, 2), { encoding: 'utf8', flag: 'wx' });
     fs.renameSync(tempPath, filePath);
@@ -336,5 +446,6 @@ function createResultPacketStore({ getResultsDirectory }) {
 module.exports = {
   createResultPacketStore,
   safeFileIdentifier,
+  sanitizePhaseHistory,
   validateResultPacket
 };

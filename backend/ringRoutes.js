@@ -1,10 +1,9 @@
 const crypto = require('crypto');
 const express = require('express');
 const fs = require('fs');
-const path = require('path');
 const { appendDivisionTrace, summarizeGroupDivisionNumbers } = require('./groupDivisionAssignments');
-
-const HEARTBEAT_TRACE_PATH = path.join(__dirname, 'ring-progress-trace.log');
+const { buildAvailableGroupDivisionNumbers } = require('./ringAvailability');
+const { sanitizePhaseHistory } = require('./resultPacket');
 
 function resolveGroupAnchorValue(value) {
   const parsed = Number.parseInt(value, 10);
@@ -29,12 +28,46 @@ function resolveRequestCorrelationId(req, packet) {
 }
 
 function logResultPacketEvent(stage, details) {
-  console.log(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    event: 'division-result-packet',
-    stage,
-    ...details
-  }));
+}
+
+function logCompletionDiagnostics(stage, details) {
+}
+
+function historyKey(entry) {
+  return `${String(entry && entry.name ? entry.name : '').trim()}|${String(entry && entry.startTime ? entry.startTime : '').trim()}`;
+}
+
+function resolveCompletionPhaseHistory(packet, fallbackHistory) {
+  const clientHistory = sanitizePhaseHistory(packet && packet.completionSnapshot && packet.completionSnapshot.phaseHistory);
+  const serverHistory = sanitizePhaseHistory(fallbackHistory);
+
+  if (!clientHistory.length) {
+    return serverHistory;
+  }
+
+  if (!serverHistory.length) {
+    return clientHistory;
+  }
+
+  const serverByKey = new Map();
+  serverHistory.forEach((entry) => {
+    serverByKey.set(historyKey(entry), entry);
+  });
+
+  return clientHistory.map((entry) => {
+    const serverEntry = serverByKey.get(historyKey(entry)) ||
+      serverHistory.find((candidate) => candidate && candidate.name === entry.name) ||
+      null;
+    return {
+      name: entry.name,
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+      elapsed: entry.elapsed,
+      estimated: entry.estimated && String(entry.estimated).trim()
+        ? entry.estimated
+        : (serverEntry && serverEntry.estimated ? serverEntry.estimated : '')
+    };
+  });
 }
 
 function buildAcknowledgementResponse(payload) {
@@ -49,7 +82,7 @@ function buildAcknowledgementResponse(payload) {
   if (payload.serverRecordId) response.serverRecordId = payload.serverRecordId;
   if (payload.receivedAt) response.receivedAt = payload.receivedAt;
   if (payload.ringAssignment) response.ringAssignment = payload.ringAssignment;
-  if (payload.currentGroupId) response.currentGroupId = payload.currentGroupId;
+  if (payload.groupDivisionNumber != null && payload.groupDivisionNumber !== '') response.groupDivisionNumber = payload.groupDivisionNumber;
   if (payload.reason) response.reason = payload.reason;
   if (payload.message) response.message = payload.message;
   if (payload.errors) response.errors = payload.errors;
@@ -114,6 +147,45 @@ function splitValidationErrors(validationErrors) {
   };
 }
 
+function normalizeRingAssignmentState(ringState) {
+  if (!ringState || typeof ringState !== 'object') {
+    return ringState;
+  }
+
+  if (!Array.isArray(ringState.queuedGroupDivisionNumbers)) {
+    ringState.queuedGroupDivisionNumbers = [];
+  }
+  if (!ringState.queuedGroupDivisionNumbers.length && Array.isArray(ringState.queuedGroupIds) && ringState.queuedGroupIds.length) {
+    ringState.queuedGroupDivisionNumbers = ringState.queuedGroupIds.map(resolveGroupAnchorValue);
+  }
+  if (!Array.isArray(ringState.completedGroupDivisionNumbers)) {
+    ringState.completedGroupDivisionNumbers = [];
+  }
+  if (!ringState.completedGroupDivisionNumbers.length && Array.isArray(ringState.completedGroupIds) && ringState.completedGroupIds.length) {
+    ringState.completedGroupDivisionNumbers = ringState.completedGroupIds.map(resolveGroupAnchorValue);
+  }
+
+  ringState.queuedGroupIds = Array.isArray(ringState.queuedGroupIds)
+    ? ringState.queuedGroupIds
+    : ringState.queuedGroupDivisionNumbers;
+  ringState.completedGroupIds = Array.isArray(ringState.completedGroupIds)
+    ? ringState.completedGroupIds
+    : ringState.completedGroupDivisionNumbers;
+
+  const currentGroupDivisionNumber = String(
+    ringState.groupDivisionNumber != null && ringState.groupDivisionNumber !== ''
+      ? ringState.groupDivisionNumber
+      : (ringState.currentGroupDivisionNumber != null && ringState.currentGroupDivisionNumber !== ''
+        ? ringState.currentGroupDivisionNumber
+        : (ringState.currentGroupId || ''))
+  ).trim();
+  ringState.groupDivisionNumber = currentGroupDivisionNumber;
+  ringState.currentGroupDivisionNumber = currentGroupDivisionNumber;
+  ringState.currentGroupId = currentGroupDivisionNumber;
+
+  return ringState;
+}
+
 function buildRejectionResponse(payload) {
   return buildAcknowledgementResponse({
     ok: false,
@@ -127,18 +199,12 @@ function buildRejectionResponse(payload) {
     errors: payload.errors || undefined,
     reasonChain: payload.reasonChain || [],
     packetSummary: payload.packetSummary || undefined,
-    currentGroupId: payload.currentGroupId || '',
+    groupDivisionNumber: payload.groupDivisionNumber || '',
     receivedAt: payload.receivedAt || ''
   });
 }
 
 function appendHeartbeatTrace(ringId, snapshot) {
-  const line = `${new Date().toISOString()} ring=${ringId} ${JSON.stringify(snapshot)}\n`;
-  try {
-    fs.appendFileSync(HEARTBEAT_TRACE_PATH, line, 'utf8');
-  } catch (error) {
-    console.error('Failed to write heartbeat trace:', error);
-  }
 }
 
 function createRingRouter(deps) {
@@ -158,6 +224,7 @@ function createRingRouter(deps) {
     groupExists,
     findGroupUsageAcrossRings,
     loadGroup,
+    loadGroups,
     serverBaseUrlForRequest,
     DISCONNECT_AFTER_MS,
     saveUploadedDivisionPacket,
@@ -197,8 +264,12 @@ function createRingRouter(deps) {
   }
 
   function promoteQueuedGroupIfIdle(state, ringId, ringState, source) {
-    if (ringState.currentGroupId || ringState.queuedGroupIds.length === 0) return false;
-    ringState.currentGroupId = ringState.queuedGroupIds.shift() || '';
+    normalizeRingAssignmentState(ringState);
+    if (ringState.currentGroupId || ringState.queuedGroupDivisionNumbers.length === 0) return false;
+    ringState.currentGroupId = ringState.queuedGroupDivisionNumbers.shift() || '';
+    ringState.currentGroupDivisionNumber = ringState.currentGroupId;
+    ringState.groupDivisionNumber = ringState.currentGroupId;
+    ringState.queuedGroupIds = ringState.queuedGroupDivisionNumbers;
     if (!ringState.currentGroupId) return false;
     touchAssignmentStart(ringState);
     setRingPhase(ringState, 'check-in');
@@ -443,11 +514,16 @@ function createRingRouter(deps) {
       response.currentGroupName = (response.currentGroup || {}).name || '';
       return response;
     });
+    const availableGroupDivisionNumbers = buildAvailableGroupDivisionNumbers(
+      typeof loadGroups === 'function' ? loadGroups() : [],
+      state.rings
+    );
 
     return res.json({
       serverBaseUrl: serverBaseUrlForRequest(req),
       ringConfig: state.config,
       eventStartedAt: state.eventStartedAt || '',
+      availableGroupDivisionNumbers,
       heartbeatPolicy: {
         disconnectAfterSeconds: DISCONNECT_AFTER_MS / 1000,
         resetMode: 'manual'
@@ -526,14 +602,14 @@ function createRingRouter(deps) {
 
       const existingSubmission = submissionId ? resultPacketStore.findBySubmissionId(submissionId) : null;
       if (existingSubmission) {
-        const acknowledgement = existingSubmission.receipt && existingSubmission.receipt.acknowledgement
-          ? { ...existingSubmission.receipt.acknowledgement }
-          : {};
-        acknowledgement.acknowledgementId = acknowledgement.acknowledgementId || acknowledgementId || existingSubmission.serverRecordId || submissionId;
+        const acknowledgement = {};
+        acknowledgement.acknowledgementId = acknowledgementId || existingSubmission.serverRecordId || submissionId;
         acknowledgement.ok = true;
         acknowledgement.accepted = true;
-        acknowledgement.status = acknowledgement.status || 'accepted';
-        acknowledgement.submissionId = acknowledgement.submissionId || submissionId;
+        acknowledgement.status = 'accepted';
+        acknowledgement.submissionId = submissionId;
+        acknowledgement.serverRecordId = existingSubmission.serverRecordId || '';
+        acknowledgement.receivedAt = existingSubmission.receivedAt || '';
         acknowledgement.packetSummary = packetSummary;
         logResultPacketEvent('duplicate', {
           acknowledgementId: acknowledgement.acknowledgementId,
@@ -541,7 +617,7 @@ function createRingRouter(deps) {
           ringId,
           ringLabel: ringState.ringLabel,
           status: 'replayed',
-          serverRecordId: acknowledgement.serverRecordId || existingSubmission.serverRecordId || '',
+          serverRecordId: existingSubmission.serverRecordId || '',
           currentGroupDivisionNumber: ringState.currentGroupDivisionNumber || ringState.currentGroupId || '',
           packetSummary
         });
@@ -589,22 +665,34 @@ function createRingRouter(deps) {
       });
 
       processingStage = 'business-rule';
+      logCompletionDiagnostics('received', {
+        acknowledgementId,
+        submissionId,
+        ringId,
+        ringLabel: ringState.ringLabel,
+        packetCompletionSnapshot: packet && packet.completionSnapshot ? packet.completionSnapshot : null,
+        packetPhaseHistory: packet && packet.completionSnapshot && Array.isArray(packet.completionSnapshot.phaseHistory)
+          ? packet.completionSnapshot.phaseHistory
+          : [],
+        ringPhaseHistoryBeforeUpdate: Array.isArray(ringState.phaseHistory) ? ringState.phaseHistory : []
+      });
+      normalizeRingAssignmentState(ringState);
       const currentGroupDivisionNumber = String(ringState.currentGroupDivisionNumber || ringState.currentGroupId || '').trim();
       const currentGroupId = currentGroupDivisionNumber;
       const packetGroupAnchor = submittedGroupDivisionNumber;
       const existingGroupRecords = packet && packet.groupId ? resultPacketStore.findByGroupId(packet.groupId) : [];
       if (existingGroupRecords.length) {
-        const receipt = existingGroupRecords[existingGroupRecords.length - 1].receipt;
+        const existingRecord = existingGroupRecords[existingGroupRecords.length - 1];
         const response = buildRejectionResponse({
           acknowledgementId,
           submissionId,
           reason: 'duplicate-group-result',
           message: `Group already has an accepted result: ${packet.groupId}`,
-          currentGroupId,
+          groupDivisionNumber: currentGroupId,
           details: {
             duplicateGroupId: packet.groupId,
-            existingServerRecordId: receipt && receipt.acknowledgement ? receipt.acknowledgement.serverRecordId : '',
-            existingReceivedAt: receipt && receipt.receivedAt ? receipt.receivedAt : ''
+            existingServerRecordId: existingRecord ? existingRecord.serverRecordId || '' : '',
+            existingReceivedAt: existingRecord ? existingRecord.receivedAt || '' : ''
           },
           reasonChain: ['business-rule', 'duplicate-group-result'],
           packetSummary
@@ -627,7 +715,7 @@ function createRingRouter(deps) {
           submissionId,
           reason: 'ring-group-mismatch',
           message: `Packet group does not match the active group for ring ${ringId}`,
-          currentGroupId,
+          groupDivisionNumber: currentGroupId,
           details: {
             activeGroupDivisionNumber: currentGroupId,
             packetGroupDivisionNumber: packetGroupAnchor,
@@ -653,8 +741,22 @@ function createRingRouter(deps) {
         ringState.completedGroupDivisionNumbers.push(currentGroupId);
         ringState.completedGroupIds = ringState.completedGroupDivisionNumbers;
       }
+      const authoritativePhaseHistory = resolveCompletionPhaseHistory(packet, ringState.phaseHistory);
+      if (!packet.completionSnapshot || typeof packet.completionSnapshot !== 'object' || Array.isArray(packet.completionSnapshot)) {
+        packet.completionSnapshot = {};
+      }
+      packet.completionSnapshot.phaseHistory = authoritativePhaseHistory;
+      logCompletionDiagnostics('resolved', {
+        acknowledgementId,
+        submissionId,
+        ringId,
+        ringLabel: ringState.ringLabel,
+        authoritativePhaseHistory
+      });
       ringState.currentGroupDivisionNumber = ringState.queuedGroupDivisionNumbers.shift() || '';
       ringState.currentGroupId = ringState.currentGroupDivisionNumber;
+      ringState.groupDivisionNumber = ringState.currentGroupDivisionNumber;
+      ringState.queuedGroupIds = ringState.queuedGroupDivisionNumbers;
       setRingPhase(ringState, ringState.currentGroupDivisionNumber ? 'check-in' : 'idle');
       if (ringState.currentGroupDivisionNumber) {
         touchAssignmentStart(ringState);
@@ -690,6 +792,18 @@ function createRingRouter(deps) {
       try {
         processingStage = 'persistence';
         record = resultPacketStore.store(packet, receipt);
+        logCompletionDiagnostics('persisted', {
+          acknowledgementId: receipt.acknowledgement.acknowledgementId,
+          submissionId,
+          ringId,
+          ringLabel: ringState.ringLabel,
+          storedPhaseHistory: record && record.completionSnapshot && Array.isArray(record.completionSnapshot.phaseHistory)
+            ? record.completionSnapshot.phaseHistory
+            : [],
+          storedCompletionSnapshotPhaseHistory: record && record.completionSnapshot && Array.isArray(record.completionSnapshot.phaseHistory)
+            ? record.completionSnapshot.phaseHistory
+            : []
+        });
       } catch (error) {
         console.error('Failed to persist division result packet:', error);
         logResultPacketEvent('failed', {
@@ -774,7 +888,7 @@ function createRingRouter(deps) {
         ringLabel: ringState.ringLabel,
         status: 'accepted',
         serverRecordId: record.serverRecordId,
-        currentGroupDivisionNumber: ringState.currentGroupDivisionNumber || '',
+        groupDivisionNumber: ringState.currentGroupDivisionNumber || '',
         packetSummary
       });
 
@@ -843,8 +957,9 @@ function createRingRouter(deps) {
         error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
       });
     }
+    normalizeRingAssignmentState(ringState);
 
-    if (ringState.currentGroupId === groupId || ringState.queuedGroupIds.includes(groupId)) {
+    if (ringState.currentGroupId === groupId || ringState.queuedGroupDivisionNumbers.includes(groupId)) {
       return res.status(409).json({ error: `Group already assigned or queued: ${groupId}` });
     }
     const usage = findGroupUsageAcrossRings(state, groupId, ringId);
@@ -854,7 +969,8 @@ function createRingRouter(deps) {
       });
     }
 
-    ringState.queuedGroupIds.push(groupId);
+    ringState.queuedGroupDivisionNumbers.push(groupId);
+    ringState.queuedGroupIds = ringState.queuedGroupDivisionNumbers;
     touchHeartbeat(ringState);
     const queuedGroup = loadGroup(groupId);
     appendDivisionTrace('ring-queue', {
@@ -881,6 +997,7 @@ function createRingRouter(deps) {
         error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
       });
     }
+    normalizeRingAssignmentState(ringState);
 
     const tabletLabel = String(req.body.tabletLabel || '').trim();
     const phase = String(req.body.phase || '').trim();
@@ -932,6 +1049,7 @@ function createRingRouter(deps) {
         error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
       });
     }
+    normalizeRingAssignmentState(ringState);
 
     const assistanceType = String(req.body.type || '').trim().toLowerCase();
     if (!['medical', 'arbitrator', 'general'].includes(assistanceType)) {
@@ -955,6 +1073,7 @@ function createRingRouter(deps) {
         error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
       });
     }
+    normalizeRingAssignmentState(ringState);
 
     ringState.assistanceType = '';
     ringState.assistanceRequestedAt = '';
@@ -981,10 +1100,12 @@ function createRingRouter(deps) {
         error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}`
       });
     }
+    normalizeRingAssignmentState(ringState);
 
-    const before = ringState.queuedGroupIds.length;
-    ringState.queuedGroupIds = ringState.queuedGroupIds.filter((id) => resolveGroupAnchorValue(id) !== normalizedGroupId);
-    if (ringState.queuedGroupIds.length === before) {
+    const before = ringState.queuedGroupDivisionNumbers.length;
+    ringState.queuedGroupDivisionNumbers = ringState.queuedGroupDivisionNumbers.filter((id) => resolveGroupAnchorValue(id) !== normalizedGroupId);
+    ringState.queuedGroupIds = ringState.queuedGroupDivisionNumbers;
+    if (ringState.queuedGroupDivisionNumbers.length === before) {
       return res.status(404).json({ error: `Group not in queue: ${normalizedGroupId}` });
     }
 

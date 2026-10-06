@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test": "node tests/ring-contract.test.js"
+  },
   "dependencies": {
     "csv-parser": "^3.2.1",
     "express": "^5.2.1",

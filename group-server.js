@@ -245,7 +245,7 @@ function buildRingLabel(letter, number) {
 function createEmptyRingState(ringLabel) {
   return {
     ringLabel,
-    currentGroupDivisionNumber: '',
+    groupDivisionNumber: '',
     queuedGroupDivisionNumbers: [],
     completedGroupDivisionNumbers: [],
     currentGroupId: '',
@@ -269,30 +269,41 @@ function createEmptyRingState(ringLabel) {
   };
 }
 
+function stripLegacyRingAliases(ringState) {
+  if (!ringState || typeof ringState !== 'object') {
+    return ringState;
+  }
+  const {
+    currentGroupId,
+    currentGroupDivisionNumber,
+    phaseHistory,
+    queuedGroupIds,
+    completedGroupIds,
+    ...rest
+  } = ringState;
+  return rest;
+}
+
 function normalizeRingState(ringState, ringLabel) {
   const normalized = createEmptyRingState(ringLabel);
   if (!ringState || typeof ringState !== 'object') {
     return normalized;
   }
   normalized.ringLabel = ringState.ringLabel || ringLabel;
-  const currentGroupDivisionNumber = String(
-    ringState.currentGroupDivisionNumber != null && ringState.currentGroupDivisionNumber !== ''
-      ? ringState.currentGroupDivisionNumber
-      : (ringState.currentGroupId || '')
-  ).trim();
-  const queuedGroupDivisionNumbers = Array.isArray(ringState.queuedGroupDivisionNumbers)
+  const groupDivisionNumber = String(ringState.groupDivisionNumber || ringState.currentGroupId || '').trim();
+  const queuedGroupDivisionNumbers = Array.isArray(ringState.queuedGroupDivisionNumbers) && ringState.queuedGroupDivisionNumbers.length
     ? ringState.queuedGroupDivisionNumbers
     : (Array.isArray(ringState.queuedGroupIds) ? ringState.queuedGroupIds : []);
-  const completedGroupDivisionNumbers = Array.isArray(ringState.completedGroupDivisionNumbers)
+  const completedGroupDivisionNumbers = Array.isArray(ringState.completedGroupDivisionNumbers) && ringState.completedGroupDivisionNumbers.length
     ? ringState.completedGroupDivisionNumbers
     : (Array.isArray(ringState.completedGroupIds) ? ringState.completedGroupIds : []);
-  normalized.currentGroupDivisionNumber = currentGroupDivisionNumber;
+  normalized.groupDivisionNumber = groupDivisionNumber;
   normalized.queuedGroupDivisionNumbers = queuedGroupDivisionNumbers;
   normalized.completedGroupDivisionNumbers = completedGroupDivisionNumbers;
-  normalized.currentGroupId = currentGroupDivisionNumber;
+  normalized.currentGroupId = groupDivisionNumber;
   normalized.queuedGroupIds = queuedGroupDivisionNumbers;
   normalized.completedGroupIds = completedGroupDivisionNumbers;
-  normalized.assignmentStartedAt = currentGroupDivisionNumber
+  normalized.assignmentStartedAt = groupDivisionNumber
     ? (ringState.assignmentStartedAt || ringState.phaseStartedAt || ringState.lastHeartbeatAt || '')
     : '';
   normalized.checkInCount = clampInt(ringState.checkInCount, 0, 0, 9999);
@@ -304,13 +315,13 @@ function normalizeRingState(ringState, ringLabel) {
   normalized.assistanceRequestedAt = ringState.assistanceRequestedAt || '';
   normalized.tabletLabel = ringState.tabletLabel || '';
   normalized.lastHeartbeatAt = ringState.lastHeartbeatAt || '';
-  normalized.phase = ringState.phase || 'idle';
+  normalized.phase = normalizePhaseName(ringState.phase);
   normalized.phaseStartedAt = ringState.phaseStartedAt || (normalized.phase !== 'idle' ? normalized.lastHeartbeatAt || '' : '');
   normalized.currentPhaseStartTime = ringState.currentPhaseStartTime || normalized.phaseStartedAt || '';
   normalized.currentPhaseEndTime = typeof ringState.currentPhaseEndTime === 'string' ? ringState.currentPhaseEndTime : null;
   normalized.phaseHistory = Array.isArray(ringState.phaseHistory)
     ? ringState.phaseHistory.map((entry) => ({
-      name: String(entry && entry.name ? entry.name : '').trim(),
+      name: normalizePhaseName(entry && entry.name),
       startTime: String(entry && entry.startTime ? entry.startTime : '').trim(),
       endTime: entry && entry.endTime ? String(entry.endTime).trim() : null,
       elapsed: String(entry && entry.elapsed ? entry.elapsed : '').trim(),
@@ -381,12 +392,22 @@ function readAssignmentsState() {
   }
   const raw = JSON.parse(fs.readFileSync(RING_ASSIGNMENTS_FILE, 'utf8'));
   const normalized = ensureStateStructure(raw);
-  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify(normalized, null, 2));
+  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify({
+    ...normalized,
+    rings: Object.fromEntries(
+      Object.entries(normalized.rings).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])
+    )
+  }, null, 2));
   return normalized;
 }
 
 function writeAssignmentsState(state) {
-  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify(state, null, 2));
+  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify({
+    ...state,
+    rings: Object.fromEntries(
+      Object.entries(state.rings || {}).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])
+    )
+  }, null, 2));
 }
 
 function getRingState(state, ringId) {
@@ -403,6 +424,7 @@ function serverBaseUrlForRequest(req) {
 
 function normalizePhaseName(phase) {
   const normalized = String(phase || 'idle').trim().toLowerCase();
+  if (!normalized) return 'idle';
   if (normalized === 'check-in') return 'setup';
   return normalized || 'idle';
 }
@@ -459,7 +481,6 @@ function buildPhaseEstimateMs(phaseName, ringState, currentGroup) {
   };
 
   if (phase === 'setup') return Math.max(1, setupTotal || competitorCount || 1) * unitByPhase.setup;
-  if (phase === 'sparring') return Math.max(1, sparringActualBoutCount || 1) * unitByPhase.sparring;
   if (phase === 'weapons' || phase === 'hyungs' || phase === 'awards') {
     return Math.max(1, phaseTotal || competitorCount || 1) * unitByPhase[phase];
   }
@@ -577,32 +598,32 @@ function buildRingTimingData(ringState, state = {}, currentGroup) {
 }
 
 function buildRingResponse(req, ringId, ringState, state = {}) {
-  const currentGroupDivisionNumber = String(ringState.currentGroupDivisionNumber || ringState.currentGroupId || '').trim();
-  const currentGroup = groupStore.loadGroup(currentGroupDivisionNumber);
-  const timingData = buildRingTimingData(ringState, state, currentGroup);
+  const normalizedRingState = normalizeRingState(ringState, ringState && ringState.ringLabel ? ringState.ringLabel : ringId);
+  const queuedGroupDivisionNumbers = Array.isArray(normalizedRingState.queuedGroupDivisionNumbers) ? normalizedRingState.queuedGroupDivisionNumbers : [];
+  const completedGroupDivisionNumbers = Array.isArray(normalizedRingState.completedGroupDivisionNumbers) ? normalizedRingState.completedGroupDivisionNumbers : [];
+  const groupDivisionNumber = String(normalizedRingState.groupDivisionNumber || normalizedRingState.currentGroupId || '').trim();
+  const currentGroup = groupStore.loadGroup(groupDivisionNumber);
+  const timingData = buildRingTimingData(normalizedRingState, state, currentGroup);
   return {
     ringId,
-    ringLabel: ringState.ringLabel,
+    ringLabel: normalizedRingState.ringLabel,
     serverBaseUrl: serverBaseUrlForRequest(req),
     eventStartedAt: state.eventStartedAt || '',
-    currentGroupDivisionNumber,
-    queuedGroupDivisionNumbers: ringState.queuedGroupDivisionNumbers,
-    completedGroupDivisionNumbers: ringState.completedGroupDivisionNumbers,
-    currentGroupId: currentGroupDivisionNumber,
-    queuedGroupIds: ringState.queuedGroupDivisionNumbers,
-    completedGroupIds: ringState.completedGroupDivisionNumbers,
-    assignmentStartedAt: ringState.assignmentStartedAt,
-    checkInCount: ringState.checkInCount,
-    checkInTotal: ringState.checkInTotal,
-    phaseCompletedCount: ringState.phaseCompletedCount,
-    phaseTotalCount: ringState.phaseTotalCount,
-    phaseProgress: ringState.phaseProgress,
-    assistanceType: ringState.assistanceType,
-    assistanceRequestedAt: ringState.assistanceRequestedAt,
-    tabletLabel: ringState.tabletLabel,
-    lastHeartbeatAt: ringState.lastHeartbeatAt,
-    phaseStartedAt: ringState.phaseStartedAt,
-    phase: ringState.phase,
+    groupDivisionNumber,
+    queuedGroupDivisionNumbers,
+    completedGroupDivisionNumbers,
+    assignmentStartedAt: normalizedRingState.assignmentStartedAt,
+    checkInCount: normalizedRingState.checkInCount,
+    checkInTotal: normalizedRingState.checkInTotal,
+    phaseCompletedCount: normalizedRingState.phaseCompletedCount,
+    phaseTotalCount: normalizedRingState.phaseTotalCount,
+    phaseProgress: normalizedRingState.phaseProgress,
+    assistanceType: normalizedRingState.assistanceType,
+    assistanceRequestedAt: normalizedRingState.assistanceRequestedAt,
+    tabletLabel: normalizedRingState.tabletLabel,
+    lastHeartbeatAt: normalizedRingState.lastHeartbeatAt,
+    phaseStartedAt: normalizedRingState.phaseStartedAt,
+    phase: normalizedRingState.phase,
     currentGroup,
     currentPhaseName: timingData.currentPhaseName,
     currentPhaseStartTime: timingData.currentPhaseStartTime,
@@ -644,7 +665,7 @@ function setRingPhase(ringState, phase) {
     ringState.currentPhaseEndTime = now;
   }
 
-  ringState.phase = nextPhase;
+  ringState.phase = nextPhaseName;
   if (nextPhaseName === 'idle') {
     ringState.phaseStartedAt = '';
     ringState.currentPhaseStartTime = '';
@@ -662,7 +683,7 @@ function setRingPhase(ringState, phase) {
       startTime: now,
       endTime: null,
       elapsed: '0:00',
-      estimated: formatDurationMs(buildPhaseEstimateMs(nextPhaseName, ringState, groupStore.loadGroup(ringState.currentGroupId)))
+      estimated: formatDurationMs(buildPhaseEstimateMs(nextPhaseName, ringState, groupStore.loadGroup(ringState.groupDivisionNumber || ringState.currentGroupId)))
     });
     ringState.phaseHistory = history;
     return;
@@ -672,7 +693,7 @@ function setRingPhase(ringState, phase) {
 }
 
 function resetRingToScratch(ringState) {
-  ringState.currentGroupDivisionNumber = '';
+  ringState.groupDivisionNumber = '';
   ringState.queuedGroupDivisionNumbers = [];
   ringState.completedGroupDivisionNumbers = [];
   ringState.currentGroupId = '';
@@ -1163,6 +1184,7 @@ app.use('/api', createRingRouter({
   groupExists: groupStore.groupExists,
   findGroupUsageAcrossRings,
   loadGroup: groupStore.loadGroup,
+  loadGroups: groupStore.loadGroups,
   serverBaseUrlForRequest,
   DISCONNECT_AFTER_MS,
   saveUploadedDivisionPacket,

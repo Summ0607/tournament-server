@@ -54,42 +54,67 @@
 
     .title-block {
       position: relative;
-      padding: 16px 132px 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 132px 46px 20px;
       min-height: 108px;
       background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
     }
 
     .tournament-name {
-      margin: 0 0 6px;
+      width: 100%;
+      margin: 0;
       font-size: clamp(30px, 4vw, 46px);
       line-height: 1.02;
       letter-spacing: -0.04em;
       font-weight: 750;
       color: var(--text);
+      text-align: center;
+    }
+
+    .title-row {
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
     .title-secondary {
       color: var(--text-soft);
-      font-size: 14px;
+      font-size: 21px;
       line-height: 1.4;
       font-weight: 700;
       letter-spacing: 0.02em;
       text-transform: uppercase;
     }
 
-    .title-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 4px 14px;
-    }
-
     .title-meta {
       color: var(--text-soft);
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
       letter-spacing: 0.01em;
     }
+
+    .banner-timer {
+      position: absolute;
+      left: 20px;
+      bottom: 14px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--text-soft);
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+    }
+
+    .banner-timer strong { color: var(--text); }
 
     .title-logo {
       position: absolute;
@@ -107,7 +132,7 @@
     }
 
     .toolbar {
-      display: flex;
+      display: none;
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
@@ -139,7 +164,7 @@
     button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
     .notice {
-      display: none;
+      display: none !important;
       margin-bottom: 14px;
       padding: 12px 14px;
       border-radius: 14px;
@@ -491,9 +516,9 @@
     @media (max-width: 780px) {
       .shell { padding: 14px; }
       .hero { grid-template-columns: 1fr; }
-      .toolbar { justify-content: flex-start; }
-      .title-block { padding-right: 20px; min-height: 0; }
+      .title-block { padding-right: 20px; padding-bottom: 56px; min-height: 0; }
       .title-logo { position: static; width: 88px; height: 88px; margin-top: 12px; }
+      .banner-timer { left: 20px; bottom: 12px; }
       .ring-row { grid-template-columns: 1fr; }
       .actions { grid-template-columns: 1fr; }
       .action-line { grid-template-columns: 1fr; }
@@ -510,6 +535,7 @@
           <div class="title-secondary">Ring Assignment</div>
           <div class="title-meta" id="competitorCountLabel">0 competitors</div>
         </div>
+        <div class="banner-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
       <div class="toolbar panel">
@@ -603,14 +629,12 @@
 
     function ringCurrentDivisionNumber(ring) {
       if (!ring) return '';
-      return String(ring.currentGroupDivisionNumber || ring.currentGroupId || '').trim();
+      return String(ring.groupDivisionNumber || '').trim();
     }
 
     function ringQueuedDivisionNumbers(ring) {
       if (!ring) return [];
-      return Array.isArray(ring.queuedGroupDivisionNumbers)
-        ? ring.queuedGroupDivisionNumbers
-        : (Array.isArray(ring.queuedGroupIds) ? ring.queuedGroupIds : []);
+      return Array.isArray(ring.queuedGroupDivisionNumbers) ? ring.queuedGroupDivisionNumbers : [];
     }
 
     function groupLabel(groupId) {
@@ -706,19 +730,13 @@
       };
     }
 
-    function availableGroupsForRing(ring) {
-      var unavailable = new Set();
-      for (var i = 0; i < state.rings.length; i += 1) {
-        var other = state.rings[i];
-        if (other.ringId === ring.ringId) continue;
-        if (ringCurrentDivisionNumber(other)) unavailable.add(ringCurrentDivisionNumber(other));
-        ringQueuedDivisionNumbers(other).forEach(function (gid) { unavailable.add(String(gid)); });
-      }
-      var currentAndQueue = new Set([ringCurrentDivisionNumber(ring)].concat(ringQueuedDivisionNumbers(ring)).filter(Boolean).map(function (value) { return String(value); }));
-      return state.groups.filter(function (group) {
-        var anchor = groupAnchor(group);
-        return !unavailable.has(anchor) || currentAndQueue.has(anchor);
-      });
+    function availableGroupsForRing() {
+      var availableGroupDivisionNumbers = Array.isArray(state.availableGroupDivisionNumbers)
+        ? state.availableGroupDivisionNumbers
+        : [];
+      return availableGroupDivisionNumbers.map(function (groupId) {
+        return groupById(groupId);
+      }).filter(Boolean);
     }
 
     function renderNotice(message, kind) {
@@ -777,7 +795,7 @@
       var view = buildRingView(ring);
       var currentGroup = view.currentGroup;
       var queue = ringQueuedDivisionNumbers(ring);
-      var queueOptions = availableGroupsForRing(ring).map(function (group) {
+      var queueOptions = availableGroupsForRing().map(function (group) {
         var anchor = groupAnchor(group);
         return '<option value="' + escapeHtml(anchor) + '">' + escapeHtml('Division ' + anchor) + ' - ' + escapeHtml(group.name) + '</option>';
       }).join('');
@@ -867,6 +885,7 @@
       state.activeEvent = results[0] && results[0].activeEvent ? String(results[0].activeEvent) : '';
       state.groups = results[1].groups || [];
       state.rings = results[2].rings || [];
+      state.availableGroupDivisionNumbers = results[2].availableGroupDivisionNumbers || [];
       state.eventStartedAt = results[2].eventStartedAt || state.eventStartedAt || '';
       state.heartbeatPolicy = results[2].heartbeatPolicy || state.heartbeatPolicy;
       state.lastLoadedAt = new Date().toISOString();

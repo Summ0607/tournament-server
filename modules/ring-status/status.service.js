@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { clampInt, buildRingId, buildRingLabel } = require('../../group-server-helpers'); // if you have helpers later
+const { clampInt, buildRingId, buildRingLabel } = require('../../group-server-helpers');
 
 const RING_ASSIGNMENTS_FILE = path.join(__dirname, '../../ring-assignments.json');
 const GROUPS_DIR = path.join(__dirname, '../../groups');
@@ -12,6 +12,9 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 function createEmptyRingState(ringLabel) {
   return {
     ringLabel,
+    groupDivisionNumber: '',
+    queuedGroupDivisionNumbers: [],
+    completedGroupDivisionNumbers: [],
     currentGroupId: '',
     queuedGroupIds: [],
     completedGroupIds: [],
@@ -33,16 +36,41 @@ function createEmptyRingState(ringLabel) {
   };
 }
 
+function stripLegacyRingAliases(ringState) {
+  if (!ringState || typeof ringState !== 'object') {
+    return ringState;
+  }
+  const {
+    currentGroupId,
+    currentGroupDivisionNumber,
+    phaseHistory,
+    queuedGroupIds,
+    completedGroupIds,
+    ...rest
+  } = ringState;
+  return rest;
+}
+
 function normalizeRingState(ringState, ringLabel) {
   const normalized = createEmptyRingState(ringLabel);
   if (!ringState || typeof ringState !== 'object') {
     return normalized;
   }
   normalized.ringLabel = ringState.ringLabel || ringLabel;
-  normalized.currentGroupId = ringState.currentGroupId || '';
-  normalized.queuedGroupIds = Array.isArray(ringState.queuedGroupIds) ? ringState.queuedGroupIds : [];
-  normalized.completedGroupIds = Array.isArray(ringState.completedGroupIds) ? ringState.completedGroupIds : [];
-  normalized.assignmentStartedAt = ringState.currentGroupId
+  const groupDivisionNumber = String(ringState.groupDivisionNumber || ringState.currentGroupId || '').trim();
+  const queuedGroupDivisionNumbers = Array.isArray(ringState.queuedGroupDivisionNumbers) && ringState.queuedGroupDivisionNumbers.length
+    ? ringState.queuedGroupDivisionNumbers
+    : (Array.isArray(ringState.queuedGroupIds) ? ringState.queuedGroupIds : []);
+  const completedGroupDivisionNumbers = Array.isArray(ringState.completedGroupDivisionNumbers) && ringState.completedGroupDivisionNumbers.length
+    ? ringState.completedGroupDivisionNumbers
+    : (Array.isArray(ringState.completedGroupIds) ? ringState.completedGroupIds : []);
+  normalized.groupDivisionNumber = groupDivisionNumber;
+  normalized.queuedGroupDivisionNumbers = queuedGroupDivisionNumbers;
+  normalized.completedGroupDivisionNumbers = completedGroupDivisionNumbers;
+  normalized.currentGroupId = groupDivisionNumber;
+  normalized.queuedGroupIds = queuedGroupDivisionNumbers;
+  normalized.completedGroupIds = completedGroupDivisionNumbers;
+  normalized.assignmentStartedAt = groupDivisionNumber
     ? (ringState.assignmentStartedAt || ringState.phaseStartedAt || ringState.lastHeartbeatAt || '')
     : '';
   normalized.checkInCount = clampInt(ringState.checkInCount, 0, 0, 9999);
@@ -54,13 +82,13 @@ function normalizeRingState(ringState, ringLabel) {
   normalized.assistanceRequestedAt = ringState.assistanceRequestedAt || '';
   normalized.tabletLabel = ringState.tabletLabel || '';
   normalized.lastHeartbeatAt = ringState.lastHeartbeatAt || '';
-  normalized.phase = ringState.phase || 'idle';
+  normalized.phase = normalizePhaseName(ringState.phase);
   normalized.phaseStartedAt = ringState.phaseStartedAt || (normalized.phase !== 'idle' ? normalized.lastHeartbeatAt || '' : '');
   normalized.currentPhaseStartTime = ringState.currentPhaseStartTime || normalized.phaseStartedAt || '';
   normalized.currentPhaseEndTime = typeof ringState.currentPhaseEndTime === 'string' ? ringState.currentPhaseEndTime : null;
   normalized.phaseHistory = Array.isArray(ringState.phaseHistory)
     ? ringState.phaseHistory.map((entry) => ({
-      name: String(entry && entry.name ? entry.name : '').trim(),
+      name: normalizePhaseName(entry && entry.name),
       startTime: String(entry && entry.startTime ? entry.startTime : '').trim(),
       endTime: entry && entry.endTime ? String(entry.endTime).trim() : null,
       elapsed: String(entry && entry.elapsed ? entry.elapsed : '').trim(),
@@ -117,12 +145,22 @@ function readAssignmentsState() {
   }
   const raw = JSON.parse(fs.readFileSync(RING_ASSIGNMENTS_FILE, 'utf8'));
   const normalized = ensureStateStructure(raw);
-  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify(normalized, null, 2));
+  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify({
+    ...normalized,
+    rings: Object.fromEntries(
+      Object.entries(normalized.rings).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])
+    )
+  }, null, 2));
   return normalized;
 }
 
 function writeAssignmentsState(state) {
-  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify(state, null, 2));
+  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify({
+    ...state,
+    rings: Object.fromEntries(
+      Object.entries(state.rings || {}).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])
+    )
+  }, null, 2));
 }
 
 function getRingState(state, ringId) {
@@ -135,6 +173,7 @@ function listAllowedRingLabels(state) {
 
 function normalizePhaseName(phase) {
   const normalized = String(phase || 'idle').trim().toLowerCase();
+  if (!normalized) return 'idle';
   if (normalized === 'check-in') return 'setup';
   return normalized || 'idle';
 }
@@ -177,7 +216,7 @@ function buildRingEstimateMs(currentGroup) {
 function buildPhaseEstimateMs(phaseName, ringState, currentGroup) {
   const phase = normalizePhaseName(phaseName);
   const competitorCount = currentGroup && Array.isArray(currentGroup.competitors) ? currentGroup.competitors.length : 0;
-  const setupTotal = Number.isFinite(Number(ringState.checkInTotal)) ? Number(ringState.checkInTotal) : competitorCount;
+    const setupTotal = Number.isFinite(Number(ringState.checkInTotal)) ? Number(ringState.checkInTotal) : competitorCount;
   const phaseTotal = Number.isFinite(Number(ringState.phaseTotalCount)) ? Number(ringState.phaseTotalCount) : competitorCount;
   const sparringByes = competitorCount % 2;
   const sparringActualBoutCount = Math.max(0, Math.floor((competitorCount - sparringByes) / 2));
@@ -265,11 +304,11 @@ function buildRingTimingData(ringState, state = {}, currentGroup) {
   const currentPhaseEstimatedMs = buildPhaseEstimateMs(currentPhaseName, ringState, currentGroup);
   const currentPhaseEstimated = formatDurationMs(currentPhaseEstimatedMs);
   const currentPhaseCompletedCount = Math.max(0, Number.parseInt(
-    currentPhaseName === 'setup' ? (ringState.checkInCount ?? ringState.phaseCompletedCount) : ringState.phaseCompletedCount,
+      currentPhaseName === 'setup' ? (ringState.checkInCount ?? ringState.phaseCompletedCount) : ringState.phaseCompletedCount,
     10
   ) || 0);
   const currentPhaseTotalCount = Math.max(0, Number.parseInt(
-    currentPhaseName === 'setup' ? (ringState.checkInTotal ?? ringState.phaseTotalCount) : ringState.phaseTotalCount,
+      currentPhaseName === 'setup' ? (ringState.checkInTotal ?? ringState.phaseTotalCount) : ringState.phaseTotalCount,
     10
   ) || 0);
   const sparringMetrics = buildSparringMetrics(currentGroup, ringState);
@@ -324,7 +363,7 @@ function setRingPhase(ringState, phase) {
     ringState.currentPhaseEndTime = now;
   }
 
-  ringState.phase = nextPhase;
+  ringState.phase = nextPhaseName;
   if (nextPhaseName === 'idle') {
     ringState.phaseStartedAt = '';
     ringState.currentPhaseStartTime = '';
@@ -342,7 +381,7 @@ function setRingPhase(ringState, phase) {
       startTime: now,
       endTime: null,
       elapsed: '0:00',
-      estimated: formatDurationMs(buildPhaseEstimateMs(nextPhaseName, ringState, loadGroup(ringState.currentGroupId)))
+      estimated: formatDurationMs(buildPhaseEstimateMs(nextPhaseName, ringState, loadGroup(ringState.groupDivisionNumber || ringState.currentGroupId)))
     });
     ringState.phaseHistory = history;
     return;
@@ -352,6 +391,9 @@ function setRingPhase(ringState, phase) {
 }
 
 function resetRingToScratch(ringState) {
+  ringState.groupDivisionNumber = '';
+  ringState.queuedGroupDivisionNumbers = [];
+  ringState.completedGroupDivisionNumbers = [];
   ringState.currentGroupId = '';
   ringState.queuedGroupIds = [];
   ringState.completedGroupIds = [];
@@ -387,27 +429,28 @@ function setRingConfig(state, letterCount, numberCount) {
 }
 
 function buildRingResponse(req, ringId, ringState) {
-  const currentGroup = loadGroup(ringState.currentGroupId);
-  const timingData = buildRingTimingData(ringState, {}, currentGroup);
+  const normalizedRingState = normalizeRingState(ringState, ringState && ringState.ringLabel ? ringState.ringLabel : ringId);
+  const currentGroup = loadGroup(normalizedRingState.groupDivisionNumber || normalizedRingState.currentGroupId);
+  const timingData = buildRingTimingData(normalizedRingState, {}, currentGroup);
   return {
     ringId,
-    ringLabel: ringState.ringLabel,
+    ringLabel: normalizedRingState.ringLabel,
     serverBaseUrl: serverBaseUrlForRequest(req),
-    assignmentStartedAt: ringState.assignmentStartedAt,
-    currentGroupId: ringState.currentGroupId,
-    queuedGroupIds: ringState.queuedGroupIds,
-    completedGroupIds: ringState.completedGroupIds,
-    checkInCount: ringState.checkInCount,
-    checkInTotal: ringState.checkInTotal,
-    phaseCompletedCount: ringState.phaseCompletedCount,
-    phaseTotalCount: ringState.phaseTotalCount,
-    phaseProgress: ringState.phaseProgress,
-    assistanceType: ringState.assistanceType,
-    assistanceRequestedAt: ringState.assistanceRequestedAt,
-    tabletLabel: ringState.tabletLabel,
-    lastHeartbeatAt: ringState.lastHeartbeatAt,
-    phaseStartedAt: ringState.phaseStartedAt,
-    phase: ringState.phase,
+    assignmentStartedAt: normalizedRingState.assignmentStartedAt,
+    groupDivisionNumber: normalizedRingState.groupDivisionNumber || normalizedRingState.currentGroupId || '',
+    queuedGroupDivisionNumbers: normalizedRingState.queuedGroupDivisionNumbers,
+    completedGroupDivisionNumbers: normalizedRingState.completedGroupDivisionNumbers,
+    checkInCount: normalizedRingState.checkInCount,
+    checkInTotal: normalizedRingState.checkInTotal,
+    phaseCompletedCount: normalizedRingState.phaseCompletedCount,
+    phaseTotalCount: normalizedRingState.phaseTotalCount,
+    phaseProgress: normalizedRingState.phaseProgress,
+    assistanceType: normalizedRingState.assistanceType,
+    assistanceRequestedAt: normalizedRingState.assistanceRequestedAt,
+    tabletLabel: normalizedRingState.tabletLabel,
+    lastHeartbeatAt: normalizedRingState.lastHeartbeatAt,
+    phaseStartedAt: normalizedRingState.phaseStartedAt,
+    phase: normalizedRingState.phase,
     currentGroup,
     currentPhaseName: timingData.currentPhaseName,
     currentPhaseStartTime: timingData.currentPhaseStartTime,

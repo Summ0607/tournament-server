@@ -34,23 +34,31 @@
 
     .page-hero .title-block {
       position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       padding: 16px 132px 14px 20px;
       min-height: 108px;
       background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
     }
 
     .page-hero .tournament-name {
-      margin: 0 0 6px;
+      width: 100%;
+      margin: 0;
       font-size: clamp(30px, 4vw, 46px);
       line-height: 1.02;
       letter-spacing: -0.04em;
       font-weight: 750;
       color: #111827;
+      text-align: center;
     }
 
     .page-hero .title-secondary {
+      position: absolute;
+      top: 16px;
+      left: 20px;
       color: #374151;
-      font-size: 14px;
+      font-size: 21px;
       line-height: 1.4;
       font-weight: 700;
       letter-spacing: 0.02em;

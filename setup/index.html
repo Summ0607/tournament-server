@@ -49,21 +49,29 @@
     }
     .title-block {
       position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       padding: 16px 132px 14px 20px;
       min-height: 108px;
       background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
     }
     .tournament-name {
-      margin: 0 0 6px;
+      width: 100%;
+      margin: 0;
       font-size: clamp(30px, 4vw, 46px);
       line-height: 1.02;
       letter-spacing: -0.04em;
       font-weight: 750;
       color: var(--text);
+      text-align: center;
     }
     .title-secondary {
+      position: absolute;
+      top: 16px;
+      left: 20px;
       color: var(--text-soft);
-      font-size: 14px;
+      font-size: 21px;
       line-height: 1.4;
       font-weight: 700;
       letter-spacing: 0.02em;
@@ -83,18 +91,24 @@
       box-shadow: 0 10px 20px rgba(15, 23, 42, 0.10);
       padding: 4px;
     }
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 14px 16px;
+    .banner-timer {
+      position: absolute;
+      left: 20px;
+      bottom: 14px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(201, 209, 222, 0.95);
+      background: rgba(255, 255, 255, 0.86);
+      color: var(--text-soft);
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
     }
-    .toolbar.panel { background: var(--surface); }
-    .event-timer { margin-left: auto; color: var(--text-soft); font-weight: 700; }
+    .banner-timer strong { color: var(--text); }
+    .toolbar {
+      display: none;
+    }
     .event-timer strong { color: var(--text); }
-    .page-intro { color: var(--text-soft); font-size: 13px; line-height: 1.45; margin: 0 0 14px; }
     button, a.btn, input, select {
       font: inherit;
     }
@@ -124,6 +138,21 @@
     }
     .card {
       padding: 18px;
+    }
+    .card.step-disabled {
+      opacity: 0.5;
+    }
+    .card.step-disabled button,
+    .card.step-disabled input,
+    .card.step-disabled select,
+    .card.step-disabled textarea {
+      cursor: not-allowed;
+    }
+    .card.step-disabled a.btn {
+      pointer-events: none;
+      opacity: 0.45;
+      box-shadow: none;
+      cursor: not-allowed;
     }
     .card h2 {
       margin: 0 0 8px;
@@ -215,9 +244,9 @@
       margin-top: 14px;
     }
     @media (max-width: 860px) {
-      .title-block { padding-right: 20px; min-height: 0; }
+      .title-block { padding-right: 20px; min-height: 0; padding-bottom: 56px; }
       .title-logo { position: static; width: 88px; height: 88px; margin-top: 12px; }
-      .event-timer { margin-left: 0; }
+      .banner-timer { left: 20px; bottom: 12px; }
       .grid, .step-grid { grid-template-columns: 1fr; }
       .field-row, .field-row.single { grid-template-columns: 1fr; }
       .field-row button { width: 100%; }
@@ -230,22 +259,15 @@
       <div class="title-block">
         <h1 class="tournament-name" id="tournamentName">Tournament</h1>
         <div class="title-secondary">Setup</div>
+        <div class="banner-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
-      <div class="toolbar panel">
-        <a class="btn" href="/group-builder/">Group Builder</a>
-        <a class="btn" href="/ring-assignment/">Ring Assignment</a>
-        <a class="btn" href="/head-table/">Head Table</a>
-        <div class="event-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
-      </div>
     </div>
-
-    <p class="page-intro">Pre-tournament preparation only: create the event, import the roster, build groups, then move to Ring Assignment or Head Table when tournament time starts.</p>
 
     <div class="notice" id="notice" aria-live="polite"></div>
 
     <div class="grid">
-      <section class="panel card">
+      <section class="panel card" id="step1Card">
         <div class="kicker">Step 1</div>
         <h2>Event lifecycle</h2>
         <p>Create a new tournament event, activate an existing one, or reset the active event before competition starts.</p>
@@ -270,7 +292,7 @@
         </div>
       </section>
 
-      <section class="panel card">
+      <section class="panel card" id="step2Card">
         <div class="kicker">Step 2</div>
         <h2>Import roster</h2>
         <p>Load the competitor CSV into the active event database. Use a local file path on the server machine.</p>
@@ -297,7 +319,7 @@
     </div>
 
     <div class="step-grid">
-      <section class="panel card">
+      <section class="panel card" id="step3Card">
         <div class="kicker">Step 3</div>
         <h2>Build groups</h2>
         <p>After the roster is imported, open the group builder to generate competition groups.</p>
@@ -306,7 +328,7 @@
         </div>
       </section>
 
-      <section class="panel card">
+      <section class="panel card" id="step4Card">
         <div class="kicker">Step 4</div>
         <h2>Assign rings</h2>
         <p>Once groups are ready, move to Ring Assignment. This stays separate from tournament-time monitoring.</p>
@@ -339,6 +361,12 @@
     const clearCsvBtn = document.getElementById('clearCsvBtn');
     const csvFileInput = document.getElementById('csvFileInput');
     const csvFileName = document.getElementById('csvFileName');
+    const stepCards = {
+      step1: document.getElementById('step1Card'),
+      step2: document.getElementById('step2Card'),
+      step3: document.getElementById('step3Card'),
+      step4: document.getElementById('step4Card')
+    };
 
     let selectedCsv = {
       name: '',
@@ -405,6 +433,85 @@
       resetEventBtn.disabled = !selected;
     }
 
+    function isRingAssignedOrComplete(ring) {
+      if (!ring || typeof ring !== 'object') return false;
+      if (String(ring.groupDivisionNumber || '').trim()) return true;
+      if (Array.isArray(ring.queuedGroupDivisionNumbers) && ring.queuedGroupDivisionNumbers.length) return true;
+      if (Array.isArray(ring.completedGroupDivisionNumbers) && ring.completedGroupDivisionNumbers.length) return true;
+      if (ring.currentGroup && typeof ring.currentGroup === 'object') {
+        return Boolean(String(ring.currentGroup.groupDivisionNumber || ring.currentGroup.groupId || '').trim());
+      }
+      return false;
+    }
+
+    function setStepEnabled(stepNumber, enabled) {
+      const card = stepCards[`step${stepNumber}`];
+      if (!card) return;
+
+      card.classList.toggle('step-disabled', !enabled);
+      card.setAttribute('aria-disabled', String(!enabled));
+
+      card.querySelectorAll('button, input, select, textarea').forEach((element) => {
+        element.disabled = !enabled;
+      });
+
+      card.querySelectorAll('a.btn').forEach((link) => {
+        if (enabled) {
+          link.removeAttribute('aria-disabled');
+          link.removeAttribute('tabindex');
+        } else {
+          link.setAttribute('aria-disabled', 'true');
+          link.setAttribute('tabindex', '-1');
+        }
+      });
+    }
+
+    function setStepStates(activeStep) {
+      [1, 2, 3, 4].forEach((stepNumber) => {
+        setStepEnabled(stepNumber, stepNumber === activeStep);
+      });
+    }
+
+    async function refreshStepStates() {
+      try {
+        if (!state.activeEvent) {
+          setStepStates(1);
+          return;
+        }
+
+        const [competitorsData, groupsData, ringsData] = await Promise.all([
+          fetchJson('/api/competitors'),
+          fetchJson('/api/groups'),
+          fetchJson('/api/rings')
+        ]);
+
+        const competitorCount = Array.isArray(competitorsData) ? competitorsData.length : 0;
+        const groups = Array.isArray(groupsData.groups) ? groupsData.groups : [];
+        const rings = Array.isArray(ringsData.rings) ? ringsData.rings : [];
+        const hasRingProgress = rings.some(isRingAssignedOrComplete);
+
+        if (hasRingProgress && groups.length > 0 && competitorCount > 0) {
+          setStepStates(1);
+          return;
+        }
+
+        if (groups.length > 0 && competitorCount > 0) {
+          setStepStates(4);
+          return;
+        }
+
+        if (competitorCount > 0) {
+          setStepStates(3);
+          return;
+        }
+
+        setStepStates(2);
+      } catch (error) {
+        console.error('Failed to refresh setup step states:', error);
+        setStepStates(1);
+      }
+    }
+
     async function refreshEvents() {
       const [eventsData, activeData] = await Promise.all([
         fetchJson('/api/events/list'),
@@ -429,6 +536,7 @@
       }
 
       updateControls();
+      await refreshStepStates();
       showNotice('', '');
     }
 
@@ -541,6 +649,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
+        await refreshStepStates();
         showNotice('', '');
       } catch (error) {
         showNotice(error.message, 'error');
@@ -583,6 +692,9 @@
     });
 
     refreshEvents().catch((error) => showNotice(error.message, 'error'));
+    window.setInterval(() => {
+      refreshStepStates().catch(() => {});
+    }, 5000);
     window.setInterval(updateTimerOnly, 1000);
   </script>
 </body>

@@ -23,9 +23,9 @@
         document.getElementById('rings').innerHTML = rings.map(r => `
             <div class="ring-card">
                 <h2>${r.ringLabel}</h2>
-                <p><strong>Current:</strong> ${r.currentGroupId || '(none)'}</p>
-                <p><strong>Queue:</strong> ${r.queuedGroupIds.join(', ') || '(empty)'}</p>
-                <p><strong>Completed:</strong> ${r.completedGroupIds.join(', ') || '(none)'}</p>
+                <p><strong>Current:</strong> ${r.groupDivisionNumber || '(none)'}</p>
+                <p><strong>Queue:</strong> ${(r.queuedGroupDivisionNumbers || []).join(', ') || '(empty)'}</p>
+                <p><strong>Completed:</strong> ${(r.completedGroupDivisionNumbers || []).join(', ') || '(none)'}</p>
                 <p><strong>Phase:</strong> ${r.phase}</p>
             </div>
         `).join('');
@@ -36,4 +36,3 @@
 
 </body>
 </html>
-
