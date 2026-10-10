@@ -3,11 +3,37 @@ const path = require('path');
 
 const { clampInt, buildRingId, buildRingLabel } = require('../../group-server-helpers');
 
-const RING_ASSIGNMENTS_FILE = path.join(__dirname, '../../ring-assignments.json');
+const ROOT_RING_ASSIGNMENTS_FILE = path.join(__dirname, '../../ring-assignments.json');
+const EVENTS_ROOT = path.join(__dirname, '../../events');
+const ACTIVE_EVENT_FILE = path.join(EVENTS_ROOT, 'active.json');
 const GROUPS_DIR = path.join(__dirname, '../../groups');
 const MAX_LETTERS = 26;
 const MAX_NUMBERS = 50;
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+function readActiveEventName() {
+  try {
+    if (!fs.existsSync(ACTIVE_EVENT_FILE)) {
+      return '';
+    }
+    const raw = JSON.parse(fs.readFileSync(ACTIVE_EVENT_FILE, 'utf8'));
+    return String(raw && raw.activeEvent ? raw.activeEvent : '').trim();
+  } catch (error) {
+    return '';
+  }
+}
+
+function resolveRingAssignmentsFile(eventName = readActiveEventName()) {
+  const normalizedEventName = String(eventName || '').trim();
+  if (!normalizedEventName) {
+    return ROOT_RING_ASSIGNMENTS_FILE;
+  }
+  return path.join(EVENTS_ROOT, normalizedEventName, 'ring-assignments.json');
+}
+
+function ensureAssignmentsFile(filePath) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+}
 
 function createEmptyRingState(ringLabel) {
   return {
@@ -138,14 +164,29 @@ function ensureStateStructure(rawState) {
 }
 
 function readAssignmentsState() {
-  if (!fs.existsSync(RING_ASSIGNMENTS_FILE)) {
+  const ringAssignmentsFile = resolveRingAssignmentsFile();
+  if (!fs.existsSync(ringAssignmentsFile)) {
     const defaults = createDefaultAssignments();
-    fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify(defaults, null, 2));
+    ensureAssignmentsFile(ringAssignmentsFile);
+
+    if (ringAssignmentsFile !== ROOT_RING_ASSIGNMENTS_FILE && fs.existsSync(ROOT_RING_ASSIGNMENTS_FILE)) {
+      const legacyRaw = JSON.parse(fs.readFileSync(ROOT_RING_ASSIGNMENTS_FILE, 'utf8'));
+      const normalizedLegacy = ensureStateStructure(legacyRaw);
+      fs.writeFileSync(ringAssignmentsFile, JSON.stringify({
+        ...normalizedLegacy,
+        rings: Object.fromEntries(
+          Object.entries(normalizedLegacy.rings).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])
+        )
+      }, null, 2));
+      return normalizedLegacy;
+    }
+
+    fs.writeFileSync(ringAssignmentsFile, JSON.stringify(defaults, null, 2));
     return defaults;
   }
-  const raw = JSON.parse(fs.readFileSync(RING_ASSIGNMENTS_FILE, 'utf8'));
+  const raw = JSON.parse(fs.readFileSync(ringAssignmentsFile, 'utf8'));
   const normalized = ensureStateStructure(raw);
-  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify({
+  fs.writeFileSync(ringAssignmentsFile, JSON.stringify({
     ...normalized,
     rings: Object.fromEntries(
       Object.entries(normalized.rings).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])
@@ -155,7 +196,9 @@ function readAssignmentsState() {
 }
 
 function writeAssignmentsState(state) {
-  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify({
+  const ringAssignmentsFile = resolveRingAssignmentsFile();
+  ensureAssignmentsFile(ringAssignmentsFile);
+  fs.writeFileSync(ringAssignmentsFile, JSON.stringify({
     ...state,
     rings: Object.fromEntries(
       Object.entries(state.rings || {}).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])

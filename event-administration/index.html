@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Administration</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6fb;
+      --surface: #ffffff;
+      --line: #d9e0ea;
+      --line-strong: #c7cfda;
+      --text: #17212f;
+      --text-soft: #5d6979;
+      --text-faint: #7a8797;
+      --shadow: 0 10px 28px rgba(24, 39, 75, 0.08);
+      --radius: 16px;
+      --info: #2257b3;
+      --good: #0a7c00;
+      --warn: #a86d00;
+      --danger: #b00020;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(34, 87, 179, 0.08), transparent 30%),
+        linear-gradient(180deg, #eef3ff 0%, var(--bg) 34%, var(--bg) 100%);
+    }
+
+    .shell {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .title-block,
+    .panel,
+    .summary-card {
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(201, 209, 222, 0.85);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .title-block {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 0 16px 0 0;
+      min-height: 58px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
+    }
+
+    .tournament-name {
+      margin: 0;
+      font-size: clamp(18px, 2.1vw, 28px);
+      line-height: 1;
+      letter-spacing: -0.05em;
+      font-weight: 750;
+      color: var(--text);
+      text-align: center;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(62vw, 560px);
+      white-space: nowrap;
+    }
+
+    .title-logo-tile {
+      width: 58px;
+      height: 58px;
+      border-radius: 10px;
+      overflow: hidden;
+      flex: 0 0 auto;
+      background: transparent;
+    }
+
+    .title-logo {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 0;
+    }
+
+    .nav-back-link {
+      position: relative;
+      z-index: 1;
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      border-radius: 8px;
+      color: var(--info);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .nav-back-link:hover,
+    .nav-back-link:focus-visible {
+      background: rgba(34, 87, 179, 0.08);
+      text-decoration: underline;
+    }
+
+    .overview {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.86);
+      border: 1px solid rgba(199, 207, 218, 0.85);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .chip strong { color: var(--info); }
+
+    .grid {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel-head {
+      padding: 16px 18px 14px;
+      border-bottom: 1px solid rgba(201, 209, 222, 0.72);
+      background: linear-gradient(180deg, #f6f9fd 0%, #eaf0f8 100%);
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+
+    .panel-head p {
+      margin: 8px 0 0;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .panel-body {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .field-stack {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field-stack label {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    .field-stack input {
+      width: 100%;
+      min-width: 0;
+      min-height: 42px;
+      padding: 10px 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+    }
+
+    .field-stack select {
+      width: 100%;
+      min-width: 0;
+      min-height: 42px;
+      padding: 10px 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+    }
+
+    .field-stack input:focus,
+    .field-stack select:focus {
+      outline: 2px solid rgba(34, 87, 179, 0.18);
+      outline-offset: 1px;
+      border-color: #7ea0dc;
+    }
+
+    .button-cluster {
+      display: grid;
+      gap: 8px;
+    }
+
+    .button-cluster-label {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .button-row button {
+      appearance: none;
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: var(--text);
+      padding: 0 16px;
+      min-height: 44px;
+      border-radius: 12px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .button-row .primary {
+      background: #111827;
+      border-color: #111827;
+      color: #fff;
+    }
+
+    .button-row .danger {
+      background: #b00020;
+      border-color: #b00020;
+      color: #fff;
+    }
+
+    .button-row button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .metadata-panel {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #f8fafc;
+    }
+
+    .metadata-panel[hidden] {
+      display: none !important;
+    }
+
+    .metadata-panel .button-row {
+      justify-content: flex-start;
+    }
+
+    .summary-card {
+      padding: 14px 16px;
+      display: grid;
+      gap: 8px;
+      border-color: var(--line);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: #a7b4cb;
+    }
+
+    .summary-value {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .state-lines {
+      display: grid;
+      gap: 6px;
+    }
+
+    .state-line {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-soft);
+    }
+
+    .state-line span {
+      flex: 0 0 auto;
+    }
+
+    .state-line strong {
+      color: var(--text);
+      font-weight: 700;
+      text-align: right;
+      word-break: break-word;
+    }
+
+    .notice {
+      display: none;
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .notice.visible { display: block; }
+    #eventNameInput::placeholder { color: #8a94a3; font-style: italic; opacity: 1; }
+    .notice.ok { border-color: rgba(10, 124, 0, 0.25); background: #f1fbf1; color: #166116; }
+    .notice.warn { border-color: rgba(168, 109, 0, 0.25); background: #fff8eb; color: #8d5b00; }
+    .notice.error { border-color: rgba(176, 0, 32, 0.25); background: #fff1f4; color: #8c0018; }
+    .notice.info { border-color: rgba(34, 87, 179, 0.25); background: #eef4ff; color: #204a91; }
+
+    @media (max-width: 1040px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .title-block {
+        padding-right: 10px;
+        min-height: 52px;
+      }
+
+      .title-logo-tile {
+        width: 52px;
+        height: 52px;
+      }
+
+      .tournament-name {
+        width: min(58vw, 330px);
+        font-size: clamp(16px, 4vw, 22px);
+      }
+
+      .title-block {
+        flex-wrap: wrap;
+      }
+
+      .title-block .tournament-name {
+        position: static;
+        transform: none;
+        flex: 1 1 0;
+        width: auto;
+      }
+
+      .nav-back-link {
+        flex-basis: 100%;
+        margin-bottom: 6px;
+        text-align: right;
+      }
+
+      .banner-timer {
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="title-block">
+      <div class="title-logo-tile">
+        <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
+      </div>
+      <h1 class="tournament-name">Event Administration</h1>
+      <a class="nav-back-link" id="backToPreTournamentLink" href="/tournament-mgmt/">← Back to Pre-Tournament Activities</a>
+    </div>
+
+    <div class="overview">
+      <div class="chip-row">
+        <span class="chip">Active Event: <strong id="activeEventChip">No event selected</strong></span>
+        <span class="chip">Selected Event: <strong id="selectedEventChip">None selected</strong></span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Create, Select, Modify, Delete</h2>
+          <p>Choose an existing event or enter a new name. Creating or modifying an event does not activate it. Use ‘Activate Event’ to set the event used by workflow pages.</p>
+        </div>
+        <div class="panel-body">
+          <div class="field-stack">
+            <label for="eventNameInput">Event Name</label>
+            <input id="eventNameInput" type="text" placeholder="Enter or Select Event Name" autocomplete="off" list="eventNameOptions">
+            <datalist id="eventNameOptions"></datalist>
+          </div>
+          <div class="button-cluster">
+            <div class="button-cluster-label">Primary Actions</div>
+            <div class="button-row">
+              <button class="primary" id="createEventBtn" type="button">Create Event</button>
+              <button id="modifyEventBtn" type="button">Modify Event</button>
+              <button id="activateEventBtn" type="button">Activate Event</button>
+            </div>
+          </div>
+          <div class="button-cluster">
+            <div class="button-cluster-label">Secondary Actions</div>
+            <div class="button-row">
+              <button class="danger" id="deleteEventBtn" type="button">Delete Event</button>
+              <button id="resetEventBtn" type="button">Reset</button>
+            </div>
+          </div>
+          <div class="metadata-panel" id="metadataPanel" hidden>
+            <div class="button-cluster-label">Event Details</div>
+            <div class="field-stack">
+              <label for="locationInput">Location</label>
+              <input id="locationInput" type="text" placeholder="Tournament location">
+            </div>
+            <div class="field-stack">
+              <label for="dateInput">Date</label>
+              <input id="dateInput" type="date">
+            </div>
+            <div class="field-stack">
+              <label for="ringConfigXInput">Ring Config Columns (Letters)</label>
+              <input id="ringConfigXInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+            </div>
+            <div class="field-stack">
+              <label for="ringConfigYInput">Ring Config Rows (Numbers)</label>
+              <input id="ringConfigYInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+            </div>
+            <div class="button-row">
+              <button class="primary" id="saveMetadataBtn" type="button">Save / Modify</button>
+            </div>
+          </div>
+          <div class="notice" id="notice" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-head">
+          <h2>Current State</h2>
+          <p>Only the Active Event is used by import, grouping, review, and ring assignment workflows.</p>
+        </div>
+        <div class="panel-body status">
+          <div class="summary-card">
+            <div class="summary-label">Active Event</div>
+            <div class="summary-value" id="activeEventName">No event selected</div>
+            <div class="state-lines">
+              <div class="state-line"><span>Location</span><strong id="activeEventLocation">—</strong></div>
+              <div class="state-line"><span>Date</span><strong id="activeEventDate">—</strong></div>
+              <div class="state-line"><span>Ring Config</span><strong id="activeEventRingConfig">—</strong></div>
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Selected Event</div>
+            <div class="summary-value" id="selectedEventName">None selected</div>
+            <div class="state-lines">
+              <div class="state-line"><span>Location</span><strong id="selectedEventLocation">—</strong></div>
+              <div class="state-line"><span>Date</span><strong id="selectedEventDate">—</strong></div>
+              <div class="state-line"><span>Ring Config</span><strong id="selectedEventRingConfig">—</strong></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const apiBaseUrl = window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin;
+    // Shared with tournament-mgmt/index.html, which owns the workflow pill.
+    const PRE_TOURNAMENT_STAGE_KEY = 'preTournament.activeStageIndex';
+    const PRE_TOURNAMENT_STAGE_COUNT = 4;
+
+    function advancePreTournamentStage() {
+      try {
+        const current = Number.parseInt(window.localStorage.getItem(PRE_TOURNAMENT_STAGE_KEY), 10);
+        const base = Number.isFinite(current) ? Math.max(0, current) : 0;
+        const next = Math.min(base + 1, PRE_TOURNAMENT_STAGE_COUNT - 1);
+        window.localStorage.setItem(PRE_TOURNAMENT_STAGE_KEY, String(next));
+        return next;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    const LAST_SELECTED_EVENT_KEY = 'eventAdmin.lastSelectedEvent';
+
+    function readLastSelectedEvent() {
+      try {
+        return window.localStorage.getItem(LAST_SELECTED_EVENT_KEY) || '';
+      } catch (error) {
+        return '';
+      }
+    }
+
+    function storeLastSelectedEvent(name) {
+      try {
+        if (name) {
+          window.localStorage.setItem(LAST_SELECTED_EVENT_KEY, name);
+        } else {
+          window.localStorage.removeItem(LAST_SELECTED_EVENT_KEY);
+        }
+      } catch (error) {
+        // Storage unavailable; selection simply is not remembered.
+      }
+    }
+
+    function goBackToPreTournament(event) {
+      event.preventDefault();
+      advancePreTournamentStage();
+      window.location.assign(event.currentTarget.getAttribute('href'));
+    }
+
+    const emptyMeta = (name) => ({
+      name: normalizeEventName(name || ''),
+      location: '',
+      date: '',
+      ringConfigX: '',
+      ringConfigY: ''
+    });
+
+    const state = {
+      events: [],
+      activeEventName: '',
+      activeEventMeta: emptyMeta(''),
+      selectedEventName: '',
+      selectedEventMeta: emptyMeta(''),
+      metadataMode: '',
+      metadataOpen: false,
+      selectionRequestToken: 0
+    };
+
+    const noticeEl = document.getElementById('notice');
+    const activeEventChipEl = document.getElementById('activeEventChip');
+    const selectedEventChipEl = document.getElementById('selectedEventChip');
+    const activeEventNameEl = document.getElementById('activeEventName');
+    const activeEventLocationEl = document.getElementById('activeEventLocation');
+    const activeEventDateEl = document.getElementById('activeEventDate');
+    const activeEventRingConfigEl = document.getElementById('activeEventRingConfig');
+    const selectedEventNameEl = document.getElementById('selectedEventName');
+    const selectedEventLocationEl = document.getElementById('selectedEventLocation');
+    const selectedEventDateEl = document.getElementById('selectedEventDate');
+    const selectedEventRingConfigEl = document.getElementById('selectedEventRingConfig');
+    const eventNameInputEl = document.getElementById('eventNameInput');
+    const eventNameOptionsEl = document.getElementById('eventNameOptions');
+    const createEventBtn = document.getElementById('createEventBtn');
+    const modifyEventBtn = document.getElementById('modifyEventBtn');
+    const activateEventBtn = document.getElementById('activateEventBtn');
+    const deleteEventBtn = document.getElementById('deleteEventBtn');
+    const resetEventBtn = document.getElementById('resetEventBtn');
+    const metadataPanelEl = document.getElementById('metadataPanel');
+    const locationInputEl = document.getElementById('locationInput');
+    const dateInputEl = document.getElementById('dateInput');
+    const ringConfigXInputEl = document.getElementById('ringConfigXInput');
+    const ringConfigYInputEl = document.getElementById('ringConfigYInput');
+    const saveMetadataBtn = document.getElementById('saveMetadataBtn');
+
+    function normalizeEventName(value) {
+      return String(value || '').trim();
+    }
+
+    function normalizeTextValue(value) {
+      return String(value || '').trim();
+    }
+
+    function normalizeNumberInput(value) {
+      const text = String(value == null ? '' : value).trim();
+      if (!text) return '';
+      const parsed = Number.parseInt(text, 10);
+      return Number.isFinite(parsed) ? String(parsed) : '';
+    }
+
+    function metaFromConfig(config, fallbackName) {
+      const ringConfigX = normalizeNumberInput(config && config.ringConfigX);
+      const ringConfigY = normalizeNumberInput(config && config.ringConfigY);
+      return {
+        name: normalizeEventName(config && config.name ? config.name : fallbackName || ''),
+        location: normalizeTextValue(config && config.location),
+        date: normalizeTextValue(config && config.date),
+        ringConfigX,
+        ringConfigY
+      };
+    }
+
+    function formatRingConfig(meta) {
+      const x = Number.parseInt(meta && meta.ringConfigX, 10);
+      const y = Number.parseInt(meta && meta.ringConfigY, 10);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return '—';
+      }
+      return `${x} × ${y} (${x * y})`;
+    }
+
+    async function fetchJson(path, options) {
+      const response = await fetch(`${apiBaseUrl}${path}`, options);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    let noticeTimer = null;
+
+    function showNotice(message, kind) {
+      clearTimeout(noticeTimer);
+      if (!message) {
+        noticeEl.className = 'notice';
+        noticeEl.textContent = '';
+        return;
+      }
+      noticeEl.className = `notice visible ${kind || 'info'}`;
+      noticeEl.textContent = message;
+      if (kind !== 'error') {
+        noticeTimer = setTimeout(() => showNotice(''), 5000);
+      }
+    }
+
+    function eventExists(eventName) {
+      const normalized = normalizeEventName(eventName).toLowerCase();
+      return Boolean(normalized) && state.events.some((item) => normalizeEventName(item).toLowerCase() === normalized);
+    }
+
+    function getSelectedEventName() {
+      return normalizeEventName(eventNameInputEl.value);
+    }
+
+    function setSelectedEvent(name, meta) {
+      const selectedName = normalizeEventName(name);
+      state.selectedEventName = selectedName;
+      eventNameInputEl.value = selectedName;
+      state.selectedEventMeta = meta ? metaFromConfig(meta, selectedName) : emptyMeta(selectedName);
+      syncButtons();
+    }
+
+    function clearSelectedEvent() {
+      state.selectedEventName = '';
+      state.selectedEventMeta = emptyMeta('');
+      eventNameInputEl.value = '';
+      syncButtons();
+    }
+
+    function setMetadataPanelVisible(visible) {
+      state.metadataOpen = Boolean(visible);
+      metadataPanelEl.hidden = !visible;
+      if (!visible) {
+        state.metadataMode = '';
+        locationInputEl.value = '';
+        dateInputEl.value = '';
+        ringConfigXInputEl.value = '';
+        ringConfigYInputEl.value = '';
+      }
+    }
+
+    function populateMetadataForm(meta) {
+      locationInputEl.value = normalizeTextValue(meta && meta.location);
+      dateInputEl.value = normalizeTextValue(meta && meta.date);
+      ringConfigXInputEl.value = normalizeNumberInput(meta && meta.ringConfigX);
+      ringConfigYInputEl.value = normalizeNumberInput(meta && meta.ringConfigY);
+    }
+
+    function readMetadataForm() {
+      for (const input of [ringConfigXInputEl, ringConfigYInputEl]) {
+        if (!input.checkValidity()) {
+          input.reportValidity();
+          throw new Error('Ring Config Columns (Letters) and Rows (Numbers) must be non-negative whole numbers.');
+        }
+      }
+      return {
+        location: normalizeTextValue(locationInputEl.value),
+        date: normalizeTextValue(dateInputEl.value),
+        ringConfigX: Number(ringConfigXInputEl.value),
+        ringConfigY: Number(ringConfigYInputEl.value)
+      };
+    }
+
+    function syncEventNameOptions() {
+      const currentValue = normalizeEventName(eventNameInputEl.value);
+      eventNameOptionsEl.innerHTML = '';
+      state.events.forEach((eventName) => {
+        const option = document.createElement('option');
+        option.value = eventName;
+        eventNameOptionsEl.appendChild(option);
+      });
+      if (currentValue) {
+        eventNameInputEl.value = currentValue;
+      }
+    }
+
+    function renderEventCard(name, meta, nameEl, locationEl, dateEl, ringConfigEl) {
+      nameEl.textContent = name || 'No event selected';
+      locationEl.textContent = normalizeTextValue(meta && meta.location) || '—';
+      dateEl.textContent = normalizeTextValue(meta && meta.date) || '—';
+      ringConfigEl.textContent = formatRingConfig(meta);
+    }
+
+    function renderState() {
+      const selectedName = state.selectedEventName || 'None selected';
+      activeEventChipEl.textContent = state.activeEventName || 'No event selected';
+      selectedEventChipEl.textContent = selectedName;
+      renderEventCard(state.activeEventName, state.activeEventMeta, activeEventNameEl, activeEventLocationEl, activeEventDateEl, activeEventRingConfigEl);
+      renderEventCard(state.selectedEventName, state.selectedEventMeta, selectedEventNameEl, selectedEventLocationEl, selectedEventDateEl, selectedEventRingConfigEl);
+    }
+
+    function syncButtons() {
+      const selectedName = getSelectedEventName();
+      const existsNow = eventExists(selectedName);
+      createEventBtn.disabled = !selectedName || existsNow;
+      modifyEventBtn.disabled = !selectedName || !existsNow;
+      activateEventBtn.disabled = !selectedName || !existsNow;
+      deleteEventBtn.disabled = !selectedName || !existsNow;
+      resetEventBtn.disabled = !selectedName && !state.metadataOpen;
+      saveMetadataBtn.disabled = !state.metadataOpen || !selectedName;
+      renderState();
+    }
+
+    async function refreshEvents() {
+      const data = await fetchJson('/api/events/list');
+      state.events = Array.isArray(data.events) ? data.events : [];
+      syncEventNameOptions();
+      return state.events;
+    }
+
+    async function loadEventConfig(eventName) {
+      const name = normalizeEventName(eventName);
+      if (!name) {
+        return emptyMeta('');
+      }
+
+      const data = await fetchJson(`/api/events/config?eventName=${encodeURIComponent(name)}`);
+      return metaFromConfig(data.eventConfig || {}, name);
+    }
+
+    async function refreshActiveEvent() {
+      const data = await fetchJson('/api/events/active');
+      const activeName = normalizeEventName(data.activeEvent);
+      state.activeEventName = activeName;
+      state.activeEventMeta = activeName ? await loadEventConfig(activeName) : emptyMeta('');
+    }
+
+    async function refreshSelectedEventFromInput() {
+      const selectedName = normalizeEventName(eventNameInputEl.value);
+      state.selectedEventName = selectedName;
+      if (!selectedName) {
+        state.selectedEventMeta = emptyMeta('');
+        syncButtons();
+        return;
+      }
+
+      const requestToken = ++state.selectionRequestToken;
+      if (!eventExists(selectedName)) {
+        state.selectedEventMeta = emptyMeta(selectedName);
+        syncButtons();
+        return;
+      }
+
+      const meta = await loadEventConfig(selectedName);
+      if (requestToken !== state.selectionRequestToken) {
+        return;
+      }
+      state.selectedEventMeta = meta;
+      storeLastSelectedEvent(selectedName);
+      syncButtons();
+    }
+
+    async function refreshAll() {
+      await refreshEvents();
+      await refreshActiveEvent();
+      await refreshSelectedEventFromInput();
+      syncButtons();
+    }
+
+    function findExistingEventName(name) {
+      const normalized = normalizeEventName(name).toLowerCase();
+      return normalized ? state.events.find((item) => normalizeEventName(item).toLowerCase() === normalized) || '' : '';
+    }
+
+    async function initializePage() {
+      await refreshEvents();
+      await refreshActiveEvent();
+      if (!getSelectedEventName()) {
+        const initialName = findExistingEventName(readLastSelectedEvent()) || findExistingEventName(state.activeEventName);
+        eventNameInputEl.value = initialName;
+      }
+      await refreshSelectedEventFromInput();
+      syncButtons();
+    }
+
+    function openMetadataPanel(mode, meta) {
+      state.metadataMode = mode;
+      setMetadataPanelVisible(true);
+      populateMetadataForm(meta || emptyMeta(state.selectedEventName));
+      saveMetadataBtn.textContent = 'Save / Modify';
+    }
+
+    async function createEvent() {
+      const selectedName = getSelectedEventName();
+      if (!selectedName) {
+        showNotice('Enter an event name first.', 'warn');
+        return;
+      }
+
+      if (eventExists(selectedName)) {
+        showNotice(`Event already exists: ${selectedName}`, 'warn');
+        return;
+      }
+
+      state.selectedEventName = selectedName;
+      state.selectedEventMeta = emptyMeta(selectedName);
+      openMetadataPanel('create', emptyMeta(selectedName));
+      showNotice('Enter event details, then use Save / Modify to create the event.', 'info');
+      syncButtons();
+    }
+
+    async function modifyEvent() {
+      const selectedName = getSelectedEventName();
+      if (!selectedName) {
+        showNotice('Enter an event name first.', 'warn');
+        return;
+      }
+
+      if (!eventExists(selectedName)) {
+        showNotice(`No existing event found for ${selectedName}.`, 'warn');
+        return;
+      }
+
+      const meta = await loadEventConfig(selectedName);
+      state.selectedEventName = selectedName;
+      state.selectedEventMeta = meta;
+      openMetadataPanel('modify', meta);
+      showNotice('Review or edit the event details, then use Save / Modify.', 'info');
+      syncButtons();
+    }
+
+    async function saveMetadata() {
+      const selectedName = getSelectedEventName();
+      if (!state.metadataOpen || !selectedName) {
+        return;
+      }
+
+      try {
+        const metadata = readMetadataForm();
+        if (state.metadataMode === 'create') {
+          showNotice(`Creating ${selectedName}...`, 'info');
+          await fetchJson('/api/events/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventName: selectedName,
+              name: selectedName,
+              location: metadata.location,
+              date: metadata.date,
+              ringConfigX: metadata.ringConfigX,
+              ringConfigY: metadata.ringConfigY
+            })
+          });
+          state.metadataMode = 'modify';
+          showNotice(`Created ${selectedName}.`, 'ok');
+        } else {
+          showNotice(`Saving ${selectedName}...`, 'info');
+          await fetchJson('/api/events/modify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventName: selectedName,
+              name: selectedName,
+              location: metadata.location,
+              date: metadata.date,
+              ringConfigX: metadata.ringConfigX,
+              ringConfigY: metadata.ringConfigY
+            })
+          });
+          showNotice(`Saved ${selectedName}.`, 'ok');
+        }
+
+        setMetadataPanelVisible(false);
+        await refreshAll();
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    async function activateEvent() {
+      const selectedName = getSelectedEventName();
+      if (!selectedName) {
+        showNotice('Enter an event name first.', 'warn');
+        return;
+      }
+
+      if (!eventExists(selectedName)) {
+        showNotice(`No existing event found for ${selectedName}.`, 'warn');
+        return;
+      }
+
+      const confirmed = window.confirm(`Activate ${selectedName}? This will set it as the active event for workflow pages.`);
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        showNotice(`Activating ${selectedName}...`, 'info');
+        await fetchJson('/api/events/activate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventName: selectedName })
+        });
+        await refreshAll();
+        showNotice(`Activated ${selectedName}.`, 'ok');
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    async function deleteEvent() {
+      const selectedName = getSelectedEventName();
+      if (!selectedName) {
+        showNotice('Enter an event name first.', 'warn');
+        return;
+      }
+
+      if (!eventExists(selectedName)) {
+        showNotice(`No existing event found for ${selectedName}.`, 'warn');
+        return;
+      }
+
+      const confirmed = window.confirm(`Delete ${selectedName}? This removes the event folder and cannot be undone.`);
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        showNotice(`Deleting ${selectedName}...`, 'info');
+        await fetchJson('/api/events/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventName: selectedName })
+        });
+        if (normalizeEventName(state.activeEventName).toLowerCase() === selectedName.toLowerCase()) {
+          state.activeEventName = '';
+          state.activeEventMeta = emptyMeta('');
+        }
+        clearSelectedEvent();
+        storeLastSelectedEvent('');
+        setMetadataPanelVisible(false);
+        await refreshAll();
+        showNotice(`Deleted ${selectedName}.`, 'ok');
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    function resetSelection() {
+      clearSelectedEvent();
+      storeLastSelectedEvent('');
+      setMetadataPanelVisible(false);
+      showNotice('', '');
+    }
+
+    eventNameInputEl.addEventListener('input', () => {
+      state.selectedEventName = normalizeEventName(eventNameInputEl.value);
+      refreshSelectedEventFromInput().catch((error) => showNotice(error.message, 'error'));
+    });
+    eventNameInputEl.addEventListener('change', () => {
+      state.selectedEventName = normalizeEventName(eventNameInputEl.value);
+      refreshSelectedEventFromInput().catch((error) => showNotice(error.message, 'error'));
+    });
+    createEventBtn.addEventListener('click', createEvent);
+    modifyEventBtn.addEventListener('click', () => modifyEvent().catch((error) => showNotice(error.message, 'error')));
+    activateEventBtn.addEventListener('click', activateEvent);
+    deleteEventBtn.addEventListener('click', deleteEvent);
+    resetEventBtn.addEventListener('click', resetSelection);
+    saveMetadataBtn.addEventListener('click', saveMetadata);
+    document.getElementById('backToPreTournamentLink').addEventListener('click', goBackToPreTournament);
+
+    initializePage()
+      .catch((error) => showNotice(error.message, 'error'));
+  </script>
+</body>
+</html>
