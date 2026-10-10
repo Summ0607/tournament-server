@@ -30,6 +30,7 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const GROUPS_DIR = path.join(ROOT_DIR, 'groups');
 const RESULTS_DIR = path.join(ROOT_DIR, 'Results');
 const RING_ASSIGNMENTS_FILE = path.join(ROOT_DIR, 'ring-assignments.json');
+const EVENTS_RING_ASSIGNMENTS_FILE = (eventName) => path.join(EVENTS_ROOT, eventName, 'ring-assignments.json');
 const DEFAULT_TOURNAMENT_DB_PATH = path.join(ROOT_DIR, 'db', 'tournament.db');
 const TOURNAMENT_DB_PATH = DEFAULT_TOURNAMENT_DB_PATH;
 const EVENTS_ROOT = path.join(ROOT_DIR, 'events');
@@ -223,6 +224,18 @@ function readActiveEvent() {
   }
 }
 
+function resolveRingAssignmentsFile(eventName = readActiveEvent()) {
+  const normalizedEventName = String(eventName || '').trim();
+  if (!normalizedEventName) {
+    return RING_ASSIGNMENTS_FILE;
+  }
+  return EVENTS_RING_ASSIGNMENTS_FILE(normalizedEventName);
+}
+
+function ensureAssignmentsFile(filePath) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+}
+
 function getEventPaths(eventName) {
   const eventDir = path.join(EVENTS_ROOT, eventName);
   return {
@@ -385,14 +398,24 @@ function ensureStateStructure(rawState) {
 }
 
 function readAssignmentsState() {
-  if (!fs.existsSync(RING_ASSIGNMENTS_FILE)) {
+  const ringAssignmentsFile = resolveRingAssignmentsFile();
+  if (!fs.existsSync(ringAssignmentsFile)) {
     const defaults = createDefaultAssignments();
-    fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify(defaults, null, 2));
+    ensureAssignmentsFile(ringAssignmentsFile);
+
+    if (ringAssignmentsFile !== RING_ASSIGNMENTS_FILE && fs.existsSync(RING_ASSIGNMENTS_FILE)) {
+      const legacyRaw = JSON.parse(fs.readFileSync(RING_ASSIGNMENTS_FILE, 'utf8'));
+      const normalizedLegacy = ensureStateStructure(legacyRaw);
+      fs.writeFileSync(ringAssignmentsFile, JSON.stringify(normalizedLegacy, null, 2));
+      return normalizedLegacy;
+    }
+
+    fs.writeFileSync(ringAssignmentsFile, JSON.stringify(defaults, null, 2));
     return defaults;
   }
-  const raw = JSON.parse(fs.readFileSync(RING_ASSIGNMENTS_FILE, 'utf8'));
+  const raw = JSON.parse(fs.readFileSync(ringAssignmentsFile, 'utf8'));
   const normalized = ensureStateStructure(raw);
-  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify({
+  fs.writeFileSync(ringAssignmentsFile, JSON.stringify({
     ...normalized,
     rings: Object.fromEntries(
       Object.entries(normalized.rings).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])
@@ -402,7 +425,9 @@ function readAssignmentsState() {
 }
 
 function writeAssignmentsState(state) {
-  fs.writeFileSync(RING_ASSIGNMENTS_FILE, JSON.stringify({
+  const ringAssignmentsFile = resolveRingAssignmentsFile();
+  ensureAssignmentsFile(ringAssignmentsFile);
+  fs.writeFileSync(ringAssignmentsFile, JSON.stringify({
     ...state,
     rings: Object.fromEntries(
       Object.entries(state.rings || {}).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])

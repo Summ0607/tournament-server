@@ -137,11 +137,19 @@ function requestJson(server, method, pathName, body) {
 
 async function main() {
   const assignmentsPath = path.join(__dirname, '..', 'ring-assignments.json');
+  const activeEventPath = path.join(__dirname, '..', 'events', 'active.json');
   const originalAssignments = fs.existsSync(assignmentsPath)
     ? fs.readFileSync(assignmentsPath, 'utf8')
     : null;
+  const originalActiveEvent = fs.existsSync(activeEventPath)
+    ? fs.readFileSync(activeEventPath, 'utf8')
+    : null;
 
   try {
+    if (fs.existsSync(activeEventPath)) {
+      fs.unlinkSync(activeEventPath);
+    }
+
     const legacyFileState = {
       config: { letterCount: 1, numberCount: 1 },
       eventStartedAt: '',
@@ -201,6 +209,12 @@ async function main() {
       if (fs.existsSync(assignmentsPath)) fs.unlinkSync(assignmentsPath);
     } else {
       fs.writeFileSync(assignmentsPath, originalAssignments);
+    }
+
+    if (originalActiveEvent == null) {
+      if (fs.existsSync(activeEventPath)) fs.unlinkSync(activeEventPath);
+    } else {
+      fs.writeFileSync(activeEventPath, originalActiveEvent);
     }
   }
 
