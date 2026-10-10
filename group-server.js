@@ -14,6 +14,7 @@ const { createDivisionRouter } = require('./backend/divisionRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
 const { createResultPacketStore } = require('./backend/resultPacket');
 const { registerPageRoutes } = require('./backend/pages');
+const { createEventConfigStore, normalizeEventRingConfig } = require('./backend/eventConfig');
 
 const app = express();
 const PORT = 3000;
@@ -39,6 +40,7 @@ const EVENTS_ROOT = path.join(ROOT_DIR, 'events');
 //  path.join(ROOT_DIR, 'events')
 //].find((candidate) => fs.existsSync(candidate)) || path.join(ROOT_DIR, 'event');
 const ACTIVE_EVENT_FILE = path.join(EVENTS_ROOT, 'active.json');
+const { readEventConfig, writeEventConfig } = createEventConfigStore(EVENTS_ROOT);
 
 function resolveEventDbPath(eventName = readActiveEvent()) {
   const normalizedEventName = String(eventName || '').trim();
@@ -1094,6 +1096,13 @@ app.get('/api/events/list', (req, res) => {
 app.post('/api/events/create', (req, res) => {
   const body = req.body || {};
   const eventName = String(body.eventName || '').trim();
+  const eventConfig = {
+    name: String(body.name || body.eventName || '').trim(),
+    location: String(body.location || '').trim(),
+    date: String(body.date || '').trim(),
+    ringConfigX: body.ringConfigX,
+    ringConfigY: body.ringConfigY
+  };
 
   if (!eventName) {
     return res.status(400).json({ error: 'eventName is required' });
@@ -1106,10 +1115,15 @@ app.post('/api/events/create', (req, res) => {
       return res.status(409).json({ error: `Event already exists: ${eventName}` });
     }
 
+    Object.assign(eventConfig, normalizeEventRingConfig(eventConfig));
     fs.mkdirSync(eventDir, { recursive: true });
     fs.mkdirSync(groupsDir, { recursive: true });
     fs.mkdirSync(resultsDir, { recursive: true });
     currentGroupStore().clearGroups();
+    writeEventConfig(eventName, {
+      ...eventConfig,
+      name: eventConfig.name || eventName
+    });
 
     const initializeDatabase = require('./db/init');
     initializeDatabase(dbPath)
@@ -1120,7 +1134,12 @@ app.post('/api/events/create', (req, res) => {
           rings: {},
         };
         fs.writeFileSync(ringAssignmentsFile, JSON.stringify(defaultAssignments, null, 2));
-        return res.json({ ok: true, eventName, dbPath});
+        return res.json({
+          ok: true,
+          eventName,
+          dbPath,
+          eventConfig: readEventConfig(eventName)
+        });
       })
       .catch((err) => {
         console.error('Failed to create event database:', err);
@@ -1130,7 +1149,86 @@ app.post('/api/events/create', (req, res) => {
     return;
   } catch (err) {
     console.error('Failed to create event:', err);
-    return res.status(500).json({ error: 'Failed to create event' });
+    return res.status(err.statusCode || 500).json({ error: err.statusCode === 400 ? err.message : 'Failed to create event' });
+  }
+});
+
+app.get('/api/events/config', (req, res) => {
+  try {
+    const eventName = String((req.query || {}).eventName || '').trim();
+    if (!eventName) {
+      return res.status(400).json({ error: 'eventName is required' });
+    }
+
+    const { eventDir } = getEventPaths(eventName);
+    if (!fs.existsSync(eventDir)) {
+      return res.status(404).json({ error: `Event folder not found: ${eventName}` });
+    }
+
+    return res.json({ ok: true, eventConfig: readEventConfig(eventName) });
+  } catch (err) {
+    console.error('Failed to read event config:', err);
+    return res.status(500).json({ error: 'Failed to read event config' });
+  }
+});
+
+app.post('/api/events/modify', (req, res) => {
+  const body = req.body || {};
+  const eventName = String(body.eventName || '').trim();
+
+  if (!eventName) {
+    return res.status(400).json({ error: 'eventName is required' });
+  }
+
+  const { eventDir } = getEventPaths(eventName);
+  if (!fs.existsSync(eventDir)) {
+    return res.status(404).json({ error: `Event folder not found: ${eventName}` });
+  }
+
+  try {
+    const updatedConfig = writeEventConfig(eventName, {
+      name: String(body.name || eventName).trim() || eventName,
+      location: String(body.location || '').trim(),
+      date: String(body.date || '').trim(),
+      ringConfigX: body.ringConfigX,
+      ringConfigY: body.ringConfigY,
+      createdAt: readEventConfig(eventName).createdAt || ''
+    });
+    return res.json({ ok: true, eventName, eventConfig: updatedConfig });
+  } catch (err) {
+    console.error('Failed to modify event:', err);
+    return res.status(err.statusCode || 500).json({ error: err.statusCode === 400 ? err.message : 'Failed to modify event' });
+  }
+});
+
+app.post('/api/events/delete', (req, res) => {
+  const body = req.body || {};
+  const eventName = String(body.eventName || '').trim();
+
+  if (!eventName) {
+    return res.status(400).json({ error: 'eventName is required' });
+  }
+
+  const { eventDir } = getEventPaths(eventName);
+
+  try {
+    if (!fs.existsSync(eventDir)) {
+      return res.status(404).json({ error: `Event folder not found: ${eventName}` });
+    }
+
+    fs.rmSync(eventDir, { recursive: true, force: true });
+
+    if (readActiveEvent().toLowerCase() === eventName.toLowerCase()) {
+      if (fs.existsSync(ACTIVE_EVENT_FILE)) {
+        fs.unlinkSync(ACTIVE_EVENT_FILE);
+      }
+      currentGroupStore().clearGroups();
+    }
+
+    return res.json({ ok: true, eventName });
+  } catch (err) {
+    console.error('Failed to delete event:', err);
+    return res.status(500).json({ error: 'Failed to delete event' });
   }
 });
 
