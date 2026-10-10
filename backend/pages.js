@@ -85,6 +85,18 @@ function registerPageRoutes(app, rootDir, controlBoardDir) {
     res.sendFile(path.join(rootDir, 'ring-progress', 'index.html'));
   });
 
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-mgmt', 'index.html'));
+  });
+
+  app.get('/tournament-mgmt', (req, res) => {
+    res.redirect('/tournament-mgmt/');
+  });
+
+  app.get('/tournament-mgmt/', (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-mgmt', 'index.html'));
+  });
+
   app.get('/setup', (req, res) => {
     res.redirect('/event-administration/');
   });

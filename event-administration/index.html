@@ -97,6 +97,25 @@
       padding: 0;
     }
 
+    .nav-back-link {
+      position: relative;
+      z-index: 1;
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      border-radius: 8px;
+      color: var(--info);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .nav-back-link:hover,
+    .nav-back-link:focus-visible {
+      background: rgba(34, 87, 179, 0.08);
+      text-decoration: underline;
+    }
+
     .overview {
       margin-top: 14px;
       display: flex;
@@ -367,6 +386,23 @@
         font-size: clamp(16px, 4vw, 22px);
       }
 
+      .title-block {
+        flex-wrap: wrap;
+      }
+
+      .title-block .tournament-name {
+        position: static;
+        transform: none;
+        flex: 1 1 0;
+        width: auto;
+      }
+
+      .nav-back-link {
+        flex-basis: 100%;
+        margin-bottom: 6px;
+        text-align: right;
+      }
+
       .banner-timer {
         font-size: 11px;
       }
@@ -380,6 +416,7 @@
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
       <h1 class="tournament-name">Event Administration</h1>
+      <a class="nav-back-link" id="backToPreTournamentLink" href="/tournament-mgmt/">← Back to Pre-Tournament Activities</a>
     </div>
 
     <div class="overview">
@@ -473,6 +510,22 @@
 
   <script>
     const apiBaseUrl = window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin;
+    // Shared with tournament-mgmt/index.html, which owns the workflow pill.
+    const PRE_TOURNAMENT_STAGE_KEY = 'preTournament.activeStageIndex';
+    const PRE_TOURNAMENT_STAGE_COUNT = 4;
+
+    function advancePreTournamentStage() {
+      try {
+        const current = Number.parseInt(window.localStorage.getItem(PRE_TOURNAMENT_STAGE_KEY), 10);
+        const base = Number.isFinite(current) ? Math.max(0, current) : 0;
+        const next = Math.min(base + 1, PRE_TOURNAMENT_STAGE_COUNT - 1);
+        window.localStorage.setItem(PRE_TOURNAMENT_STAGE_KEY, String(next));
+        return next;
+      } catch (error) {
+        return null;
+      }
+    }
+
     const LAST_SELECTED_EVENT_KEY = 'eventAdmin.lastSelectedEvent';
 
     function readLastSelectedEvent() {
@@ -493,6 +546,12 @@
       } catch (error) {
         // Storage unavailable; selection simply is not remembered.
       }
+    }
+
+    function goBackToPreTournament(event) {
+      event.preventDefault();
+      advancePreTournamentStage();
+      window.location.assign(event.currentTarget.getAttribute('href'));
     }
 
     const emptyMeta = (name) => ({
@@ -952,6 +1011,7 @@
     deleteEventBtn.addEventListener('click', deleteEvent);
     resetEventBtn.addEventListener('click', resetSelection);
     saveMetadataBtn.addEventListener('click', saveMetadata);
+    document.getElementById('backToPreTournamentLink').addEventListener('click', goBackToPreTournament);
 
     initializePage()
       .catch((error) => showNotice(error.message, 'error'));
