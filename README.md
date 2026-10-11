@@ -14,9 +14,11 @@ This branch is being used to document a proposed split of tournament surfaces by
 port and operational purpose:
 
 - `3000` Pre-Tournament
-- `3001` Day-of Ring Assignment Operations
-- `3002` Day-of Monitoring / display-only
-- `3003` Day-of Medical
+- `3001-3009` Day-of Event surfaces
+  - `3001` Ring Assignment Operations
+  - `3002` Monitoring / display-only
+  - `3003` Medical
+  - `3004-3009` Reserved for additional Day-of surfaces
 - `3010+` Post-Tournament
 
 The goal is to keep the surfaces loosely coupled while sharing the same server
