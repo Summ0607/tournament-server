@@ -102,29 +102,28 @@
       padding: 4px;
     }
 
-    .subtitle {
-      color: #0f172a;
-      font-size: 15px;
-      line-height: 1.45;
-      font-weight: 800;
-      letter-spacing: 0.01em;
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 10px;
+    .banner-timer {
+      position: absolute;
+      top: 16px;
+      right: 128px;
+      padding: 0;
+      border-radius: 999px;
+      border: 0;
+      background: transparent;
+      color: var(--text-soft);
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
       align-items: center;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      padding: 14px 16px;
+      gap: 6px;
+      white-space: nowrap;
     }
 
-    .toolbar.panel {
-      background: var(--surface);
-      backdrop-filter: blur(8px);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+    .banner-timer strong {
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: -0.02em;
     }
 
     button {
@@ -146,6 +145,7 @@
     button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
     button.ghost { background: var(--surface); }
     button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
     .hidden { display: none !important; }
 
     .panel {
@@ -153,11 +153,6 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
-    }
-
-    .section-card {
-      padding: 16px;
-      margin-bottom: 14px;
     }
 
     .summary {
@@ -500,24 +495,6 @@
       font-size: 11px;
     }
 
-    .event-timer {
-      margin-left: auto;
-      font-size: 13px;
-      color: var(--text-soft);
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-
-    .event-timer strong {
-      color: var(--text);
-      font-size: 18px;
-      line-height: 1;
-      letter-spacing: -0.02em;
-    }
-
     .ring-modal {
       position: fixed;
       inset: 0;
@@ -812,7 +789,18 @@
 
     @media (max-width: 760px) {
       .shell { padding: 14px; }
-      .toolbar { justify-content: flex-start; }
+      .title-block {
+        padding-right: 100px;
+        min-height: 96px;
+      }
+      .title-logo {
+        width: 92px;
+        height: 92px;
+      }
+      .banner-timer {
+        right: 100px;
+        font-size: 11px;
+      }
       .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .board { grid-template-columns: 1fr; }
       .ring-row { grid-template-columns: 1fr; }
@@ -820,7 +808,6 @@
       .action-line, .action-line.reset { grid-template-columns: 1fr; }
       .action-line button { width: 100%; min-width: 0; }
       .status-panel-head { align-items: flex-start; flex-direction: column; }
-      .event-timer { margin-left: 0; }
       .timer-box { text-align: left; }
     }
   </style>
@@ -832,14 +819,7 @@
         <h1 class="tournament-name" id="tournamentName">Tournament</h1>
         <div class="title-secondary">Head Table</div>
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
-      </div>
-      <div class="toolbar panel">
-        <button class="ghost" id="refreshBtn">Refresh Board</button>
-        <button class="danger" id="resetTournamentBtn">Reset Tournament</button>
-        <button class="ghost" id="openSetupBtn" onclick="location.href='/event-administration/'">Event Administration</button>
-        <button class="ghost" id="openRingAssignmentBtn" onclick="location.href='/ring-assignment/'">Ring Assignment</button>
-        <button class="ghost" id="debugToggleBtn">Show Debug</button>
-        <div class="event-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
+        <div class="banner-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
       </div>
     </div>
 
@@ -909,9 +889,6 @@
     const ringModalSubtitleEl = document.getElementById('ringModalSubtitle');
     const ringModalBodyEl = document.getElementById('ringModalBody');
     const ringModalCloseEl = document.getElementById('ringModalClose');
-    const refreshBtn = document.getElementById('refreshBtn');
-    const resetTournamentBtn = document.getElementById('resetTournamentBtn');
-    const debugToggleBtn = document.getElementById('debugToggleBtn');
 
     function escapeHtml(value) {
       return String(value)
@@ -1435,7 +1412,6 @@
 
     function applyDebugVisibility() {
       statusPanelEl.classList.toggle('hidden', !state.debugVisible);
-      debugToggleBtn.textContent = state.debugVisible ? 'Hide Debug' : 'Show Debug';
       if (state.debugVisible) {
         loadStatus().catch((error) => renderStatusPanel(false, error.message));
       }
@@ -1526,10 +1502,6 @@
       }
     }
 
-    refreshBtn.addEventListener('click', () => {
-      refreshAll().catch((error) => renderNotice(error.message, 'error'));
-    });
-
     boardEl.addEventListener('click', (event) => {
       const link = event.target instanceof Element ? event.target.closest('button[data-action="open-ring"]') : null;
       if (!link) return;
@@ -1546,23 +1518,6 @@
     }, true);
     ringModalEl.addEventListener('click', (event) => {
       if (event.target === ringModalEl) closeRingDetails();
-    });
-
-    debugToggleBtn.addEventListener('click', () => {
-      state.debugVisible = !state.debugVisible;
-      applyDebugVisibility();
-    });
-
-    resetTournamentBtn.addEventListener('click', async () => {
-      if (!confirm('Reset the tournament? This clears all ring assignments and queues.')) return;
-      try {
-        renderNotice('Resetting tournament...', 'warn');
-        await fetchJson('/api/reset', { method: 'POST' });
-        await refreshAll();
-        renderNotice('Tournament reset complete.', 'ok');
-      } catch (error) {
-        renderNotice(`Reset failed: ${error.message}`, 'error');
-      }
     });
 
     window.addEventListener('keydown', (event) => {
