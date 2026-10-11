@@ -13,11 +13,13 @@ const { createGroupStore } = require('./backend/groupStore');
 const { createDivisionRouter } = require('./backend/divisionRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
 const { createResultPacketStore } = require('./backend/resultPacket');
+const { resolveSurfaceName, resolveSurfacePort } = require('./backend/surfacePorts');
 const { registerPageRoutes } = require('./backend/pages');
 const { createEventConfigStore, normalizeEventRingConfig } = require('./backend/eventConfig');
 
 const app = express();
-const PORT = 3000;
+const ACTIVE_SURFACE = resolveSurfaceName(process.env.TOURNAMENT_SURFACE);
+const PORT = resolveSurfacePort(ACTIVE_SURFACE);
 
 // ─────────────────────────────────────────────
 // BASE CONSTANTS
@@ -1323,7 +1325,7 @@ async function startServer() {
   }
 
   app.listen(PORT, () => {
-    console.log(`Group server running at http://localhost:${PORT}`);
+    console.log(`Group server running on ${ACTIVE_SURFACE} at http://localhost:${PORT}`);
     console.log(`Control board: http://localhost:${PORT}/control-board`);
     console.log(`Group example: http://localhost:${PORT}/api/groups/group-1`);
     console.log(`Ring request-group example: http://localhost:${PORT}/api/rings/ring-a-1/request-group`);

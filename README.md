@@ -24,6 +24,9 @@ port and operational purpose:
 The goal is to keep the surfaces loosely coupled while sharing the same server
 backend and data model.
 
+The active surface can be selected with the `TOURNAMENT_SURFACE` environment
+variable. If unset, the server defaults to `pre`.
+
 Ring layout dimensions are saved in each event's `event-config.json` as numeric
 `ringConfigX` (Ring Config Columns, shown as letters) and `ringConfigY` (Ring Config
 Rows, shown as numbers) fields (non-negative whole numbers; blank inputs
