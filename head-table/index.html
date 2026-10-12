@@ -52,20 +52,20 @@
 
     .title-block {
       position: relative;
-      display: flex;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
       align-items: center;
-      justify-content: center;
+      gap: 18px;
       background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
       backdrop-filter: blur(8px);
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
-      padding: 16px 132px 14px 20px;
+      padding: 10px 20px;
       min-height: 108px;
     }
 
     .tournament-name {
-      width: 100%;
       margin: 0;
       font-size: clamp(30px, 4vw, 46px);
       line-height: 1.02;
@@ -73,41 +73,28 @@
       font-weight: 750;
       color: var(--text);
       text-align: center;
-    }
-
-    .title-secondary {
-      position: absolute;
-      top: 16px;
-      left: 20px;
-      color: var(--text-soft);
-      font-size: 21px;
-      line-height: 1.4;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
+      justify-self: center;
+      grid-column: 2;
     }
 
     .title-logo {
-      position: absolute;
-      top: -1px;
-      right: 1px;
-      width: 108px;
-      height: 108px;
+      position: static;
+      width: 92px;
+      height: 92px;
       object-fit: contain;
       object-position: center;
-      border-radius: 12px;
-      background: #fff;
-      border: 1px solid var(--line);
-      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.10);
-      padding: 4px;
+      border-radius: 0;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 0;
     }
 
     .banner-timer {
-      position: absolute;
-      top: 16px;
-      right: 128px;
+      position: static;
+      justify-self: end;
       padding: 0;
-      border-radius: 999px;
+      border-radius: 0;
       border: 0;
       background: transparent;
       color: var(--text-soft);
@@ -397,6 +384,22 @@
     }
 
     .ring-link:hover { text-decoration-thickness: 2px; }
+
+    .ring-link-static {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #111827;
+      font: inherit;
+      font-weight: 900;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      text-decoration: none;
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: default;
+    }
 
     .progress-box {
       display: grid;
@@ -790,16 +793,20 @@
     @media (max-width: 760px) {
       .shell { padding: 14px; }
       .title-block {
-        padding-right: 100px;
+        grid-template-columns: auto 1fr auto;
+        gap: 12px;
+        padding: 10px 12px;
         min-height: 96px;
       }
       .title-logo {
-        width: 92px;
-        height: 92px;
+        width: 72px;
+        height: 72px;
       }
       .banner-timer {
-        right: 100px;
         font-size: 11px;
+      }
+      .tournament-name {
+        font-size: clamp(20px, 5vw, 30px);
       }
       .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .board { grid-template-columns: 1fr; }
@@ -816,9 +823,8 @@
   <div class="shell">
     <div class="hero">
       <div class="title-block">
-        <h1 class="tournament-name" id="tournamentName">Tournament</h1>
-        <div class="title-secondary">Head Table</div>
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
+        <h1 class="tournament-name" id="tournamentName">Event Progress</h1>
         <div class="banner-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
       </div>
     </div>
@@ -856,6 +862,27 @@
   </div>
 
   <script>
+    const PRESENTATION_MODES = Object.freeze({
+      public: {
+        title: 'Event Progress',
+        showRingDetails: false,
+        showDebugPanel: false
+      },
+      admin: {
+        title: 'Administration Progress View',
+        showRingDetails: true,
+        showDebugPanel: true
+      }
+    });
+
+    function resolvePresentationMode() {
+      const mode = new URLSearchParams(window.location.search).get('mode');
+      return Object.prototype.hasOwnProperty.call(PRESENTATION_MODES, mode) ? mode : 'public';
+    }
+
+    const PRESENTATION_MODE = resolvePresentationMode();
+    const PRESENTATION = PRESENTATION_MODES[PRESENTATION_MODE];
+
     const state = {
       groups: [],
       rings: [],
@@ -1263,6 +1290,13 @@
     }
 
     function renderRingModal(view) {
+      if (!PRESENTATION.showRingDetails) {
+        ringModalEl.classList.remove('visible');
+        ringModalEl.setAttribute('aria-hidden', 'true');
+        ringModalBodyEl.innerHTML = '';
+        return;
+      }
+
       if (!state.activeRingId || !view) {
         ringModalEl.classList.remove('visible');
         ringModalEl.setAttribute('aria-hidden', 'true');
@@ -1335,6 +1369,7 @@
     }
 
     function openRingDetails(ringId) {
+      if (!PRESENTATION.showRingDetails) return;
       state.activeRingId = ringId;
       state.phaseHistoryExpanded = false;
       renderBoard();
@@ -1347,7 +1382,8 @@
     }
 
     function renderBoard() {
-      tournamentNameEl.textContent = state.activeEvent || 'Tournament';
+      tournamentNameEl.textContent = PRESENTATION.title;
+      document.title = PRESENTATION.title;
       const loadedAt = state.lastBoardLoadedAt ? new Date(state.lastBoardLoadedAt).toLocaleTimeString() : '--';
       metaLineEl.innerHTML = `<span>Last board refresh: ${escapeHtml(loadedAt)}</span>`;
       eventTimerEl.textContent = state.eventStartedAt ? fmtDuration(Date.now() - new Date(state.eventStartedAt).getTime()) : '--:--:--';
@@ -1364,7 +1400,9 @@
             <section class="ring-card ${view.tone}" data-ring-id="${escapeHtml(ring.ringId)}">
               <div class="ring-row">
                 <div class="ring-id-cell">
-                  <button class="ring-link" data-action="open-ring" data-ring-id="${escapeHtml(ring.ringId)}">${escapeHtml(ring.ringLabel)}</button>
+                  ${PRESENTATION.showRingDetails
+                    ? `<button class="ring-link" data-action="open-ring" data-ring-id="${escapeHtml(ring.ringId)}">${escapeHtml(ring.ringLabel)}</button>`
+                    : `<span class="ring-link-static">${escapeHtml(ring.ringLabel)}</span>`}
                   <div class="ring-status"><span class="status-chip ${view.statusTone}">${escapeHtml(statusLabel)}</span></div>
                 </div>
                 <div class="progress-box">
@@ -1411,6 +1449,12 @@
     }
 
     function applyDebugVisibility() {
+      if (!PRESENTATION.showDebugPanel) {
+        state.debugVisible = false;
+        statusPanelEl.classList.add('hidden');
+        return;
+      }
+
       statusPanelEl.classList.toggle('hidden', !state.debugVisible);
       if (state.debugVisible) {
         loadStatus().catch((error) => renderStatusPanel(false, error.message));
@@ -1503,6 +1547,7 @@
     }
 
     boardEl.addEventListener('click', (event) => {
+      if (!PRESENTATION.showRingDetails) return;
       const link = event.target instanceof Element ? event.target.closest('button[data-action="open-ring"]') : null;
       if (!link) return;
       const ringId = link.getAttribute('data-ring-id');
@@ -1525,7 +1570,7 @@
         closeRingDetails();
         return;
       }
-      if (event.key === 'F12') {
+      if (event.key === 'F12' && PRESENTATION.showDebugPanel) {
         event.preventDefault();
         state.debugVisible = !state.debugVisible;
         applyDebugVisibility();
