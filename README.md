@@ -29,6 +29,9 @@ The active surface can be selected with the `TOURNAMENT_SURFACE` environment
 variable. If unset, the server defaults to `pre`.
 Use `monitoring` for the public Event Progress view and `adminProgress` for the
 Administration Progress View.
+Exact entry points:
+- `http://localhost:3002/event-progress/` for the public Event Progress view
+- `http://localhost:3004/administration-progress/` for the Administration Progress view
 
 Ring layout dimensions are saved in each event's `event-config.json` as numeric
 `ringConfigX` (Ring Config Columns, shown as letters) and `ringConfigY` (Ring Config

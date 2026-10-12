@@ -876,6 +876,9 @@ feature/multi-surface-tournament-backend,<!DOCTYPE html>
     });
 
     function resolvePresentationMode() {
+      const pathname = String(window.location.pathname || '').toLowerCase();
+      if (pathname.indexOf('administration-progress') >= 0) return 'admin';
+      if (pathname.indexOf('event-progress') >= 0) return 'public';
       const mode = new URLSearchParams(window.location.search).get('mode');
       return Object.prototype.hasOwnProperty.call(PRESENTATION_MODES, mode) ? mode : 'public';
     }

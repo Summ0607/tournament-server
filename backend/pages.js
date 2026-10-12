@@ -6,17 +6,21 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
   const isMonitoringSurface = normalizedSurface === 'monitoring';
   const isAdminProgressSurface = normalizedSurface === 'adminprogress';
   const progressPagePath = path.join(rootDir, 'head-table', 'index.html');
+  const canonicalProgressPath = isAdminProgressSurface ? '/administration-progress/' : '/event-progress/';
+  const canonicalProgressHtml = isAdminProgressSurface ? '/administration-progress.html' : '/event-progress.html';
+  const alternateProgressPath = isAdminProgressSurface ? '/event-progress/' : '/administration-progress/';
+  const alternateProgressHtml = isAdminProgressSurface ? '/event-progress.html' : '/administration-progress.html';
 
-  function isAdminModeRequested(req) {
-    return String(req.query && req.query.mode || '').trim().toLowerCase() === 'admin';
-  }
-
-  function sendPublicProgressPage(res) {
+  function sendProgressPage(res) {
     res.sendFile(progressPagePath);
   }
 
-  function redirectToAdminProgress(res) {
-    res.redirect('/head-table/?mode=admin');
+  function redirectToCanonicalProgress(res) {
+    res.redirect(canonicalProgressPath);
+  }
+
+  function redirectToCanonicalHtml(res) {
+    res.redirect(canonicalProgressHtml);
   }
 
   app.use('/head-table', express.static(controlBoardDir, { index: false }));
@@ -38,111 +42,45 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
     res.redirect('/api/rings');
   });
 
-  if (isMonitoringSurface) {
-    app.get('/', (req, res) => {
-      if (isAdminModeRequested(req)) {
-        res.redirect('/');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
+  app.get('/', (req, res) => {
+    redirectToCanonicalProgress(res);
+  });
 
-    app.get('/head-table', (req, res) => {
-      if (isAdminModeRequested(req)) {
-        res.redirect('/head-table/');
-        return;
-      }
-      res.redirect('/head-table/');
-    });
+  app.get('/head-table', (req, res) => {
+    redirectToCanonicalProgress(res);
+  });
 
-    app.get('/head-table/', (req, res) => {
-      if (isAdminModeRequested(req)) {
-        res.redirect('/head-table/');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
+  app.get('/head-table/', (req, res) => {
+    redirectToCanonicalProgress(res);
+  });
 
-    app.get('/head-table.html', (req, res) => {
-      if (isAdminModeRequested(req)) {
-        res.redirect('/head-table.html');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
+  app.get('/head-table.html', (req, res) => {
+    redirectToCanonicalHtml(res);
+  });
 
-    app.get('/event-progress', (req, res) => {
-      if (isAdminModeRequested(req)) {
-        res.redirect('/event-progress/');
-        return;
-      }
-      res.redirect('/event-progress/');
-    });
+  app.get(canonicalProgressPath.slice(0, -1), (req, res) => {
+    redirectToCanonicalProgress(res);
+  });
 
-    app.get('/event-progress/', (req, res) => {
-      if (isAdminModeRequested(req)) {
-        res.redirect('/event-progress/');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
+  app.get(canonicalProgressPath, (req, res) => {
+    sendProgressPage(res);
+  });
 
-    app.get('/event-progress.html', (req, res) => {
-      if (isAdminModeRequested(req)) {
-        res.redirect('/event-progress.html');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
-  } else if (isAdminProgressSurface) {
-    app.get('/', (req, res) => {
-      res.redirect('/head-table/?mode=admin');
-    });
+  app.get(canonicalProgressHtml, (req, res) => {
+    sendProgressPage(res);
+  });
 
-    app.get('/head-table', (req, res) => {
-      if (!isAdminModeRequested(req)) {
-        res.redirect('/head-table/?mode=admin');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
+  app.get(alternateProgressPath.slice(0, -1), (req, res) => {
+    redirectToCanonicalProgress(res);
+  });
 
-    app.get('/head-table/', (req, res) => {
-      if (!isAdminModeRequested(req)) {
-        res.redirect('/head-table/?mode=admin');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
+  app.get(alternateProgressPath, (req, res) => {
+    redirectToCanonicalProgress(res);
+  });
 
-    app.get('/head-table.html', (req, res) => {
-      if (!isAdminModeRequested(req)) {
-        res.redirect('/head-table/?mode=admin');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
-
-    app.get('/administration-progress', (req, res) => {
-      res.redirect('/administration-progress/');
-    });
-
-    app.get('/administration-progress/', (req, res) => {
-      if (!isAdminModeRequested(req)) {
-        res.redirect('/head-table/?mode=admin');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
-
-    app.get('/administration-progress.html', (req, res) => {
-      if (!isAdminModeRequested(req)) {
-        res.redirect('/head-table/?mode=admin');
-        return;
-      }
-      sendPublicProgressPage(res);
-    });
-  }
+  app.get(alternateProgressHtml, (req, res) => {
+    redirectToCanonicalHtml(res);
+  });
 
   app.get('/group-builder', (req, res) => {
     res.redirect('/group-builder/');
