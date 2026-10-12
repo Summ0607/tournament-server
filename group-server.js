@@ -20,6 +20,9 @@ const { createEventConfigStore, normalizeEventRingConfig } = require('./backend/
 const app = express();
 const ACTIVE_SURFACE = resolveSurfaceName(process.env.TOURNAMENT_SURFACE);
 const PORT = resolveSurfacePort(ACTIVE_SURFACE);
+const SURFACE_ENTRY_PATH = ACTIVE_SURFACE === 'adminProgress'
+  ? '/administration-progress/'
+  : (ACTIVE_SURFACE === 'monitoring' ? '/event-progress/' : '/');
 
 // ─────────────────────────────────────────────
 // BASE CONSTANTS
@@ -1325,8 +1328,8 @@ async function startServer() {
   }
 
   app.listen(PORT, () => {
-    console.log(`Group server running on ${ACTIVE_SURFACE} at http://localhost:${PORT}`);
-    console.log(`Control board: http://localhost:${PORT}/control-board`);
+    console.log(`Group server running on ${ACTIVE_SURFACE} at http://localhost:${PORT}${SURFACE_ENTRY_PATH}`);
+    console.log(`Entry page: http://localhost:${PORT}${SURFACE_ENTRY_PATH}`);
     console.log(`Group example: http://localhost:${PORT}/api/groups/group-1`);
     console.log(`Ring request-group example: http://localhost:${PORT}/api/rings/ring-a-1/request-group`);
   });

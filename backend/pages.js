@@ -23,8 +23,14 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
     res.redirect(canonicalProgressHtml);
   }
 
-  app.use('/head-table', express.static(controlBoardDir, { index: false }));
-  app.use('/dashboard', express.static(controlBoardDir));
+  function exactRoute(pathname) {
+    return new RegExp(`^${pathname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+  }
+
+  if (!(isMonitoringSurface || isAdminProgressSurface)) {
+    app.use('/head-table', express.static(controlBoardDir, { index: false }));
+    app.use('/dashboard', express.static(controlBoardDir));
+  }
   app.use('/ring-progress', express.static(path.join(rootDir, 'ring-progress')));
   app.use('/ring-assignment', express.static(path.join(rootDir, 'ring-assignment')));
   app.use('/event-administration', express.static(path.join(rootDir, 'event-administration')));
@@ -33,6 +39,20 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
   app.use('/group-builder', express.static(path.join(rootDir, 'group-builder')));
   app.use(express.static(rootDir));
   app.use('/control-board-assets', express.static(controlBoardDir));
+
+  if (isMonitoringSurface || isAdminProgressSurface) {
+    app.get([exactRoute('/control-board'), exactRoute('/dashboard'), exactRoute('/head-table')], (req, res) => {
+      res.redirect(canonicalProgressPath);
+    });
+
+    app.get([exactRoute('/control-board/'), exactRoute('/dashboard/'), exactRoute('/head-table/')], (req, res) => {
+      res.redirect(canonicalProgressPath);
+    });
+
+    app.get([exactRoute('/control-board.html'), exactRoute('/dashboard.html'), exactRoute('/head-table.html')], (req, res) => {
+      res.redirect(canonicalProgressHtml);
+    });
+  }
 
   app.get('/control-board', (req, res) => {
     res.sendFile(path.join(controlBoardDir, 'index.html'));
@@ -46,39 +66,27 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
     redirectToCanonicalProgress(res);
   });
 
-  app.get('/head-table', (req, res) => {
+  app.get(exactRoute(canonicalProgressPath.slice(0, -1)), (req, res) => {
     redirectToCanonicalProgress(res);
   });
 
-  app.get('/head-table/', (req, res) => {
-    redirectToCanonicalProgress(res);
-  });
-
-  app.get('/head-table.html', (req, res) => {
-    redirectToCanonicalHtml(res);
-  });
-
-  app.get(canonicalProgressPath.slice(0, -1), (req, res) => {
-    redirectToCanonicalProgress(res);
-  });
-
-  app.get(canonicalProgressPath, (req, res) => {
+  app.get(exactRoute(canonicalProgressPath), (req, res) => {
     sendProgressPage(res);
   });
 
-  app.get(canonicalProgressHtml, (req, res) => {
+  app.get(exactRoute(canonicalProgressHtml), (req, res) => {
     sendProgressPage(res);
   });
 
-  app.get(alternateProgressPath.slice(0, -1), (req, res) => {
+  app.get(exactRoute(alternateProgressPath.slice(0, -1)), (req, res) => {
     redirectToCanonicalProgress(res);
   });
 
-  app.get(alternateProgressPath, (req, res) => {
+  app.get(exactRoute(alternateProgressPath), (req, res) => {
     redirectToCanonicalProgress(res);
   });
 
-  app.get(alternateProgressHtml, (req, res) => {
+  app.get(exactRoute(alternateProgressHtml), (req, res) => {
     redirectToCanonicalHtml(res);
   });
 
