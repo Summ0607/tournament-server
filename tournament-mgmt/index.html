@@ -28,14 +28,19 @@
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--text);
       background:
-        radial-gradient(circle at top left, rgba(34, 87, 179, 0.08), transparent 30%),
-        linear-gradient(180deg, #eef3ff 0%, var(--bg) 34%, var(--bg) 100%);
+        radial-gradient(circle at top left, rgba(34, 87, 179, 0.10), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(31, 79, 166, 0.06), transparent 24%),
+        linear-gradient(180deg, #e9eef8 0%, #f0f4fb 34%, #edf2f8 100%);
     }
 
     .shell {
-      max-width: 820px;
+      max-width: 860px;
       margin: 0 auto;
-      padding: 18px 16px 24px;
+      padding: 18px 18px 26px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.74), rgba(246, 249, 253, 0.90));
+      border: 1px solid rgba(192, 201, 214, 0.60);
+      border-radius: 28px;
+      box-shadow: 0 16px 40px rgba(31, 44, 77, 0.08);
     }
 
     .title-block,
@@ -52,7 +57,7 @@
       align-items: center;
       justify-content: flex-start;
       gap: 12px;
-      width: min(100%, 760px);
+      width: min(100%, 780px);
       margin: 0 auto;
       padding: 6px 0 4px;
       min-height: 56px;
@@ -212,19 +217,19 @@
     }
 
     .workspace-shell {
-      width: min(100%, 760px);
-      margin: 12px auto 0;
+      width: min(100%, 780px);
+      margin: 10px auto 0;
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       justify-items: center;
-      gap: 16px;
+      gap: 12px;
       align-items: start;
     }
 
     .sidebar {
-      width: min(100%, 760px);
+      width: min(100%, 780px);
       display: grid;
-      gap: 16px;
+      gap: 12px;
     }
 
     .summary-panel {
@@ -232,9 +237,9 @@
     }
 
     .workspace-main {
-      width: min(100%, 760px);
+      width: min(100%, 780px);
       display: grid;
-      gap: 16px;
+      gap: 12px;
       margin: 0 auto;
     }
 
@@ -248,13 +253,94 @@
 
     .stack-card.workflow-card {
       transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-      opacity: 0.92;
+      opacity: 0.94;
       cursor: pointer;
+    }
+
+    .stack-card.workflow-card.state-complete {
+      border-color: rgba(10, 124, 0, 0.28);
+      background: linear-gradient(180deg, rgba(245, 253, 245, 0.95) 0%, rgba(241, 249, 242, 0.98) 100%);
+    }
+
+    .stack-card.workflow-card.state-complete .stack-card-header {
+      background: linear-gradient(180deg, #edf9ed 0%, #e1f3e1 100%);
+    }
+
+    .stack-card.workflow-card.state-complete .stack-card-header h3,
+    .stack-card.workflow-card.state-complete .stack-card-summary {
+      color: #2f5f35;
+    }
+
+    .stack-card.workflow-card.state-complete .stack-card-header::before {
+      background: #0a7c00;
+    }
+
+    .stack-card.workflow-card.state-pending {
+      border-color: rgba(168, 109, 0, 0.22);
+      background: linear-gradient(180deg, rgba(255, 250, 241, 0.96) 0%, rgba(252, 246, 233, 0.98) 100%);
+    }
+
+    .stack-card.workflow-card.state-pending .stack-card-header {
+      background: linear-gradient(180deg, #fff6df 0%, #f6e8c0 100%);
+    }
+
+    .stack-card.workflow-card.state-pending .stack-card-header h3,
+    .stack-card.workflow-card.state-pending .stack-card-summary {
+      color: #7c5814;
+    }
+
+    .stack-card.workflow-card.state-pending .stack-card-header::before {
+      background: #d29a00;
+    }
+
+    .stack-card.workflow-card.state-inactive {
+      border-color: rgba(148, 163, 184, 0.28);
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.96) 0%, rgba(243, 247, 251, 0.98) 100%);
+      opacity: 0.92;
+    }
+
+    .stack-card.workflow-card.state-inactive .stack-card-header {
+      background: linear-gradient(180deg, #f5f7fa 0%, #e9eef4 100%);
+    }
+
+    .stack-card.workflow-card.state-inactive .stack-card-header h3,
+    .stack-card.workflow-card.state-inactive .stack-card-summary {
+      color: #66758a;
+    }
+
+    .stack-card.workflow-card.state-inactive .stack-card-header::before {
+      background: #94a3b8;
+    }
+
+    .stack-card.workflow-card.state-active {
+      border-color: rgba(31, 79, 166, 0.48);
+      box-shadow: 0 24px 46px rgba(31, 79, 166, 0.22);
+      transform: translateY(-2px);
+      opacity: 1;
+      border-left: 10px solid #1c62d4;
+      background: linear-gradient(180deg, rgba(245, 249, 255, 0.98) 0%, rgba(242, 247, 255, 1) 100%);
+    }
+
+    .stack-card.workflow-card.state-active .stack-card-header {
+      background: linear-gradient(180deg, #edf4ff 0%, #dfeaff 100%);
+    }
+
+    .stack-card.workflow-card.state-active .stack-card-header h3 {
+      color: var(--text);
+    }
+
+    .stack-card.workflow-card.state-active .stack-card-header::before {
+      background: #1f4fa6;
+    }
+
+    .stack-card.workflow-card.state-active .primary-btn {
+      background: linear-gradient(180deg, #1f4fa6, #163b7f);
+      border-color: #163b7f;
     }
 
     .stack-card.workflow-card.active {
       border-color: rgba(31, 79, 166, 0.48);
-      box-shadow: 0 22px 42px rgba(31, 79, 166, 0.20);
+      box-shadow: 0 24px 46px rgba(31, 79, 166, 0.22);
       transform: translateY(-2px);
       opacity: 1;
       border-left: 10px solid #1c62d4;
@@ -274,11 +360,23 @@
     }
 
     .stack-card-header {
-      padding: 14px 18px 12px;
-      border-bottom: 1px solid rgba(201, 209, 222, 0.72);
-      background: linear-gradient(180deg, #f6f9fd 0%, #eaf0f8 100%);
+      position: relative;
+      padding: 13px 18px 11px;
+      border-bottom: 1px solid rgba(190, 200, 214, 0.78);
+      background: linear-gradient(180deg, #f7faff 0%, #e9eff7 100%);
       display: grid;
       gap: 8px;
+      padding-left: 22px;
+    }
+
+    .stack-card-header::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 8px;
+      background: #1c62d4;
     }
 
     .stack-card-header h3 {
@@ -297,7 +395,7 @@
     }
 
     .stack-card-body {
-      padding: 18px;
+      padding: 16px 18px 18px;
       display: grid;
       gap: 14px;
     }
@@ -450,8 +548,8 @@
 
     .module-copy {
       margin: 0;
-      color: var(--text-soft);
-      font-size: 14px;
+      color: #4a5668;
+      font-size: 13px;
       line-height: 1.5;
     }
 
@@ -475,9 +573,9 @@
 
     .metric {
       background: #fff;
-      border: 1px solid var(--line);
+      border: 1px solid rgba(199, 207, 218, 0.95);
       border-radius: 14px;
-      padding: 14px;
+      padding: 13px;
       display: grid;
       gap: 6px;
     }
@@ -507,8 +605,8 @@
 
     .review-table th,
     .review-table td {
-      padding: 10px 12px;
-      border-bottom: 1px solid #e8edf3;
+      padding: 9px 11px;
+      border-bottom: 1px solid #e3e8f0;
       text-align: left;
       vertical-align: top;
     }
@@ -916,6 +1014,25 @@
       });
     }
 
+    function applyWorkflowStatusClasses(state) {
+      const currentStageIndex = Number(state.activeStageIndex) || 0;
+      const hasActiveEvent = Boolean(state.activeEvent);
+      document.querySelectorAll('.workflow-card').forEach((card) => {
+        const cardStageIndex = Number(card.getAttribute('data-stage'));
+        let status = 'inactive';
+        if (cardStageIndex === currentStageIndex) {
+          status = 'active';
+        } else if (cardStageIndex < currentStageIndex) {
+          status = hasActiveEvent ? 'complete' : 'inactive';
+        } else if (cardStageIndex > currentStageIndex) {
+          status = hasActiveEvent ? 'pending' : 'pending';
+        }
+        card.dataset.status = status;
+        card.classList.remove('state-active', 'state-complete', 'state-pending', 'state-inactive');
+        card.classList.add(`state-${status}`);
+      });
+    }
+
     function renderLaunchState(state) {
       activeStageIndex = Number(state.activeStageIndex) || 0;
       activeStageIndex = Number(state.activeStageIndex) || activeStageIndex || 0;
@@ -995,6 +1112,8 @@
       setText('step-summary-3', state.activeEvent
         ? 'Review and save are ready'
         : 'Awaiting group generation');
+
+      applyWorkflowStatusClasses(state);
 
     }
 
