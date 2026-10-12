@@ -50,10 +50,11 @@
       position: relative;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-start;
+      gap: 14px;
       width: 100%;
-      padding: 0 16px 0 0;
-      min-height: 64px;
+      padding: 12px 16px;
+      min-height: 72px;
       overflow: hidden;
       background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
     }
@@ -75,13 +76,15 @@
     }
 
     .title-logo-tile {
-      position: static;
-      width: 64px;
-      height: 64px;
+      position: relative;
+      width: 52px;
+      height: 52px;
       overflow: hidden;
       flex: 0 0 auto;
-      border-radius: 10px;
-      background: transparent;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.88);
+      border: 1px solid rgba(199, 207, 218, 0.75);
+      box-shadow: 0 8px 16px rgba(24, 39, 75, 0.06);
     }
 
     .title-logo {
@@ -95,22 +98,6 @@
       box-shadow: none;
       padding: 0;
     }
-
-    .banner-timer {
-      position: static;
-      padding: 0;
-      border-radius: 999px;
-      border: 0;
-      background: transparent;
-      color: var(--text-soft);
-      font-size: 12px;
-      font-weight: 700;
-      flex: 0 0 auto;
-      margin-left: 8px;
-      white-space: nowrap;
-    }
-
-    .banner-timer strong { color: var(--text); }
 
     .context-strip {
       margin-top: 12px;
@@ -265,12 +252,14 @@
 
     .stack-card.workflow-card {
       transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+      opacity: 0.93;
     }
 
     .stack-card.workflow-card.active {
       border-color: rgba(31, 79, 166, 0.38);
-      box-shadow: 0 16px 34px rgba(31, 79, 166, 0.14);
-      transform: translateY(-1px);
+      box-shadow: 0 20px 40px rgba(31, 79, 166, 0.18);
+      transform: translateY(-2px);
+      opacity: 1;
     }
 
     .stack-card.workflow-card.active .stack-card-header {
@@ -538,22 +527,17 @@
         align-items: center;
         gap: 10px;
       }
-      .title-logo-tile { width: 56px; height: 56px; order: 2; }
+      .title-logo-tile { width: 48px; height: 48px; order: 1; }
       .tournament-name {
         position: static;
         transform: none;
-        order: 1;
-        flex: 1 1 100%;
+        order: 2;
+        flex: 1 1 auto;
         width: 100%;
         white-space: normal;
         font-size: clamp(18px, 5vw, 24px);
-        text-align: center;
+        text-align: left;
       }
-      .banner-timer {
-        order: 3;
-        margin-left: auto;
-      }
-      .banner-timer { font-size: 11px; }
       .stage-bar-shell { width: 100%; }
       .context-strip { align-items: stretch; }
       .context-strip-left,
@@ -568,11 +552,10 @@
 <body>
   <div class="shell">
     <div class="title-block">
-      <h1 class="tournament-name">Pre-Tournament Activities</h1>
       <div class="title-logo-tile">
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
-      <div class="banner-timer">Event Timer: <strong>--:--:--</strong></div>
+      <h1 class="tournament-name">Pre-Tournament Activities</h1>
     </div>
 
     <div class="context-strip">
