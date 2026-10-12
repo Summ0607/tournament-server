@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+feature/multi-surface-tournament-backend,<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -52,20 +52,20 @@
 
     .title-block {
       position: relative;
-      display: flex;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
       align-items: center;
-      justify-content: center;
+      gap: 18px;
       background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
       backdrop-filter: blur(8px);
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
-      padding: 16px 132px 14px 20px;
+      padding: 10px 20px;
       min-height: 108px;
     }
 
     .tournament-name {
-      width: 100%;
       margin: 0;
       font-size: clamp(30px, 4vw, 46px);
       line-height: 1.02;
@@ -73,58 +73,44 @@
       font-weight: 750;
       color: var(--text);
       text-align: center;
-    }
-
-    .title-secondary {
-      position: absolute;
-      top: 16px;
-      left: 20px;
-      color: var(--text-soft);
-      font-size: 21px;
-      line-height: 1.4;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
+      justify-self: center;
+      grid-column: 2;
     }
 
     .title-logo {
-      position: absolute;
-      top: -1px;
-      right: 1px;
-      width: 108px;
-      height: 108px;
+      position: static;
+      width: 92px;
+      height: 92px;
       object-fit: contain;
       object-position: center;
-      border-radius: 12px;
-      background: #fff;
-      border: 1px solid var(--line);
-      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.10);
-      padding: 4px;
+      border-radius: 0;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 0;
     }
 
-    .subtitle {
-      color: #0f172a;
-      font-size: 15px;
-      line-height: 1.45;
-      font-weight: 800;
-      letter-spacing: 0.01em;
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 10px;
+    .banner-timer {
+      position: static;
+      justify-self: end;
+      padding: 0;
+      border-radius: 0;
+      border: 0;
+      background: transparent;
+      color: var(--text-soft);
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
       align-items: center;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      padding: 14px 16px;
+      gap: 6px;
+      white-space: nowrap;
     }
 
-    .toolbar.panel {
-      background: var(--surface);
-      backdrop-filter: blur(8px);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+    .banner-timer strong {
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: -0.02em;
     }
 
     button {
@@ -146,6 +132,7 @@
     button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
     button.ghost { background: var(--surface); }
     button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
     .hidden { display: none !important; }
 
     .panel {
@@ -153,11 +140,6 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
-    }
-
-    .section-card {
-      padding: 16px;
-      margin-bottom: 14px;
     }
 
     .summary {
@@ -403,6 +385,22 @@
 
     .ring-link:hover { text-decoration-thickness: 2px; }
 
+    .ring-link-static {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #111827;
+      font: inherit;
+      font-weight: 900;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      text-decoration: none;
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: default;
+    }
+
     .progress-box {
       display: grid;
       gap: 6px;
@@ -498,24 +496,6 @@
       margin-top: 4px;
       color: var(--text-soft);
       font-size: 11px;
-    }
-
-    .event-timer {
-      margin-left: auto;
-      font-size: 13px;
-      color: var(--text-soft);
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-
-    .event-timer strong {
-      color: var(--text);
-      font-size: 18px;
-      line-height: 1;
-      letter-spacing: -0.02em;
     }
 
     .ring-modal {
@@ -812,7 +792,22 @@
 
     @media (max-width: 760px) {
       .shell { padding: 14px; }
-      .toolbar { justify-content: flex-start; }
+      .title-block {
+        grid-template-columns: auto 1fr auto;
+        gap: 12px;
+        padding: 10px 12px;
+        min-height: 96px;
+      }
+      .title-logo {
+        width: 72px;
+        height: 72px;
+      }
+      .banner-timer {
+        font-size: 11px;
+      }
+      .tournament-name {
+        font-size: clamp(20px, 5vw, 30px);
+      }
       .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .board { grid-template-columns: 1fr; }
       .ring-row { grid-template-columns: 1fr; }
@@ -820,7 +815,6 @@
       .action-line, .action-line.reset { grid-template-columns: 1fr; }
       .action-line button { width: 100%; min-width: 0; }
       .status-panel-head { align-items: flex-start; flex-direction: column; }
-      .event-timer { margin-left: 0; }
       .timer-box { text-align: left; }
     }
   </style>
@@ -829,17 +823,9 @@
   <div class="shell">
     <div class="hero">
       <div class="title-block">
-        <h1 class="tournament-name" id="tournamentName">Tournament</h1>
-        <div class="title-secondary">Head Table</div>
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
-      </div>
-      <div class="toolbar panel">
-        <button class="ghost" id="refreshBtn">Refresh Board</button>
-        <button class="danger" id="resetTournamentBtn">Reset Tournament</button>
-        <button class="ghost" id="openSetupBtn" onclick="location.href='/event-administration/'">Event Administration</button>
-        <button class="ghost" id="openRingAssignmentBtn" onclick="location.href='/ring-assignment/'">Ring Assignment</button>
-        <button class="ghost" id="debugToggleBtn">Show Debug</button>
-        <div class="event-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
+        <h1 class="tournament-name" id="tournamentName">Event Progress</h1>
+        <div class="banner-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
       </div>
     </div>
 
@@ -876,6 +862,27 @@
   </div>
 
   <script>
+    const PRESENTATION_MODES = Object.freeze({
+      public: {
+        title: 'Event Progress',
+        showRingDetails: false,
+        showDebugPanel: false
+      },
+      admin: {
+        title: 'Administration Progress View',
+        showRingDetails: true,
+        showDebugPanel: true
+      }
+    });
+
+    function resolvePresentationMode() {
+      const mode = new URLSearchParams(window.location.search).get('mode');
+      return Object.prototype.hasOwnProperty.call(PRESENTATION_MODES, mode) ? mode : 'public';
+    }
+
+    const PRESENTATION_MODE = resolvePresentationMode();
+    const PRESENTATION = PRESENTATION_MODES[PRESENTATION_MODE];
+
     const state = {
       groups: [],
       rings: [],
@@ -909,9 +916,6 @@
     const ringModalSubtitleEl = document.getElementById('ringModalSubtitle');
     const ringModalBodyEl = document.getElementById('ringModalBody');
     const ringModalCloseEl = document.getElementById('ringModalClose');
-    const refreshBtn = document.getElementById('refreshBtn');
-    const resetTournamentBtn = document.getElementById('resetTournamentBtn');
-    const debugToggleBtn = document.getElementById('debugToggleBtn');
 
     function escapeHtml(value) {
       return String(value)
@@ -1286,6 +1290,13 @@
     }
 
     function renderRingModal(view) {
+      if (!PRESENTATION.showRingDetails) {
+        ringModalEl.classList.remove('visible');
+        ringModalEl.setAttribute('aria-hidden', 'true');
+        ringModalBodyEl.innerHTML = '';
+        return;
+      }
+
       if (!state.activeRingId || !view) {
         ringModalEl.classList.remove('visible');
         ringModalEl.setAttribute('aria-hidden', 'true');
@@ -1358,6 +1369,7 @@
     }
 
     function openRingDetails(ringId) {
+      if (!PRESENTATION.showRingDetails) return;
       state.activeRingId = ringId;
       state.phaseHistoryExpanded = false;
       renderBoard();
@@ -1370,7 +1382,8 @@
     }
 
     function renderBoard() {
-      tournamentNameEl.textContent = state.activeEvent || 'Tournament';
+      tournamentNameEl.textContent = PRESENTATION.title;
+      document.title = PRESENTATION.title;
       const loadedAt = state.lastBoardLoadedAt ? new Date(state.lastBoardLoadedAt).toLocaleTimeString() : '--';
       metaLineEl.innerHTML = `<span>Last board refresh: ${escapeHtml(loadedAt)}</span>`;
       eventTimerEl.textContent = state.eventStartedAt ? fmtDuration(Date.now() - new Date(state.eventStartedAt).getTime()) : '--:--:--';
@@ -1387,7 +1400,9 @@
             <section class="ring-card ${view.tone}" data-ring-id="${escapeHtml(ring.ringId)}">
               <div class="ring-row">
                 <div class="ring-id-cell">
-                  <button class="ring-link" data-action="open-ring" data-ring-id="${escapeHtml(ring.ringId)}">${escapeHtml(ring.ringLabel)}</button>
+                  ${PRESENTATION.showRingDetails
+                    ? `<button class="ring-link" data-action="open-ring" data-ring-id="${escapeHtml(ring.ringId)}">${escapeHtml(ring.ringLabel)}</button>`
+                    : `<span class="ring-link-static">${escapeHtml(ring.ringLabel)}</span>`}
                   <div class="ring-status"><span class="status-chip ${view.statusTone}">${escapeHtml(statusLabel)}</span></div>
                 </div>
                 <div class="progress-box">
@@ -1434,8 +1449,13 @@
     }
 
     function applyDebugVisibility() {
+      if (!PRESENTATION.showDebugPanel) {
+        state.debugVisible = false;
+        statusPanelEl.classList.add('hidden');
+        return;
+      }
+
       statusPanelEl.classList.toggle('hidden', !state.debugVisible);
-      debugToggleBtn.textContent = state.debugVisible ? 'Hide Debug' : 'Show Debug';
       if (state.debugVisible) {
         loadStatus().catch((error) => renderStatusPanel(false, error.message));
       }
@@ -1526,11 +1546,8 @@
       }
     }
 
-    refreshBtn.addEventListener('click', () => {
-      refreshAll().catch((error) => renderNotice(error.message, 'error'));
-    });
-
     boardEl.addEventListener('click', (event) => {
+      if (!PRESENTATION.showRingDetails) return;
       const link = event.target instanceof Element ? event.target.closest('button[data-action="open-ring"]') : null;
       if (!link) return;
       const ringId = link.getAttribute('data-ring-id');
@@ -1548,29 +1565,12 @@
       if (event.target === ringModalEl) closeRingDetails();
     });
 
-    debugToggleBtn.addEventListener('click', () => {
-      state.debugVisible = !state.debugVisible;
-      applyDebugVisibility();
-    });
-
-    resetTournamentBtn.addEventListener('click', async () => {
-      if (!confirm('Reset the tournament? This clears all ring assignments and queues.')) return;
-      try {
-        renderNotice('Resetting tournament...', 'warn');
-        await fetchJson('/api/reset', { method: 'POST' });
-        await refreshAll();
-        renderNotice('Tournament reset complete.', 'ok');
-      } catch (error) {
-        renderNotice(`Reset failed: ${error.message}`, 'error');
-      }
-    });
-
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && state.activeRingId) {
         closeRingDetails();
         return;
       }
-      if (event.key === 'F12') {
+      if (event.key === 'F12' && PRESENTATION.showDebugPanel) {
         event.preventDefault();
         state.debugVisible = !state.debugVisible;
         applyDebugVisibility();
