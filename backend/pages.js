@@ -1,8 +1,25 @@
 const express = require('express');
 const path = require('path');
 
-function registerPageRoutes(app, rootDir, controlBoardDir) {
-  app.use('/head-table', express.static(controlBoardDir));
+function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
+  const normalizedSurface = String(activeSurface || '').trim().toLowerCase();
+  const isMonitoringSurface = normalizedSurface === 'monitoring';
+  const isAdminProgressSurface = normalizedSurface === 'adminprogress';
+  const progressPagePath = path.join(rootDir, 'head-table', 'index.html');
+
+  function isAdminModeRequested(req) {
+    return String(req.query && req.query.mode || '').trim().toLowerCase() === 'admin';
+  }
+
+  function sendPublicProgressPage(res) {
+    res.sendFile(progressPagePath);
+  }
+
+  function redirectToAdminProgress(res) {
+    res.redirect('/head-table/?mode=admin');
+  }
+
+  app.use('/head-table', express.static(controlBoardDir, { index: false }));
   app.use('/dashboard', express.static(controlBoardDir));
   app.use('/ring-progress', express.static(path.join(rootDir, 'ring-progress')));
   app.use('/ring-assignment', express.static(path.join(rootDir, 'ring-assignment')));
@@ -20,6 +37,112 @@ function registerPageRoutes(app, rootDir, controlBoardDir) {
   app.get('/status', (req, res) => {
     res.redirect('/api/rings');
   });
+
+  if (isMonitoringSurface) {
+    app.get('/', (req, res) => {
+      if (isAdminModeRequested(req)) {
+        res.redirect('/');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+
+    app.get('/head-table', (req, res) => {
+      if (isAdminModeRequested(req)) {
+        res.redirect('/head-table/');
+        return;
+      }
+      res.redirect('/head-table/');
+    });
+
+    app.get('/head-table/', (req, res) => {
+      if (isAdminModeRequested(req)) {
+        res.redirect('/head-table/');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+
+    app.get('/head-table.html', (req, res) => {
+      if (isAdminModeRequested(req)) {
+        res.redirect('/head-table.html');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+
+    app.get('/event-progress', (req, res) => {
+      if (isAdminModeRequested(req)) {
+        res.redirect('/event-progress/');
+        return;
+      }
+      res.redirect('/event-progress/');
+    });
+
+    app.get('/event-progress/', (req, res) => {
+      if (isAdminModeRequested(req)) {
+        res.redirect('/event-progress/');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+
+    app.get('/event-progress.html', (req, res) => {
+      if (isAdminModeRequested(req)) {
+        res.redirect('/event-progress.html');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+  } else if (isAdminProgressSurface) {
+    app.get('/', (req, res) => {
+      res.redirect('/head-table/?mode=admin');
+    });
+
+    app.get('/head-table', (req, res) => {
+      if (!isAdminModeRequested(req)) {
+        res.redirect('/head-table/?mode=admin');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+
+    app.get('/head-table/', (req, res) => {
+      if (!isAdminModeRequested(req)) {
+        res.redirect('/head-table/?mode=admin');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+
+    app.get('/head-table.html', (req, res) => {
+      if (!isAdminModeRequested(req)) {
+        res.redirect('/head-table/?mode=admin');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+
+    app.get('/administration-progress', (req, res) => {
+      res.redirect('/administration-progress/');
+    });
+
+    app.get('/administration-progress/', (req, res) => {
+      if (!isAdminModeRequested(req)) {
+        res.redirect('/head-table/?mode=admin');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+
+    app.get('/administration-progress.html', (req, res) => {
+      if (!isAdminModeRequested(req)) {
+        res.redirect('/head-table/?mode=admin');
+        return;
+      }
+      sendPublicProgressPage(res);
+    });
+  }
 
   app.get('/group-builder', (req, res) => {
     res.redirect('/group-builder/');

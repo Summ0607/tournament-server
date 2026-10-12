@@ -8,11 +8,13 @@ test('surface ports resolve by name and default to pre', () => {
   assert.equal(resolveSurfaceName('ringOps'), 'ringOps');
   assert.equal(resolveSurfacePort('ringOps'), 3001);
   assert.equal(resolveSurfacePort('MONITORING'), 3002);
+  assert.equal(resolveSurfacePort('adminProgress'), 3004);
   assert.deepEqual(SURFACE_PORTS, {
     pre: 3000,
     ringOps: 3001,
     monitoring: 3002,
     medical: 3003,
+    adminProgress: 3004,
     post: 3010
   });
 });

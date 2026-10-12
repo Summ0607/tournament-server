@@ -16,9 +16,10 @@ port and operational purpose:
 - `3000` Pre-Tournament
 - `3001-3009` Day-of Event surfaces
   - `3001` Ring Assignment Operations
-  - `3002` Monitoring / display-only
+  - `3002` Event Progress / display-only
   - `3003` Medical
-  - `3004-3009` Reserved for additional Day-of surfaces
+  - `3004` Administration Progress View
+  - `3005-3009` Reserved for additional Day-of surfaces
 - `3010+` Post-Tournament
 
 The goal is to keep the surfaces loosely coupled while sharing the same server
@@ -26,6 +27,8 @@ backend and data model.
 
 The active surface can be selected with the `TOURNAMENT_SURFACE` environment
 variable. If unset, the server defaults to `pre`.
+Use `monitoring` for the public Event Progress view and `adminProgress` for the
+Administration Progress View.
 
 Ring layout dimensions are saved in each event's `event-config.json` as numeric
 `ringConfigX` (Ring Config Columns, shown as letters) and `ringConfigY` (Ring Config

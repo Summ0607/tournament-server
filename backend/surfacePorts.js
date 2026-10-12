@@ -3,6 +3,7 @@ const SURFACE_PORTS = Object.freeze({
   ringOps: 3001,
   monitoring: 3002,
   medical: 3003,
+  adminProgress: 3004,
   post: 3010
 });
 

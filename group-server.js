@@ -827,7 +827,7 @@ function saveUploadedDivisionPacket(ringId, packet) {
   fs.writeFileSync(filePath, JSON.stringify(packet, null, 2));
 }
 
-registerPageRoutes(app, ROOT_DIR, CONTROL_BOARD_DIR);
+registerPageRoutes(app, ROOT_DIR, CONTROL_BOARD_DIR, ACTIVE_SURFACE);
 
 app.get('/api/version', (req, res) => {
   const versionInfo = readAndroidVersionInfo();
