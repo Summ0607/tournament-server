@@ -33,7 +33,6 @@ const DISCONNECT_AFTER_MS = 90 * 1000;
 const MAX_LETTERS = 26;
 const MAX_NUMBERS = 50;
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-const GROUPS_DIR = path.join(ROOT_DIR, 'groups');
 const RESULTS_DIR = path.join(ROOT_DIR, 'Results');
 const RING_ASSIGNMENTS_FILE = path.join(ROOT_DIR, 'ring-assignments.json');
 const EVENTS_RING_ASSIGNMENTS_FILE = (eventName) => path.join(EVENTS_ROOT, eventName, 'ring-assignments.json');
@@ -57,15 +56,6 @@ function resolveEventDbPath(eventName = readActiveEvent()) {
   return fs.existsSync(eventDbPath) ? eventDbPath : TOURNAMENT_DB_PATH;
 }
 
-function resolveEventDirectory(eventName = readActiveEvent()) {
-  const normalizedEventName = String(eventName || '').trim();
-  if (!normalizedEventName) {
-    return '';
-  }
-
-  return path.join(EVENTS_ROOT, normalizedEventName);
-}
-
 const resultPacketStore = createResultPacketStore({
   getResultsDirectory: () => {
     const activeEvent = readActiveEvent();
@@ -75,27 +65,13 @@ const resultPacketStore = createResultPacketStore({
   }
 });
 
-function resolveGroupsDir(eventName = readActiveEvent()) {
-  const normalizedEventName = String(eventName || '').trim();
-  if (!normalizedEventName) {
-    return GROUPS_DIR;
-  }
-
-  const eventDir = resolveEventDirectory(normalizedEventName);
-  if (eventDir && fs.existsSync(eventDir)) {
-    return path.join(eventDir, 'groups');
-  }
-
-  return GROUPS_DIR;
-}
-
 // ─────────────────────────────────────────────
-// STORES (NOW USING EVENT PATHS)
+// STORES (IN-MEMORY BY EVENT)
 // ─────────────────────────────────────────────
 const competitorStore = createCompetitorStore(TOURNAMENT_DB_PATH);
 const groupStoresByEvent = new Map();
-function currentGroupStore() {
-  const cacheKey = resolveGroupsDir() || '__default__';
+function currentGroupStore(eventName = readActiveEvent()) {
+  const cacheKey = String(eventName || '').trim().toLowerCase() || '__default__';
   if (!groupStoresByEvent.has(cacheKey)) {
     groupStoresByEvent.set(cacheKey, createGroupStore());
   }
@@ -248,7 +224,6 @@ function getEventPaths(eventName) {
   return {
     eventDir,
     dbPath: path.join(eventDir, 'tournament.db'),
-    groupsDir: path.join(eventDir, 'groups'),
     resultsDir: path.join(eventDir, 'results'),
     ringAssignmentsFile: path.join(eventDir, 'ring-assignments.json')
   };
@@ -1016,7 +991,7 @@ app.post('/api/events/activate', async (req, res) => {
   }
 
   try {
-    currentGroupStore().clearGroups();
+    currentGroupStore(eventName).clearGroups();
     fs.writeFileSync(ACTIVE_EVENT_FILE, JSON.stringify({ activeEvent: eventName }, null, 2));
     await primeGroupCacheFromDatabase();
     return res.json({ ok: true, activeEvent: eventName, dbPath: path.join(eventDir, 'tournament.db') });
@@ -1113,7 +1088,7 @@ app.post('/api/events/create', (req, res) => {
     return res.status(400).json({ error: 'eventName is required' });
   }
 
-  const { eventDir, dbPath, groupsDir, resultsDir, ringAssignmentsFile } = getEventPaths(eventName);
+  const { eventDir, dbPath, resultsDir, ringAssignmentsFile } = getEventPaths(eventName);
 
   try {
     if (fs.existsSync(eventDir)) {
@@ -1122,9 +1097,8 @@ app.post('/api/events/create', (req, res) => {
 
     Object.assign(eventConfig, normalizeEventRingConfig(eventConfig));
     fs.mkdirSync(eventDir, { recursive: true });
-    fs.mkdirSync(groupsDir, { recursive: true });
     fs.mkdirSync(resultsDir, { recursive: true });
-    currentGroupStore().clearGroups();
+    currentGroupStore(eventName).clearGroups();
     writeEventConfig(eventName, {
       ...eventConfig,
       name: eventConfig.name || eventName
@@ -1243,7 +1217,7 @@ async function resetEvent(eventName) {
     throw new Error('eventName is required or no active event is set');
   }
 
-  const { eventDir, dbPath, groupsDir, resultsDir, ringAssignmentsFile } = getEventPaths(normalizedName);
+  const { eventDir, dbPath, resultsDir, ringAssignmentsFile } = getEventPaths(normalizedName);
   if (!fs.existsSync(eventDir)) {
     const err = new Error(`Event folder not found: ${normalizedName}`);
     err.statusCode = 404;
@@ -1254,10 +1228,6 @@ async function resetEvent(eventName) {
     fs.unlinkSync(dbPath);
   }
 
-  if (fs.existsSync(groupsDir)) {
-    fs.rmSync(groupsDir, { recursive: true, force: true });
-  }
-
   if (fs.existsSync(resultsDir)) {
     fs.rmSync(resultsDir, { recursive: true, force: true });
   }
@@ -1266,9 +1236,8 @@ async function resetEvent(eventName) {
     fs.unlinkSync(ringAssignmentsFile);
   }
 
-  currentGroupStore().clearGroups();
+  currentGroupStore(normalizedName).clearGroups();
 
-  fs.mkdirSync(groupsDir, { recursive: true });
   fs.mkdirSync(resultsDir, { recursive: true });
 
   const initializeDatabase = require('./db/init');
