@@ -40,3 +40,19 @@ Rows, shown as numbers) fields (non-negative whole numbers; blank inputs
 default to zero). Creating or modifying an event saves both dimensions. Older
 `ringConfig` strings such as `"2 x 3"` are read for compatibility and converted to
 numeric fields on the next save.
+
+## Group storage cleanup
+
+The server now treats the database and in-memory store as the active source of
+truth for groups/divisions. Legacy filesystem group folders are no longer part
+of the event lifecycle.
+
+### What changed
+- Root `groups/` folder lifecycle handling was removed
+- Per-event `groups/` folder creation and deletion was removed
+- Group lookup, `/api/groups`, division build/save, and ring flow still work
+  through the live in-memory store populated from the database
+
+### Practical effect
+This reduces stale filesystem state while preserving the current runtime
+behavior for divisions and ring assignment flows.
