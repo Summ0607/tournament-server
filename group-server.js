@@ -22,7 +22,7 @@ const ACTIVE_SURFACE = resolveSurfaceName(process.env.TOURNAMENT_SURFACE);
 const PORT = resolveSurfacePort(ACTIVE_SURFACE);
 const SURFACE_ENTRY_PATH = ACTIVE_SURFACE === 'adminProgress'
   ? '/administration-progress/'
-  : (ACTIVE_SURFACE === 'monitoring' ? '/event-progress/' : '/');
+  : (ACTIVE_SURFACE === 'monitoring' ? '/event-progress/' : '/tournament-mgmt/');
 
 // ─────────────────────────────────────────────
 // BASE CONSTANTS

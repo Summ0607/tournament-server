@@ -32,6 +32,7 @@ Administration Progress View.
 Exact entry points:
 - `http://localhost:3002/event-progress/` for the public Event Progress view
 - `http://localhost:3004/administration-progress/` for the Administration Progress view
+Launcher: [launch-surfaces.ps1](./launch-surfaces.ps1)
 
 Ring layout dimensions are saved in each event's `event-config.json` as numeric
 `ringConfigX` (Ring Config Columns, shown as letters) and `ringConfigY` (Ring Config
