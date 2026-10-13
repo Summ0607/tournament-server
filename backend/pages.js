@@ -34,6 +34,7 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
   app.use('/ring-progress', express.static(path.join(rootDir, 'ring-progress')));
   app.use('/ring-assignment', express.static(path.join(rootDir, 'ring-assignment')));
   app.use('/event-administration', express.static(path.join(rootDir, 'event-administration')));
+  app.use('/tournament-setup', express.static(path.join(rootDir, 'tournament-setup')));
   app.use('/rings', express.static(path.join(rootDir, 'ring-progress')));
   app.use('/ring-status', express.static(path.join(rootDir, 'ring-progress')));
   app.use('/group-builder', express.static(path.join(rootDir, 'group-builder')));
@@ -100,6 +101,18 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
 
   app.get('/group-builder.html', (req, res) => {
     res.sendFile(path.join(rootDir, 'group-builder', 'index.html'));
+  });
+
+  app.get('/tournament-setup', (req, res) => {
+    res.redirect('/tournament-setup/');
+  });
+
+  app.get('/tournament-setup/', (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'index.html'));
+  });
+
+  app.get('/tournament-setup.html', (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'index.html'));
   });
 
   app.get('/dashboard', (req, res) => {
