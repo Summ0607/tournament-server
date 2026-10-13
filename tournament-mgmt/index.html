@@ -704,9 +704,9 @@
             <div class="status-line"><span>Last Saved</span><strong id="launch-last-saved">No event loaded</strong></div>
             <div class="status-line"><span>Roster</span><strong id="launch-roster">Not loaded</strong></div>
             <div class="flow-actions" id="launch-flow-actions">
-              <button class="flow-btn active" id="launch-open-event-admin" type="button">Open Event Administration</button>
+              <button class="flow-btn active" id="launch-open-event-admin" type="button">Open Event Definition</button>
             </div>
-            <p class="module-copy" id="launch-action-status">Open Event Administration to create, modify, or activate an event.</p>
+            <p class="module-copy" id="launch-action-status">Open Event Definition to create, modify, or activate an event.</p>
           </div>
         </section>
 
@@ -896,7 +896,7 @@
     function buildLaunchState(activeEvent) {
       const state = { ...launchStateDefaults };
       if (!activeEvent) {
-        state.actionStatus = 'No active event loaded. Open Event Administration to create or activate one.';
+        state.actionStatus = 'No active event loaded. Open Event Definition to create or activate one.';
         return state;
       }
 
@@ -1206,7 +1206,7 @@
       });
     });
 
-    // Event Administration's Back button returns here and advances the stage.
+    // Event Definition's Back button returns here and advances the stage.
     openEventAdminButton.addEventListener('click', () => {
       window.location.assign('/event-administration/');
     });
