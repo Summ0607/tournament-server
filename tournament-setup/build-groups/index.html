@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tournament Group Builder</title>
+  <title>Build Groups | Tournament Setup</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,63 +14,73 @@
       min-height: 100vh;
     }
 
-    /* Shared page banner (matches Head Table / Ring Assignment) */
-    .page-hero {
+    /* Shared setup banner */
+    .setup-banner {
       max-width: 1320px;
       margin: 0 auto;
-      padding: 20px 24px 0;
+      padding: 0 0 0 20px;
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
       gap: 12px;
-    }
-
-    .page-hero .title-block,
-    .page-hero .toolbar {
       background: #ffffff;
       border: 1px solid #c9d1db;
       border-radius: 16px;
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+      min-height: 88px;
     }
 
-    .page-hero .title-block {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px 132px 14px 20px;
-      min-height: 108px;
-      background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
-    }
-
-    .page-hero .tournament-name {
-      width: 100%;
-      margin: 0;
-      font-size: clamp(30px, 4vw, 46px);
-      line-height: 1.02;
-      letter-spacing: -0.04em;
-      font-weight: 750;
-      color: #111827;
-      text-align: center;
-    }
-
-    .page-hero .title-secondary {
-      position: absolute;
-      top: 16px;
-      left: 20px;
-      color: #374151;
-      font-size: 21px;
+    .banner-back-link {
+      color: #2257b3;
+      font-size: 13px;
       line-height: 1.4;
       font-weight: 700;
-      letter-spacing: 0.02em;
+      text-decoration: none;
+      white-space: nowrap;
+      justify-self: start;
+    }
+
+    .banner-back-link:hover,
+    .banner-back-link:focus-visible {
+      text-decoration: underline;
+    }
+
+    .banner-copy {
+      display: grid;
+      gap: 1px;
+      justify-items: center;
+      text-align: center;
+      padding: 4px 0;
+    }
+
+    .banner-kicker {
+      color: #374151;
+      font-size: 13px;
+      line-height: 1.35;
+      font-weight: 700;
+      letter-spacing: 0.10em;
       text-transform: uppercase;
     }
 
-    .page-hero .title-logo {
-      position: absolute;
-      top: -1px;
-      right: 1px;
-      width: 108px;
-      height: 108px;
+    .banner-title {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 40px);
+      line-height: 1.05;
+      letter-spacing: -0.05em;
+      font-weight: 750;
+      color: #111827;
+    }
+
+    .banner-subtitle {
+      margin: 0;
+      color: #374151;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .banner-logo-tile {
+      width: 88px;
+      height: 88px;
       object-fit: contain;
       object-position: center;
       border-radius: 12px;
@@ -78,34 +88,15 @@
       border: 1px solid #c9d1db;
       box-shadow: 0 10px 20px rgba(15, 23, 42, 0.10);
       padding: 4px;
+      justify-self: end;
     }
 
-    .page-hero .toolbar {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      padding: 14px 16px;
+    .banner-logo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
     }
-
-    .page-hero .nav-btn {
-      appearance: none;
-      border: 1px solid #94a3b8;
-      background: #ffffff;
-      color: #111827;
-      padding: 10px 14px;
-      border-radius: 12px;
-      font: inherit;
-      font-weight: 700;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .page-hero .event-timer { margin-left: auto; color: #374151; font-weight: 700; }
-    .page-hero .event-timer strong { color: #111827; }
 
     main {
       max-width: 1320px;
@@ -178,22 +169,55 @@
     .btn-sm { padding: 5px 12px; font-size: 12px; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* Settings */
-    .settings-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 14px;
-      align-items: end;
+    .btn-shell {
+      min-width: 110px;
+      border: 1px dashed #9eb4da;
+      background: #f8fbff;
+      color: #2257b3;
     }
 
-    .setting-group { display: flex; flex-direction: column; gap: 6px; }
-    .setting-group label { font-size: 12px; font-weight: 700; color: #5b6475; }
+    .btn-shell:hover:not(:disabled) {
+      background: #edf4ff;
+      border-color: #7fa0d8;
+    }
+
+    .btn.next-action {
+      background: linear-gradient(180deg, #2257b3 0%, #1d4ea1 100%);
+      color: #fff;
+      border: 1px solid #2257b3;
+      box-shadow: 0 8px 18px rgba(34, 87, 179, 0.18);
+    }
+
+    .btn.next-action:hover:not(:disabled) {
+      background: linear-gradient(180deg, #1f4e9f 0%, #18458e 100%);
+      border-color: #1f4e9f;
+    }
+
+    /* Settings */
+    .settings-row {
+      margin-top: 8px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .setting-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      width: 132px;
+      flex: 0 0 132px;
+    }
+
+    .setting-group label { font-size: 11px; font-weight: 700; color: #5b6475; }
     .setting-group input[type="number"] {
       width: 100%;
-      padding: 10px 12px;
+      padding: 8px 10px;
       border: 1px solid #d7deea;
-      border-radius: 10px;
-      font-size: 14px;
+      border-radius: 8px;
+      font-size: 13px;
       background: #fff;
     }
 
@@ -207,6 +231,64 @@
       border-radius: 10px;
       border: 1px solid #dbe2f0;
       border-left: 4px solid #1a1a2e;
+    }
+
+    .optional-actions {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .optional-actions-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: #7a8797;
+    }
+
+    .btn-quiet {
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px dashed #9eb4da;
+      background: #f8fbff;
+      color: #2257b3;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .btn-quiet:hover:not(:disabled) {
+      background: #edf4ff;
+      border-color: #7fa0d8;
+    }
+
+    .build-tip {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .build-tip strong {
+      color: #1a1a2e;
+    }
+
+    .build-tip-icon {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #e8eefc;
+      color: #2257b3;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      margin-top: 1px;
     }
 
     /* Preview table */
@@ -314,6 +396,12 @@
       overflow: hidden;
     }
 
+    .group-card.empty-shell {
+      border-style: dashed;
+      border-color: #9eb4da;
+      background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+    }
+
     .group-card.drop-target {
       box-shadow: 0 0 0 3px rgba(26, 26, 46, 0.18), 0 2px 10px rgba(0,0,0,0.05);
       transform: translateY(-1px);
@@ -328,7 +416,41 @@
       color: white;
     }
 
+    .group-header.empty-shell {
+      background: linear-gradient(180deg, #edf4ff 0%, #dfeaff 100%);
+      color: #123a7a;
+    }
+
     .group-header.adult { background: #1a4d2e; }
+
+    .group-header-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .group-header-main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .group-delete-btn {
+      flex: 0 0 auto;
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(185, 28, 28, 0.35);
+      background: rgba(255, 255, 255, 0.9);
+      color: #b91c1c;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .group-delete-btn:hover:not(:disabled) {
+      background: #fee2e2;
+    }
 
     .group-name-input {
       background: transparent;
@@ -409,6 +531,14 @@
 
     .group-footer .btn-danger {
       display: none;
+    }
+
+    .group-shell-hint {
+      padding: 10px 16px 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #4f6f9e;
+      font-weight: 700;
     }
 
     /* Unassigned pool */
@@ -597,10 +727,23 @@
     .flex-gap { display: flex; gap: 8px; align-items: center; }
 
     @media (max-width: 700px) {
-      .page-hero { padding: 12px 12px 0; }
-      .page-hero .title-block { padding-right: 20px; min-height: 0; }
-      .page-hero .title-logo { position: static; width: 88px; height: 88px; margin-top: 12px; }
-      .page-hero .event-timer { margin-left: 0; }
+      .setup-banner {
+        padding: 12px 14px;
+        grid-template-columns: 1fr auto;
+        min-height: 0;
+      }
+      .banner-back-link {
+        grid-column: 1 / -1;
+      }
+      .banner-copy {
+        grid-column: 1 / 2;
+        justify-items: start;
+        text-align: left;
+      }
+      .banner-logo-tile {
+        width: 72px;
+        height: 72px;
+      }
       main { padding: 12px; }
       .groups-grid { grid-template-columns: 1fr; }
       .action-bar .btn { width: 100%; }
@@ -638,55 +781,39 @@
     }
   </style>
 </head>
-<body>
+<body data-page-mode="build">
 
-<div class="page-hero">
-  <div class="title-block">
-    <h1 class="tournament-name" id="tournamentName">Tournament</h1>
-    <div class="title-secondary">Group Builder</div>
-    <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
+<div class="setup-banner">
+  <a class="banner-back-link" href="/tournament-setup/">← Back to Tournament Setup</a>
+  <div class="banner-copy">
+    <div class="banner-kicker">Build Groups</div>
+    <h1 class="banner-title" id="bannerEventName">No event selected</h1>
+    <p class="banner-subtitle">Generate groups and continue to Review &amp; Save.</p>
   </div>
-  <div class="toolbar">
-    <a class="nav-btn" href="/event-administration/">Event Definition</a>
-    <a class="nav-btn" href="/ring-assignment/">Ring Assignment</a>
-    <a class="nav-btn" href="/head-table/">Head Table</a>
-    <div class="event-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
-  </div>
+  <img class="banner-logo-tile" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
 </div>
 
 <main>
-
-  <!-- ── STEP 1: Load Competitors ── -->
-  <div class="card">
-    <div class="card-title">
-      <div class="step-num">1</div>
-      Load Competitors
-    </div>
-    <p class="section-copy">Load the competitor roster from the server before auto-grouping.</p>
-
-    <div class="flex-gap">
-      <button class="btn btn-primary" onclick="loadCompetitorsFromServer()">Load Competitors</button>
-    </div>
-  </div>
-
   <!-- ── STEP 2.5: Build Divisions (Backend Logic) ── -->
   <div class="card">
-    <div class="card-title">
-      <div class="step-num">2.5</div>
-      Build Divisions (Backend Logic)
+    <div class="flex-gap" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <button class="btn btn-primary" onclick="buildDivisions()">
+        🛠 Build Divisions
+      </button>
+      <button class="btn btn-secondary" id="reviewNextBtn" type="button" disabled>
+        Next: Review &amp; Save
+      </button>
     </div>
-    <p class="section-copy">
-      Use the backend TTLD/Special Needs/Youth/Adult/Black Belt logic to generate official divisions.
-    </p>
 
-    <button class="btn btn-primary" onclick="buildAndSaveDivisions()">
-      🛠 Build & Save Divisions
-    </button>
+    <div class="info-note build-tip">
+      <span class="build-tip-icon">↕</span>
+      <div>
+        <strong>Drag and drop</strong> competitors between groups to rebalance divisions.
+        When you’re done, use <strong>Next: Review &amp; Save</strong>.
+      </div>
     </div>
 
     <div id="groupsContainer"></div>
-
-    <p class="section-copy">Adjust the size and age-span guardrails, then generate groups with one click.</p>
 
     <div class="settings-row">
       <div class="setting-group">
@@ -697,123 +824,96 @@
         <label>Target Max Size</label>
         <input type="number" id="maxSize" value="6" min="6" max="13">
       </div>
-      <div class="setting-group">
-        <label>Age Span Under 14 (yrs)</label>
-        <input type="number" id="ageSpanUnder14" value="3" min="1" max="10">
-      </div>
-      <div class="setting-group">
-        <label>Age Span 14-37 (yrs)</label>
-        <input type="number" id="ageSpan14To37" value="4" min="1" max="20">
-      </div>
-      <div class="setting-group">
-        <label>Age Span 18-37 (yrs)</label>
-        <input type="number" id="ageSpan18To37" value="4" min="1" max="20">
-      </div>
-      <div class="setting-group">
-        <label>Age Span 38+ (yrs)</label>
-        <input type="number" id="ageSpan38Plus" value="35" min="1" max="60">
-      </div>
-      <button class="btn btn-primary" id="autoGroupBtn" onclick="runAutoGroup()" disabled>
-        ⚡ Auto-Group
+    </div>
+
+    <div class="optional-actions">
+      <span class="optional-actions-label">Optional</span>
+      <button class="btn btn-quiet" id="addGroupBtn" type="button" title="Add an empty group for a rare manual split">
+        ＋ Add group
       </button>
     </div>
 
-    <div class="info-note" id="adultNote" style="display:none;">
-    ℹ️ Groups are separated by <strong>gender</strong> first. The bounded rank rules are: <strong>G10–G5</strong> in 1–2 rank chunks, widening only when needed to fill a <strong>4–6 competitor</strong> group while keeping age spread tight; <strong>G4–G1</strong> in up to 3-rank chunks; and <strong>CDB–D3</strong> as the black-belt pool. <strong>CDB</strong> can sit with either the <strong>G4–G1</strong> pool or the black-belt pool when needed to fill a group, but it should not be stretched beyond a two-rank gap with the G4–G1 pool. Age spans stay tight within each bounded pool.
-    </div>
-    <div class="info-note" id="sizeNote" style="display:none;"></div>
   </div>
 
-  <!-- ── STEP 3: Review & Adjust ── -->
-  <div id="reviewSection" class="hidden">
-
-    <div class="stats-bar" id="statsBar"></div>
-    <p class="section-copy" style="margin-top:-6px;">Review group balance, move competitors, or export once the layout looks right.</p>
-
-    <div id="reviewRosterSection" class="review-roster hidden">
-      <div class="review-roster-head">
-        <div class="review-roster-title">Review Roster / Flagged Entries</div>
-        <div class="review-chip review-chip-alert" id="reviewRosterCount">0 flagged entries</div>
-      </div>
-      <div class="review-roster-sub">
-        These entries were excluded by the server build step because their rank could not be grouped as-is.
-        Correct the rank inline, add a note, then apply the change to re-queue the competitor without re-importing the CSV.
-      </div>
-      <div id="reviewRosterList"></div>
-      <div class="review-empty hidden" id="reviewRosterEmpty">No flagged entries remain.</div>
-    </div>
-
-    <div id="unassignedSection" class="hidden pool">
-      <div class="pool-title">⚠️ Unassigned Competitors</div>
-      <div id="unassignedList"></div>
-    </div>
-
-    <div class="action-bar">
-      <button class="btn btn-secondary" onclick="addNewGroup()">+ New Group</button>
-      <button class="btn btn-secondary" onclick="runAutoGroup()">↺ Re-run Auto-Group</button>
-
-      <button class="btn btn-secondary" onclick="loadStatus()">🛈 Load Status</button>
-      <button class="btn btn-secondary" onclick="loadStatus()">⟳ Refresh Status</button>
-      <button class="btn btn-secondary" onclick="clearStatus()">✖ Clear Status</button>
-
-      <span style="flex:1"></span>
-      <button class="btn btn-gold" onclick="exportJSON()">⬇ Export JSON</button>
-    </div>
-
+  <div class="card">
     <div class="groups-grid" id="groupsGrid"></div>
-
-    <div id="statusPanel" class="card" style="margin-top:20px; padding:16px;">
-      <h3>Ring Assignment</h3>
-      <pre id="statusOutput" style="font-size:13px;"></pre>
-
-      <div id="statusTimestamp" class="status-timestamp"></div>
-    </div>
-
   </div>
 
 </main>
 
-<script src="/group-builder/app.js"></script>
+<script src="app.js"></script>
 <script>
   (function () {
-    const tournamentNameEl = document.getElementById('tournamentName');
-    const eventTimerEl = document.getElementById('eventTimer');
-    let eventStartedAt = '';
+    const bannerEventNameEl = document.getElementById('bannerEventName');
+    const apiBaseUrl = window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin;
+    const SELECTED_EVENT_KEY = 'eventAdmin.lastSelectedEvent';
 
-    function fmtDuration(ms) {
-      if (!Number.isFinite(ms) || ms < 0) return '0:00';
-      const totalSeconds = Math.floor(ms / 1000);
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-      if (hours > 0) {
-        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    function readSelectedEventName() {
+      try {
+        return String(window.localStorage.getItem('eventAdmin.lastSelectedEvent') || '').trim();
+      } catch (error) {
+        return '';
       }
-      return `${minutes}:${String(seconds).padStart(2, '0')}`;
     }
 
-    function updateTimer() {
-      eventTimerEl.textContent = eventStartedAt
-        ? fmtDuration(Date.now() - new Date(eventStartedAt).getTime())
-        : '--:--:--';
+    async function resolveSelectedEventName() {
+      let selectedEvent = readSelectedEventName();
+      if (!selectedEvent) {
+        try {
+          const activeResponse = await fetch(apiBaseUrl + '/api/events/active');
+          const activeData = await activeResponse.json();
+          if (activeData && activeData.activeEvent) {
+            selectedEvent = String(activeData.activeEvent).trim();
+          }
+        } catch (error) {
+          selectedEvent = '';
+        }
+      }
+
+      if (!selectedEvent) {
+        try {
+          const listResponse = await fetch(apiBaseUrl + '/api/events/list');
+          const listData = await listResponse.json();
+          const events = Array.isArray(listData && listData.events) ? listData.events : [];
+          if (events.length === 1) {
+            selectedEvent = String(events[0] || '').trim();
+          }
+        } catch (error) {
+          selectedEvent = '';
+        }
+      }
+
+      if (selectedEvent) {
+        try {
+          window.localStorage.setItem(SELECTED_EVENT_KEY, selectedEvent);
+        } catch (error) {
+          // Ignore storage failures here; the resolved name still works for this page.
+        }
+      }
+
+      return selectedEvent;
     }
 
     async function loadBanner() {
-      try {
-        const [activeRes, ringsRes] = await Promise.all([
-          fetch('/api/events/active').then((r) => r.json()),
-          fetch('/api/rings').then((r) => r.json())
-        ]);
-        tournamentNameEl.textContent = (activeRes && activeRes.activeEvent) || 'Tournament';
-        eventStartedAt = (ringsRes && ringsRes.eventStartedAt) || '';
-      } catch (error) {
-        eventStartedAt = '';
+      const selectedEvent = await resolveSelectedEventName();
+      if (!selectedEvent) {
+        bannerEventNameEl.textContent = 'No event selected';
+        return;
       }
-      updateTimer();
+
+      try {
+        const response = await fetch(apiBaseUrl + '/api/events/config?eventName=' + encodeURIComponent(selectedEvent));
+        if (!response.ok) {
+          bannerEventNameEl.textContent = 'No event selected';
+          return;
+        }
+        bannerEventNameEl.textContent = selectedEvent;
+      } catch (error) {
+        bannerEventNameEl.textContent = 'No event selected';
+      }
     }
 
     loadBanner();
-    window.setInterval(updateTimer, 1000);
   })();
 </script>
 </body>

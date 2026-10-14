@@ -4,8 +4,13 @@ Tournament Management Server Source
 ## Event metadata
 
 Start the server with `node group-server.js` and open `http://localhost:3000/`, which
-loads Tournament Management (`/tournament-mgmt/`), the pre-tournament launch page.
-Event details are managed at `/event-administration/`.
+loads Tournament Setup (`/tournament-setup/`), the pre-tournament hub page.
+Use the separate pages for each step:
+- Event Definition: `/tournament-setup/event-definition/`
+- Import Registration: `/tournament-setup/import/`
+- Build Groups: `/tournament-setup/build-groups/`
+- Review & Save: `/tournament-setup/review-save/`
+Event details are managed at `/tournament-setup/event-definition/`.
 Restart the server after backend changes; refreshing the page alone does not reload server code.
 
 ## Multi-Surface Tournament Backend

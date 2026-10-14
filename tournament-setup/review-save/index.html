@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Final Review &amp; Save</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #17212f;
+      background:
+        radial-gradient(circle at top left, rgba(34, 87, 179, 0.10), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(31, 79, 166, 0.06), transparent 24%),
+        linear-gradient(180deg, #e9eef8 0%, #f0f4fb 34%, #edf2f8 100%);
+    }
+
+    .shell {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .setup-banner,
+    .panel,
+    .card,
+    .stats-bar {
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(201, 209, 222, 0.88);
+      border-radius: 18px;
+      box-shadow: 0 16px 40px rgba(31, 44, 77, 0.08);
+    }
+
+    .setup-banner {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 0 0 0 20px;
+      margin-bottom: 10px;
+      min-height: 88px;
+    }
+
+    .banner-back-link {
+      color: #2257b3;
+      font-size: 13px;
+      line-height: 1.4;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+      justify-self: start;
+    }
+
+    .banner-back-link:hover,
+    .banner-back-link:focus-visible {
+      text-decoration: underline;
+    }
+
+    .banner-copy {
+      display: grid;
+      gap: 1px;
+      justify-items: center;
+      text-align: center;
+      padding: 4px 0;
+    }
+
+    .banner-kicker {
+      color: #374151;
+      font-size: 13px;
+      line-height: 1.35;
+      font-weight: 700;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+    }
+
+    .banner-title {
+      margin: 0;
+      font-size: clamp(22px, 2.4vw, 30px);
+      line-height: 1;
+      letter-spacing: -0.05em;
+    }
+
+    .banner-subtitle {
+      margin: 0;
+      color: #445062;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .banner-logo-tile {
+      width: 88px;
+      height: 88px;
+      padding: 4px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(236, 242, 251, 0.96));
+      border: 1px solid rgba(31, 79, 166, 0.16);
+      box-shadow: 0 12px 24px rgba(31, 79, 166, 0.10);
+      flex: 0 0 auto;
+      justify-self: end;
+    }
+
+    .banner-logo {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    @media (max-width: 760px) {
+      .setup-banner {
+        grid-template-columns: 1fr;
+        justify-items: start;
+        padding: 12px 14px;
+        min-height: 0;
+      }
+
+      .banner-back-link,
+      .banner-copy,
+      .banner-logo-tile {
+        justify-self: start;
+      }
+
+      .banner-copy {
+        justify-items: start;
+        text-align: left;
+      }
+
+      .banner-logo-tile {
+        width: 72px;
+        height: 72px;
+      }
+    }
+
+    .panel {
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .panel-head {
+      padding: 16px 18px 14px;
+      background: linear-gradient(180deg, #f7faff 0%, #e9eff7 100%);
+      border-bottom: 1px solid rgba(201, 209, 222, 0.88);
+      display: grid;
+      gap: 8px;
+    }
+
+    .panel-head h2,
+    .card-title {
+      margin: 0;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .panel-head p,
+    .section-copy,
+    .note {
+      margin: 0;
+      color: #445062;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .cards {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      padding: 16px 18px;
+      overflow: hidden;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #1a1a2e;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      background: linear-gradient(180deg, #1a1a2e 0%, #20243d 100%);
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .stat-value { font-size: 26px; font-weight: 800; line-height: 1; }
+    .stat-label { font-size: 11px; opacity: 0.68; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .action-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      padding: 4px 0;
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border-radius: 14px;
+      border: 1px solid #111827;
+      background: #111827;
+      color: #fff;
+      text-decoration: none;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn.secondary {
+      background: #fff;
+      color: #17212f;
+      border-color: rgba(191, 201, 215, 0.98);
+    }
+
+    .btn.gold {
+      background: #c8a951;
+      color: #17212f;
+      border-color: #c8a951;
+    }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .groups-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .group-card {
+      background: white;
+      border-radius: 16px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+
+    .group-header {
+      padding: 14px 16px 12px;
+      background: linear-gradient(180deg, #1a1a2e 0%, #232746 100%);
+      color: white;
+    }
+
+    .group-name-input {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.24);
+      color: white;
+      font-size: 15px;
+      font-weight: 800;
+      width: 100%;
+      outline: none;
+      padding: 4px 0 8px;
+      margin-bottom: 8px;
+    }
+
+    .group-meta {
+      font-size: 11px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .group-meta span {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 999px;
+      padding: 4px 8px;
+      line-height: 1;
+    }
+
+    .competitor-list {
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .competitor-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      gap: 10px;
+      border-bottom: 1px solid #f3f4f6;
+      cursor: grab;
+    }
+
+    .competitor-row:hover { background: #fafbff; }
+
+    .competitor-info { flex: 1; min-width: 0; }
+    .competitor-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .competitor-sub { font-size: 11px; color: #6b7280; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+    .competitor-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .review-roster {
+      background: linear-gradient(180deg, #fff1f2 0%, #fff7f8 100%);
+      border: 1px solid #fb7185;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .review-roster-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .review-roster-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #9f1239;
+    }
+
+    .review-roster-sub {
+      font-size: 12px;
+      color: #9f1239;
+      opacity: 0.85;
+      margin-bottom: 12px;
+    }
+
+    .review-row {
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #fecdd3;
+      padding: 12px;
+      margin-bottom: 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .review-row-main { min-width: 0; }
+    .review-row-title { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+    .review-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+    .review-chip-alert { background: #fce7f3; color: #9f1239; }
+    .review-row-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #4b5563; margin-bottom: 10px; }
+    .review-row-note { display: grid; gap: 6px; }
+    .review-row-note label,
+    .review-row-actions label { font-size: 11px; font-weight: 700; color: #7a2543; text-transform: uppercase; letter-spacing: 0.04em; }
+    .review-row-note input,
+    .review-row-actions select {
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid #f9a8d4;
+      border-radius: 10px;
+      font-size: 13px;
+      background: #fff;
+    }
+    .review-row-actions { display: grid; gap: 8px; align-content: start; }
+    .review-empty { font-size: 13px; color: #9f1239; padding: 8px 0 2px; }
+
+    .pool {
+      background: linear-gradient(180deg, #fff8f0 0%, #fffaf5 100%);
+      border: 1px solid #f59e0b;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .pool-title { font-size: 14px; font-weight: 700; color: #92400e; margin-bottom: 12px; }
+    .pool-row { background: white; border-radius: 10px; margin-bottom: 8px; }
+
+    .status-panel {
+      margin-top: 20px;
+      padding: 16px;
+    }
+
+    .hidden { display: none !important; }
+
+    .footer {
+      margin-top: 12px;
+      color: #627082;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body data-page-mode="review">
+  <main class="shell">
+    <header class="setup-banner">
+      <a class="banner-back-link" href="/tournament-setup/">← Back to Tournament Setup</a>
+      <div class="banner-copy">
+        <div class="banner-kicker">Final Review &amp; Save</div>
+        <h1 class="banner-title" id="bannerEventName">No event selected</h1>
+        <p class="banner-subtitle">Review the finalized division presentation, adjust groups if needed, and save the completed divisions.</p>
+      </div>
+      <div class="banner-logo-tile">
+        <img class="banner-logo" src="../../assets/vaughns-dojang-logo.png" alt="Tournament logo">
+      </div>
+    </header>
+
+    <section class="panel" aria-label="Review workflow">
+      <div class="panel-head">
+        <h2>Final presentation</h2>
+        <p>This page is the final presentation layer for the division draft. Fine-tune the layout here, then save the completed divisions.</p>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-title"><span class="step-num">3</span> Review &amp; Save</div>
+          <p class="section-copy">This is the finalized view of the divisions. Resolve flagged competitors, adjust any final group assignments, and persist the finished divisions from this dedicated step.</p>
+          <div class="action-bar">
+            <a class="btn secondary" href="/tournament-setup/build-groups/">Back to Build Groups</a>
+            <button class="btn" onclick="saveCurrentReview()">Save Divisions</button>
+          </div>
+          <p class="note">Use drag-and-drop within the group cards to fine-tune the draft before saving. If you need to create more structure, return to Build Groups and regenerate the draft.</p>
+        </div>
+      </div>
+    </section>
+
+    <div id="reviewSection" class="hidden">
+      <div class="stats-bar" id="statsBar"></div>
+
+      <div id="reviewRosterSection" class="review-roster hidden">
+        <div class="review-roster-head">
+          <div class="review-roster-title">Review Roster / Flagged Entries</div>
+          <div class="review-chip review-chip-alert" id="reviewRosterCount">0 flagged entries</div>
+        </div>
+        <div class="review-roster-sub">
+          These entries were excluded by the server build step because their rank could not be grouped as-is.
+          Correct the rank inline, add a note, then apply the change to re-queue the competitor without re-importing the CSV.
+        </div>
+        <div id="reviewRosterList"></div>
+        <div class="review-empty hidden" id="reviewRosterEmpty">No flagged entries remain.</div>
+      </div>
+
+      <div id="unassignedSection" class="hidden pool">
+        <div class="pool-title">⚠️ Unassigned Competitors</div>
+        <div id="unassignedList"></div>
+      </div>
+
+      <div class="groups-grid" id="groupsGrid"></div>
+
+      <div id="statusPanel" class="card status-panel hidden">
+        <h3>Ring Assignment</h3>
+        <pre id="statusOutput" style="font-size:13px;"></pre>
+        <div id="statusTimestamp" class="status-timestamp"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      The review draft is stored locally until you save it. Saving clears the draft and writes the final groups back to the server.
+    </div>
+  </main>
+
+  <script src="../build-groups/app.js"></script>
+  <script>
+    (async function () {
+      var bannerEventNameEl = document.getElementById('bannerEventName');
+      var apiBaseUrl = window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin;
+      var SELECTED_EVENT_KEY = 'eventAdmin.lastSelectedEvent';
+      if (!bannerEventNameEl) return;
+
+      function readSelectedEventName() {
+        try {
+          return String(window.localStorage.getItem(SELECTED_EVENT_KEY) || '').trim();
+        } catch (error) {
+          return '';
+        }
+      }
+
+      async function resolveSelectedEventName() {
+        var selectedEvent = readSelectedEventName();
+        if (!selectedEvent) {
+          try {
+            var activeResponse = await fetch(apiBaseUrl + '/api/events/active');
+            var activeData = await activeResponse.json();
+            if (activeData && activeData.activeEvent) {
+              selectedEvent = String(activeData.activeEvent).trim();
+            }
+          } catch (error) {
+            selectedEvent = '';
+          }
+        }
+
+        if (!selectedEvent) {
+          try {
+            var listResponse = await fetch(apiBaseUrl + '/api/events/list');
+            var listData = await listResponse.json();
+            var events = Array.isArray(listData && listData.events) ? listData.events : [];
+            if (events.length === 1) {
+              selectedEvent = String(events[0] || '').trim();
+            }
+          } catch (error) {
+            selectedEvent = '';
+          }
+        }
+
+        if (selectedEvent) {
+          try {
+            window.localStorage.setItem(SELECTED_EVENT_KEY, selectedEvent);
+          } catch (error) {
+            // Ignore storage failures and continue with the resolved event name.
+          }
+        }
+
+        return selectedEvent;
+      }
+
+      try {
+        var selectedEvent = await resolveSelectedEventName();
+        if (!selectedEvent) {
+          bannerEventNameEl.textContent = 'No event selected';
+          return;
+        }
+        var response = await fetch(apiBaseUrl + '/api/events/config?eventName=' + encodeURIComponent(selectedEvent));
+        if (!response.ok) {
+          bannerEventNameEl.textContent = 'No event selected';
+          return;
+        }
+        bannerEventNameEl.textContent = selectedEvent;
+      } catch (error) {
+        bannerEventNameEl.textContent = 'No event selected';
+      }
+    }());
+  </script>
+</body>
+</html>

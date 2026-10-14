@@ -3,8 +3,14 @@
     competitors: [],
     groups: [],
     unassigned: [],
-    reviewCompetitors: []
+    reviewCompetitors: [],
+    reviewSettings: null,
+    selectedEventName: ''
   };
+
+  const REVIEW_DRAFT_KEY = 'tournamentSetup.groupReviewDraft';
+  const SELECTED_EVENT_KEY = 'eventAdmin.lastSelectedEvent';
+  const PAGE_MODE = String(document.body && document.body.dataset && document.body.dataset.pageMode || 'build').toLowerCase();
 
   let dragCtx = null;
 
@@ -107,6 +113,91 @@
     return Number.isFinite(parsed) ? parsed : undefined;
   }
 
+  function readSelectedEventName() {
+    try {
+      return String(window.localStorage.getItem(SELECTED_EVENT_KEY) || '').trim();
+    } catch (error) {
+      return '';
+    }
+  }
+
+  async function getSelectedEventContext() {
+    let selectedEventName = readSelectedEventName();
+
+    if (!selectedEventName) {
+      try {
+        const active = await fetchJson('/api/events/active');
+        if (active && active.activeEvent) {
+          selectedEventName = String(active.activeEvent).trim();
+        }
+      } catch (error) {
+        selectedEventName = '';
+      }
+    }
+
+    if (!selectedEventName) {
+      try {
+        const eventList = await fetchJson('/api/events/list');
+        const events = Array.isArray(eventList && eventList.events) ? eventList.events : [];
+        if (events.length === 1) {
+          selectedEventName = String(events[0] || '').trim();
+        }
+      } catch (error) {
+        selectedEventName = '';
+      }
+    }
+
+    if (selectedEventName) {
+      try {
+        window.localStorage.setItem(SELECTED_EVENT_KEY, selectedEventName);
+      } catch (error) {
+        console.warn('Unable to persist selected event context.', error);
+      }
+      return {
+        selectedEventName,
+        dbExists: true
+      };
+    }
+
+    return {
+      selectedEventName: '',
+      dbExists: false
+    };
+  }
+
+  function saveReviewDraft(payload) {
+    try {
+      window.localStorage.setItem(REVIEW_DRAFT_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.warn('Unable to persist review draft.', error);
+    }
+  }
+
+  function loadReviewDraft(expectedEventName) {
+    try {
+      const raw = window.localStorage.getItem(REVIEW_DRAFT_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.groups)) return null;
+      if (expectedEventName) {
+        const draftEventName = String(parsed.eventName || '').trim();
+        if (draftEventName !== expectedEventName) return null;
+      }
+      return parsed;
+    } catch (error) {
+      console.warn('Unable to load review draft.', error);
+      return null;
+    }
+  }
+
+  function clearReviewDraft() {
+    try {
+      window.localStorage.removeItem(REVIEW_DRAFT_KEY);
+    } catch (error) {
+      console.warn('Unable to clear review draft.', error);
+    }
+  }
+
   function normalizeCompetitor(row) {
     const firstName = String(row.firstName || '').trim();
     const lastName = String(row.lastName || '').trim();
@@ -159,6 +250,10 @@
   function updateReviewSectionVisibility() {
     const section = document.getElementById('reviewSection');
     if (!section) return;
+    if (PAGE_MODE !== 'review') {
+      section.classList.add('hidden');
+      return;
+    }
     if (state.groups.length || state.reviewCompetitors.length) {
       section.classList.remove('hidden');
     } else {
@@ -262,13 +357,38 @@
     const maxSize = recommendedMaxSize(totalCompetitors);
     document.getElementById('minSize').value = String(MIN_GROUP_SIZE);
     document.getElementById('maxSize').value = String(maxSize);
+    state.reviewSettings = { minGroupSize: MIN_GROUP_SIZE, maxGroupSize: maxSize };
     const sizeNote = document.getElementById('sizeNote');
-    sizeNote.style.display = 'block';
-    sizeNote.innerHTML = `ℹ️ Recommended group size for <strong>${totalCompetitors}</strong> competitors: <strong>${MIN_GROUP_SIZE} to ${maxSize}</strong>.`;
+    if (sizeNote) {
+      sizeNote.style.display = 'block';
+      sizeNote.innerHTML = `ℹ️ Recommended group size for <strong>${totalCompetitors}</strong> competitors: <strong>${MIN_GROUP_SIZE} to ${maxSize}</strong>.`;
+    }
+  }
+
+  function resolveReviewSettings() {
+    const minInput = document.getElementById('minSize');
+    const maxInput = document.getElementById('maxSize');
+    if (minInput && maxInput) {
+      const minGroupSize = Number(minInput.value || MIN_GROUP_SIZE);
+      const maxGroupSize = Number(maxInput.value || recommendedMaxSize(state.competitors.length));
+      state.reviewSettings = { minGroupSize, maxGroupSize };
+      return state.reviewSettings;
+    }
+
+    if (state.reviewSettings) {
+      return state.reviewSettings;
+    }
+
+    const firstGroup = state.groups[0] || {};
+    const minGroupSize = Number.isFinite(Number(firstGroup.minGroupSize)) ? Number(firstGroup.minGroupSize) : MIN_GROUP_SIZE;
+    const maxGroupSize = Number.isFinite(Number(firstGroup.maxGroupSize)) ? Number(firstGroup.maxGroupSize) : recommendedMaxSize(state.competitors.length);
+    state.reviewSettings = { minGroupSize, maxGroupSize };
+    return state.reviewSettings;
   }
 
   function renderStats() {
-    const minSize = Math.max(MIN_GROUP_SIZE, parseInt(document.getElementById('minSize').value || MIN_GROUP_SIZE, 10));
+    const settings = resolveReviewSettings();
+    const minSize = Math.max(MIN_GROUP_SIZE, Number(settings.minGroupSize || MIN_GROUP_SIZE));
     const total = state.groups.reduce((sum, group) => sum + group.competitors.length, 0) + state.unassigned.length + state.reviewCompetitors.length;
     const nGroups = state.groups.length;
     const nWarn = state.groups.filter((group) => group.competitors.length < minSize).length;
@@ -388,22 +508,34 @@
     grid.innerHTML = state.groups.map((g, idx) => {
       const count = g.competitors.length;
       const warn = count < minSize;
+      const emptyShell = count === 0;
       return `
-        <div class="group-card ${warn ? 'warn-border' : 'ok-border'}"
+        <div class="group-card ${emptyShell ? 'empty-shell' : (warn ? 'warn-border' : 'ok-border')}"
              id="gc-${g.id}"
              ondragover="allowGroupDrop(event, '${g.id}')"
              ondragenter="markGroupDropTarget(event, '${g.id}')"
              ondragleave="unmarkGroupDropTarget(event, '${g.id}')"
              ondrop="dropIntoGroup(event, '${g.id}')">
-          <div class="group-header ${g.isAdult ? 'adult' : ''}">
-            <input class="group-name-input" value="${esc(g.name)}" readonly title="Auto-generated from current competitors">
-            <div class="group-meta">
-              <span>${count} competitor${count !== 1 ? 's' : ''}</span>
-              <span>${groupRankRange(g.competitors)}</span>
-              <span>${groupAgeRange(g.competitors)}</span>
+          <div class="group-header ${emptyShell ? 'empty-shell' : (g.isAdult ? 'adult' : '')}">
+            <div class="group-header-top">
+              <div class="group-header-main">
+                <input class="group-name-input" value="${esc(g.name)}" readonly title="${emptyShell ? 'Empty group — first drop defines the group characteristics' : 'Auto-generated from current competitors'}">
+                <div class="group-meta">
+                  ${emptyShell
+                    ? ''
+                    : `<span>${count} competitor${count !== 1 ? 's' : ''}</span>
+                       <span>${groupRankRange(g.competitors)}</span>
+                       <span>${groupAgeRange(g.competitors)}</span>`}
+                </div>
+              </div>
+              ${emptyShell
+                ? `<button class="group-delete-btn" type="button" onclick="deleteGroup('${esc(g.id)}')">Delete group</button>`
+                : ''}
             </div>
           </div>
-          ${warn ? `<div class="group-warn-strip">⚠️ Only ${count} competitor${count !== 1 ? 's' : ''} — minimum is ${minSize}</div>` : ''}
+          ${emptyShell
+            ? ''
+            : (warn ? `<div class="group-warn-strip">⚠️ Only ${count} competitor${count !== 1 ? 's' : ''} — minimum is ${minSize}</div>` : '')}
           <div class="competitor-list">${g.competitors.map((c) => competitorRow(c, g.id)).join('')}</div>
           <div class="group-footer"><span style="font-size:12px;color:#999;">Group ${idx + 1}</span></div>
         </div>
@@ -411,13 +543,81 @@
     }).join('');
   }
 
+  function renderFinalGroups() {
+    const grid = document.getElementById('groupsGrid');
+    if (!grid) return;
+
+    grid.innerHTML = state.groups.map((group, index) => {
+      const divisionNumber = Number.isFinite(Number(group.groupDivisionNumber))
+        ? Number(group.groupDivisionNumber)
+        : index + 1;
+      const rows = (Array.isArray(group.competitors) ? group.competitors : []).map((competitor) => {
+        return `
+          <tr>
+            <td>${esc(competitor.fullName || 'Unknown')}</td>
+            <td>${esc(competitor.studio || 'Unknown')}</td>
+            <td>${esc(competitor.rank || '')}</td>
+            <td>${esc(String(competitor.age || 0))}</td>
+          </tr>
+        `;
+      }).join('');
+
+      return `
+        <div class="group-card ok-border">
+          <div class="group-header ${group.isAdult ? 'adult' : ''}">
+            <input class="group-name-input" value="${esc(group.name)}" readonly title="Finalized group name">
+            <div class="group-meta">
+              <span>Division ${divisionNumber}</span>
+              <span>${group.competitors.length} competitor${group.competitors.length !== 1 ? 's' : ''}</span>
+              <span>${groupRankRange(group.competitors)}</span>
+            </div>
+          </div>
+          <div class="competitor-list" style="max-height:none; overflow:visible;">
+            <table class="preview-table" style="border-collapse: collapse; width: 100%;">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Studio</th>
+                  <th>Rank</th>
+                  <th>Age</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows || '<tr><td colspan="4" style="padding:12px;">No competitors</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   function renderReview() {
     state.groups.forEach(syncGroupDisplayMetadata);
-    renderStats();
-    renderUnassigned();
-    renderGroups();
-    renderReviewRoster();
-    updateReviewSectionVisibility();
+    if (PAGE_MODE === 'review') {
+      renderFinalGroups();
+      renderStats();
+      renderUnassigned();
+      renderReviewRoster();
+      updateReviewSectionVisibility();
+    } else {
+      renderGroups();
+      updateReviewSectionVisibility();
+    }
+    updateReviewNextStepState();
+  }
+
+  function updateReviewNextStepState() {
+    const reviewNextBtn = document.getElementById('reviewNextBtn');
+    if (!reviewNextBtn) return;
+
+    const hasGroups = state.groups.length > 0;
+    reviewNextBtn.disabled = !hasGroups;
+    reviewNextBtn.classList.toggle('next-action', hasGroups);
+    reviewNextBtn.classList.toggle('btn-secondary', !hasGroups);
+    reviewNextBtn.title = hasGroups
+      ? 'Proceed to Review & Save once you are done adjusting groups.'
+      : 'Build groups first, then continue to Review & Save.';
   }
 
   function applyReviewCorrection(compId) {
@@ -462,10 +662,16 @@
     return !group.competitors.length || !group.competitors.every((c) => String(c.rank || '').trim() === 'TTLD');
   }
 
-  function promptToDeleteEmptyGroup(group) {
-    if (!group || group.competitors.length !== 0) return;
-    if (!window.confirm(`"${group.name}" is now empty. Delete this group?`)) return;
+  function deleteGroup(groupId) {
+    const group = state.groups.find((candidate) => candidate.id === groupId);
+    if (!group) return;
+    if (group.competitors.length !== 0) {
+      window.alert('Remove all competitors from the group before deleting it.');
+      return;
+    }
+    if (!window.confirm(`Delete "${group.name}"?`)) return;
     state.groups = state.groups.filter((candidate) => candidate.id !== group.id);
+    renderReview();
   }
 
   function moveCompetitorBetweenGroups(compId, fromGroupId, targetGroupId) {
@@ -480,7 +686,6 @@
 
     sourceList.splice(sourceIndex, 1);
     targetGroup.competitors.push(competitor);
-    promptToDeleteEmptyGroup(sourceGroup);
     renderReview();
     return true;
   }
@@ -495,97 +700,140 @@
   }
 
   async function loadSavedGroups() {
-    const data = await fetchJson('/api/groups');
+    const context = await getSelectedEventContext();
+    state.selectedEventName = context.selectedEventName;
+    if (!context.selectedEventName) {
+      state.groups = [];
+      state.unassigned = [];
+      state.reviewCompetitors = [];
+      renderReview();
+      return false;
+    }
+
+    const data = await fetchJson(`/api/groups?eventName=${encodeURIComponent(context.selectedEventName)}`);
     state.groups = Array.isArray(data.groups) ? data.groups.map(normalizeGroup) : [];
     state.unassigned = [];
     state.reviewCompetitors = [];
+    resolveReviewSettings();
     renderReview();
+    return true;
+  }
+
+  async function loadReviewState() {
+    const context = await getSelectedEventContext();
+    state.selectedEventName = context.selectedEventName;
+    if (!context.selectedEventName) {
+      state.groups = [];
+      state.unassigned = [];
+      state.reviewCompetitors = [];
+      state.reviewSettings = null;
+      renderReview();
+      return false;
+    }
+
+    const draft = loadReviewDraft(context.selectedEventName);
+    if (draft) {
+      state.groups = Array.isArray(draft.groups) ? draft.groups.map(normalizeGroup) : [];
+      state.reviewCompetitors = Array.isArray(draft.reviewCompetitors)
+        ? draft.reviewCompetitors.map(normalizeCompetitor)
+        : [];
+      state.reviewSettings = draft.reviewSettings || {
+        minGroupSize: Number.isFinite(Number(draft.minGroupSize)) ? Number(draft.minGroupSize) : MIN_GROUP_SIZE,
+        maxGroupSize: Number.isFinite(Number(draft.maxGroupSize)) ? Number(draft.maxGroupSize) : recommendedMaxSize(state.competitors.length)
+      };
+      state.unassigned = [];
+      renderReview();
+      return true;
+    }
+
+    return loadSavedGroups();
   }
 
   async function loadCompetitorsFromServer() {
     try {
-      const result = await fetchJson('/api/competitors');
+      const context = await getSelectedEventContext();
+      state.selectedEventName = context.selectedEventName;
+      if (!context.selectedEventName) {
+        state.competitors = [];
+        state.groups = [];
+        state.unassigned = [];
+        state.reviewCompetitors = [];
+        updateReviewSectionVisibility();
+        renderReview();
+        return false;
+      }
+
+      const result = await fetchJson(`/api/competitors?eventName=${encodeURIComponent(context.selectedEventName)}`);
       const rawCompetitors = Array.isArray(result) ? result : (result && Array.isArray(result.competitors) ? result.competitors : []);
       state.competitors = rawCompetitors.map(normalizeCompetitor);
       state.groups = [];
       state.unassigned = [];
       state.reviewCompetitors = [];
       updateReviewSectionVisibility();
-      document.getElementById('autoGroupBtn').disabled = state.competitors.length === 0;
       if (state.competitors.length) {
         applyRecommendedSizeSettings(state.competitors.length);
       }
       console.log(`Loaded ${state.competitors.length} competitors from server.`);
+      return true;
     } catch (error) {
-      document.getElementById('autoGroupBtn').disabled = true;
       window.alert(`Unable to load competitors from the server.\n${error.message}`);
-    }
-  }
-
-  async function runAutoGroup() {
-    if (!state.competitors.length) return;
-
-    try {
-      const payload = {
-        minGroupSize: Number(document.getElementById('minSize').value || 4),
-        maxGroupSize: Number(document.getElementById('maxSize').value || recommendedMaxSize(state.competitors.length)),
-        ageSpanUnder14: Number(document.getElementById('ageSpanUnder14').value || 3),
-        ageSpan14To37: Number(document.getElementById('ageSpan14To37').value || 4),
-        ageSpan18To37: Number(document.getElementById('ageSpan18To37').value || 4),
-        ageSpan38Plus: Number(document.getElementById('ageSpan38Plus').value || 35),
-        competitors: state.competitors
-      };
-
-      const built = await fetchJson('/api/divisions/build', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const builtGroups = Array.isArray(built.groups) ? built.groups.map(normalizeGroup) : [];
-
-      if (!builtGroups.length) {
-        state.groups = [];
-        state.unassigned = [];
-        renderReview();
-        window.alert('Auto-group returned no standard groups. Review flagged entries and retry.');
-        return;
-      }
-
-      state.groups = builtGroups;
-      state.unassigned = [];
-      state.reviewCompetitors = Array.isArray(built.reviewCompetitors) ? built.reviewCompetitors.map(normalizeCompetitor) : [];
-      renderReview();
-    } catch (error) {
-      console.error('Auto-group error:', error);
-      window.alert(`Auto-group failed: ${error.message}`);
+      return false;
     }
   }
 
   async function saveGroupsToServer() {
-    return fetchJson('/api/divisions/save', {
+    const context = await getSelectedEventContext();
+    if (!context.selectedEventName) {
+      throw new Error('Select an event before saving divisions.');
+    }
+
+    const settings = resolveReviewSettings();
+    const result = await fetchJson('/api/divisions/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         groups: state.groups,
-        minGroupSize: Number(document.getElementById('minSize').value || 4),
-        maxGroupSize: Number(document.getElementById('maxSize').value || recommendedMaxSize(state.competitors.length)),
-        startingDivisionNumber: 20
+        minGroupSize: settings.minGroupSize,
+        maxGroupSize: settings.maxGroupSize,
+        startingDivisionNumber: 20,
+        eventName: context.selectedEventName
       })
     });
+    clearReviewDraft();
+    return result;
   }
 
-  async function buildAndSaveDivisions() {
+  async function saveCurrentReview() {
     try {
+      const saved = await saveGroupsToServer();
+      window.alert(`Divisions saved successfully (${saved.saved || state.groups.length} groups).`);
+      window.location.assign('/tournament-setup/');
+      return saved;
+    } catch (error) {
+      console.error('Save review error:', error);
+      window.alert(`Save failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async function buildDivisions() {
+    try {
+      const context = await getSelectedEventContext();
+      if (!context.selectedEventName) {
+        window.alert('Select an event before building divisions.');
+        return;
+      }
+
+      if (!state.competitors.length) {
+        window.alert('Import registrations before building divisions.');
+        return;
+      }
+
       const minGroupSize = Number(document.getElementById('minSize').value || 4);
       const maxGroupSize = Number(document.getElementById('maxSize').value || 6);
       const payload = {
         minGroupSize,
         maxGroupSize,
-        ageSpanUnder14: Number(document.getElementById('ageSpanUnder14').value || 3),
-        ageSpan14To37: Number(document.getElementById('ageSpan14To37').value || 4),
-        ageSpan18To37: Number(document.getElementById('ageSpan18To37').value || 4),
-        ageSpan38Plus: Number(document.getElementById('ageSpan38Plus').value || 35),
         competitors: state.competitors,
         groups: state.groups
       };
@@ -606,55 +854,25 @@
         return;
       }
 
-      const saved = await fetchJson('/api/divisions/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          groups: builtGroups,
-          minGroupSize,
-          maxGroupSize,
-          startingDivisionNumber: 20
-        })
+      state.groups = builtGroups;
+      state.unassigned = [];
+      state.reviewCompetitors = Array.isArray(built.reviewCompetitors) ? built.reviewCompetitors.map(normalizeCompetitor) : [];
+      state.reviewSettings = { minGroupSize, maxGroupSize };
+      saveReviewDraft({
+        eventName: context.selectedEventName,
+        groups: builtGroups,
+        reviewCompetitors: state.reviewCompetitors,
+        builtAt: new Date().toISOString(),
+        source: 'build-groups',
+        minGroupSize,
+        maxGroupSize,
+        reviewSettings: { minGroupSize, maxGroupSize }
       });
-
-      state.groups = Array.isArray(saved.groups) ? saved.groups.map(normalizeGroup) : builtGroups;
       renderReview();
-      displayGroups(state.groups);
-      window.alert(`Divisions built and saved successfully (${state.groups.length} groups).`);
     } catch (error) {
-      console.error('Build & save error:', error);
-      window.alert(`Build & save failed: ${error.message}`);
+      console.error('Build groups error:', error);
+      window.alert(`Build groups failed: ${error.message}`);
     }
-  }
-
-  function displayGroups(groups) {
-    const container = document.getElementById('groupsContainer');
-    if (!container) return;
-    container.innerHTML = '';
-
-    (Array.isArray(groups) ? groups : []).forEach((group, index) => {
-      const groupDiv = document.createElement('div');
-      groupDiv.className = 'group-block';
-
-      const header = document.createElement('h3');
-      const divisionLabel = Number.isFinite(Number(group.groupDivisionNumber))
-        ? ` (Division ${Number(group.groupDivisionNumber)})`
-        : '';
-      header.textContent = `${group.name || `Group ${index + 1}`}${divisionLabel}`;
-      groupDiv.appendChild(header);
-
-      const list = document.createElement('ul');
-      (Array.isArray(group.competitors) ? group.competitors : []).forEach((comp) => {
-        const li = document.createElement('li');
-        const compDivision = Number.isFinite(Number(comp.competitionDivisionNumber))
-          ? ` — #${Number(comp.competitionDivisionNumber)}`
-          : '';
-        li.textContent = `${comp.fullName || `${comp.firstName || ''} ${comp.lastName || ''}`.trim() || 'Unknown'}${compDivision} — ${comp.age} — ${comp.gender || ''} — ${comp.rank || ''}`;
-        list.appendChild(li);
-      });
-      groupDiv.appendChild(list);
-      container.appendChild(groupDiv);
-    });
   }
 
   async function loadStatus() {
@@ -671,7 +889,7 @@
   }
 
   function addNewGroup() {
-    state.groups.push(normalizeGroup({ id: genId(), name: 'New Group', competitors: [] }, state.groups.length));
+    state.groups.push(normalizeGroup({ id: genId(), name: `Group ${state.groups.length + 1}`, competitors: [] }, state.groups.length));
     renderReview();
   }
 
@@ -681,7 +899,6 @@
     const idx = g.competitors.findIndex((c) => c.id === compId);
     if (idx === -1) return;
     state.unassigned.push.apply(state.unassigned, g.competitors.splice(idx, 1));
-    promptToDeleteEmptyGroup(g);
     renderReview();
   }
 
@@ -756,9 +973,7 @@
     saveGroupsToServer();
   }
 
-  window.loadCompetitorsFromServer = loadCompetitorsFromServer;
-  window.runAutoGroup = runAutoGroup;
-  window.buildAndSaveDivisions = buildAndSaveDivisions;
+  window.buildDivisions = buildDivisions;
   window.loadStatus = loadStatus;
   window.clearStatus = clearStatus;
   window.addNewGroup = addNewGroup;
@@ -770,11 +985,38 @@
   window.markGroupDropTarget = markGroupDropTarget;
   window.unmarkGroupDropTarget = unmarkGroupDropTarget;
   window.dropIntoGroup = dropIntoGroup;
+  window.deleteGroup = deleteGroup;
   window.exportJSON = exportJSON;
+  window.saveGroupsToServer = saveGroupsToServer;
+  window.saveCurrentReview = saveCurrentReview;
+  window.updateReviewNextStepState = updateReviewNextStepState;
 
   window.addEventListener('DOMContentLoaded', () => {
-    loadSavedGroups().catch((error) => {
+    if (window.location.protocol === 'file:') {
+      console.warn('Opened from file://; server-backed group loading is skipped. Use the served URL to load and save groups.');
+      return;
+    }
+    const addGroupBtn = document.getElementById('addGroupBtn');
+    if (addGroupBtn) {
+      addGroupBtn.addEventListener('click', addNewGroup);
+    }
+    const reviewNextBtn = document.getElementById('reviewNextBtn');
+    if (reviewNextBtn) {
+      reviewNextBtn.addEventListener('click', () => {
+        if (reviewNextBtn.disabled) return;
+        window.location.assign('/tournament-setup/review-save/');
+      });
+    }
+    const loader = PAGE_MODE === 'review'
+      ? loadReviewState
+      : function () {
+          return loadCompetitorsFromServer().then(function () {
+            return loadSavedGroups();
+          });
+        };
+    loader().catch((error) => {
       console.error('Failed to load saved groups.', error);
     });
+    updateReviewNextStepState();
   });
 }());
