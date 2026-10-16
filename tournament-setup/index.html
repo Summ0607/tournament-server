@@ -46,34 +46,19 @@
     .title-block {
       width: min(100%, 860px);
       margin: 0 auto;
-      display: flex;
+      display: grid;
+      grid-template-columns: 1fr auto;
       align-items: center;
       gap: 12px;
-      padding: 6px 0 4px;
-    }
-
-    .title-logo-tile {
-      width: 62px;
-      height: 62px;
-      padding: 4px;
-      border-radius: 16px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(236, 242, 251, 0.96));
-      border: 1px solid rgba(31, 79, 166, 0.16);
-      box-shadow: 0 12px 24px rgba(31, 79, 166, 0.10);
-      flex: 0 0 auto;
-    }
-
-    .title-logo {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      object-position: center;
+      padding: 0;
+      min-height: 88px;
     }
 
     .title-copy {
       display: grid;
       gap: 2px;
+      justify-items: center;
+      text-align: center;
     }
 
     .title-copy h1 {
@@ -90,8 +75,28 @@
       line-height: 1.4;
     }
 
+    .title-logo-tile {
+      width: 88px;
+      height: 88px;
+      padding: 4px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(236, 242, 251, 0.96));
+      border: 1px solid rgba(31, 79, 166, 0.16);
+      box-shadow: 0 12px 24px rgba(31, 79, 166, 0.10);
+      flex: 0 0 auto;
+      justify-self: end;
+    }
+
+    .title-logo {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+    }
+
     .panel {
-      margin: 14px auto 0;
+      margin: 10px auto 0;
       width: min(100%, 860px);
       background: var(--surface);
       border: 1px solid var(--line);
@@ -202,7 +207,12 @@
 
     @media (max-width: 860px) {
       .shell { padding: 14px 12px 20px; }
-      .title-block { flex-wrap: wrap; }
+      .title-block {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+      .title-copy { justify-items: center; }
+      .title-logo-tile { width: 72px; height: 72px; }
       .title-copy h1 { font-size: clamp(20px, 5vw, 26px); }
       .panel { margin-top: 12px; }
       .cards { padding: 14px; }
@@ -213,12 +223,12 @@
 <body>
   <main class="shell">
     <header class="title-block">
-      <div class="title-logo-tile">
-        <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
-      </div>
       <div class="title-copy">
         <h1>Tournament Setup</h1>
         <p>Pre-Tournament Activities</p>
+      </div>
+      <div class="title-logo-tile">
+        <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
     </header>
 
@@ -232,32 +242,40 @@
           <h3>Event Definition</h3>
           <p>Create, edit, or activate the event before any roster work begins.</p>
           <div class="card-actions">
-            <a class="btn" href="../event-administration/">Open Event Definition</a>
+            <a class="btn" href="/tournament-setup/event-definition/">Open Event Definition</a>
           </div>
         </article>
 
         <article class="card blue">
           <h3>Import Registration</h3>
-          <p>Load the roster and continue through the current pre-tournament stepper.</p>
+          <p>Load the roster before building groups.</p>
           <div class="card-actions">
-            <a class="btn" href="../tournament-mgmt/">Open Import / Setup</a>
+            <a class="btn" href="/tournament-setup/import/">Open Import Registration</a>
           </div>
         </article>
 
         <article class="card yellow">
           <h3>Build Groups</h3>
-          <p>Generate groups and continue toward the current review/save workflow.</p>
+          <p>Generate groups and continue to the separate review/save step.</p>
           <div class="card-actions">
-            <a class="btn" href="../group-builder/">Open Build Groups</a>
+            <a class="btn" href="/tournament-setup/build-groups/">Open Build Groups</a>
           </div>
         </article>
 
-        <p class="note">Review / Save stays embedded in Build Groups for this first pass and will be separated in a later phase.</p>
+        <article class="card">
+          <h3>Review &amp; Save</h3>
+          <p>Adjust the draft, resolve flagged entries, and save the final divisions.</p>
+          <div class="card-actions">
+            <a class="btn" href="/tournament-setup/review-save/">Open Review &amp; Save</a>
+          </div>
+        </article>
+
+        <p class="note">Review &amp; Save is a separate page, keeping Build Groups focused on generating the draft.</p>
       </div>
     </section>
 
     <div class="footer">
-      Legacy URLs remain in place during the migration so existing navigation continues to work while the cleaner layout is introduced.
+      Use this hub to move between the distinct event setup stages.
     </div>
   </main>
 </body>

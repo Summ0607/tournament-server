@@ -72,7 +72,7 @@ test('dimensions default to zero and reject invalid input instead of truncating'
 });
 
 test('administration sends numeric dimensions, displays zero, and blocks invalid input', async () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'event-administration', 'index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-setup', 'event-definition', 'index.html'), 'utf8');
   const elements = new Map();
   function element(id) {
     if (!elements.has(id)) {

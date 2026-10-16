@@ -10,7 +10,7 @@ $surfaces = @(
   [pscustomobject]@{
     Name = "pre"
     Port = 3000
-    Url = "http://localhost:3000/tournament-mgmt/"
+    Url = "http://localhost:3000/tournament-setup/"
   },
   [pscustomobject]@{
     Name = "monitoring"

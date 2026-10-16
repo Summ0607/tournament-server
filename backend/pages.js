@@ -31,14 +31,12 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
     app.use('/head-table', express.static(controlBoardDir, { index: false }));
     app.use('/dashboard', express.static(controlBoardDir));
   }
-  app.use('/ring-progress', express.static(path.join(rootDir, 'ring-progress')));
-  app.use('/ring-assignment', express.static(path.join(rootDir, 'ring-assignment')));
-  app.use('/event-administration', express.static(path.join(rootDir, 'event-administration')));
-  app.use('/tournament-setup', express.static(path.join(rootDir, 'tournament-setup')));
-  app.use('/rings', express.static(path.join(rootDir, 'ring-progress')));
-  app.use('/ring-status', express.static(path.join(rootDir, 'ring-progress')));
-  app.use('/group-builder', express.static(path.join(rootDir, 'group-builder')));
-  app.use(express.static(rootDir));
+  app.use('/ring-progress', express.static(path.join(rootDir, 'ring-progress'), { index: false, redirect: false }));
+  app.use('/ring-assignment', express.static(path.join(rootDir, 'ring-assignment'), { index: false, redirect: false }));
+  app.use('/tournament-setup', express.static(path.join(rootDir, 'tournament-setup'), { index: false, redirect: false }));
+  app.use('/rings', express.static(path.join(rootDir, 'ring-progress'), { redirect: false }));
+  app.use('/ring-status', express.static(path.join(rootDir, 'ring-progress'), { redirect: false }));
+  app.use(express.static(rootDir, { index: false, redirect: false }));
   app.use('/control-board-assets', express.static(controlBoardDir));
 
   if (isMonitoringSurface || isAdminProgressSurface) {
@@ -64,7 +62,12 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
   });
 
   app.get('/', (req, res) => {
-    redirectToCanonicalProgress(res);
+    if (isMonitoringSurface || isAdminProgressSurface) {
+      redirectToCanonicalProgress(res);
+      return;
+    }
+
+    res.redirect('/tournament-setup/');
   });
 
   app.get(exactRoute(canonicalProgressPath.slice(0, -1)), (req, res) => {
@@ -91,28 +94,80 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
     redirectToCanonicalHtml(res);
   });
 
-  app.get('/group-builder', (req, res) => {
-    res.redirect('/group-builder/');
+  app.get(exactRoute('/group-builder'), (req, res) => {
+    res.redirect('/tournament-setup/build-groups/');
   });
 
-  app.get('/group-builder/', (req, res) => {
-    res.sendFile(path.join(rootDir, 'group-builder', 'index.html'));
+  app.get(exactRoute('/group-builder/'), (req, res) => {
+    res.redirect('/tournament-setup/build-groups/');
   });
 
-  app.get('/group-builder.html', (req, res) => {
-    res.sendFile(path.join(rootDir, 'group-builder', 'index.html'));
+  app.get(exactRoute('/group-builder.html'), (req, res) => {
+    res.redirect('/tournament-setup/build-groups/');
   });
 
-  app.get('/tournament-setup', (req, res) => {
+  app.get(exactRoute('/group-builder/index.html'), (req, res) => {
+    res.redirect('/tournament-setup/build-groups/');
+  });
+
+  app.get(exactRoute('/tournament-setup'), (req, res) => {
     res.redirect('/tournament-setup/');
   });
 
-  app.get('/tournament-setup/', (req, res) => {
+  app.get(exactRoute('/tournament-setup/'), (req, res) => {
     res.sendFile(path.join(rootDir, 'tournament-setup', 'index.html'));
   });
 
-  app.get('/tournament-setup.html', (req, res) => {
+  app.get(exactRoute('/tournament-setup.html'), (req, res) => {
     res.sendFile(path.join(rootDir, 'tournament-setup', 'index.html'));
+  });
+
+  app.get(exactRoute('/tournament-setup/event-definition'), (req, res) => {
+    res.redirect('/tournament-setup/event-definition/');
+  });
+
+  app.get(exactRoute('/tournament-setup/event-definition/'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'event-definition', 'index.html'));
+  });
+
+  app.get(exactRoute('/tournament-setup/event-definition.html'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'event-definition', 'index.html'));
+  });
+
+  app.get(exactRoute('/tournament-setup/import'), (req, res) => {
+    res.redirect('/tournament-setup/import/');
+  });
+
+  app.get(exactRoute('/tournament-setup/import/'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'import', 'index.html'));
+  });
+
+  app.get(exactRoute('/tournament-setup/import.html'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'import', 'index.html'));
+  });
+
+  app.get(exactRoute('/tournament-setup/build-groups'), (req, res) => {
+    res.redirect('/tournament-setup/build-groups/');
+  });
+
+  app.get(exactRoute('/tournament-setup/build-groups/'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'build-groups', 'index.html'));
+  });
+
+  app.get(exactRoute('/tournament-setup/build-groups.html'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'build-groups', 'index.html'));
+  });
+
+  app.get(exactRoute('/tournament-setup/review-save'), (req, res) => {
+    res.redirect('/tournament-setup/review-save/');
+  });
+
+  app.get(exactRoute('/tournament-setup/review-save/'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'review-save', 'index.html'));
+  });
+
+  app.get(exactRoute('/tournament-setup/review-save.html'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-setup', 'review-save', 'index.html'));
   });
 
   app.get('/dashboard', (req, res) => {
@@ -167,45 +222,47 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
     res.sendFile(path.join(rootDir, 'ring-progress', 'index.html'));
   });
 
-  app.get('/', (req, res) => {
-    res.sendFile(path.join(rootDir, 'tournament-mgmt', 'index.html'));
+  app.get([
+    exactRoute('/tournament-mgmt'),
+    exactRoute('/tournament-mgmt/'),
+    exactRoute('/tournament-mgmt.html'),
+    exactRoute('/tournament-mgmt/index.html')
+  ], (req, res) => {
+    res.redirect('/tournament-setup/');
   });
 
-  app.get('/tournament-mgmt', (req, res) => {
-    res.redirect('/tournament-mgmt/');
+  app.get(exactRoute('/setup'), (req, res) => {
+    res.redirect('/tournament-setup/event-definition/');
   });
 
-  app.get('/tournament-mgmt/', (req, res) => {
-    res.sendFile(path.join(rootDir, 'tournament-mgmt', 'index.html'));
+  app.get(exactRoute('/setup/'), (req, res) => {
+    res.redirect('/tournament-setup/event-definition/');
   });
 
-  app.get('/setup', (req, res) => {
-    res.redirect('/event-administration/');
+  app.get(exactRoute('/setup.html'), (req, res) => {
+    res.redirect('/tournament-setup/event-definition/');
   });
 
-  app.get('/setup/', (req, res) => {
-    res.redirect('/event-administration/');
+  app.get(exactRoute('/setup/index.html'), (req, res) => {
+    res.redirect('/tournament-setup/event-definition/');
   });
 
-  app.get('/setup.html', (req, res) => {
-    res.redirect('/event-administration/');
+  app.get(exactRoute('/event-administration'), (req, res) => {
+    res.redirect('/tournament-setup/event-definition/');
   });
 
-  app.get('/setup/index.html', (req, res) => {
-    res.redirect('/event-administration/');
+  app.get(exactRoute('/event-administration/'), (req, res) => {
+    res.redirect('/tournament-setup/event-definition/');
   });
 
-  app.get('/event-administration', (req, res) => {
-    res.redirect('/event-administration/');
+  app.get(exactRoute('/event-administration.html'), (req, res) => {
+    res.redirect('/tournament-setup/event-definition/');
   });
 
-  app.get('/event-administration/', (req, res) => {
-    res.sendFile(path.join(rootDir, 'event-administration', 'index.html'));
+  app.get(exactRoute('/event-administration/index.html'), (req, res) => {
+    res.redirect('/tournament-setup/event-definition/');
   });
 
-  app.get('/event-administration.html', (req, res) => {
-    res.sendFile(path.join(rootDir, 'event-administration', 'index.html'));
-  });
 }
 
 module.exports = {

@@ -22,7 +22,7 @@ const ACTIVE_SURFACE = resolveSurfaceName(process.env.TOURNAMENT_SURFACE);
 const PORT = resolveSurfacePort(ACTIVE_SURFACE);
 const SURFACE_ENTRY_PATH = ACTIVE_SURFACE === 'adminProgress'
   ? '/administration-progress/'
-  : (ACTIVE_SURFACE === 'monitoring' ? '/event-progress/' : '/tournament-mgmt/');
+  : (ACTIVE_SURFACE === 'monitoring' ? '/event-progress/' : '/tournament-setup/');
 
 // ─────────────────────────────────────────────
 // BASE CONSTANTS
@@ -46,13 +46,16 @@ const EVENTS_ROOT = path.join(ROOT_DIR, 'events');
 const ACTIVE_EVENT_FILE = path.join(EVENTS_ROOT, 'active.json');
 const { readEventConfig, writeEventConfig } = createEventConfigStore(EVENTS_ROOT);
 
-function resolveEventDbPath(eventName = readActiveEvent()) {
+function resolveEventDbPath(eventName = readActiveEvent(), options = {}) {
   const normalizedEventName = String(eventName || '').trim();
   if (!normalizedEventName) {
     return TOURNAMENT_DB_PATH;
   }
 
   const eventDbPath = path.join(EVENTS_ROOT, normalizedEventName, 'tournament.db');
+  if (options.strict) {
+    return eventDbPath;
+  }
   return fs.existsSync(eventDbPath) ? eventDbPath : TOURNAMENT_DB_PATH;
 }
 
@@ -78,20 +81,20 @@ function currentGroupStore(eventName = readActiveEvent()) {
   return groupStoresByEvent.get(cacheKey);
 }
 const groupStore = {
-  saveGroups(groups) {
-    return currentGroupStore().saveGroups(groups);
+  saveGroups(groups, eventName) {
+    return currentGroupStore(eventName).saveGroups(groups);
   },
-  loadGroups() {
-    return currentGroupStore().loadGroups();
+  loadGroups(eventName) {
+    return currentGroupStore(eventName).loadGroups();
   },
-  loadGroup(groupId) {
-    return currentGroupStore().loadGroup(groupId);
+  loadGroup(groupId, eventName) {
+    return currentGroupStore(eventName).loadGroup(groupId);
   },
-  groupExists(groupId) {
-    return currentGroupStore().groupExists(groupId);
+  groupExists(groupId, eventName) {
+    return currentGroupStore(eventName).groupExists(groupId);
   },
-  clearGroups() {
-    return currentGroupStore().clearGroups();
+  clearGroups(eventName) {
+    return currentGroupStore(eventName).clearGroups();
   }
 };
 
@@ -821,8 +824,11 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/events/active', (req, res) => {
   try {
+    const activeEvent = readActiveEvent();
+    const dbPath = activeEvent ? path.join(EVENTS_ROOT, activeEvent, 'tournament.db') : '';
     return res.json({
-      activeEvent: readActiveEvent()
+      activeEvent,
+      dbExists: !!(activeEvent && fs.existsSync(dbPath))
     });
   } catch (err) {
     console.error('Failed to read active event:', err);
@@ -869,7 +875,8 @@ app.get('/api/results/:serverRecordId', (req, res) => {
 
 app.get('/api/competitors', async (req, res) => {
   try {
-    const activeDbPath = resolveEventDbPath();
+    const requestedEventName = String((req.query || {}).eventName || '').trim();
+    const activeDbPath = resolveEventDbPath(requestedEventName, { strict: !!requestedEventName });
     const activeCompetitorStore = createCompetitorStore(activeDbPath);
     const competitors = await activeCompetitorStore.loadCompetitors();
     res.json(competitors);
@@ -880,7 +887,8 @@ app.get('/api/competitors', async (req, res) => {
 });
 
 app.get('/api/competitors/table', (req, res) => {
-  const activeDbPath = resolveEventDbPath();
+  const requestedEventName = String((req.query || {}).eventName || '').trim();
+  const activeDbPath = resolveEventDbPath(requestedEventName, { strict: !!requestedEventName });
   const activeDb = new sqlite3.Database(activeDbPath, sqlite3.OPEN_READONLY, (openErr) => {
     if (openErr) {
       console.error(openErr);
@@ -917,7 +925,8 @@ app.get('/search', (req, res) => {
   const associationNumber = String(req.query.associationNumber || '').trim();
   const groupDivisionNumber = String(req.query.groupDivisionNumber || '').trim();
   const rank = String(req.query.rank || '').trim();
-  const activeDbPath = resolveEventDbPath();
+  const requestedEventName = String(req.query.eventName || '').trim();
+  const activeDbPath = resolveEventDbPath(requestedEventName, { strict: !!requestedEventName });
   const activeDb = new sqlite3.Database(activeDbPath, sqlite3.OPEN_READONLY, (openErr) => {
    if (openErr) {
      console.error(openErr);
@@ -968,7 +977,7 @@ app.get('/search', (req, res) => {
 });
 
 app.use('/api', createDivisionRouter({
-  competitorStore: () => createCompetitorStore(resolveEventDbPath()),
+  competitorStore: (eventName) => createCompetitorStore(resolveEventDbPath(eventName, { strict: !!String(eventName || '').trim() })),
   groupStore,
   buildGroups,
   buildGroupsWithReview
@@ -1144,7 +1153,12 @@ app.get('/api/events/config', (req, res) => {
       return res.status(404).json({ error: `Event folder not found: ${eventName}` });
     }
 
-    return res.json({ ok: true, eventConfig: readEventConfig(eventName) });
+    const dbPath = path.join(eventDir, 'tournament.db');
+    return res.json({
+      ok: true,
+      eventConfig: readEventConfig(eventName),
+      dbExists: fs.existsSync(dbPath)
+    });
   } catch (err) {
     console.error('Failed to read event config:', err);
     return res.status(500).json({ error: 'Failed to read event config' });

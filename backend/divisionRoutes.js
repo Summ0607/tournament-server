@@ -7,12 +7,14 @@ function createDivisionRouter(deps) {
   const { competitorStore, groupStore, buildGroups, buildGroupsWithReview } = deps;
 
   router.get('/groups', async (req, res) => {
-    const groups = groupStore.loadGroups();
+    const eventName = String((req.query || {}).eventName || '').trim();
+    const groups = groupStore.loadGroups(eventName);
     res.json({ groups });
   });
 
   router.get('/groups/:groupId', (req, res) => {
-    const group = groupStore.loadGroup(req.params.groupId);
+    const eventName = String((req.query || {}).eventName || '').trim();
+    const group = groupStore.loadGroup(req.params.groupId, eventName);
     if (!group) {
       return res.status(404).json({
         error: 'Group not found',
@@ -26,6 +28,7 @@ function createDivisionRouter(deps) {
   router.post('/divisions/build', async (req, res) => {
     try {
       const payload = req.body || {};
+      const eventName = String(payload.eventName || req.query.eventName || '').trim();
       const explicitGroups = payload.groups || [];
       if (explicitGroups.length) {
         const { groups: assignedGroups } = typeof buildGroupsWithReview === 'function'
@@ -40,7 +43,7 @@ function createDivisionRouter(deps) {
       }
 
       const activeCompetitorStore = typeof competitorStore === 'function'
-        ? competitorStore()
+        ? competitorStore(eventName)
         : competitorStore;
 
       const competitors = Array.isArray(payload.competitors)
@@ -68,13 +71,15 @@ function createDivisionRouter(deps) {
         return res.status(400).json({ error: 'Invalid groups payload' });
       }
 
+      const eventName = String(req.body.eventName || req.query.eventName || '').trim();
+
       const groups = assignDivisionNumbers(
         req.body.groups,
         req.body.startingDivisionNumber ?? 20
       );
 
       const activeCompetitorStore = typeof competitorStore === 'function'
-        ? competitorStore()
+        ? competitorStore(eventName)
         : competitorStore;
 
       const persisted = await activeCompetitorStore.saveDivisionAssignments(groups, {
@@ -82,7 +87,7 @@ function createDivisionRouter(deps) {
         minGroupSize: req.body.minGroupSize,
         startingDivisionNumber: req.body.startingDivisionNumber
       });
-      const savedGroups = groupStore.saveGroups(persisted.groups);
+      const savedGroups = groupStore.saveGroups(persisted.groups, eventName);
       appendDivisionTrace('division-save', {
         groupCount: savedGroups.length,
         updatedCompetitors: persisted.updatedCompetitors,
