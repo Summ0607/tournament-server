@@ -136,63 +136,30 @@
     .panel {
       overflow: hidden;
       margin-bottom: 10px;
+      padding: 14px 16px;
     }
 
-    .panel-head {
-      padding: 16px 18px 14px;
-      background: linear-gradient(180deg, #f7faff 0%, #e9eff7 100%);
-      border-bottom: 1px solid rgba(201, 209, 222, 0.88);
-      display: grid;
-      gap: 8px;
-    }
-
-    .panel-head h2,
-    .card-title {
-      margin: 0;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-    }
-
-    .panel-head p,
-    .section-copy,
-    .note {
-      margin: 0;
-      color: #445062;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .cards {
-      padding: 18px;
-      display: grid;
-      gap: 14px;
-    }
-
-    .card {
-      padding: 16px 18px;
-      overflow: hidden;
-    }
-
-    .card-title {
+    .review-toolbar {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-      font-size: 16px;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 2px 0;
     }
 
-    .step-num {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: #1a1a2e;
-      color: #fff;
-      font-size: 12px;
-      font-weight: 700;
-      display: inline-flex;
+    .review-toolbar-label {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #17212f;
+    }
+
+    .action-bar {
+      display: grid;
+      gap: 10px;
+      grid-auto-flow: column;
       align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
     }
 
     .stats-bar {
@@ -407,12 +374,6 @@
 
     .hidden { display: none !important; }
 
-    .footer {
-      margin-top: 12px;
-      color: #627082;
-      font-size: 12px;
-      line-height: 1.45;
-    }
   </style>
 </head>
 <body data-page-mode="review">
@@ -422,7 +383,6 @@
       <div class="banner-copy">
         <div class="banner-kicker">Final Review &amp; Save</div>
         <h1 class="banner-title" id="bannerEventName">No event selected</h1>
-        <p class="banner-subtitle">Review the finalized division presentation, adjust groups if needed, and save the completed divisions.</p>
       </div>
       <div class="banner-logo-tile">
         <img class="banner-logo" src="../../assets/vaughns-dojang-logo.png" alt="Tournament logo">
@@ -430,19 +390,11 @@
     </header>
 
     <section class="panel" aria-label="Review workflow">
-      <div class="panel-head">
-        <h2>Final presentation</h2>
-        <p>This page is the final presentation layer for the division draft. Fine-tune the layout here, then save the completed divisions.</p>
-      </div>
-      <div class="cards">
-        <div class="card">
-          <div class="card-title"><span class="step-num">3</span> Review &amp; Save</div>
-          <p class="section-copy">This is the finalized view of the divisions. Resolve flagged competitors, adjust any final group assignments, and persist the finished divisions from this dedicated step.</p>
-          <div class="action-bar">
-            <a class="btn secondary" href="/tournament-setup/build-groups/">Back to Build Groups</a>
-            <button class="btn" onclick="saveCurrentReview()">Save Divisions</button>
-          </div>
-          <p class="note">Use drag-and-drop within the group cards to fine-tune the draft before saving. If you need to create more structure, return to Build Groups and regenerate the draft.</p>
+      <div class="review-toolbar">
+        <div class="review-toolbar-label">Review &amp; Save</div>
+        <div class="action-bar">
+          <a class="btn secondary" href="/tournament-setup/build-groups/" title="Return to Build Groups to edit the draft.">Back to Build Groups</a>
+          <button class="btn" onclick="saveCurrentReview()" title="Save the current divisions and clear the local review draft.">Save Divisions</button>
         </div>
       </div>
     </section>
@@ -454,10 +406,6 @@
         <div class="review-roster-head">
           <div class="review-roster-title">Review Roster / Flagged Entries</div>
           <div class="review-chip review-chip-alert" id="reviewRosterCount">0 flagged entries</div>
-        </div>
-        <div class="review-roster-sub">
-          These entries were excluded by the server build step because their rank could not be grouped as-is.
-          Correct the rank inline, add a note, then apply the change to re-queue the competitor without re-importing the CSV.
         </div>
         <div id="reviewRosterList"></div>
         <div class="review-empty hidden" id="reviewRosterEmpty">No flagged entries remain.</div>
@@ -477,9 +425,6 @@
       </div>
     </div>
 
-    <div class="footer">
-      The review draft is stored locally until you save it. Saving clears the draft and writes the final groups back to the server.
-    </div>
   </main>
 
   <script src="../build-groups/app.js"></script>

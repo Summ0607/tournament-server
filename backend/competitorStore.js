@@ -69,6 +69,73 @@ function divisionText(value) {
   return Number.isFinite(Number(value)) ? String(Number(value)) : 'unassigned';
 }
 
+function normalizeLookupValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function competitorLookupKeys(competitor = {}) {
+  const keys = [];
+  const associationNumber = String(competitor.associationNumber || '').trim();
+  const firstName = normalizeLookupValue(competitor.firstName);
+  const lastName = normalizeLookupValue(competitor.lastName);
+  const dob = String(competitor.dob || competitor.dobIso || '').trim();
+  const email = normalizeLookupValue(competitor.email);
+
+  if (associationNumber) {
+    keys.push(`assoc:${associationNumber.toUpperCase()}`);
+  }
+
+  if (firstName || lastName || dob) {
+    keys.push(`name:${firstName}|${lastName}|${dob}`);
+  }
+
+  if (email) {
+    keys.push(`email:${email}`);
+  }
+
+  return keys;
+}
+
+function buildRosterLookup(rows) {
+  const lookup = new Map();
+
+  rows.forEach((row) => {
+    const competitorId = Number.parseInt(row.id, 10);
+    if (!Number.isFinite(competitorId)) return;
+
+    lookup.set(`id:${competitorId}`, competitorId);
+    competitorLookupKeys(row).forEach((key) => {
+      if (!lookup.has(key)) {
+        lookup.set(key, competitorId);
+      } else if (lookup.get(key) !== competitorId) {
+        lookup.set(key, null);
+      }
+    });
+  });
+
+  return lookup;
+}
+
+function resolveCompetitorId(competitor, rosterLookup) {
+  const currentId = Number.parseInt(competitor && competitor.id, 10);
+  const lookupKeys = competitorLookupKeys(competitor);
+
+  if (rosterLookup) {
+    for (const key of lookupKeys) {
+      const matchedId = rosterLookup.get(key);
+      if (Number.isFinite(matchedId)) {
+        return matchedId;
+      }
+    }
+
+    if (!lookupKeys.length && Number.isFinite(currentId) && rosterLookup.has(`id:${currentId}`)) {
+      return rosterLookup.get(`id:${currentId}`);
+    }
+  }
+
+  return NaN;
+}
+
 async function ensureDivisionColumns(db) {
   const rows = await all(db, 'PRAGMA table_info(competitors)');
   const existingColumns = new Set(rows.map((row) => row.name));
@@ -137,6 +204,8 @@ function createCompetitorStore(dbFilePath) {
     try {
       await ensureDivisionColumns(db);
       await ensureDivisionIndexes(db);
+      const rosterRows = await all(db, 'SELECT id, firstName, lastName, dob, associationNumber, email FROM competitors');
+      const rosterLookup = buildRosterLookup(rosterRows);
       await run(db, 'BEGIN TRANSACTION');
       transactionStarted = true;
       await run(
@@ -161,7 +230,10 @@ function createCompetitorStore(dbFilePath) {
         const groupAnchor = Number.isFinite(groupDivisionNumber) ? groupDivisionNumber : null;
 
         for (const competitor of competitors) {
-          const competitorId = Number.parseInt(competitor.id, 10);
+          const competitorId = resolveCompetitorId(competitor, rosterLookup);
+          if (Number.isFinite(competitorId)) {
+            competitor.id = String(competitorId);
+          }
 
           const weaponsDivision = isWeaponsEligible(competitor) && competitor.weaponsDivisionNumber != null
             ? String(competitor.weaponsDivisionNumber)
@@ -181,7 +253,7 @@ function createCompetitorStore(dbFilePath) {
           );
 
           if (!Number.isFinite(competitorId)) {
-            throw new Error(`Cannot persist division number for competitor without a numeric id in division ${groupAnchor != null ? groupAnchor : 'unknown'}`);
+            throw new Error(`Cannot uniquely match competitor ${competitor.id || '(no id)'} to the current roster in division ${groupAnchor != null ? groupAnchor : 'unknown'}`);
           }
           if (!Number.isFinite(competitionDivisionNumber)) {
             throw new Error(`Cannot persist competition division number for competitor ${competitorId}`);

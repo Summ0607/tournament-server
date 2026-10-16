@@ -13,6 +13,7 @@
   const PAGE_MODE = String(document.body && document.body.dataset && document.body.dataset.pageMode || 'build').toLowerCase();
 
   let dragCtx = null;
+  let groupDragCtx = null;
 
   const RANKS = [
     'TTLD',
@@ -171,6 +172,23 @@
     } catch (error) {
       console.warn('Unable to persist review draft.', error);
     }
+  }
+
+  function persistCurrentReviewDraft() {
+    const eventName = String(state.selectedEventName || readSelectedEventName() || '').trim();
+    if (!eventName) return;
+
+    const reviewSettings = resolveReviewSettings();
+    saveReviewDraft({
+      eventName,
+      groups: state.groups,
+      reviewCompetitors: state.reviewCompetitors,
+      builtAt: new Date().toISOString(),
+      source: 'build-groups',
+      minGroupSize: reviewSettings.minGroupSize,
+      maxGroupSize: reviewSettings.maxGroupSize,
+      reviewSettings
+    });
   }
 
   function loadReviewDraft(expectedEventName) {
@@ -393,13 +411,13 @@
     const nGroups = state.groups.length;
     const nWarn = state.groups.filter((group) => group.competitors.length < minSize).length;
     const nAdults = state.groups.filter((group) => group.isAdult).reduce((sum, group) => sum + group.competitors.length, 0);
-    const nJuniors = total - nAdults - state.unassigned.length - state.reviewCompetitors.length;
+    const nYouth = total - nAdults - state.unassigned.length - state.reviewCompetitors.length;
 
     document.getElementById('statsBar').innerHTML = `
       <div class="stat"><span class="stat-value">${total}</span><span class="stat-label">Competitors</span></div>
       <div class="stat"><span class="stat-value">${nGroups}</span><span class="stat-label">Groups</span></div>
       <div class="stat"><span class="stat-value">${nAdults}</span><span class="stat-label">Adults</span></div>
-      <div class="stat"><span class="stat-value">${nJuniors}</span><span class="stat-label">Juniors</span></div>
+      <div class="stat"><span class="stat-value">${nYouth}</span><span class="stat-label">Youth</span></div>
       ${state.reviewCompetitors.length ? `<div class="stat stat-warn"><span class="stat-value">⚑ ${state.reviewCompetitors.length}</span><span class="stat-label">Flagged</span></div>` : ''}
       ${nWarn ? `<div class="stat stat-warn"><span class="stat-value">⚠ ${nWarn}</span><span class="stat-label">Undersized</span></div>` : ''}
     `;
@@ -421,6 +439,7 @@
   function competitorRow(c, groupId) {
     return `
       <div class="competitor-row"
+           title="Drag this competitor to another group to rebalance divisions."
            draggable="true"
            ondragstart="startCompetitorDrag(event, '${c.id}', '${groupId}')"
            ondragend="endCompetitorDrag(event)">
@@ -445,6 +464,7 @@
     sec.classList.remove('hidden');
     list.innerHTML = state.unassigned.map((c) => `
       <div class="competitor-row pool-row"
+           title="Drag this competitor into a group to place them."
            draggable="true"
            ondragstart="startCompetitorDrag(event, '${c.id}', null)"
            ondragend="endCompetitorDrag(event)">
@@ -509,17 +529,20 @@
       const count = g.competitors.length;
       const warn = count < minSize;
       const emptyShell = count === 0;
+      const isDraggedGroup = groupDragCtx && groupDragCtx.groupId === g.id;
       return `
-        <div class="group-card ${emptyShell ? 'empty-shell' : (warn ? 'warn-border' : 'ok-border')}"
+        <div class="group-card ${emptyShell ? 'empty-shell' : (warn ? 'warn-border' : 'ok-border')} ${isDraggedGroup ? 'group-drag-source' : ''}"
              id="gc-${g.id}"
              ondragover="allowGroupDrop(event, '${g.id}')"
              ondragenter="markGroupDropTarget(event, '${g.id}')"
              ondragleave="unmarkGroupDropTarget(event, '${g.id}')"
              ondrop="dropIntoGroup(event, '${g.id}')">
           <div class="group-header ${emptyShell ? 'empty-shell' : (g.isAdult ? 'adult' : '')}">
-            <div class="group-header-top">
+            <div class="group-header-top drag-handle" draggable="true" title="Drag this group header to reorder the group"
+                 ondragstart="startGroupDrag(event, '${g.id}')"
+                 ondragend="endGroupDrag(event)">
               <div class="group-header-main">
-                <input class="group-name-input" value="${esc(g.name)}" readonly title="${emptyShell ? 'Empty group — first drop defines the group characteristics' : 'Auto-generated from current competitors'}">
+                <input class="group-name-input" value="${esc(g.name)}" readonly title="Drag group headers to reorder groups.">
                 <div class="group-meta">
                   ${emptyShell
                     ? ''
@@ -672,6 +695,46 @@
     if (!window.confirm(`Delete "${group.name}"?`)) return;
     state.groups = state.groups.filter((candidate) => candidate.id !== group.id);
     renderReview();
+    persistCurrentReviewDraft();
+  }
+
+  function startGroupDrag(event, groupId) {
+    if (!groupId) return;
+    groupDragCtx = { groupId: groupId };
+    dragCtx = null;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'group', groupId: groupId }));
+
+    const card = document.getElementById(`gc-${groupId}`);
+    if (card) {
+      card.classList.add('group-drag-source');
+    }
+  }
+
+  function endGroupDrag() {
+    groupDragCtx = null;
+    document.querySelectorAll('.group-card.group-drag-source').forEach((el) => el.classList.remove('group-drag-source'));
+    document.querySelectorAll('.group-card.group-drop-target').forEach((el) => el.classList.remove('group-drop-target'));
+  }
+
+  function reorderGroup(sourceGroupId, targetGroupId) {
+    if (!sourceGroupId || !targetGroupId || sourceGroupId === targetGroupId) return false;
+
+    const sourceIndex = state.groups.findIndex((group) => group.id === sourceGroupId);
+    const targetIndex = state.groups.findIndex((group) => group.id === targetGroupId);
+    if (sourceIndex === -1 || targetIndex === -1) return false;
+
+    const sourceGroup = state.groups[sourceIndex];
+    const nextGroups = state.groups.slice();
+    nextGroups.splice(sourceIndex, 1);
+
+    const adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    nextGroups.splice(adjustedTargetIndex, 0, sourceGroup);
+
+    state.groups = nextGroups;
+    renderReview();
+    persistCurrentReviewDraft();
+    return true;
   }
 
   function moveCompetitorBetweenGroups(compId, fromGroupId, targetGroupId) {
@@ -687,6 +750,7 @@
     sourceList.splice(sourceIndex, 1);
     targetGroup.competitors.push(competitor);
     renderReview();
+    persistCurrentReviewDraft();
     return true;
   }
 
@@ -708,6 +772,21 @@
       state.reviewCompetitors = [];
       renderReview();
       return false;
+    }
+
+    const draft = loadReviewDraft(context.selectedEventName);
+    if (draft) {
+      state.groups = Array.isArray(draft.groups) ? draft.groups.map(normalizeGroup) : [];
+      state.unassigned = [];
+      state.reviewCompetitors = Array.isArray(draft.reviewCompetitors)
+        ? draft.reviewCompetitors.map(normalizeCompetitor)
+        : [];
+      state.reviewSettings = draft.reviewSettings || {
+        minGroupSize: Number.isFinite(Number(draft.minGroupSize)) ? Number(draft.minGroupSize) : MIN_GROUP_SIZE,
+        maxGroupSize: Number.isFinite(Number(draft.maxGroupSize)) ? Number(draft.maxGroupSize) : recommendedMaxSize(state.competitors.length)
+      };
+      renderReview();
+      return true;
     }
 
     const data = await fetchJson(`/api/groups?eventName=${encodeURIComponent(context.selectedEventName)}`);
@@ -858,16 +937,7 @@
       state.unassigned = [];
       state.reviewCompetitors = Array.isArray(built.reviewCompetitors) ? built.reviewCompetitors.map(normalizeCompetitor) : [];
       state.reviewSettings = { minGroupSize, maxGroupSize };
-      saveReviewDraft({
-        eventName: context.selectedEventName,
-        groups: builtGroups,
-        reviewCompetitors: state.reviewCompetitors,
-        builtAt: new Date().toISOString(),
-        source: 'build-groups',
-        minGroupSize,
-        maxGroupSize,
-        reviewSettings: { minGroupSize, maxGroupSize }
-      });
+      persistCurrentReviewDraft();
       renderReview();
     } catch (error) {
       console.error('Build groups error:', error);
@@ -889,8 +959,9 @@
   }
 
   function addNewGroup() {
-    state.groups.push(normalizeGroup({ id: genId(), name: `Group ${state.groups.length + 1}`, competitors: [] }, state.groups.length));
+    state.groups.unshift(normalizeGroup({ id: genId(), name: 'Group 1', competitors: [] }, 0));
     renderReview();
+    persistCurrentReviewDraft();
   }
 
   function unassign(compId, groupId) {
@@ -900,6 +971,7 @@
     if (idx === -1) return;
     state.unassigned.push.apply(state.unassigned, g.competitors.splice(idx, 1));
     renderReview();
+    persistCurrentReviewDraft();
   }
 
   function startCompetitorDrag(event, compId, fromGroupId) {
@@ -910,10 +982,17 @@
 
   function endCompetitorDrag() {
     dragCtx = null;
-    document.querySelectorAll('.group-card.drop-target').forEach((el) => el.classList.remove('drop-target'));
+    document.querySelectorAll('.group-card.group-drop-target').forEach((el) => el.classList.remove('group-drop-target'));
   }
 
   function allowGroupDrop(event, groupId) {
+    if (groupDragCtx) {
+      if (groupDragCtx.groupId === groupId) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      return;
+    }
+
     if (!dragCtx || dragCtx.fromGroupId === groupId) return;
     const target = state.groups.find((group) => group.id === groupId);
     const source = dragCtx.fromGroupId ? state.groups.find((group) => group.id === dragCtx.fromGroupId) : null;
@@ -925,20 +1004,30 @@
   }
 
   function markGroupDropTarget(event, groupId) {
-    if (!dragCtx || dragCtx.fromGroupId === groupId) return;
+    if (groupDragCtx) {
+      if (groupDragCtx.groupId === groupId) return;
+    } else if (!dragCtx || dragCtx.fromGroupId === groupId) {
+      return;
+    }
     const card = document.getElementById(`gc-${groupId}`);
-    if (card) card.classList.add('drop-target');
+    if (card) card.classList.add('group-drop-target');
   }
 
   function unmarkGroupDropTarget(event, groupId) {
     const card = document.getElementById(`gc-${groupId}`);
-    if (card) card.classList.remove('drop-target');
+    if (card) card.classList.remove('group-drop-target');
   }
 
   function dropIntoGroup(event, targetGroupId) {
     event.preventDefault();
     const card = document.getElementById(`gc-${targetGroupId}`);
-    if (card) card.classList.remove('drop-target');
+    if (card) card.classList.remove('group-drop-target');
+
+    if (groupDragCtx) {
+      reorderGroup(groupDragCtx.groupId, targetGroupId);
+      endGroupDrag();
+      return;
+    }
 
     let payload = dragCtx;
     if (!payload && event.dataTransfer) {
@@ -979,12 +1068,14 @@
   window.addNewGroup = addNewGroup;
   window.applyReviewCorrection = applyReviewCorrection;
   window.unassign = unassign;
-  window.startCompetitorDrag = startCompetitorDrag;
-  window.endCompetitorDrag = endCompetitorDrag;
+  window.startGroupDrag = startGroupDrag;
+  window.endGroupDrag = endGroupDrag;
   window.allowGroupDrop = allowGroupDrop;
   window.markGroupDropTarget = markGroupDropTarget;
   window.unmarkGroupDropTarget = unmarkGroupDropTarget;
   window.dropIntoGroup = dropIntoGroup;
+  window.startCompetitorDrag = startCompetitorDrag;
+  window.endCompetitorDrag = endCompetitorDrag;
   window.deleteGroup = deleteGroup;
   window.exportJSON = exportJSON;
   window.saveGroupsToServer = saveGroupsToServer;

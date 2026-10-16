@@ -265,32 +265,6 @@
       border-color: #7fa0d8;
     }
 
-    .build-tip {
-      margin-top: 10px;
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-    }
-
-    .build-tip strong {
-      color: #1a1a2e;
-    }
-
-    .build-tip-icon {
-      flex: 0 0 auto;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: #e8eefc;
-      color: #2257b3;
-      font-weight: 800;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      margin-top: 1px;
-    }
-
     /* Preview table */
     .preview-table {
       width: 100%;
@@ -394,6 +368,7 @@
       border: 1px solid #e5e7eb;
       box-shadow: 0 2px 10px rgba(0,0,0,0.05);
       overflow: hidden;
+      position: relative;
     }
 
     .group-card.empty-shell {
@@ -402,9 +377,30 @@
       background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
     }
 
-    .group-card.drop-target {
-      box-shadow: 0 0 0 3px rgba(26, 26, 46, 0.18), 0 2px 10px rgba(0,0,0,0.05);
-      transform: translateY(-1px);
+    .group-card.group-drag-source {
+      opacity: 0.78;
+      transform: scale(0.992);
+    }
+
+    .group-card.group-drop-target {
+      box-shadow: 0 0 0 3px rgba(34, 87, 179, 0.22), 0 2px 10px rgba(0,0,0,0.05);
+      transform: translateY(-2px);
+    }
+
+    .group-card.group-drop-target::after {
+      content: 'Drop to place here';
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      z-index: 2;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.9);
+      color: #2257b3;
+      border: 1px solid rgba(34, 87, 179, 0.18);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
     }
 
     .group-card.warn-border { border-color: #f59e0b; }
@@ -428,6 +424,12 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .group-header-top:active {
+      cursor: grabbing;
     }
 
     .group-header-main {
@@ -785,10 +787,9 @@
 
 <div class="setup-banner">
   <a class="banner-back-link" href="/tournament-setup/">← Back to Tournament Setup</a>
-  <div class="banner-copy">
+  <div class="banner-copy" title="Drag group headers to reorder groups.">
     <div class="banner-kicker">Build Groups</div>
     <h1 class="banner-title" id="bannerEventName">No event selected</h1>
-    <p class="banner-subtitle">Generate groups and continue to Review &amp; Save.</p>
   </div>
   <img class="banner-logo-tile" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
 </div>
@@ -803,14 +804,6 @@
       <button class="btn btn-secondary" id="reviewNextBtn" type="button" disabled>
         Next: Review &amp; Save
       </button>
-    </div>
-
-    <div class="info-note build-tip">
-      <span class="build-tip-icon">↕</span>
-      <div>
-        <strong>Drag and drop</strong> competitors between groups to rebalance divisions.
-        When you’re done, use <strong>Next: Review &amp; Save</strong>.
-      </div>
     </div>
 
     <div id="groupsContainer"></div>
