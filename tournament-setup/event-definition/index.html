@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Event Administration</title>
+  <title>Event Definition</title>
   <style>
     :root {
       color-scheme: light;
@@ -49,15 +49,22 @@
     }
 
     .title-block {
-      position: relative;
-      display: flex;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
       align-items: center;
-      justify-content: space-between;
+      gap: 12px;
       width: 100%;
-      padding: 0 16px 0 0;
-      min-height: 58px;
+      padding: 0 0 0 12px;
+      min-height: 88px;
       overflow: hidden;
       background: linear-gradient(180deg, #fafbfc 0%, #eef2f6 100%);
+    }
+
+    .title-copy {
+      display: grid;
+      justify-items: center;
+      text-align: center;
+      gap: 2px;
     }
 
     .tournament-name {
@@ -67,22 +74,24 @@
       letter-spacing: -0.05em;
       font-weight: 750;
       color: var(--text);
-      text-align: center;
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: min(62vw, 560px);
       white-space: nowrap;
     }
 
+    .title-copy p {
+      margin: 0;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
     .title-logo-tile {
-      width: 58px;
-      height: 58px;
+      width: 88px;
+      height: 88px;
       border-radius: 10px;
       overflow: hidden;
       flex: 0 0 auto;
       background: transparent;
+      justify-self: end;
     }
 
     .title-logo {
@@ -108,6 +117,7 @@
       font-weight: 700;
       text-decoration: none;
       white-space: nowrap;
+      justify-self: start;
     }
 
     .nav-back-link:hover,
@@ -268,6 +278,18 @@
       color: #fff;
     }
 
+    .button-row .next-action {
+      background: linear-gradient(180deg, #2257b3 0%, #1d4ea1 100%);
+      border-color: #2257b3;
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(34, 87, 179, 0.18);
+    }
+
+    .button-row .next-action:hover:not(:disabled) {
+      background: linear-gradient(180deg, #1f4e9f 0%, #18458e 100%);
+      border-color: #1f4e9f;
+    }
+
     .button-row .danger {
       background: #b00020;
       border-color: #b00020;
@@ -372,35 +394,23 @@
 
     @media (max-width: 760px) {
       .title-block {
-        padding-right: 10px;
-        min-height: 52px;
+        grid-template-columns: 1fr;
+        padding: 10px 12px;
+        min-height: 0;
       }
 
       .title-logo-tile {
-        width: 52px;
-        height: 52px;
+        width: 72px;
+        height: 72px;
+        justify-self: start;
       }
 
       .tournament-name {
-        width: min(58vw, 330px);
         font-size: clamp(16px, 4vw, 22px);
       }
 
-      .title-block {
-        flex-wrap: wrap;
-      }
-
-      .title-block .tournament-name {
-        position: static;
-        transform: none;
-        flex: 1 1 0;
-        width: auto;
-      }
-
       .nav-back-link {
-        flex-basis: 100%;
-        margin-bottom: 6px;
-        text-align: right;
+        justify-self: start;
       }
 
       .banner-timer {
@@ -412,11 +422,14 @@
 <body>
   <div class="shell">
     <div class="title-block">
+      <a class="nav-back-link" href="/tournament-setup/">← Back to Tournament Setup</a>
+      <div class="title-copy">
+        <h1 class="tournament-name">Event Definition</h1>
+        <p>Create, edit, or activate the event before any roster work begins.</p>
+      </div>
       <div class="title-logo-tile">
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
-      <h1 class="tournament-name">Event Administration</h1>
-      <a class="nav-back-link" id="backToPreTournamentLink" href="/tournament-mgmt/">← Back to Pre-Tournament Activities</a>
     </div>
 
     <div class="overview">
@@ -444,6 +457,12 @@
               <button class="primary" id="createEventBtn" type="button">Create Event</button>
               <button id="modifyEventBtn" type="button">Modify Event</button>
               <button id="activateEventBtn" type="button">Activate Event</button>
+            </div>
+          </div>
+          <div class="button-cluster">
+            <div class="button-cluster-label">Next Step</div>
+            <div class="button-row">
+              <button class="primary next-action" id="goToImportBtn" type="button">Next: Import Registration</button>
             </div>
           </div>
           <div class="button-cluster">
@@ -510,22 +529,6 @@
 
   <script>
     const apiBaseUrl = window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin;
-    // Shared with tournament-mgmt/index.html, which owns the workflow pill.
-    const PRE_TOURNAMENT_STAGE_KEY = 'preTournament.activeStageIndex';
-    const PRE_TOURNAMENT_STAGE_COUNT = 4;
-
-    function advancePreTournamentStage() {
-      try {
-        const current = Number.parseInt(window.localStorage.getItem(PRE_TOURNAMENT_STAGE_KEY), 10);
-        const base = Number.isFinite(current) ? Math.max(0, current) : 0;
-        const next = Math.min(base + 1, PRE_TOURNAMENT_STAGE_COUNT - 1);
-        window.localStorage.setItem(PRE_TOURNAMENT_STAGE_KEY, String(next));
-        return next;
-      } catch (error) {
-        return null;
-      }
-    }
-
     const LAST_SELECTED_EVENT_KEY = 'eventAdmin.lastSelectedEvent';
 
     function readLastSelectedEvent() {
@@ -546,12 +549,6 @@
       } catch (error) {
         // Storage unavailable; selection simply is not remembered.
       }
-    }
-
-    function goBackToPreTournament(event) {
-      event.preventDefault();
-      advancePreTournamentStage();
-      window.location.assign(event.currentTarget.getAttribute('href'));
     }
 
     const emptyMeta = (name) => ({
@@ -589,6 +586,7 @@
     const createEventBtn = document.getElementById('createEventBtn');
     const modifyEventBtn = document.getElementById('modifyEventBtn');
     const activateEventBtn = document.getElementById('activateEventBtn');
+    const goToImportBtn = document.getElementById('goToImportBtn');
     const deleteEventBtn = document.getElementById('deleteEventBtn');
     const resetEventBtn = document.getElementById('resetEventBtn');
     const metadataPanelEl = document.getElementById('metadataPanel');
@@ -749,6 +747,7 @@
       createEventBtn.disabled = !selectedName || existsNow;
       modifyEventBtn.disabled = !selectedName || !existsNow;
       activateEventBtn.disabled = !selectedName || !existsNow;
+      goToImportBtn.disabled = !selectedName || !existsNow;
       deleteEventBtn.disabled = !selectedName || !existsNow;
       resetEventBtn.disabled = !selectedName && !state.metadataOpen;
       saveMetadataBtn.disabled = !state.metadataOpen || !selectedName;
@@ -1008,10 +1007,17 @@
     createEventBtn.addEventListener('click', createEvent);
     modifyEventBtn.addEventListener('click', () => modifyEvent().catch((error) => showNotice(error.message, 'error')));
     activateEventBtn.addEventListener('click', activateEvent);
+    goToImportBtn.addEventListener('click', () => {
+      const selectedName = getSelectedEventName();
+      if (!selectedName || !eventExists(selectedName)) {
+        showNotice('Select an existing event before going to Import Registration.', 'warn');
+        return;
+      }
+      window.location.assign('/tournament-setup/import/');
+    });
     deleteEventBtn.addEventListener('click', deleteEvent);
     resetEventBtn.addEventListener('click', resetSelection);
     saveMetadataBtn.addEventListener('click', saveMetadata);
-    document.getElementById('backToPreTournamentLink').addEventListener('click', goBackToPreTournament);
 
     initializePage()
       .catch((error) => showNotice(error.message, 'error'));
