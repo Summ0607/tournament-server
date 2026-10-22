@@ -124,3 +124,20 @@ test('legacy pre-tournament routes redirect to the new canonical paths', async (
   assert.ok([301, 302].includes(oldSetupFile.statusCode));
   assert.equal(oldSetupFile.headers.location, '/tournament-setup/event-definition/');
 });
+
+test('tournament management shell is available as a standalone page', async () => {
+  const shellRoot = await requestPath('pre', '/tournament-management');
+  assert.ok([301, 302].includes(shellRoot.statusCode));
+  assert.equal(shellRoot.headers.location, '/tournament-management/');
+
+  const shellPage = await requestPath('pre', '/tournament-management/');
+  assert.equal(shellPage.statusCode, 200);
+  assert.match(shellPage.body, /Tournament Management System/);
+  assert.match(shellPage.body, /Under Development/);
+  assert.match(shellPage.body, /Event Setup/);
+  assert.match(shellPage.body, /Draft/);
+
+  const shellHtml = await requestPath('pre', '/tournament-management.html');
+  assert.equal(shellHtml.statusCode, 200);
+  assert.match(shellHtml.body, /Tournament Management System/);
+});

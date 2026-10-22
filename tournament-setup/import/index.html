@@ -236,6 +236,13 @@
       cursor: not-allowed;
     }
 
+    [hidden] { display: none !important; }
+
+    .import-form {
+      display: grid;
+      gap: 14px;
+    }
+
     .grid {
       display: grid;
       grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
@@ -443,7 +450,7 @@
       <div class="banner-copy">
         <div class="banner-kicker">Import Registration</div>
         <h1 class="banner-title" id="bannerEventName">No event selected</h1>
-        <p class="banner-subtitle">Load competitor registrations into the active event before building groups.</p>
+        <p class="banner-subtitle">Resume saved registration and divisions, or import registrations for a new event.</p>
       </div>
       <div class="banner-logo-tile">
         <img class="banner-logo" src="../../assets/vaughns-dojang-logo.png" alt="Tournament logo">
@@ -453,25 +460,31 @@
     <section class="grid">
       <section class="panel">
         <div class="panel-head">
-          <h2>Upload CSV</h2>
-          <p>Import will use the selected event. If no event is selected, the snapshot stays empty until one is chosen and initialized.</p>
+          <h2>Registration</h2>
+          <p id="registrationSummary">Loading saved event data...</p>
         </div>
         <div class="cards">
-          <div class="field-stack">
-            <label for="csvFileInput">Choose CSV file</label>
-            <input id="csvFileInput" type="file" accept=".csv,text/csv">
-          </div>
-          <div class="field-stack">
-            <label for="csvTextInput">CSV text</label>
-            <textarea id="csvTextInput" placeholder="Paste CSV data here, or choose a file above."></textarea>
-          </div>
           <div class="action-bar">
-            <button class="btn" id="importBtn" type="button">Import CSV</button>
-            <button class="btn secondary" id="clearBtn" type="button">Clear</button>
             <button class="btn secondary" id="continueBtn" type="button" disabled>Continue to Build Groups</button>
+            <button class="btn secondary" id="buildGroupsBtn" type="button" hidden>Build Groups</button>
+            <button class="btn secondary" id="reimportBtn" type="button" hidden>Reimport Registration</button>
           </div>
-          <div class="note-box">
-            Supported columns match the import parser: First Name, Last Name, DOB, Gender, Current Rank, Studio, Special Needs, Height, and optional competitor ID fields.
+          <div class="import-form" id="importForm" hidden>
+            <div class="field-stack">
+              <label for="csvFileInput">Choose CSV file</label>
+              <input id="csvFileInput" type="file" accept=".csv,text/csv">
+            </div>
+            <div class="field-stack">
+              <label for="csvTextInput">CSV text</label>
+              <textarea id="csvTextInput" placeholder="Paste CSV data here, or choose a file above."></textarea>
+            </div>
+            <div class="action-bar">
+              <button class="btn" id="importBtn" type="button" disabled>Import CSV</button>
+              <button class="btn secondary" id="clearBtn" type="button">Clear</button>
+            </div>
+            <div class="note-box">
+              Supported columns match the import parser: First Name, Last Name, DOB, Gender, Current Rank, Studio, Special Needs, Height, and optional competitor ID fields.
+            </div>
           </div>
           <div class="status-bar" id="statusBar" aria-live="polite"></div>
         </div>
@@ -479,8 +492,8 @@
 
       <aside class="panel">
         <div class="panel-head">
-          <h2>Current import snapshot</h2>
-          <p>Review the selected event and the last import result.</p>
+          <h2>Saved event snapshot</h2>
+          <p>Roster and division counts come from the selected event's database. Import warnings are available only for imports performed on this page.</p>
         </div>
         <div class="cards">
           <div class="summary-grid">
@@ -489,12 +502,16 @@
               <div class="summary-value" id="activeEventValue">Loading...</div>
             </div>
             <div class="summary-card">
-              <div class="summary-label">Imported</div>
-              <div class="summary-value" id="importedCountValue">0</div>
+              <div class="summary-label">Competitors</div>
+              <div class="summary-value" id="importedCountValue">Loading...</div>
             </div>
             <div class="summary-card">
-              <div class="summary-label">Warnings</div>
-              <div class="summary-value" id="warningCountValue">0</div>
+              <div class="summary-label">Saved Divisions</div>
+              <div class="summary-value" id="savedDivisionCountValue">Loading...</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Last Import Warnings</div>
+              <div class="summary-value" id="warningCountValue">Not available</div>
             </div>
           </div>
 
@@ -509,7 +526,7 @@
                 </tr>
               </thead>
               <tbody id="importPreviewBody">
-                <tr><td colspan="4">No import performed yet.</td></tr>
+                <tr><td colspan="4">Loading saved roster...</td></tr>
               </tbody>
             </table>
           </div>
@@ -520,7 +537,7 @@
     </section>
 
     <div class="footer">
-      After importing, continue to Build Groups to generate divisions for the event. Review & Save remains a separate final stage.
+      Resume the saved roster without importing again. Reimport is an exceptional replacement operation, not a required setup step.
     </div>
   </main>
 
@@ -531,6 +548,11 @@
       var importBtn = document.getElementById('importBtn');
       var clearBtn = document.getElementById('clearBtn');
       var continueBtn = document.getElementById('continueBtn');
+      var buildGroupsBtn = document.getElementById('buildGroupsBtn');
+      var reimportBtn = document.getElementById('reimportBtn');
+      var importForm = document.getElementById('importForm');
+      var registrationSummary = document.getElementById('registrationSummary');
+      var savedDivisionCountValue = document.getElementById('savedDivisionCountValue');
       var csvFileInput = document.getElementById('csvFileInput');
       var csvTextInput = document.getElementById('csvTextInput');
       var statusBar = document.getElementById('statusBar');
@@ -540,8 +562,12 @@
       var warningCountValue = document.getElementById('warningCountValue');
       var importPreviewBody = document.getElementById('importPreviewBody');
       var warningList = document.getElementById('warningList');
-      var lastImportResult = null;
       var selectedEventName = '';
+      var savedCompetitors = [];
+      var savedGroupCount = 0;
+      var snapshotReady = false;
+      var importing = false;
+      var reimportOpen = false;
 
       function readSelectedEventName() {
         try {
@@ -592,11 +618,24 @@
         return data;
       }
 
-      function setContinueButtonState(isNextAction, enabled) {
-        continueBtn.classList.toggle('next-action', !!isNextAction);
-        continueBtn.classList.toggle('secondary', !isNextAction);
-        continueBtn.textContent = isNextAction ? 'Next: Build Groups' : 'Continue to Build Groups';
-        continueBtn.disabled = !enabled;
+      function syncActions() {
+        var hasRoster = snapshotReady && savedCompetitors.length > 0;
+        var hasDivisions = hasRoster && savedGroupCount > 0;
+        continueBtn.classList.toggle('next-action', hasRoster);
+        continueBtn.classList.toggle('secondary', !hasRoster);
+        continueBtn.textContent = hasDivisions ? 'Review Saved Divisions' : 'Continue to Build Groups';
+        continueBtn.disabled = !hasRoster || importing;
+        buildGroupsBtn.hidden = !hasDivisions;
+        buildGroupsBtn.disabled = importing;
+        reimportBtn.hidden = !hasRoster;
+        reimportBtn.disabled = importing;
+        reimportBtn.textContent = reimportOpen ? 'Cancel Reimport' : 'Reimport Registration';
+        importForm.hidden = !snapshotReady || (hasRoster && !reimportOpen);
+        importBtn.textContent = hasRoster ? 'Replace Registration from CSV' : 'Import CSV';
+        importBtn.disabled = !snapshotReady || importing;
+        clearBtn.disabled = importing;
+        csvFileInput.disabled = importing;
+        csvTextInput.disabled = importing;
       }
 
       async function resolveSelectedEventName() {
@@ -605,24 +644,16 @@
           return selected;
         }
 
-        try {
-          var active = await fetchJson('/api/events/active');
-          if (active && active.activeEvent) {
-            selected = String(active.activeEvent).trim();
-          }
-        } catch (error) {
-          selected = '';
+        var active = await fetchJson('/api/events/active');
+        if (active && active.activeEvent) {
+          selected = String(active.activeEvent).trim();
         }
 
         if (!selected) {
-          try {
-            var eventList = await fetchJson('/api/events/list');
-            var events = Array.isArray(eventList && eventList.events) ? eventList.events : [];
-            if (events.length === 1) {
-              selected = String(events[0] || '').trim();
-            }
-          } catch (error) {
-            selected = '';
+          var eventList = await fetchJson('/api/events/list');
+          var events = Array.isArray(eventList && eventList.events) ? eventList.events : [];
+          if (events.length === 1) {
+            selected = String(events[0] || '').trim();
           }
         }
 
@@ -638,6 +669,8 @@
       }
 
       async function loadSelectedEvent() {
+        snapshotReady = false;
+        syncActions();
         try {
           selectedEventName = await resolveSelectedEventName();
           if (!selectedEventName) {
@@ -647,8 +680,8 @@
             renderCompetitorRows([]);
             warningList.innerHTML = '';
             importedCountValue.textContent = '0';
-            warningCountValue.textContent = '0';
-            setContinueButtonState(false, false);
+            savedDivisionCountValue.textContent = '0';
+            registrationSummary.textContent = 'Select an event in Event Definition before importing.';
             return;
           }
 
@@ -658,26 +691,45 @@
           var config = await fetchJson('/api/events/config?eventName=' + encodeURIComponent(selectedEventName));
           if (!config || !config.dbExists) {
             setStatus('Selected event ' + selectedEventName + ' is not initialized yet. The import snapshot stays empty until the event database is ready.', 'warn');
+            registrationSummary.textContent = 'Initialize this event in Event Definition before importing.';
+            importedCountValue.textContent = '0';
+            savedDivisionCountValue.textContent = '0';
+            renderCompetitorRows([]);
+            return;
           }
-          setContinueButtonState(!!lastImportResult, !!lastImportResult);
+          var eventQuery = '?eventName=' + encodeURIComponent(selectedEventName);
+          var snapshot = await Promise.all([
+            fetchJson('/api/competitors' + eventQuery),
+            fetchJson('/api/groups' + eventQuery)
+          ]);
+          if (!Array.isArray(snapshot[0]) || !snapshot[1] || !Array.isArray(snapshot[1].groups)) {
+            throw new Error('Invalid saved event snapshot returned by the server.');
+          }
+          savedCompetitors = snapshot[0];
+          savedGroupCount = snapshot[1].groups.length;
+          snapshotReady = true;
+          reimportOpen = false;
+          importedCountValue.textContent = savedCompetitors.length;
+          savedDivisionCountValue.textContent = savedGroupCount;
+          renderCompetitorRows(savedCompetitors);
+          registrationSummary.textContent = savedCompetitors.length
+            ? 'Saved roster loaded. ' + (savedGroupCount ? 'Review saved divisions or deliberately return to Build Groups.' : 'Continue to Build Groups without importing again.')
+            : 'No competitors are saved yet. Import a CSV to begin.';
+          syncActions();
         } catch (error) {
-          selectedEventName = '';
-          activeEventValue.textContent = 'Unavailable';
-          bannerEventNameEl.textContent = 'No event selected';
+          importedCountValue.textContent = 'Unavailable';
+          savedDivisionCountValue.textContent = 'Unavailable';
+          importPreviewBody.innerHTML = '<tr><td colspan="4">Unable to load saved roster.</td></tr>';
+          registrationSummary.textContent = 'Unable to load saved event data. Reload this page to retry; do not reimport to resolve a loading error.';
           setStatus(error.message, 'error');
-          setContinueButtonState(false, false);
+          syncActions();
         }
       }
 
       function renderResult(result) {
-        lastImportResult = result || null;
-        var competitors = Array.isArray(result && result.normalizedCompetitors) ? result.normalizedCompetitors : [];
         var warnings = Array.isArray(result && result.rankWarnings) ? result.rankWarnings : [];
 
-        importedCountValue.textContent = competitors.length;
         warningCountValue.textContent = warnings.length;
-        setContinueButtonState(competitors.length > 0, competitors.length > 0);
-        renderCompetitorRows(competitors);
 
         if (warnings.length) {
           warningList.innerHTML = warnings.slice(0, 8).map(function (warning) {
@@ -694,6 +746,10 @@
       }
 
       async function importCsv() {
+        if (!snapshotReady || importing || !selectedEventName) {
+          setStatus('Load a selected event successfully before importing.', 'warn');
+          return;
+        }
         try {
           var csvText = String(csvTextInput.value || '').trim();
           var file = csvFileInput.files && csvFileInput.files[0];
@@ -704,11 +760,22 @@
             return;
           }
 
+          importing = true;
+          syncActions();
           if (file && !csvText) {
             csvText = await file.text();
           }
 
-          importBtn.disabled = true;
+          var replacing = savedCompetitors.length > 0;
+          if (replacing && !window.confirm(
+            'Replace registration for "' + selectedEventName + '"?\n\n' +
+            'This replaces all ' + savedCompetitors.length + ' saved competitors and removes their saved division assignments (' +
+            savedGroupCount + ' divisions). This does not merge registrations. You will need to rebuild and save divisions.\n\n' +
+            'Existing ring assignments and results are NOT cleared and must be reviewed separately. Continue?'
+          )) {
+            return;
+          }
+
           setStatus('Importing CSV…', 'ok');
 
           var result = await fetchJson('/api/events/import-csv', {
@@ -721,33 +788,28 @@
             })
           });
 
+          try {
+            var draftKey = 'tournamentSetup.groupReviewDraft';
+            var draft = JSON.parse(window.localStorage.getItem(draftKey) || 'null');
+            if (draft && draft.eventName === selectedEventName) {
+              window.localStorage.removeItem(draftKey);
+            }
+          } catch (error) {
+            throw new Error('Registration was imported, but the old browser review draft could not be cleared. Do not save that draft. ' + error.message);
+          }
           renderResult(result);
-          setStatus('Imported ' + (result.normalizedCompetitors ? result.normalizedCompetitors.length : 0) + ' competitors into ' + (result.eventName || 'the active event') + '.', 'ok');
+          await loadSelectedEvent();
+          if (!snapshotReady) return;
+          setStatus('Imported ' + savedCompetitors.length + ' competitors into ' + selectedEventName + '.' +
+            (replacing ? ' Rebuild and save divisions, and review existing ring assignments and results separately.' : ''), 'ok');
         } catch (error) {
           console.error('Import failed:', error);
-          setStatus(error.message, 'error');
+          snapshotReady = false;
+          setStatus(error.message + ' Reload this page to verify the saved event state before continuing.', 'error');
         } finally {
-          importBtn.disabled = false;
+          importing = false;
+          syncActions();
         }
-      }
-
-      async function refreshSnapshot() {
-        var competitors = Array.isArray(lastImportResult && lastImportResult.normalizedCompetitors)
-          ? lastImportResult.normalizedCompetitors
-          : [];
-        var warnings = Array.isArray(lastImportResult && lastImportResult.rankWarnings)
-          ? lastImportResult.rankWarnings
-          : [];
-
-        importedCountValue.textContent = competitors.length;
-        warningCountValue.textContent = warnings.length;
-        renderCompetitorRows(competitors);
-        warningList.innerHTML = warnings.length
-          ? warnings.map(function (warning) {
-            return '<div class="warning-item">' + escapeHtml(warning.name || warning.competitorId || 'Unknown competitor') + ': ' +
-              escapeHtml(warning.reason || 'Review required') + '</div>';
-          }).join('')
-          : '';
       }
 
       csvFileInput.addEventListener('change', function () {
@@ -764,21 +826,27 @@
       clearBtn.addEventListener('click', function () {
         csvFileInput.value = '';
         csvTextInput.value = '';
-        lastImportResult = null;
-        importedCountValue.textContent = '0';
-        warningCountValue.textContent = '0';
-        renderCompetitorRows([]);
-        warningList.innerHTML = '';
-        setContinueButtonState(false, false);
         setStatus('', '');
       });
+      reimportBtn.addEventListener('click', function () {
+        reimportOpen = !reimportOpen;
+        syncActions();
+        setStatus(reimportOpen
+          ? 'Reimport replaces the entire roster and removes saved division assignments. Ring assignments and results are not cleared. Confirmation is required before replacement.'
+          : '', 'warn');
+      });
       continueBtn.addEventListener('click', function () {
-        window.location.assign('/tournament-setup/build-groups/');
+        if (continueBtn.disabled) return;
+        window.location.assign(savedGroupCount
+          ? '/tournament-setup/review-save/?source=saved'
+          : '/tournament-setup/build-groups/');
+      });
+      buildGroupsBtn.addEventListener('click', function () {
+        if (!buildGroupsBtn.disabled) window.location.assign('/tournament-setup/build-groups/');
       });
 
       Promise.resolve()
         .then(loadSelectedEvent)
-        .then(refreshSnapshot)
         .catch(function (error) {
           setStatus(error.message, 'error');
         });

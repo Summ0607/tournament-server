@@ -98,10 +98,10 @@ const groupStore = {
   }
 };
 
-async function primeGroupCacheFromDatabase() {
-  const activeDbPath = resolveEventDbPath();
+async function primeGroupCacheFromDatabase(eventName = readActiveEvent()) {
+  const activeDbPath = resolveEventDbPath(eventName, { strict: !!eventName });
   const groups = await loadGroupsFromDatabase(activeDbPath);
-  currentGroupStore().saveGroups(groups);
+  return currentGroupStore(eventName).saveGroups(groups);
 }
 
 function groupRowsToGroups(rows) {
@@ -979,6 +979,7 @@ app.get('/search', (req, res) => {
 app.use('/api', createDivisionRouter({
   competitorStore: (eventName) => createCompetitorStore(resolveEventDbPath(eventName, { strict: !!String(eventName || '').trim() })),
   groupStore,
+  loadSavedGroups: primeGroupCacheFromDatabase,
   buildGroups,
   buildGroupsWithReview
 }));
@@ -1046,7 +1047,12 @@ app.post('/api/events/import-csv', async (req, res) => {
       return res.status(404).json({ error: `Event folder not found: ${targetEventName}` });
     }
 
+    if (!fs.existsSync(targetDbPath)) {
+      const initializeDatabase = require('./db/init');
+      await initializeDatabase(targetDbPath);
+    }
     const result = await importCSV(importPath, targetDbPath, { clearExisting: true });
+    currentGroupStore(targetEventName).clearGroups();
     return res.json({ ok: true, eventName: targetEventName || 'default', dbPath: targetDbPath, ...result });
   } catch (err) {
     console.error('Failed to import CSV for active event:', err);

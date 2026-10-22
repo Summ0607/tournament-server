@@ -763,7 +763,7 @@
     return response.json();
   }
 
-  async function loadSavedGroups() {
+  async function loadSavedGroups(useDraft = true) {
     const context = await getSelectedEventContext();
     state.selectedEventName = context.selectedEventName;
     if (!context.selectedEventName) {
@@ -774,7 +774,7 @@
       return false;
     }
 
-    const draft = loadReviewDraft(context.selectedEventName);
+    const draft = useDraft ? loadReviewDraft(context.selectedEventName) : null;
     if (draft) {
       state.groups = Array.isArray(draft.groups) ? draft.groups.map(normalizeGroup) : [];
       state.unassigned = [];
@@ -799,6 +799,9 @@
   }
 
   async function loadReviewState() {
+    if (new URLSearchParams(window.location.search).get('source') === 'saved') {
+      return loadSavedGroups(false);
+    }
     const context = await getSelectedEventContext();
     state.selectedEventName = context.selectedEventName;
     if (!context.selectedEventName) {

@@ -222,6 +222,18 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
     res.sendFile(path.join(rootDir, 'ring-progress', 'index.html'));
   });
 
+  app.get(exactRoute('/tournament-management'), (req, res) => {
+    res.redirect('/tournament-management/');
+  });
+
+  app.get(exactRoute('/tournament-management/'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-management', 'index.html'));
+  });
+
+  app.get(exactRoute('/tournament-management.html'), (req, res) => {
+    res.sendFile(path.join(rootDir, 'tournament-management', 'index.html'));
+  });
+
   app.get([
     exactRoute('/tournament-mgmt'),
     exactRoute('/tournament-mgmt/'),

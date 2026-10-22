@@ -78,6 +78,7 @@ test('administration sends numeric dimensions, displays zero, and blocks invalid
     if (!elements.has(id)) {
       elements.set(id, {
         value: '',
+        classList: { toggle() {} },
         addEventListener() {},
         checkValidity() { return true; },
         reportValidity() {},
@@ -91,7 +92,7 @@ test('administration sends numeric dimensions, displays zero, and blocks invalid
     setTimeout: () => 0,
     clearTimeout: () => {},
     window: { location: { protocol: 'http:', origin: 'http://localhost:3000' } },
-    document: { getElementById: element, createElement: () => ({}) },
+    document: { getElementById: element, querySelector: element, createElement: () => ({}) },
     fetch: async (url, options) => {
       if (options) requests.push({ url, body: JSON.parse(options.body) });
       return {

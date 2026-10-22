@@ -165,6 +165,10 @@
       align-items: start;
     }
 
+    .grid.details-hidden {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
     .panel-head {
       padding: 16px 18px 14px;
       border-bottom: 1px solid rgba(201, 209, 222, 0.72);
@@ -189,6 +193,42 @@
       padding: 18px;
       display: grid;
       gap: 14px;
+    }
+
+    .selected-summary {
+      padding: 14px 16px;
+      border-radius: calc(var(--radius) - 4px);
+      border: 1px solid rgba(199, 207, 218, 0.85);
+      background: linear-gradient(180deg, rgba(249, 251, 255, 0.96) 0%, rgba(239, 244, 251, 0.96) 100%);
+      display: grid;
+      gap: 8px;
+    }
+
+    .selected-summary-label {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    .selected-summary-value {
+      font-size: 20px;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      font-weight: 750;
+      color: var(--text);
+    }
+
+    .selected-summary-meta {
+      display: grid;
+      gap: 4px;
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .panel[hidden] {
+      display: none;
     }
 
     .field-stack {
@@ -451,6 +491,15 @@
             <input id="eventNameInput" type="text" placeholder="Enter or Select Event Name" autocomplete="off" list="eventNameOptions">
             <datalist id="eventNameOptions"></datalist>
           </div>
+          <div class="selected-summary" aria-live="polite">
+            <div class="selected-summary-label">Selected Event Context</div>
+            <div class="selected-summary-value" id="mainSelectedEventName">None selected</div>
+            <div class="selected-summary-meta">
+              <div class="state-line"><span>Location</span><strong id="mainSelectedEventLocation">—</strong></div>
+              <div class="state-line"><span>Date</span><strong id="mainSelectedEventDate">—</strong></div>
+              <div class="state-line"><span>Ring Config</span><strong id="mainSelectedEventRingConfig">—</strong></div>
+            </div>
+          </div>
           <div class="button-cluster">
             <div class="button-cluster-label">Primary Actions</div>
             <div class="button-row">
@@ -498,10 +547,10 @@
         </div>
       </section>
 
-      <aside class="panel">
+      <aside class="panel" id="detailsPanel">
         <div class="panel-head">
           <h2>Current State</h2>
-          <p>Only the Active Event is used by import, grouping, review, and ring assignment workflows.</p>
+          <p>The active event is the event used by import, grouping, review, and ring assignment workflows.</p>
         </div>
         <div class="panel-body status">
           <div class="summary-card">
@@ -514,13 +563,8 @@
             </div>
           </div>
           <div class="summary-card">
-            <div class="summary-label">Selected Event</div>
-            <div class="summary-value" id="selectedEventName">None selected</div>
-            <div class="state-lines">
-              <div class="state-line"><span>Location</span><strong id="selectedEventLocation">—</strong></div>
-              <div class="state-line"><span>Date</span><strong id="selectedEventDate">—</strong></div>
-              <div class="state-line"><span>Ring Config</span><strong id="selectedEventRingConfig">—</strong></div>
-            </div>
+            <div class="summary-label">Why this matters</div>
+            <div class="summary-value" id="activeEventNote">Use the active event for downstream workflow pages.</div>
           </div>
         </div>
       </aside>
@@ -577,10 +621,11 @@
     const activeEventLocationEl = document.getElementById('activeEventLocation');
     const activeEventDateEl = document.getElementById('activeEventDate');
     const activeEventRingConfigEl = document.getElementById('activeEventRingConfig');
-    const selectedEventNameEl = document.getElementById('selectedEventName');
-    const selectedEventLocationEl = document.getElementById('selectedEventLocation');
-    const selectedEventDateEl = document.getElementById('selectedEventDate');
-    const selectedEventRingConfigEl = document.getElementById('selectedEventRingConfig');
+    const activeEventNoteEl = document.getElementById('activeEventNote');
+    const mainSelectedEventNameEl = document.getElementById('mainSelectedEventName');
+    const mainSelectedEventLocationEl = document.getElementById('mainSelectedEventLocation');
+    const mainSelectedEventDateEl = document.getElementById('mainSelectedEventDate');
+    const mainSelectedEventRingConfigEl = document.getElementById('mainSelectedEventRingConfig');
     const eventNameInputEl = document.getElementById('eventNameInput');
     const eventNameOptionsEl = document.getElementById('eventNameOptions');
     const createEventBtn = document.getElementById('createEventBtn');
@@ -590,6 +635,8 @@
     const deleteEventBtn = document.getElementById('deleteEventBtn');
     const resetEventBtn = document.getElementById('resetEventBtn');
     const metadataPanelEl = document.getElementById('metadataPanel');
+    const detailsPanelEl = document.getElementById('detailsPanel');
+    const gridEl = document.querySelector('.grid');
     const locationInputEl = document.getElementById('locationInput');
     const dateInputEl = document.getElementById('dateInput');
     const ringConfigXInputEl = document.getElementById('ringConfigXInput');
@@ -735,10 +782,22 @@
 
     function renderState() {
       const selectedName = state.selectedEventName || 'None selected';
+      const hasDetails = Boolean(state.activeEventName);
       activeEventChipEl.textContent = state.activeEventName || 'No event selected';
       selectedEventChipEl.textContent = selectedName;
       renderEventCard(state.activeEventName, state.activeEventMeta, activeEventNameEl, activeEventLocationEl, activeEventDateEl, activeEventRingConfigEl);
-      renderEventCard(state.selectedEventName, state.selectedEventMeta, selectedEventNameEl, selectedEventLocationEl, selectedEventDateEl, selectedEventRingConfigEl);
+      renderEventCard(state.selectedEventName, state.selectedEventMeta, mainSelectedEventNameEl, mainSelectedEventLocationEl, mainSelectedEventDateEl, mainSelectedEventRingConfigEl);
+      if (activeEventNoteEl) {
+        activeEventNoteEl.textContent = state.activeEventName
+          ? 'Use the active event for downstream workflow pages.'
+          : 'Select and activate an event to make it available to downstream workflow pages.';
+      }
+      if (detailsPanelEl) {
+        detailsPanelEl.hidden = !hasDetails;
+      }
+      if (gridEl) {
+        gridEl.classList.toggle('details-hidden', !hasDetails);
+      }
     }
 
     function syncButtons() {

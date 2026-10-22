@@ -1,0 +1,2640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tournament Management System</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #dfe6ef;
+      --shell: rgba(242, 245, 249, 0.95);
+      --panel: rgba(255, 255, 255, 0.95);
+      --line: #c9d1dc;
+      --line-strong: #aab4c2;
+      --text: #1d2734;
+      --text-soft: #4a5668;
+      --text-faint: #667386;
+      --shadow: 0 16px 36px rgba(24, 39, 75, 0.12);
+      --radius: 14px;
+      --nav-active: linear-gradient(180deg, #1f69d7 0%, #185ac0 100%);
+      --nav-active-text: #fff;
+      --nav-text: #1d2734;
+      --under-dev: #7b8797;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(38, 82, 155, 0.12), transparent 26%),
+        radial-gradient(circle at bottom right, rgba(36, 68, 120, 0.09), transparent 28%),
+        linear-gradient(180deg, #e8edf4 0%, #dde5ef 100%);
+    }
+
+    .shell {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .frame {
+      background: var(--shell);
+      border: 1px solid rgba(161, 172, 187, 0.68);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .banner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-height: 56px;
+      padding: 0 18px;
+      background: linear-gradient(180deg, #2d3c53 0%, #243248 100%);
+      color: #edf3fb;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .banner-icon {
+      width: 28px;
+      height: 28px;
+      flex: 0 0 auto;
+      color: #edf3fb;
+    }
+
+    .banner-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .banner-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+      color: rgba(237, 243, 251, 0.92);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .banner-meta span + span::before {
+      content: "|";
+      margin-right: 10px;
+      color: rgba(237, 243, 251, 0.45);
+    }
+
+    .banner-status {
+      color: #72d27c;
+      font-weight: 800;
+    }
+
+    .content.import-wide {
+      grid-template-columns: 220px minmax(0, 1fr) 360px;
+    }
+
+    #importDetails .table-wrap {
+      max-height: 60vh;
+      overflow: auto;
+    }
+
+    .import-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 4px 12px;
+      margin: 4px 0 8px;
+      font-size: 12px;
+      color: #5b6b82;
+    }
+
+    #importDetails .overview {
+      margin-bottom: 8px;
+    }
+
+    #importDetails .table-wrap th,
+    #importDetails .table-wrap td {
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr) 340px;
+      gap: 10px;
+      padding: 12px;
+      align-items: start;
+    }
+
+    .sidebar,
+    .workspace,
+    .details {
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 8px 20px rgba(24, 39, 75, 0.05);
+      overflow: hidden;
+    }
+
+    .details[hidden],
+    .metadata-panel[hidden],
+    #importDetails[hidden] {
+      display: none;
+    }
+
+    .view {
+      display: grid;
+      gap: 14px;
+    }
+
+    .view[hidden],
+    #groupDetails[hidden] {
+      display: none;
+    }
+
+    .gb-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .gb-toolbar label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #5b6b82;
+    }
+
+    .gb-toolbar input {
+      width: 70px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      font: inherit;
+    }
+
+    .gb-banners {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+      gap: 8px;
+    }
+
+    .gb-banner.pseudo { grid-column: 1 / -1; }
+
+    .gb-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .gb-banners {
+      background: #e6ecf5;
+      border: 1px solid #d3dbe8;
+      border-radius: 14px;
+      padding: 10px;
+    }
+
+    .gb-banner {
+      border-color: #c3cddd;
+      border-left: 4px solid #2f66c8;
+      box-shadow: 0 1px 3px rgba(24, 39, 75, 0.12);
+    }
+
+    .gb-banner {
+      padding: 7px 10px;
+      gap: 8px;
+    }
+
+    .gb-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 3px;
+    }
+
+    .gb-chip {
+      font-size: 11px;
+      font-weight: 650;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: #eef3fb;
+      color: #33507a;
+    }
+
+    .gb-chip.weapons { background: #fff3d6; color: #8d5b00; }
+    .gb-meta { margin-top: 2px; font-size: 11px; }
+
+    .workflow-body .gb-del {
+      min-height: 0;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .gb-banner:hover { background: #f6f9ff; }
+    .gb-banner.pseudo { background: #f1f3f8; border-left-color: #8b97a8; }
+    .gb-banner.warn { border-left-color: #d9a441; }
+    .gb-banner.selected { background: #e8f0ff; border-color: #2f66c8; box-shadow: 0 0 0 2px rgba(47, 102, 200, 0.25); }
+    .gb-banner.drop { background: #eaf2ff; border: 1px dashed #2f66c8; }
+
+    .gb-grip {
+      cursor: grab;
+      color: #8b97a8;
+      padding: 0 4px;
+      font-weight: 800;
+      user-select: none;
+    }
+
+    .gb-num {
+      font-size: 12px;
+      font-weight: 700;
+      color: #8b97a8;
+      min-width: 22px;
+    }
+
+    .gb-main { flex: 1; min-width: 0; }
+
+    .gb-title {
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+
+    .gb-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      font-size: 12px;
+      color: #5b6b82;
+    }
+
+    .gb-count {
+      min-width: 30px;
+      text-align: center;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #eef3fb;
+      color: #1f4f9f;
+    }
+
+    .gb-banner.warn .gb-count { background: #fff3d6; color: #8d5b00; }
+
+    .gb-del {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      font: inherit;
+      font-size: 12px;
+      line-height: 1;
+      color: #5b6b82;
+      cursor: pointer;
+      flex: none;
+    }
+
+    .gb-del:hover { background: #fdecec; color: #b42318; }
+
+    .gd-members { display: grid; gap: 6px; }
+
+    .gd-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      cursor: grab;
+    }
+
+    .gd-row.static { cursor: default; flex-wrap: wrap; }
+    .gd-name { font-weight: 700; font-size: 13px; }
+    .gd-sub { display: flex; gap: 6px; align-items: center; font-size: 12px; color: #5b6b82; }
+
+    .gd-badge {
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: #eef3fb;
+      color: #1f4f9f;
+      font-weight: 700;
+      font-size: 11px;
+    }
+
+    .gd-x, .gd-apply {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 10px;
+      padding: 3px 9px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .gd-fix { display: flex; gap: 6px; align-items: center; width: 100%; }
+    .gd-fix select { flex: 1; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); font: inherit; font-size: 12px; }
+
+    .field-stack textarea {
+      width: 100%;
+      min-height: 140px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      resize: vertical;
+    }
+
+    .field-stack input[type="file"] {
+      min-height: 0;
+      padding: 10px 14px;
+    }
+
+    .table-wrap {
+      max-height: 280px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+
+    .table-wrap table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .table-wrap th,
+    .table-wrap td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .table-wrap th {
+      position: sticky;
+      top: 0;
+      background: #f3f6fa;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    .warning-list {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: #8d5b00;
+    }
+
+    .warning-list:empty {
+      display: none;
+    }
+
+    .content.details-hidden {
+      grid-template-columns: 220px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: linear-gradient(180deg, rgba(246, 248, 251, 0.96) 0%, rgba(236, 241, 247, 0.96) 100%);
+      border-color: rgba(186, 194, 205, 0.72);
+      box-shadow: 0 6px 16px rgba(24, 39, 75, 0.035);
+    }
+
+    .sidebar-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 13px;
+      border: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.65);
+      border-bottom: 1px solid rgba(188, 197, 210, 0.55);
+      background: linear-gradient(180deg, rgba(242, 245, 249, 0.92) 0%, rgba(230, 236, 243, 0.92) 100%);
+      color: #2a3443;
+      text-align: left;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 650;
+      cursor: default;
+    }
+
+    .sidebar-heading {
+      padding: 10px 13px 6px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #5b6b82;
+      background: rgba(223, 230, 240, 0.9);
+      border-bottom: 1px solid rgba(188, 197, 210, 0.55);
+    }
+
+    .sidebar-item.locked {
+      opacity: 0.5;
+      color: #5b6b82;
+    }
+
+    .sidebar-item.active {
+      background: linear-gradient(180deg, rgba(28, 96, 204, 0.96) 0%, rgba(26, 87, 184, 0.96) 100%);
+      color: var(--nav-active-text);
+      box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.28);
+    }
+
+    .sidebar-icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+    }
+
+    .panel-head {
+      padding: 12px 16px;
+      background: linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .panel-body {
+      padding: 16px;
+    }
+
+    .workspace {
+      min-width: 0;
+    }
+
+    .workspace-head {
+      display: grid;
+      gap: 6px;
+      align-items: start;
+      padding: 12px 16px;
+      background: linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .workspace-head h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .workspace-head p {
+      margin: 0;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .workspace-body {
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .overview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.86);
+      border: 1px solid rgba(199, 207, 218, 0.85);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .chip strong { color: #1f4f9f; }
+
+    .workflow-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 20px rgba(24, 39, 75, 0.04);
+    }
+
+    .workflow-head {
+      padding: 16px 18px 14px;
+      background: linear-gradient(180deg, #f7faff 0%, #e9eff7 100%);
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+    }
+
+    .workflow-head h2 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+
+    .workflow-head p {
+      margin: 0;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .workflow-body {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .field-stack {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field-stack label,
+    .button-cluster-label,
+    .selected-summary-label,
+    .summary-label {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    .field-stack input,
+    .field-stack select {
+      width: 100%;
+      min-height: 52px;
+      padding: 0 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: 15px;
+      box-shadow: inset 0 1px 1px rgba(24, 39, 75, 0.03);
+    }
+
+    .field-stack input:focus,
+    .field-stack select:focus {
+      outline: 2px solid rgba(31, 79, 166, 0.18);
+      border-color: rgba(31, 79, 166, 0.4);
+    }
+
+    .selected-summary,
+    .summary-card {
+      padding: 14px 16px;
+      border-radius: calc(var(--radius) - 4px);
+      border: 1px solid rgba(199, 207, 218, 0.85);
+      background: linear-gradient(180deg, rgba(249, 251, 255, 0.96) 0%, rgba(239, 244, 251, 0.96) 100%);
+      display: grid;
+      gap: 8px;
+    }
+
+    .selected-summary-value,
+    .summary-value {
+      font-size: 20px;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      font-weight: 750;
+      color: var(--text);
+    }
+
+    .selected-summary-meta,
+    .state-lines {
+      display: grid;
+      gap: 4px;
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .state-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .state-line strong {
+      color: var(--text);
+      text-align: right;
+    }
+
+    .button-cluster {
+      display: grid;
+      gap: 10px;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .workflow-body button.primary,
+    .workflow-body button.danger,
+    .workflow-body button,
+    .workflow-body .next-action {
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-weight: 800;
+      box-shadow: none;
+      cursor: pointer;
+    }
+
+    .workflow-body button.primary {
+      border-color: #1f4f9f;
+      background: linear-gradient(180deg, #2e72dd 0%, #1f5bb7 100%);
+      color: #fff;
+      box-shadow: 0 10px 18px rgba(31, 79, 166, 0.18);
+    }
+
+    .workflow-body button.danger {
+      border-color: rgba(176, 0, 32, 0.35);
+      background: linear-gradient(180deg, #b80024 0%, #9a001d 100%);
+      color: #fff;
+      box-shadow: 0 10px 18px rgba(176, 0, 32, 0.14);
+    }
+
+    .workflow-body button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .workflow-body .next-action {
+      border-color: #1f4f9f;
+      background: linear-gradient(180deg, #4a77e2 0%, #355dc0 100%);
+      color: #fff;
+      box-shadow: 0 10px 18px rgba(31, 79, 166, 0.18);
+    }
+
+    .metadata-action {
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 14px;
+      border-color: rgba(170, 180, 194, 0.95);
+      background: linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
+      color: #243140;
+      box-shadow: 0 6px 12px rgba(24, 39, 75, 0.05);
+      font-weight: 750;
+    }
+
+    .metadata-panel {
+      display: grid;
+      gap: 14px;
+      padding-top: 2px;
+    }
+
+    .notice {
+      min-height: 0;
+      display: none;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .notice.visible { display: block; }
+    #eventNameInput::placeholder { color: #8a94a3; font-style: italic; opacity: 1; }
+    .notice.ok { border-color: rgba(10, 124, 0, 0.25); background: #f1fbf1; color: #166116; }
+    .notice.warn { border-color: rgba(168, 109, 0, 0.25); background: #fff8eb; color: #8d5b00; }
+    .notice.error { border-color: rgba(176, 0, 32, 0.25); background: #fff1f4; color: #8c0018; }
+    .notice.info { border-color: rgba(34, 87, 179, 0.25); background: #eef4ff; color: #204a91; }
+
+    .under-dev {
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+      text-align: center;
+      padding: 28px 24px;
+      border: 1px dashed rgba(124, 135, 151, 0.35);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(240, 244, 249, 0.95));
+      max-width: 520px;
+      width: 100%;
+    }
+
+    .launcher {
+      display: grid;
+      gap: 14px;
+      justify-items: start;
+      text-align: left;
+      padding: 28px 24px;
+      border: 1px solid rgba(124, 135, 151, 0.22);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(240, 244, 249, 0.98));
+      max-width: 720px;
+      width: 100%;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .launcher-kicker {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 800;
+      color: #1f4f9f;
+    }
+
+    .launcher h2 {
+      margin: 0;
+      font-size: clamp(28px, 2.6vw, 40px);
+      letter-spacing: -0.04em;
+      line-height: 1;
+      color: var(--text);
+    }
+
+    .launcher p {
+      margin: 0;
+      color: var(--under-dev);
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 56ch;
+    }
+
+    .step-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding-left: 18px;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 14px;
+      border: 1px solid #1f4f9f;
+      background: linear-gradient(180deg, #2e72dd 0%, #1f5bb7 100%);
+      color: #fff;
+      text-decoration: none;
+      font: inherit;
+      font-weight: 800;
+      box-shadow: 0 10px 18px rgba(31, 79, 166, 0.18);
+    }
+
+    .cta.secondary {
+      background: #fff;
+      color: var(--text);
+      border-color: var(--line-strong);
+      box-shadow: none;
+    }
+
+    .under-dev h2 {
+      margin: 0;
+      font-size: clamp(28px, 2.6vw, 40px);
+      letter-spacing: -0.04em;
+      line-height: 1;
+      color: var(--text);
+    }
+
+    .under-dev p {
+      margin: 0;
+      color: var(--under-dev);
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 42ch;
+    }
+
+    .status-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 4px;
+    }
+
+    .status-pill {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(47, 110, 207, 0.18);
+      background: rgba(47, 110, 207, 0.08);
+      color: #1f4f9f;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 960px) {
+      .shell { padding: 12px; }
+      .content {
+        grid-template-columns: 1fr;
+      }
+
+      .banner {
+        align-items: flex-start;
+        padding: 14px 14px 12px;
+        gap: 10px;
+      }
+
+      .banner-meta {
+        margin-left: 0;
+        gap: 4px 10px;
+      }
+
+      .banner-meta span + span::before {
+        display: none;
+      }
+
+      .panel-body {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="frame" aria-label="Tournament management shell">
+      <header class="banner">
+        <svg class="banner-icon" viewBox="0 0 24 24" role="img" aria-label="Globe">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75" />
+          <ellipse cx="12" cy="12" rx="4.5" ry="9" fill="none" stroke="currentColor" stroke-width="1.75" />
+          <path d="M3 12h18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+          <path d="M5 7.2c1.7 1 4 1.6 7 1.6s5.3-.6 7-1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          <path d="M5 16.8c1.7-1 4-1.6 7-1.6s5.3.6 7 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+        </svg>
+        <div class="banner-title">Tournament Management System</div>
+        <div class="banner-meta" aria-label="Current event metadata">
+          <span>Event: <strong>Winter Tournament</strong></span>
+          <span>Date: <strong id="currentDate">--</strong></span>
+          <span>Status: <strong class="banner-status">Draft</strong></span>
+        </div>
+      </header>
+
+      <div class="content" id="pageContent">
+        <aside class="sidebar" aria-label="Primary navigation">
+          <div class="sidebar-heading">Pre-Tournament</div>
+          <button class="sidebar-item active" type="button">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5zM7 6h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/>
+            </svg>
+            Event Setup
+          </button>
+          <button class="sidebar-item" type="button">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 3l5 5h-3.5v6h-3V8H7zM5 17h14v4H5z"/>
+            </svg>
+            Import
+          </button>
+          <button class="sidebar-item" type="button">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 2l3 6 6 .9-4.3 4.2 1 6-5.7-3-5.7 3 1-6L3 8.9 9 8z"/>
+            </svg>
+            Group Builder
+          </button>
+          <div class="sidebar-heading">Day-Of</div>
+          <button class="sidebar-item" type="button">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 2c2.3 0 4.2 1.9 4.2 4.2S14.3 10.4 12 10.4 7.8 8.5 7.8 6.2 9.7 2 12 2zm0 11c4.4 0 8 2.8 8 6.2V22H4v-2.8C4 15.8 7.6 13 12 13z"/>
+            </svg>
+            Ring Assignment
+          </button>
+          <button class="sidebar-item" type="button">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M5 3h14a2 2 0 0 1 2 2v4H3V5a2 2 0 0 1 2-2zm-2 8h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8zm5 2v4h8v-4z"/>
+            </svg>
+            Head Table
+          </button>
+          <button class="sidebar-item" type="button">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm-7 17v-1.2c0-3.4 3.1-6.1 7-6.1s7 2.7 7 6.1V20z"/>
+            </svg>
+            Competitors
+          </button>
+          <button class="sidebar-item" type="button">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 2l3 6 6 .9-4.3 4.2 1 6-5.7-3-5.7 3 1-6L3 8.9 9 8z"/>
+            </svg>
+            Judges &amp; Volunteers
+          </button>
+          <button class="sidebar-item" type="button">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M4 4h16v4H4zm0 6h10v4H4zm0 6h16v4H4z"/>
+            </svg>
+            Reports &amp; Results
+          </button>
+        </aside>
+
+        <section class="workspace" aria-label="Event setup workspace">
+          <div class="workspace-head">
+            <h1 id="workspaceTitle" aria-live="polite">Event Setup</h1>
+            <p id="workspaceSubtitle">Manage the event that downstream tournament pages will use.</p>
+          </div>
+          <div class="workspace-body">
+            <div class="view" id="eventSetupView">
+            <div class="overview">
+              <span class="chip">Active Event: <strong id="activeEventChip">No event selected</strong></span>
+              <span class="chip">Selected Event: <strong id="selectedEventChip">None selected</strong></span>
+            </div>
+
+            <section class="workflow-panel" aria-label="Event setup workflow">
+              <div class="workflow-head">
+                <h2>Create, Select, Modify, Delete</h2>
+                <p>Choose an existing event or enter a new name. Creating or modifying an event does not activate it. Use ‘Activate Event’ to set the event used by workflow pages.</p>
+              </div>
+              <div class="workflow-body">
+                <div class="field-stack">
+                  <label for="eventSelect">Event Name</label>
+                  <select id="eventSelect"></select>
+                  <input id="eventNameInput" type="text" placeholder="Enter new event name" autocomplete="off" aria-label="New event name" hidden>
+                </div>
+
+                <div class="button-cluster">
+                  <div class="button-cluster-label">Primary Actions</div>
+                  <div class="button-row">
+                    <button class="primary" id="createEventBtn" type="button">Create Event</button>
+                    <button id="modifyEventBtn" type="button">Modify Event</button>
+                    <button id="activateEventBtn" type="button">Activate Event</button>
+                  </div>
+                </div>
+
+                <div class="button-cluster">
+                  <div class="button-cluster-label">Next Step</div>
+                  <div class="button-row">
+                    <button class="next-action" id="goToImportBtn" type="button">Next: Import Registration</button>
+                  </div>
+                </div>
+
+                <div class="button-cluster">
+                  <div class="button-cluster-label">Secondary Actions</div>
+                  <div class="button-row">
+                    <button class="danger" id="deleteEventBtn" type="button">Delete Event</button>
+                    <button id="resetEventBtn" type="button">Reset</button>
+                  </div>
+                </div>
+
+                <div class="notice" id="notice" aria-live="polite"></div>
+              </div>
+            </section>
+            </div>
+
+            <div class="view" id="importView" hidden>
+              <section class="workflow-panel" aria-label="Import registration">
+                <div class="workflow-head">
+                  <h2>Upload CSV</h2>
+                  <p id="importSummary">Saved registrations can continue directly to Build Groups. Choosing a file or entering CSV text makes Import CSV the next action.</p>
+                </div>
+                <div class="workflow-body">
+                  <div class="overview">
+                    <span class="chip">Selected Event: <strong id="importEventChip">None selected</strong></span>
+                  </div>
+                  <div class="field-stack">
+                    <label for="csvFileInput">Choose CSV file</label>
+                    <input id="csvFileInput" type="file" accept=".csv,text/csv">
+                  </div>
+                  <div class="field-stack">
+                    <label for="csvTextInput">CSV text</label>
+                    <textarea id="csvTextInput" placeholder="Paste CSV data here, or choose a file above."></textarea>
+                  </div>
+                  <div class="button-row">
+                    <button id="importBtn" type="button" disabled>Import CSV</button>
+                    <button id="clearImportBtn" type="button">Clear</button>
+                    <button id="importNextBtn" type="button" disabled>Next: Build Groups</button>
+                  </div>
+                  <div class="notice" id="importNotice" aria-live="polite"></div>
+                </div>
+              </section>
+            </div>
+
+            <div class="view" id="groupsView" hidden>
+              <section class="workflow-panel" aria-label="Group builder">
+                <div class="workflow-head">
+                  <h2>Groups</h2>
+                </div>
+                <div class="workflow-body">
+                  <div class="overview" id="gbStats"></div>
+                  <div class="gb-toolbar">
+                    <label for="gbMaxSize">Max size</label>
+                    <input id="gbMaxSize" type="number" min="6" max="13" value="6">
+                    <button class="primary" id="gbBuildBtn" type="button">Build Groups</button>
+                    <button id="gbAddBtn" type="button">+ Add Group</button>
+                    <button id="gbSaveBtn" type="button">Save &amp; Finish Setup</button>
+                    <button class="primary" id="gbDoneBtn" type="button" hidden>Go to Event Setup to Activate</button>
+                  </div>
+                  <div class="notice" id="gbNotice" aria-live="polite"></div>
+                  <div class="gb-banners" id="gbBanners"></div>
+                </div>
+              </section>
+            </div>
+
+            <div class="view" id="placeholderView" hidden>
+              <div class="under-dev">
+                <h2 id="placeholderTitle">Under Development</h2>
+                <p>This section is under development.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="details" id="detailsPanel" aria-label="Details panel" hidden>
+          <div class="panel-head">
+            <h2 class="panel-title" id="detailsTitle">Event Details</h2>
+          </div>
+          <div class="panel-body">
+            <div id="groupDetails" hidden>
+              <div class="summary-label" id="gdName"></div>
+              <div class="import-meta" id="gdMeta"></div>
+              <div class="gd-members" id="gdMembers"></div>
+            </div>
+            <div id="importDetails" hidden>
+              <div class="summary-label">Registration Snapshot</div>
+              <div class="import-meta">
+                <span id="importDetailFile">—</span>
+                <span id="importDetailTime">Select an event</span>
+              </div>
+              <div class="overview">
+                <span class="chip">Competitors: <strong id="importedCount">—</strong></span>
+                <span class="chip">Last import warnings: <strong id="warningCount">Not available</strong></span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Name</th><th>Rank</th><th>Gender</th><th>Age</th></tr>
+                  </thead>
+                  <tbody id="importPreviewBody"></tbody>
+                </table>
+              </div>
+              <div class="warning-list" id="importWarningList"></div>
+            </div>
+            <div class="metadata-panel" id="metadataPanel" hidden>
+              <div class="summary-label">Edit Event</div>
+              <div class="field-stack">
+                <label for="locationInput">Location</label>
+                <input id="locationInput" type="text" placeholder="Tournament location">
+              </div>
+              <div class="field-stack">
+                <label for="dateInput">Date</label>
+                <input id="dateInput" type="date">
+              </div>
+              <div class="field-stack">
+                <label for="ringConfigXInput">Ring Config Columns (Letters)</label>
+                <input id="ringConfigXInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+              </div>
+              <div class="field-stack">
+                <label for="ringConfigYInput">Ring Config Rows (Numbers)</label>
+                <input id="ringConfigYInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+              </div>
+              <div class="button-row">
+                <button class="metadata-action" id="saveMetadataBtn" type="button">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const apiBaseUrl = window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin;
+      const LAST_SELECTED_EVENT_KEY = 'eventAdmin.lastSelectedEvent';
+
+      function readLastSelectedEvent() {
+        try {
+          return window.localStorage.getItem(LAST_SELECTED_EVENT_KEY) || '';
+        } catch (error) {
+          return '';
+        }
+      }
+
+      function storeLastSelectedEvent(name) {
+        try {
+          if (name) {
+            window.localStorage.setItem(LAST_SELECTED_EVENT_KEY, name);
+          } else {
+            window.localStorage.removeItem(LAST_SELECTED_EVENT_KEY);
+          }
+        } catch (error) {
+          // Storage unavailable; selection simply is not remembered.
+        }
+      }
+
+      const emptyMeta = (name) => ({
+        name: normalizeEventName(name || ''),
+        location: '',
+        date: '',
+        ringConfigX: '',
+        ringConfigY: ''
+      });
+
+      const state = {
+        events: [],
+        activeEventName: '',
+        activeEventMeta: emptyMeta(''),
+        selectedEventName: '',
+        selectedEventMeta: emptyMeta(''),
+        metadataMode: '',
+        metadataOpen: false,
+        newEventMode: false,
+        selectionRequestToken: 0
+      };
+
+      const dateTarget = document.getElementById('currentDate');
+      const workspaceTitle = document.getElementById('workspaceTitle');
+      const sidebar = document.querySelector('.sidebar');
+      const navItems = Array.from(document.querySelectorAll('.sidebar-item'));
+      const detailsPanel = document.getElementById('detailsPanel');
+      const importDetailsEl = document.getElementById('importDetails');
+      const groupDetailsEl = document.getElementById('groupDetails');
+      const groupsView = document.getElementById('groupsView');
+      const detailsTitleEl = document.getElementById('detailsTitle');
+      const importDetailFileEl = document.getElementById('importDetailFile');
+      const importDetailTimeEl = document.getElementById('importDetailTime');
+      const pageContent = document.getElementById('pageContent');
+      const defaultTitle = workspaceTitle ? workspaceTitle.textContent.trim() : '';
+      const noticeEl = document.getElementById('notice');
+      const activeEventChipEl = document.getElementById('activeEventChip');
+      const selectedEventChipEl = document.getElementById('selectedEventChip');
+      const eventNameInputEl = document.getElementById('eventNameInput');
+      const eventSelectEl = document.getElementById('eventSelect');
+      const NEW_EVENT_VALUE = '__new__';
+      const importView = document.getElementById('importView');
+      const eventSetupView = document.getElementById('eventSetupView');
+      const placeholderView = document.getElementById('placeholderView');
+      const placeholderTitle = document.getElementById('placeholderTitle');
+      const workspaceSubtitle = document.getElementById('workspaceSubtitle');
+      const importEventChipEl = document.getElementById('importEventChip');
+      const csvFileInput = document.getElementById('csvFileInput');
+      const csvTextInput = document.getElementById('csvTextInput');
+      const importBtn = document.getElementById('importBtn');
+      const clearImportBtn = document.getElementById('clearImportBtn');
+      const importNextBtn = document.getElementById('importNextBtn');
+      const importNoticeEl = document.getElementById('importNotice');
+      const importSummaryEl = document.getElementById('importSummary');
+      const importedCountEl = document.getElementById('importedCount');
+      const warningCountEl = document.getElementById('warningCount');
+      const importPreviewBody = document.getElementById('importPreviewBody');
+      const importWarningList = document.getElementById('importWarningList');
+      const viewSubtitles = {
+        'event-setup': 'Manage the event that downstream tournament pages will use.',
+        import: 'Load competitor registrations into the selected event.',
+        groups: 'Build and adjust the competitor groups for the selected event.',
+        placeholder: ''
+      };
+      const importResults = new Map();
+      let importSnapshot = { eventName: '', status: 'idle', dbExists: false, competitors: [] };
+      let importSnapshotToken = 0;
+      let currentView = 'event-setup';
+      let importInputEvent = '';
+      let importBusy = false;
+      const createEventBtn = document.getElementById('createEventBtn');
+      const modifyEventBtn = document.getElementById('modifyEventBtn');
+      const activateEventBtn = document.getElementById('activateEventBtn');
+      const goToImportBtn = document.getElementById('goToImportBtn');
+      const deleteEventBtn = document.getElementById('deleteEventBtn');
+      const resetEventBtn = document.getElementById('resetEventBtn');
+      const metadataPanelEl = document.getElementById('metadataPanel');
+      const locationInputEl = document.getElementById('locationInput');
+      const dateInputEl = document.getElementById('dateInput');
+      const ringConfigXInputEl = document.getElementById('ringConfigXInput');
+      const ringConfigYInputEl = document.getElementById('ringConfigYInput');
+      const saveMetadataBtn = document.getElementById('saveMetadataBtn');
+
+      function normalizeEventName(value) {
+        return String(value || '').trim();
+      }
+
+      function normalizeTextValue(value) {
+        return String(value || '').trim();
+      }
+
+      function normalizeNumberInput(value) {
+        const text = String(value == null ? '' : value).trim();
+        if (!text) return '';
+        const parsed = Number.parseInt(text, 10);
+        return Number.isFinite(parsed) ? String(parsed) : '';
+      }
+
+      function metaFromConfig(config, fallbackName) {
+        const ringConfigX = normalizeNumberInput(config && config.ringConfigX);
+        const ringConfigY = normalizeNumberInput(config && config.ringConfigY);
+        return {
+          name: normalizeEventName(config && config.name ? config.name : fallbackName || ''),
+          location: normalizeTextValue(config && config.location),
+          date: normalizeTextValue(config && config.date),
+          ringConfigX,
+          ringConfigY
+        };
+      }
+
+      function formatRingConfig(meta) {
+        const x = Number.parseInt(meta && meta.ringConfigX, 10);
+        const y = Number.parseInt(meta && meta.ringConfigY, 10);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          return '—';
+        }
+        return `${x} × ${y} (${x * y})`;
+      }
+
+      async function fetchJson(path, options) {
+        const response = await fetch(`${apiBaseUrl}${path}`, options);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        return data;
+      }
+
+      let noticeTimer = null;
+
+      function showNotice(message, kind) {
+        clearTimeout(noticeTimer);
+        if (!message) {
+          noticeEl.className = 'notice';
+          noticeEl.textContent = '';
+          return;
+        }
+        noticeEl.className = `notice visible ${kind || 'info'}`;
+        noticeEl.textContent = message;
+        if (kind !== 'error') {
+          noticeTimer = setTimeout(() => showNotice(''), 5000);
+        }
+      }
+
+      function eventExists(eventName) {
+        const normalized = normalizeEventName(eventName).toLowerCase();
+        return Boolean(normalized) && state.events.some((item) => normalizeEventName(item).toLowerCase() === normalized);
+      }
+
+      function getSelectedEventName() {
+        return normalizeEventName(eventNameInputEl.value);
+      }
+
+      function setSelectedEvent(name, meta) {
+        const selectedName = normalizeEventName(name);
+        state.selectedEventName = selectedName;
+        eventNameInputEl.value = selectedName;
+        syncEventNameOptions();
+        state.selectedEventMeta = meta ? metaFromConfig(meta, selectedName) : emptyMeta(selectedName);
+        syncButtons();
+      }
+
+      function clearSelectedEvent() {
+        state.selectedEventName = '';
+        state.selectedEventMeta = emptyMeta('');
+        state.newEventMode = false;
+        eventNameInputEl.value = '';
+        syncEventNameOptions();
+        syncButtons();
+      }
+
+      function setMetadataPanelVisible(visible) {
+        state.metadataOpen = Boolean(visible);
+        if (pageContent) {
+          pageContent.classList.toggle('details-hidden', !state.metadataOpen);
+        }
+        if (detailsPanel) {
+          detailsPanel.hidden = !state.metadataOpen;
+        }
+        metadataPanelEl.hidden = !visible;
+        if (!visible) {
+          state.metadataMode = '';
+          locationInputEl.value = '';
+          dateInputEl.value = '';
+          ringConfigXInputEl.value = '';
+          ringConfigYInputEl.value = '';
+        }
+      }
+
+      function populateMetadataForm(meta) {
+        locationInputEl.value = normalizeTextValue(meta && meta.location);
+        dateInputEl.value = normalizeTextValue(meta && meta.date);
+        ringConfigXInputEl.value = normalizeNumberInput(meta && meta.ringConfigX);
+        ringConfigYInputEl.value = normalizeNumberInput(meta && meta.ringConfigY);
+      }
+
+      function readMetadataForm() {
+        for (const input of [ringConfigXInputEl, ringConfigYInputEl]) {
+          if (!input.checkValidity()) {
+            input.reportValidity();
+            throw new Error('Ring Config Columns (Letters) and Rows (Numbers) must be non-negative whole numbers.');
+          }
+        }
+        return {
+          location: normalizeTextValue(locationInputEl.value),
+          date: normalizeTextValue(dateInputEl.value),
+          ringConfigX: Number(ringConfigXInputEl.value),
+          ringConfigY: Number(ringConfigYInputEl.value)
+        };
+      }
+
+      function syncEventNameOptions() {
+        const currentValue = findExistingEventName(eventNameInputEl.value);
+        eventSelectEl.innerHTML = '';
+        const addOption = (value, label) => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          eventSelectEl.appendChild(option);
+        };
+        addOption('', 'Select an event…');
+        state.events.forEach((eventName) => addOption(eventName, eventName));
+        addOption(NEW_EVENT_VALUE, '+ New event…');
+
+        if (currentValue) {
+          state.newEventMode = false;
+          eventNameInputEl.value = currentValue;
+          eventSelectEl.value = currentValue;
+        } else if (state.newEventMode) {
+          eventSelectEl.value = NEW_EVENT_VALUE;
+        } else {
+          eventNameInputEl.value = '';
+          eventSelectEl.value = '';
+        }
+        eventNameInputEl.hidden = !state.newEventMode;
+      }
+
+      function renderState() {
+        const selectedName = state.selectedEventName || 'None selected';
+        activeEventChipEl.textContent = state.activeEventName || 'No event selected';
+        syncDayOfNav();
+        selectedEventChipEl.textContent = selectedName;
+        const onImport = currentView === 'import';
+        const onGroups = currentView === 'groups';
+        const detailsVisible = onImport
+          ? Boolean(state.selectedEventName) && eventExists(state.selectedEventName)
+          : onGroups
+            ? gbHasSelection()
+            : state.metadataOpen && currentView === 'event-setup';
+        if (detailsPanel) {
+          detailsPanel.hidden = !detailsVisible;
+        }
+        if (pageContent) {
+          pageContent.classList.toggle('details-hidden', !detailsVisible);
+          pageContent.classList.toggle('import-wide', onImport || onGroups);
+        }
+        importDetailsEl.hidden = !onImport;
+        groupDetailsEl.hidden = !onGroups;
+        metadataPanelEl.hidden = onImport || onGroups || !state.metadataOpen;
+        detailsTitleEl.textContent = onImport ? 'Import Details' : onGroups ? 'Division Details' : 'Event Details';
+        renderImportView();
+        if (onGroups) {
+          gbSyncControls();
+        }
+      }
+
+      function syncButtons() {
+        const selectedName = getSelectedEventName();
+        const existsNow = eventExists(selectedName);
+        createEventBtn.disabled = !selectedName || existsNow;
+        modifyEventBtn.disabled = !selectedName || !existsNow;
+        activateEventBtn.disabled = !selectedName || !existsNow;
+        goToImportBtn.disabled = !selectedName || !existsNow;
+        deleteEventBtn.disabled = !selectedName || !existsNow;
+        resetEventBtn.disabled = !selectedName && !state.metadataOpen;
+        saveMetadataBtn.disabled = !state.metadataOpen || !selectedName;
+        renderState();
+      }
+
+      async function refreshEvents() {
+        const data = await fetchJson('/api/events/list');
+        state.events = Array.isArray(data.events) ? data.events : [];
+        syncEventNameOptions();
+        return state.events;
+      }
+
+      async function loadEventConfig(eventName) {
+        const name = normalizeEventName(eventName);
+        if (!name) {
+          return emptyMeta('');
+        }
+
+        const data = await fetchJson(`/api/events/config?eventName=${encodeURIComponent(name)}`);
+        return metaFromConfig(data.eventConfig || {}, name);
+      }
+
+      async function refreshActiveEvent() {
+        const data = await fetchJson('/api/events/active');
+        const activeName = normalizeEventName(data.activeEvent);
+        state.activeEventName = activeName;
+        state.activeEventMeta = activeName ? await loadEventConfig(activeName) : emptyMeta('');
+      }
+
+      async function refreshSelectedEventFromInput() {
+        const selectedName = normalizeEventName(eventNameInputEl.value);
+        state.selectedEventName = selectedName;
+        if (!selectedName) {
+          state.selectedEventMeta = emptyMeta('');
+          syncButtons();
+          return;
+        }
+
+        const requestToken = ++state.selectionRequestToken;
+        if (!eventExists(selectedName)) {
+          state.selectedEventMeta = emptyMeta(selectedName);
+          syncButtons();
+          return;
+        }
+
+        const meta = await loadEventConfig(selectedName);
+        if (requestToken !== state.selectionRequestToken) {
+          return;
+        }
+        state.selectedEventMeta = meta;
+        storeLastSelectedEvent(selectedName);
+        syncButtons();
+      }
+
+      async function refreshAll() {
+        await refreshEvents();
+        await refreshActiveEvent();
+        await refreshSelectedEventFromInput();
+        syncButtons();
+      }
+
+      function findExistingEventName(name) {
+        const normalized = normalizeEventName(name).toLowerCase();
+        return normalized ? state.events.find((item) => normalizeEventName(item).toLowerCase() === normalized) || '' : '';
+      }
+
+      async function initializePage() {
+        await refreshEvents();
+        await refreshActiveEvent();
+        if (!getSelectedEventName()) {
+          const initialName = findExistingEventName(readLastSelectedEvent()) || findExistingEventName(state.activeEventName);
+          eventNameInputEl.value = initialName;
+          syncEventNameOptions();
+        }
+        await refreshSelectedEventFromInput();
+        syncButtons();
+      }
+
+      function openMetadataPanel(mode, meta) {
+        state.metadataMode = mode;
+        setMetadataPanelVisible(true);
+        populateMetadataForm(meta || emptyMeta(state.selectedEventName));
+        saveMetadataBtn.textContent = 'Save Changes';
+      }
+
+      async function createEvent() {
+        const selectedName = getSelectedEventName();
+        if (!selectedName) {
+          showNotice('Enter an event name first.', 'warn');
+          return;
+        }
+
+        if (eventExists(selectedName)) {
+          showNotice(`Event already exists: ${selectedName}`, 'warn');
+          return;
+        }
+
+        state.selectedEventName = selectedName;
+        state.selectedEventMeta = emptyMeta(selectedName);
+        openMetadataPanel('create', emptyMeta(selectedName));
+        showNotice('Enter event details, then save the event.', 'info');
+        syncButtons();
+      }
+
+      async function modifyEvent() {
+        const selectedName = getSelectedEventName();
+        if (!selectedName) {
+          showNotice('Enter an event name first.', 'warn');
+          return;
+        }
+
+        if (!eventExists(selectedName)) {
+          showNotice(`No existing event found for ${selectedName}.`, 'warn');
+          return;
+        }
+
+        const meta = await loadEventConfig(selectedName);
+        state.selectedEventName = selectedName;
+        state.selectedEventMeta = meta;
+        openMetadataPanel('modify', meta);
+        showNotice('Review or edit the event details, then save the event.', 'info');
+        syncButtons();
+      }
+
+      async function saveMetadata() {
+        const selectedName = getSelectedEventName();
+        if (!state.metadataOpen || !selectedName) {
+          return;
+        }
+
+        try {
+          const metadata = readMetadataForm();
+          if (state.metadataMode === 'create') {
+            showNotice(`Creating ${selectedName}...`, 'info');
+            await fetchJson('/api/events/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                eventName: selectedName,
+                name: selectedName,
+                location: metadata.location,
+                date: metadata.date,
+                ringConfigX: metadata.ringConfigX,
+                ringConfigY: metadata.ringConfigY
+              })
+            });
+            state.metadataMode = 'modify';
+            showNotice(`Created ${selectedName}.`, 'ok');
+          } else {
+            showNotice(`Saving ${selectedName}...`, 'info');
+            await fetchJson('/api/events/modify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                eventName: selectedName,
+                name: selectedName,
+                location: metadata.location,
+                date: metadata.date,
+                ringConfigX: metadata.ringConfigX,
+                ringConfigY: metadata.ringConfigY
+              })
+            });
+            showNotice(`Saved ${selectedName}.`, 'ok');
+          }
+
+          setMetadataPanelVisible(false);
+          await refreshAll();
+        } catch (error) {
+          showNotice(error.message, 'error');
+        }
+      }
+
+      async function activateEvent() {
+        const selectedName = getSelectedEventName();
+        if (!selectedName) {
+          showNotice('Enter an event name first.', 'warn');
+          return;
+        }
+
+        if (!eventExists(selectedName)) {
+          showNotice(`No existing event found for ${selectedName}.`, 'warn');
+          return;
+        }
+
+        const confirmed = window.confirm(`Activate ${selectedName}? This will set it as the active event for workflow pages.`);
+        if (!confirmed) {
+          return;
+        }
+
+        try {
+          showNotice(`Activating ${selectedName}...`, 'info');
+          await fetchJson('/api/events/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventName: selectedName })
+          });
+          await refreshAll();
+          showNotice(`Activated ${selectedName}.`, 'ok');
+        } catch (error) {
+          showNotice(error.message, 'error');
+        }
+      }
+
+      async function deleteEvent() {
+        const selectedName = getSelectedEventName();
+        if (!selectedName) {
+          showNotice('Enter an event name first.', 'warn');
+          return;
+        }
+
+        if (!eventExists(selectedName)) {
+          showNotice(`No existing event found for ${selectedName}.`, 'warn');
+          return;
+        }
+
+        const confirmed = window.confirm(`Delete ${selectedName}? This removes the event folder and cannot be undone.`);
+        if (!confirmed) {
+          return;
+        }
+
+        try {
+          showNotice(`Deleting ${selectedName}...`, 'info');
+          await fetchJson('/api/events/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventName: selectedName })
+          });
+          if (normalizeEventName(state.activeEventName).toLowerCase() === selectedName.toLowerCase()) {
+            state.activeEventName = '';
+            state.activeEventMeta = emptyMeta('');
+          }
+          clearSelectedEvent();
+          storeLastSelectedEvent('');
+          setMetadataPanelVisible(false);
+          await refreshAll();
+          showNotice(`Deleted ${selectedName}.`, 'ok');
+        } catch (error) {
+          showNotice(error.message, 'error');
+        }
+      }
+
+      function resetSelection() {
+        clearSelectedEvent();
+        storeLastSelectedEvent('');
+        setMetadataPanelVisible(false);
+        showNotice('', '');
+      }
+
+      async function handleSelectionChange() {
+        state.selectedEventName = normalizeEventName(eventNameInputEl.value);
+        await refreshSelectedEventFromInput();
+        if (!state.metadataOpen) {
+          return;
+        }
+        const name = getSelectedEventName();
+        if (name && eventExists(name)) {
+          openMetadataPanel('modify', state.selectedEventMeta);
+        } else if (state.metadataMode === 'modify') {
+          openMetadataPanel('create', emptyMeta(name));
+        }
+        syncButtons();
+      }
+
+      function normalizeSelectionFromInput() {
+        handleSelectionChange().catch((error) => showNotice(error.message, 'error'));
+      }
+
+      eventSelectEl.addEventListener('change', () => {
+        if (eventSelectEl.value === NEW_EVENT_VALUE) {
+          state.newEventMode = true;
+          eventNameInputEl.value = '';
+          eventNameInputEl.hidden = false;
+          eventNameInputEl.focus();
+        } else {
+          state.newEventMode = false;
+          eventNameInputEl.value = eventSelectEl.value;
+          eventNameInputEl.hidden = true;
+        }
+        normalizeSelectionFromInput();
+      });
+      eventNameInputEl.addEventListener('input', normalizeSelectionFromInput);
+      createEventBtn.addEventListener('click', createEvent);
+      modifyEventBtn.addEventListener('click', () => modifyEvent().catch((error) => showNotice(error.message, 'error')));
+      activateEventBtn.addEventListener('click', activateEvent);
+      goToImportBtn.addEventListener('click', () => {
+        const selectedName = getSelectedEventName();
+        if (!selectedName || !eventExists(selectedName)) {
+          showNotice('Select an existing event before going to Import Registration.', 'warn');
+          return;
+        }
+        showView('import', importNavItem);
+      });
+      deleteEventBtn.addEventListener('click', deleteEvent);
+      resetEventBtn.addEventListener('click', resetSelection);
+      saveMetadataBtn.addEventListener('click', saveMetadata);
+
+      function setSidebarActive(item) {
+        navItems.forEach((navItem) => navItem.classList.toggle('active', navItem === item));
+      }
+
+      const navLabel = (item) => item.textContent.trim();
+      const importNavItem = navItems.find((item) => navLabel(item) === 'Import');
+
+      function showView(view, item) {
+        if (importBusy) {
+          setImportNotice('Wait for the import to finish before changing pages.', 'warn');
+          return;
+        }
+        currentView = view;
+        if (view === 'import') {
+          importSnapshot.status = 'idle';
+        }
+        setSidebarActive(item);
+        eventSetupView.hidden = view !== 'event-setup';
+        importView.hidden = view !== 'import';
+        groupsView.hidden = view !== 'groups';
+        placeholderView.hidden = view !== 'placeholder';
+        const title = navLabel(item);
+        workspaceTitle.textContent = title;
+        placeholderTitle.textContent = title;
+        workspaceSubtitle.textContent = viewSubtitles[view];
+        workspaceSubtitle.hidden = !viewSubtitles[view];
+        if (view !== 'event-setup' && state.metadataOpen) {
+          setMetadataPanelVisible(false);
+        }
+        syncButtons();
+        if (view !== 'placeholder') {
+          refreshAll()
+            .then(() => {
+              if (currentView !== view) return;
+              return view === 'groups' ? gbLoad() : view === 'import' ? loadImportSnapshot() : null;
+            })
+            .catch((error) => {
+              if (currentView === 'import') {
+                importSnapshot.status = 'error';
+                renderImportView();
+                setImportNotice(error.message, 'error');
+              } else {
+                showNotice(error.message, 'error');
+              }
+            });
+        }
+      }
+
+      function setImportNotice(message, kind) {
+        importNoticeEl.className = message ? `notice visible ${kind || 'info'}` : 'notice';
+        importNoticeEl.textContent = message || '';
+      }
+
+      function appendCell(row, text) {
+        const cell = document.createElement('td');
+        cell.textContent = text;
+        row.appendChild(cell);
+      }
+
+      function renderImportSnapshot(result) {
+        const loaded = importSnapshot.status === 'ready';
+        const competitors = loaded ? importSnapshot.competitors : [];
+        const warnings = Array.isArray(result && result.rankWarnings) ? result.rankWarnings : [];
+        importedCountEl.textContent = loaded ? competitors.length : importSnapshot.status === 'error' ? 'Unavailable' : '—';
+        warningCountEl.textContent = result ? warnings.length : 'Not available';
+        importDetailFileEl.textContent = (result && result.fileName) || '—';
+        importDetailTimeEl.textContent = result && result.importedAt
+          ? new Date(result.importedAt).toLocaleString()
+          : loaded ? (importSnapshot.dbExists ? 'Loaded from saved database' : 'No saved database yet') : 'Saved data not loaded';
+
+        importPreviewBody.innerHTML = '';
+        if (!competitors.length) {
+          const row = importPreviewBody.insertRow();
+          const cell = row.insertCell();
+          cell.colSpan = 4;
+          cell.textContent = loaded ? 'No saved competitors yet.' : 'Saved roster not loaded.';
+        }
+        competitors.forEach((competitor) => {
+          const row = importPreviewBody.insertRow();
+          const fullName = competitor.fullName || `${competitor.firstName || ''} ${competitor.lastName || ''}`.trim() || 'Unknown';
+          appendCell(row, fullName);
+          appendCell(row, competitor.rank || '');
+          appendCell(row, competitor.gender || '');
+          appendCell(row, competitor.age == null ? '' : String(competitor.age));
+        });
+
+        importWarningList.innerHTML = '';
+        warnings.slice(0, 8).forEach((warning) => {
+          const item = document.createElement('div');
+          item.textContent = `${warning.name || warning.competitorId || 'Warning'} (CSV line ${warning.csvLine || '?'}): ${warning.reason || 'review required'}`;
+          importWarningList.appendChild(item);
+        });
+      }
+
+      function hasPendingCsv() {
+        return Boolean((csvFileInput.files && csvFileInput.files.length) || csvTextInput.value.trim());
+      }
+
+      async function loadImportSnapshot() {
+        const name = getSelectedEventName();
+        if (!name || !eventExists(name)) return false;
+        renderImportView();
+        const token = ++importSnapshotToken;
+        importSnapshot = { eventName: name, status: 'loading', dbExists: false, competitors: [] };
+        renderImportView();
+        try {
+          const config = await fetchJson(`/api/events/config?eventName=${encodeURIComponent(name)}`);
+          if (typeof config.dbExists !== 'boolean') throw new Error('Invalid event database status returned by the server.');
+          const competitors = config.dbExists
+            ? await fetchJson(`/api/competitors?eventName=${encodeURIComponent(name)}`)
+            : [];
+          if (!Array.isArray(competitors)) throw new Error('Invalid saved roster returned by the server.');
+          if (token !== importSnapshotToken || name !== getSelectedEventName()) return false;
+          importSnapshot = { eventName: name, status: 'ready', dbExists: config.dbExists, competitors };
+          renderImportView();
+          return true;
+        } catch (error) {
+          if (token !== importSnapshotToken || name !== getSelectedEventName()) return false;
+          importSnapshot = { eventName: name, status: 'error', dbExists: false, competitors: [] };
+          renderImportView();
+          setImportNotice(`Unable to load saved registration: ${error.message}. Reopen Import to retry; do not reimport to fix a loading error.`, 'error');
+          return false;
+        }
+      }
+
+      function renderImportView() {
+        const name = getSelectedEventName();
+        const ready = Boolean(name) && eventExists(name);
+        const key = ready ? name.toLowerCase() : '';
+
+        if (key !== importInputEvent) {
+          ++importSnapshotToken;
+          importSnapshot = { eventName: name, status: 'idle', dbExists: false, competitors: [] };
+          importInputEvent = key;
+          csvFileInput.value = '';
+          csvTextInput.value = '';
+          setImportNotice('', '');
+        }
+
+        const loaded = ready && importSnapshot.eventName === name && importSnapshot.status === 'ready';
+        const pendingCsv = hasPendingCsv();
+        const canContinue = loaded && importSnapshot.competitors.length > 0 && !pendingCsv;
+        importEventChipEl.textContent = ready ? name : 'None selected';
+        csvFileInput.disabled = !ready || importBusy;
+        csvTextInput.disabled = !ready || importBusy;
+        importBtn.disabled = !loaded || importBusy;
+        clearImportBtn.disabled = !ready || importBusy;
+        importNextBtn.disabled = !canContinue || importBusy;
+        importBtn.classList.toggle('primary', !canContinue);
+        importNextBtn.classList.toggle('next-action', canContinue);
+        importSummaryEl.textContent = !ready ? 'Select an existing event on Event Setup.'
+          : !loaded ? (importSnapshot.status === 'error' ? 'Saved registration is unavailable. Reopen Import to retry.' : 'Loading saved registration...')
+          : pendingCsv ? 'CSV selected or entered. Import it before continuing, or Clear to resume the saved roster.'
+          : canContinue ? `Loaded ${importSnapshot.competitors.length} saved competitors. Next: Build Groups; no import is required.`
+          : importSnapshot.dbExists ? 'The database exists but has no competitors. Import a CSV to begin.'
+          : 'No saved database exists. Import a CSV to begin.';
+        if (!ready && currentView === 'import') {
+          setImportNotice('Select an existing event on Event Setup before importing.', 'warn');
+        }
+        renderImportSnapshot(ready ? importResults.get(key) : null);
+      }
+
+      async function importCsv() {
+        if (importBusy) return;
+        const name = getSelectedEventName();
+        if (!name || !eventExists(name)) {
+          setImportNotice('Select an existing event on Event Setup before importing.', 'warn');
+          return;
+        }
+        if (importSnapshot.eventName !== name || importSnapshot.status !== 'ready') {
+          setImportNotice('Load saved registration successfully before importing.', 'warn');
+          return;
+        }
+        let csvText = csvTextInput.value.trim();
+        const file = csvFileInput.files && csvFileInput.files[0];
+        if (!csvText && !file) {
+          setImportNotice('Choose a CSV file or paste CSV text first.', 'warn');
+          return;
+        }
+
+        importBusy = true;
+        renderImportView();
+        let submitted = false;
+        try {
+          await refreshEvents();
+          if (!eventExists(name)) {
+            importSnapshot.status = 'error';
+            setImportNotice(`Event "${name}" no longer exists. Select an event on Event Setup.`, 'error');
+            return;
+          }
+          if (!csvText) {
+            csvText = await file.text();
+          }
+          if (!csvText.trim()) {
+            setImportNotice('The selected CSV is empty. Choose a file with registrations.', 'warn');
+            return;
+          }
+          if (!await loadImportSnapshot()) return;
+          if (importSnapshot.competitors.length && !window.confirm(
+            `Replace registration for "${name}"?\n\nThis replaces all ${importSnapshot.competitors.length} saved competitors and removes their saved division assignments. It does not merge registrations. You will need to rebuild and save groups.\n\nRing assignments and results are NOT cleared and must be reviewed separately. Continue?`
+          )) return;
+          setImportNotice('Importing CSV…', 'info');
+          submitted = true;
+          const result = await fetchJson('/api/events/import-csv', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventName: name, csvName: file ? file.name : 'uploaded.csv', csvText })
+          });
+          importResults.set(name.toLowerCase(), Object.assign({}, result, {
+            eventName: name,
+            fileName: file ? file.name : 'Pasted text',
+            importedAt: new Date().toISOString()
+          }));
+          gbReset('');
+          gb.saved = false;
+          const draft = JSON.parse(window.localStorage.getItem(GB_DRAFT_KEY) || 'null');
+          if (draft && normalizeEventName(draft.eventName).toLowerCase() === name.toLowerCase()) {
+            window.localStorage.removeItem(GB_DRAFT_KEY);
+          }
+          csvFileInput.value = '';
+          csvTextInput.value = '';
+          if (!await loadImportSnapshot()) return;
+          setImportNotice(`Imported ${importSnapshot.competitors.length} competitors into ${name}. Next: Build Groups. Review any existing ring assignments and results separately.`, 'ok');
+        } catch (error) {
+          if (submitted) {
+            gbReset('');
+            gb.saved = false;
+            importSnapshot.status = 'error';
+          }
+          setImportNotice(`${error.message}${submitted ? ' Reopen Import to verify saved data before continuing; do not save an old group draft.' : ''}`, 'error');
+        } finally {
+          importBusy = false;
+          renderImportView();
+        }
+      }
+
+      csvFileInput.addEventListener('change', () => {
+        if (csvFileInput.files && csvFileInput.files.length) csvTextInput.value = '';
+        renderImportView();
+      });
+      csvTextInput.addEventListener('input', renderImportView);
+      importBtn.addEventListener('click', importCsv);
+      clearImportBtn.addEventListener('click', () => {
+        csvFileInput.value = '';
+        csvTextInput.value = '';
+        setImportNotice('', '');
+        renderImportView();
+      });
+
+      /* ---------- Group Builder ---------- */
+      const GB_RANKS = ['TTLD', 'G10', 'G9', 'G8', 'G7', 'G6', 'G5', 'G4', 'G3', 'G2', 'G1', 'CDB', 'D1', 'D2', 'D3'];
+      const GB_MIN = 4;
+      const GB_UNASSIGNED = '__unassigned__';
+      const GB_FLAGGED = '__flagged__';
+      const GB_DRAFT_KEY = 'tournamentSetup.groupReviewDraft';
+      const gb = { eventName: '', competitors: [], groups: [], unassigned: [], flagged: [], selectedId: '', maxSize: 6, busy: false, saved: false };
+      let gbDrag = null;
+      const gbStatsEl = document.getElementById('gbStats');
+      const gbMaxSizeEl = document.getElementById('gbMaxSize');
+      const gbBuildBtn = document.getElementById('gbBuildBtn');
+      const gbAddBtn = document.getElementById('gbAddBtn');
+      const gbSaveBtn = document.getElementById('gbSaveBtn');
+      const gbDoneBtn = document.getElementById('gbDoneBtn');
+      const gbNoticeEl = document.getElementById('gbNotice');
+      const gbBannersEl = document.getElementById('gbBanners');
+      const gdNameEl = document.getElementById('gdName');
+      const gdMetaEl = document.getElementById('gdMeta');
+      const gdMembersEl = document.getElementById('gdMembers');
+
+      function gbEsc(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      function gbNotice(message, kind) {
+        gbNoticeEl.className = message ? `notice visible ${kind || 'info'}` : 'notice';
+        gbNoticeEl.textContent = message || '';
+      }
+
+      function gbAge(dob) {
+        const parts = String(dob || '').trim().split(/[\/\-]/).map((part) => parseInt(part, 10));
+        if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return NaN;
+        const birth = new Date(parts[2], parts[0] - 1, parts[1]);
+        if (Number.isNaN(birth.getTime())) return NaN;
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age -= 1;
+        return age;
+      }
+
+      function gbRank(value) {
+        const raw = String(value || '').trim();
+        const upper = raw.toUpperCase();
+        if (!upper) return '';
+        if (GB_RANKS.includes(upper)) return upper;
+        const gup = upper.match(/^(\d+)(ST|ND|RD|TH)\s+GUP$/);
+        if (gup) {
+          const n = Number.parseInt(gup[1], 10);
+          if (n >= 1 && n <= 10) return `G${11 - n}`;
+        }
+        if (upper === 'CHO DAN') return 'D1';
+        if (upper === 'E DAN') return 'D2';
+        if (upper === 'SAM DAN') return 'D3';
+        return raw;
+      }
+
+      function gbGender(value) {
+        const v = String(value || '').trim().toLowerCase();
+        if (!v) return 'Unknown';
+        if (v.startsWith('m')) return 'Male';
+        if (v.startsWith('f')) return 'Female';
+        return String(value).trim();
+      }
+
+      function gbId() {
+        return Math.random().toString(36).slice(2, 11);
+      }
+
+      function gbComp(row) {
+        const firstName = String(row.firstName || '').trim();
+        const lastName = String(row.lastName || '').trim();
+        const age = gbAge(row.dob);
+        return {
+          ...row,
+          id: row.id != null ? String(row.id) : gbId(),
+          firstName,
+          lastName,
+          fullName: [firstName, lastName].filter(Boolean).join(' ') || 'Unknown',
+          gender: gbGender(row.gender),
+          rank: gbRank(row.rank),
+          rankCode: gbRank(row.rank),
+          age: Number.isFinite(age) ? age : (Number(row.age) || 0),
+          studio: String(row.studio || '').trim(),
+          reviewReason: String(row.reviewReason || '').trim()
+        };
+      }
+
+      function gbRankIdx(rank) {
+        return GB_RANKS.indexOf(rank);
+      }
+
+      function gbRankRange(comps) {
+        if (!comps.length) return '';
+        const idxs = comps.map((c) => gbRankIdx(c.rank)).filter((i) => i >= 0);
+        if (!idxs.length) return 'Unknown rank';
+        const lo = Math.min(...idxs);
+        const hi = Math.max(...idxs);
+        return lo === hi ? GB_RANKS[lo] : `${GB_RANKS[lo]} - ${GB_RANKS[hi]}`;
+      }
+
+      function gbAgeRange(comps) {
+        if (!comps.length) return '';
+        const ages = comps.map((c) => c.age);
+        const lo = Math.min(...ages);
+        const hi = Math.max(...ages);
+        return lo === hi ? `Age ${lo}` : `Ages ${lo}-${hi}`;
+      }
+
+      function gbSyncGroup(group) {
+        const comps = group.competitors;
+        group.isAdult = comps.some((c) => c.age >= 18);
+        if (!comps.length) {
+          group.name = group.name || 'Empty Group';
+          return;
+        }
+        const genders = [...new Set(comps.map((c) => c.gender || 'Unknown'))];
+        const gender = genders.length === 1 ? genders[0] : 'Mixed';
+        group.gender = gender;
+        group.name = `${gender} ${gbRankRange(comps)} · ${gbAgeRange(comps)}`;
+      }
+
+      function gbGroup(group, index) {
+        const normalized = {
+          id: String(group.id || group.groupId || `group-${index + 1}`),
+          groupId: String(group.groupId || group.id || `group-${index + 1}`),
+          name: String(group.name || group.groupId || group.id || `Group ${index + 1}`),
+          groupDivisionNumber: group.groupDivisionNumber,
+          competitors: Array.isArray(group.competitors) ? group.competitors.map(gbComp) : []
+        };
+        gbSyncGroup(normalized);
+        return normalized;
+      }
+
+      function gbRecommendedMax(total) {
+        if (total <= 120) return 6;
+        if (total <= 250) return 7;
+        return 13;
+      }
+
+      function gbCanAccept(group, competitor) {
+        if (!group || !competitor) return false;
+        const isTtld = competitor.rank === 'TTLD';
+        if (isTtld) return !group.competitors.length || group.competitors.every((c) => c.rank === 'TTLD');
+        return !group.competitors.length || !group.competitors.every((c) => c.rank === 'TTLD');
+      }
+
+      function gbList(id) {
+        if (id === GB_UNASSIGNED) return gb.unassigned;
+        if (id === GB_FLAGGED) return gb.flagged;
+        const group = gb.groups.find((g) => g.id === id);
+        return group ? group.competitors : null;
+      }
+
+      function gbHasSelection() {
+        return Boolean(gb.selectedId) && gb.eventName !== '' && gbList(gb.selectedId) !== null;
+      }
+
+      function gbPersist() {
+        gb.saved = false;
+        gbSyncControls();
+        if (!gb.eventName) return;
+        try {
+          window.localStorage.setItem(GB_DRAFT_KEY, JSON.stringify({
+            eventName: gb.eventName,
+            groups: gb.groups,
+            unassigned: gb.unassigned,
+            reviewCompetitors: gb.flagged,
+            builtAt: new Date().toISOString(),
+            source: 'group-builder',
+            minGroupSize: GB_MIN,
+            maxGroupSize: gb.maxSize,
+            reviewSettings: { minGroupSize: GB_MIN, maxGroupSize: gb.maxSize }
+          }));
+        } catch (error) {
+          console.warn('Unable to persist group draft.', error);
+        }
+      }
+
+      function gbReadDraft(eventName) {
+        try {
+          const parsed = JSON.parse(window.localStorage.getItem(GB_DRAFT_KEY) || 'null');
+          if (!parsed || !Array.isArray(parsed.groups) || String(parsed.eventName || '').trim() !== eventName) return null;
+          return parsed;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function gbReady() {
+        const name = getSelectedEventName();
+        return Boolean(name) && eventExists(name);
+      }
+
+      function gbSyncControls() {
+        const ready = gbReady();
+        gbBuildBtn.disabled = gb.busy || !ready || !gb.competitors.length;
+        gbAddBtn.disabled = gb.busy || !ready;
+        const pending = gb.unassigned.length + gb.flagged.length;
+        const canFinish = !gb.busy && ready && gb.groups.length > 0 && pending === 0;
+        gbSaveBtn.disabled = !canFinish;
+        gbSaveBtn.title = canFinish || !gb.groups.length ? '' : `${pending} competitor${pending === 1 ? '' : 's'} still unassigned or flagged`;
+        gbSaveBtn.classList.toggle('primary', gb.groups.length > 0 && !gb.saved);
+        gbBuildBtn.classList.toggle('primary', gb.groups.length === 0);
+        const isActive = normalizeEventName(state.activeEventName).toLowerCase() === normalizeEventName(gb.eventName).toLowerCase();
+        gbDoneBtn.hidden = !(gb.saved && canFinish && !isActive);
+        gbMaxSizeEl.disabled = gb.busy || !ready;
+      }
+
+      function gbRenderStats() {
+        const assigned = gb.groups.reduce((sum, g) => sum + g.competitors.length, 0);
+        const undersized = gb.groups.filter((g) => g.competitors.length && g.competitors.length < GB_MIN).length;
+        const chips = [
+          ['Event', gbReady() ? getSelectedEventName() : 'None selected'],
+          ['Competitors', gb.competitors.length],
+          ['Groups', gb.groups.length],
+          ['Assigned', assigned]
+        ];
+        if (gb.unassigned.length) chips.push(['Unassigned', gb.unassigned.length]);
+        if (gb.flagged.length) chips.push(['Flagged', gb.flagged.length]);
+        if (undersized) chips.push(['Undersized', undersized]);
+        gbStatsEl.innerHTML = chips.map(([label, value]) => `<span class="chip">${gbEsc(label)}: <strong>${gbEsc(value)}</strong></span>`).join('');
+      }
+
+      function gbWeapons(c) {
+        return c && (c.weaponsEligible === true || c.weaponsEligible === 1 || c.weaponsEligible === '1');
+      }
+
+      // Mirrors the server's sequential numbering so the preview matches what Save assigns.
+      function gbPlan() {
+        const plan = {};
+        let next = 20;
+        gb.groups.forEach((group) => {
+          const weapons = group.competitors.filter(gbWeapons).length;
+          const first = next++;
+          plan[group.id] = weapons
+            ? { number: first, weapons: first, hyungs: next++, sparring: next++, eligible: weapons }
+            : { number: first, weapons: null, hyungs: first, sparring: next++, eligible: 0 };
+        });
+        return plan;
+      }
+
+      function gbDivLabel(group) {
+        const entry = gb.plan && gb.plan[group.id];
+        return entry ? `Division ${entry.number}` : 'Division';
+      }
+
+      function gbBannerHtml(opts) {
+        const chips = opts.chips ? `<div class="gb-chips">${opts.chips.map((m) => `<span class="gb-chip${m.cls ? ` ${m.cls}` : ''}">${gbEsc(m.text)}</span>`).join('')}</div>` : '';
+        return `
+          <div class="gb-banner${opts.pseudo ? ' pseudo' : ''}${opts.warn ? ' warn' : ''}${gb.selectedId === opts.id ? ' selected' : ''}" data-id="${gbEsc(opts.id)}">
+            ${opts.pseudo ? '' : '<span class="gb-grip" draggable="true" title="Drag to reorder">⋮⋮</span>'}
+            <div class="gb-main">
+              <div class="gb-title">${gbEsc(opts.title)}</div>
+              ${chips}
+              ${opts.sub ? `<div class="gb-meta">${gbEsc(opts.sub)}</div>` : ''}
+            </div>
+            <span class="gb-count">${opts.count}</span>
+            ${opts.removable ? '<button class="gb-del" type="button" data-del title="Delete group" aria-label="Delete group">✕</button>' : ''}
+          </div>`;
+      }
+
+      function gbRenderBanners() {
+        const html = [];
+        if (gb.flagged.length) {
+          html.push(gbBannerHtml({ id: GB_FLAGGED, pseudo: true, title: 'Flagged for review', sub: 'Correct the rank to release', count: gb.flagged.length, warn: true }));
+        }
+        if (gb.unassigned.length) {
+          html.push(gbBannerHtml({ id: GB_UNASSIGNED, pseudo: true, title: 'Unassigned', sub: 'Drop here to remove from a group', count: gb.unassigned.length }));
+        }
+        gb.groups.forEach((group) => {
+          const comps = group.competitors;
+          const count = comps.length;
+          const entry = gb.plan[group.id];
+          const chips = count
+            ? [{ text: (group.gender || 'Mixed').charAt(0).toUpperCase() }, { text: gbAgeRange(comps) }, { text: gbRankRange(comps).replace(/ - /g, '–') }]
+            : [{ text: 'Empty' }];
+          if (entry.weapons != null) chips.push({ text: `Weapons ${entry.eligible}`, cls: 'weapons' });
+          html.push(gbBannerHtml({
+            id: group.id,
+            title: gbDivLabel(group),
+            chips,
+            count,
+            warn: count > 0 && count < GB_MIN,
+            removable: true
+          }));
+        });
+        gbBannersEl.innerHTML = html.join('') || '<div class="gd-sub">No groups yet. Use Build Groups.</div>';
+      }
+
+      function gbRenderDetails() {
+        if (!gbHasSelection()) {
+          gdNameEl.textContent = '';
+          gdMetaEl.textContent = '';
+          gdMembersEl.innerHTML = '';
+          return;
+        }
+        const id = gb.selectedId;
+        const list = gbList(id);
+        const group = gb.groups.find((g) => g.id === id);
+        gdNameEl.textContent = id === GB_UNASSIGNED ? 'Unassigned' : id === GB_FLAGGED ? 'Flagged for review' : gbDivLabel(group);
+        const plan = group && gb.plan[group.id];
+        const subs = plan ? `<span>${plan.weapons != null ? `Weapons ${plan.weapons} · ` : ''}Hyungs ${plan.hyungs} · Sparring ${plan.sparring}</span>` : '';
+        gdMetaEl.innerHTML = `<span>${list.length} competitor${list.length === 1 ? '' : 's'}</span>${group && list.length ? `<span>${gbEsc(gbRankRange(list))}</span><span>${gbEsc(gbAgeRange(list))}</span>` : ''}${subs}`;
+        if (!list.length) {
+          gdMembersEl.innerHTML = '<div class="gd-sub">No competitors.</div>';
+          return;
+        }
+        gdMembersEl.innerHTML = list.map((c) => {
+          const sub = `<div class="gd-sub"><span class="gd-badge">${gbEsc(c.gender.charAt(0))}</span><span class="gd-badge">${gbEsc(c.rank || '?')}</span><span>Age ${c.age}</span></div>`;
+          if (id === GB_FLAGGED) {
+            const options = ['<option value="">Corrected rank…</option>'].concat(GB_RANKS.map((r) => `<option value="${r}">${r}</option>`)).join('');
+            return `<div class="gd-row static" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}<div class="gd-sub">${gbEsc(c.reviewReason || 'review required')}</div></div><div class="gd-fix"><select>${options}</select><button class="gd-apply" type="button" data-apply>Apply</button></div></div>`;
+          }
+          return `<div class="gd-row" draggable="true" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}</div>${id === GB_UNASSIGNED ? '' : '<button class="gd-x" type="button" data-unassign title="Move to Unassigned">✕</button>'}</div>`;
+        }).join('');
+      }
+
+      function gbRender() {
+        gb.groups.forEach(gbSyncGroup);
+        gb.plan = gbPlan();
+        if (gb.selectedId === GB_UNASSIGNED && !gb.unassigned.length) gb.selectedId = '';
+        if (gb.selectedId && gbList(gb.selectedId) === null) gb.selectedId = '';
+        gbRenderStats();
+        gbRenderBanners();
+        gbRenderDetails();
+        gbSyncControls();
+        renderState();
+      }
+
+      function gbReset(name) {
+        gb.saved = false;
+        gb.eventName = name;
+        gb.competitors = [];
+        gb.groups = [];
+        gb.unassigned = [];
+        gb.flagged = [];
+        gb.selectedId = '';
+      }
+
+      async function gbLoad() {
+        const name = getSelectedEventName();
+        if (!name || !eventExists(name)) {
+          gbReset('');
+          gbNotice('Select an existing event on Event Setup first.', 'warn');
+          gbRender();
+          return;
+        }
+        if (gb.eventName === name) {
+          gbRender();
+          return;
+        }
+        gbReset('');
+        gbNotice('', '');
+        gb.busy = true;
+        gbRender();
+        try {
+          const result = await fetchJson(`/api/competitors?eventName=${encodeURIComponent(name)}`);
+          const raw = Array.isArray(result) ? result : (result && Array.isArray(result.competitors) ? result.competitors : []);
+          const competitors = raw.map(gbComp);
+          let groups = [];
+          let unassigned = [];
+          let flagged = [];
+          let maxSize = gbRecommendedMax(competitors.length);
+          const draft = gbReadDraft(name);
+          if (draft) {
+            groups = draft.groups.map(gbGroup);
+            unassigned = Array.isArray(draft.unassigned) ? draft.unassigned.map(gbComp) : [];
+            flagged = Array.isArray(draft.reviewCompetitors) ? draft.reviewCompetitors.map(gbComp) : [];
+            maxSize = Number(draft.maxGroupSize) || maxSize;
+          } else {
+            const saved = await fetchJson(`/api/groups?eventName=${encodeURIComponent(name)}`);
+            if (!Array.isArray(saved.groups)) throw new Error('Invalid saved groups returned by the server.');
+            groups = saved.groups.map(gbGroup);
+            if (groups.length) {
+              const placed = new Set(groups.flatMap((g) => g.competitors.map((c) => c.id)));
+              unassigned = competitors.filter((c) => !placed.has(c.id));
+            }
+          }
+          gb.eventName = name;
+          gb.competitors = competitors;
+          gb.groups = groups;
+          gb.unassigned = unassigned;
+          gb.flagged = flagged;
+          gb.saved = !draft && groups.length > 0 && unassigned.length === 0 && flagged.length === 0;
+          gb.maxSize = maxSize;
+          gbMaxSizeEl.value = String(maxSize);
+          if (!competitors.length) gbNotice('No competitors yet. Import registrations first.', 'warn');
+        } catch (error) {
+          gbNotice(error.message, 'error');
+        } finally {
+          gb.busy = false;
+          gbRender();
+        }
+      }
+
+      async function gbBuild() {
+        if (!gb.competitors.length) {
+          gbNotice('No competitors yet. Import registrations first.', 'warn');
+          return;
+        }
+        if (gb.groups.length && !window.confirm('Rebuild groups? Current groups and manual changes will be replaced.')) return;
+        const maxSize = Math.min(13, Math.max(6, Number(gbMaxSizeEl.value) || gb.maxSize));
+        gb.busy = true;
+        gbSyncControls();
+        gbNotice('Building groups…', 'info');
+        try {
+          const built = await fetchJson('/api/divisions/build', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventName: gb.eventName, minGroupSize: GB_MIN, maxGroupSize: maxSize, competitors: gb.competitors, groups: [] })
+          });
+          gb.groups = Array.isArray(built.groups) ? built.groups.map(gbGroup) : [];
+          gb.flagged = Array.isArray(built.reviewCompetitors) ? built.reviewCompetitors.map(gbComp) : [];
+          gb.unassigned = [];
+          gb.maxSize = maxSize;
+          gbMaxSizeEl.value = String(maxSize);
+          gb.selectedId = '';
+          gbPersist();
+          gbNotice(gb.groups.length ? `Built ${gb.groups.length} groups.` : 'No groups were built. Check the flagged entries.', gb.groups.length ? 'ok' : 'warn');
+        } catch (error) {
+          gbNotice(error.message, 'error');
+        } finally {
+          gb.busy = false;
+          gbRender();
+        }
+      }
+
+      async function gbSave() {
+        if (!gb.groups.length) return;
+        gb.busy = true;
+        gbSyncControls();
+        gbNotice('Saving…', 'info');
+        try {
+          const result = await fetchJson('/api/divisions/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groups: gb.groups.map((g) => ({ ...g, groupDivisionNumber: null })), minGroupSize: GB_MIN, maxGroupSize: gb.maxSize, startingDivisionNumber: 20, eventName: gb.eventName })
+          });
+          try { window.localStorage.removeItem(GB_DRAFT_KEY); } catch (error) { /* ignore */ }
+          gb.saved = true;
+          gbNotice(`Setup complete. ${result.saved || gb.groups.length} groups saved to the competitor records.`, 'ok');
+        } catch (error) {
+          gbNotice(error.message, 'error');
+        } finally {
+          gb.busy = false;
+          gbRender();
+        }
+      }
+
+      function gbFindMember(listId, compId) {
+        const list = gbList(listId);
+        return list ? list.find((c) => c.id === compId) : null;
+      }
+
+      function gbMove(compId, fromId, toId) {
+        const from = gbList(fromId);
+        const to = gbList(toId);
+        if (!from || !to || fromId === toId) return false;
+        const index = from.findIndex((c) => c.id === compId);
+        if (index === -1) return false;
+        to.push(from.splice(index, 1)[0]);
+        gbPersist();
+        gbRender();
+        return true;
+      }
+
+      function gbAddGroup() {
+        const group = gbGroup({ id: gbId(), name: 'New Group', competitors: [] }, gb.groups.length);
+        gb.groups.push(group);
+        gb.selectedId = group.id;
+        gbPersist();
+        gbRender();
+        const banner = gbBannersEl.querySelector(`[data-id="${group.id}"]`);
+        if (banner) banner.scrollIntoView({ block: 'nearest' });
+      }
+
+      function gbDeleteGroup(id) {
+        const group = gb.groups.find((g) => g.id === id);
+        if (!group) return;
+        const count = group.competitors.length;
+        const message = count
+          ? `Delete ${gbDivLabel(group)}? Its ${count} competitor${count === 1 ? '' : 's'} will move to Unassigned.`
+          : `Delete ${gbDivLabel(group)}?`;
+        if (!window.confirm(message)) return;
+        gb.unassigned.push(...group.competitors);
+        gb.groups = gb.groups.filter((g) => g.id !== id);
+        if (gb.selectedId === id) gb.selectedId = '';
+        gbPersist();
+        gbRender();
+      }
+
+      function gbReorder(sourceId, targetId) {
+        const from = gb.groups.findIndex((g) => g.id === sourceId);
+        const to = gb.groups.findIndex((g) => g.id === targetId);
+        if (from === -1 || to === -1 || from === to) return;
+        const [moved] = gb.groups.splice(from, 1);
+        gb.groups.splice(to, 0, moved);
+        gbPersist();
+        gbRender();
+      }
+
+      function gbAccepts(targetId) {
+        if (!gbDrag) return false;
+        if (gbDrag.type === 'group') {
+          return targetId !== gbDrag.id && gb.groups.some((g) => g.id === targetId);
+        }
+        if (targetId === gbDrag.from || targetId === GB_FLAGGED) return false;
+        if (targetId === GB_UNASSIGNED) return true;
+        const target = gb.groups.find((g) => g.id === targetId);
+        return gbCanAccept(target, gbFindMember(gbDrag.from, gbDrag.compId));
+      }
+
+      function gbClearDrop() {
+        gbBannersEl.querySelectorAll('.gb-banner.drop').forEach((el) => el.classList.remove('drop'));
+      }
+
+      gbBannersEl.addEventListener('click', (event) => {
+        const banner = event.target.closest('.gb-banner');
+        if (!banner) return;
+        if (event.target.closest('[data-del]')) {
+          gbDeleteGroup(banner.dataset.id);
+          return;
+        }
+        gb.selectedId = banner.dataset.id;
+        gbRender();
+      });
+
+      gbBannersEl.addEventListener('dragstart', (event) => {
+        const grip = event.target.closest('.gb-grip');
+        const banner = event.target.closest('.gb-banner');
+        if (!grip || !banner) return;
+        gbDrag = { type: 'group', id: banner.dataset.id };
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', banner.dataset.id);
+        event.dataTransfer.setDragImage(banner, 12, 12);
+      });
+
+      gbBannersEl.addEventListener('dragover', (event) => {
+        const banner = event.target.closest('.gb-banner');
+        if (!banner || !gbAccepts(banner.dataset.id)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        banner.classList.add('drop');
+      });
+
+      gbBannersEl.addEventListener('dragleave', (event) => {
+        const banner = event.target.closest('.gb-banner');
+        if (banner && !banner.contains(event.relatedTarget)) banner.classList.remove('drop');
+      });
+
+      gbBannersEl.addEventListener('drop', (event) => {
+        const banner = event.target.closest('.gb-banner');
+        gbClearDrop();
+        if (!banner || !gbAccepts(banner.dataset.id)) return;
+        event.preventDefault();
+        const drag = gbDrag;
+        gbDrag = null;
+        if (drag.type === 'group') {
+          gbReorder(drag.id, banner.dataset.id);
+        } else {
+          gbMove(drag.compId, drag.from, banner.dataset.id);
+        }
+      });
+
+      gbBannersEl.addEventListener('dragend', () => {
+        gbDrag = null;
+        gbClearDrop();
+      });
+
+      gdMembersEl.addEventListener('dragstart', (event) => {
+        const row = event.target.closest('.gd-row[draggable="true"]');
+        if (!row) return;
+        gbDrag = { type: 'member', compId: row.dataset.comp, from: gb.selectedId };
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', row.dataset.comp);
+      });
+
+      gdMembersEl.addEventListener('dragend', () => {
+        gbDrag = null;
+        gbClearDrop();
+      });
+
+      gdMembersEl.addEventListener('click', (event) => {
+        const row = event.target.closest('.gd-row');
+        if (!row) return;
+        if (event.target.closest('[data-unassign]')) {
+          gbMove(row.dataset.comp, gb.selectedId, GB_UNASSIGNED);
+        } else if (event.target.closest('[data-apply]')) {
+          const rank = row.querySelector('select').value;
+          const competitor = gbFindMember(GB_FLAGGED, row.dataset.comp);
+          if (!rank) {
+            gbNotice('Choose a corrected rank first.', 'warn');
+            return;
+          }
+          competitor.rank = rank;
+          competitor.rankCode = rank;
+          competitor.reviewReason = '';
+          gbMove(row.dataset.comp, GB_FLAGGED, GB_UNASSIGNED);
+          gb.selectedId = GB_UNASSIGNED;
+          gbRender();
+        }
+      });
+
+      gbMaxSizeEl.addEventListener('change', () => {
+        gb.maxSize = Math.min(13, Math.max(6, Number(gbMaxSizeEl.value) || gb.maxSize));
+        gbMaxSizeEl.value = String(gb.maxSize);
+        gbPersist();
+      });
+      gbBuildBtn.addEventListener('click', gbBuild);
+      gbAddBtn.addEventListener('click', gbAddGroup);
+      gbSaveBtn.addEventListener('click', gbSave);
+      const eventSetupNavItem = navItems.find((item) => navLabel(item) === 'Event Setup');
+      gbDoneBtn.addEventListener('click', () => {
+        if (eventSetupNavItem) showView('event-setup', eventSetupNavItem);
+      });
+
+      const dayOfLabels = ['Ring Assignment', 'Head Table', 'Competitors', 'Judges & Volunteers', 'Reports & Results'];
+      function syncDayOfNav() {
+        const unlocked = Boolean(state.activeEventName);
+        navItems.forEach((item) => {
+          if (!dayOfLabels.includes(navLabel(item))) return;
+          item.classList.toggle('locked', !unlocked);
+          item.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
+          item.title = unlocked ? '' : 'Activate an event on Event Setup to unlock';
+        });
+      }
+
+      const groupNavItem = navItems.find((item) => navLabel(item) === 'Group Builder');
+      importNextBtn.addEventListener('click', () => {
+        if (!importNextBtn.disabled && groupNavItem) showView('groups', groupNavItem);
+      });
+
+      if (dateTarget) {
+        const now = new Date();
+        dateTarget.textContent = new Intl.DateTimeFormat(undefined, {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        }).format(now);
+      }
+
+      if (sidebar && navItems.length) {
+        navItems.forEach((item) => {
+          item.addEventListener('click', () => {
+            const label = navLabel(item);
+            if (item.getAttribute('aria-disabled') === 'true') return;
+            showView(label === 'Event Setup' ? 'event-setup' : label === 'Import' ? 'import' : label === 'Group Builder' ? 'groups' : 'placeholder', item);
+          });
+        });
+      }
+
+      initializePage()
+        .catch((error) => showNotice(error.message, 'error'));
+    }());
+  </script>
+</body>
+</html>

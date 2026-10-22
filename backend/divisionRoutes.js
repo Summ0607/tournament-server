@@ -5,11 +5,17 @@ const { assignDivisionNumbers, appendDivisionTrace, summarizeGroupDivisionNumber
 function createDivisionRouter(deps) {
   const router = express.Router();
   const { competitorStore, groupStore, buildGroups, buildGroupsWithReview } = deps;
+  const loadSavedGroups = deps.loadSavedGroups || ((eventName) => groupStore.loadGroups(eventName));
 
   router.get('/groups', async (req, res) => {
-    const eventName = String((req.query || {}).eventName || '').trim();
-    const groups = groupStore.loadGroups(eventName);
-    res.json({ groups });
+    try {
+      const eventName = String((req.query || {}).eventName || '').trim();
+      const groups = await loadSavedGroups(eventName || undefined);
+      res.json({ groups });
+    } catch (err) {
+      console.error('Failed to load saved groups:', err);
+      res.status(500).json({ error: 'Failed to load saved divisions' });
+    }
   });
 
   router.get('/groups/:groupId', (req, res) => {

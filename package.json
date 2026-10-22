@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test": "node --test tests/event-config.test.js tests/pageRoutes.test.js tests/surfacePorts.test.js tests/competitorStore.test.js && node tests/ring-contract.test.js"
+    "test": "node --test tests/event-config.test.js tests/pageRoutes.test.js tests/surfacePorts.test.js tests/competitorStore.test.js tests/importRegistration.test.js tests/integratedImport.test.js && node tests/ring-contract.test.js"
   },
   "dependencies": {
     "csv-parser": "^3.2.1",
