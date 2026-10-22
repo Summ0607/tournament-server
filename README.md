@@ -1,34 +1,28 @@
 # tournament-server
 Tournament Management Server Source
 
-## Event metadata
+## Pre-tournament management
 
-Start the server with `node group-server.js` and open `http://localhost:3000/`, which
-loads Tournament Setup (`/tournament-setup/`), the pre-tournament hub page.
-Use the separate pages for each step:
-- Event Definition: `/tournament-setup/event-definition/`
-- Import Registration: `/tournament-setup/import/`
-- Build Groups: `/tournament-setup/build-groups/`
-- Review & Save: `/tournament-setup/review-save/`
-Event details are managed at `/tournament-setup/event-definition/`.
+Start the server with `node group-server.js` and open `http://localhost:3000/`,
+which redirects to the integrated interface at `/tournament-management/`.
+Use its sidebar to move between Event Setup, Import, and Group Builder.
+Direct workflow links are available:
+- Event Setup: `/tournament-management/?view=event-setup`
+- Import: `/tournament-management/?view=import`
+- Group Builder (including review and save): `/tournament-management/?view=groups`
+
+On pre-tournament views the banner describes the **selected event**, including its configured event date
+(not today's date) and status: Not active, Active, or Unsaved changes.
+No selection and missing dates are labeled explicitly. The separate Active Event
+indicator identifies the event used by day-of workflows.
+On day-of views the banner switches explicitly to **Active Event** and uses that
+event's configured date. Selecting a different event for preparation does not
+change the day-of context; activation remains explicit. Day-of navigation stays
+locked when no event is active or the active context cannot be loaded. An open
+day-of view reports No active event or Unavailable rather than falling back to
+the selected event. Day-of sections in the integrated interface remain placeholders.
 Restart the server after backend changes; refreshing the page alone does not reload server code.
 
-Import Registration resumes the selected event from its saved database, including
-competitor and division counts. Existing rosters can continue to Build Groups
-without importing again. Events with saved divisions default to **Review Saved
-Divisions**, which opens database data rather than a browser review draft;
-Build Groups remains a secondary option. Saved divisions are loaded for the
-requested event even when it is not the active event at server startup.
-
-**Reimport Registration** is a secondary, explicitly confirmed replacement action.
-It replaces the entire roster (not a merge), removes its saved division
-assignments, and discards this browser's review draft for that event. Rebuild
-and save divisions afterward. Existing ring assignments and results are **not**
-cleared; review them separately before resuming operations. Clearing the CSV
-inputs does not clear the saved roster. Historical import warnings are not
-persisted and display as unavailable on a fresh page visit, not as zero.
-
-The integrated three-panel interface is available at `/tournament-management/`.
 Its Import page loads the selected event's saved roster. With saved competitors
 and no pending CSV input, **Next: Build Groups** is the default action, even when
 divisions already exist. Selecting a CSV file or entering CSV text switches the
@@ -41,14 +35,37 @@ Replacing an existing roster requires confirmation. A successful import clears
 the integrated Group Builder's old in-memory state and this event's browser draft
 before continuing. Without reimport, existing saved groups/drafts remain available
 to Group Builder. Group building and saving remain separate, explicit actions.
+Reimport replaces the whole roster rather than merging it and removes its saved
+division assignments. Existing ring assignments and results are **not** cleared;
+review them separately. Clearing CSV inputs does not clear saved registration.
+Historical import warnings are not persisted and show as unavailable on a fresh
+page visit, not as zero. Saved divisions load from the requested event's database
+even when it is not the active event at server startup.
 
 Group Builder distinguishes saved divisions from unsaved changes. Saved,
 fully assigned groups emphasize **Go to Event Setup to Activate** when the event
 is not already active, rather than highlighting **Save & Finish Setup**.
 Editing groups (including drag-and-drop) highlights Save and hides the activation
 shortcut until the changes are successfully saved. Browser drafts are treated
-as unsaved work. The older standalone pages remain available for compatibility;
-their cleanup is deferred to a separate change.
+as unsaved work.
+
+### Retired pages and bookmark compatibility
+
+The standalone setup hub, event definition, import, build, and review/save pages
+and their duplicate frontend script have been removed. Their former URLs redirect
+to the matching integrated view, including bare paths, trailing slashes, `.html`,
+and `/index.html` variants:
+
+| Former URL prefix | Integrated view |
+| --- | --- |
+| `/tournament-setup`, `/tournament-mgmt`, `/setup`, `/event-administration`, `/tournament-setup/event-definition` | Event Setup |
+| `/tournament-setup/import` | Import |
+| `/group-builder`, `/tournament-setup/build-groups`, `/tournament-setup/review-save` | Group Builder |
+
+Legacy group/review links with `?source=saved` retain that option to open database
+groups rather than a browser draft. Editing those groups removes that option so
+a refresh can resume the new draft. The retired `build-groups/app.js` is no longer
+served. Day-of workflows and stored event data are retained.
 
 Run `npm test` to validate event configuration, routes, import/resume behavior,
 saved/modified group actions, division persistence, and ring contracts.

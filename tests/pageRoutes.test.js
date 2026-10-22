@@ -60,72 +60,35 @@ test('canonical progress routes still serve the page directly', async () => {
   assert.match(adminPage.body, /<!DOCTYPE html>/);
 });
 
-test('tournament setup routes serve the new canonical hierarchy', async () => {
+test('pre-tournament root opens the integrated interface', async () => {
   const rootPage = await requestPath('pre', '/');
   assert.ok([301, 302].includes(rootPage.statusCode));
-  assert.equal(rootPage.headers.location, '/tournament-setup/');
-
-  const hubPage = await requestPath('pre', '/tournament-setup/');
-  assert.equal(hubPage.statusCode, 200);
-  assert.match(hubPage.body, /Tournament Setup/);
-
-  const importPage = await requestPath('pre', '/tournament-setup/import/');
-  assert.equal(importPage.statusCode, 200);
-  assert.match(importPage.body, /Import Registration/);
-  assert.match(importPage.body, /Import CSV/);
-
-  const eventDefinitionPage = await requestPath('pre', '/tournament-setup/event-definition/');
-  assert.equal(eventDefinitionPage.statusCode, 200);
-  assert.match(eventDefinitionPage.body, /Event Definition/);
-
-  const buildGroupsPage = await requestPath('pre', '/tournament-setup/build-groups/');
-  assert.equal(buildGroupsPage.statusCode, 200);
-  assert.match(buildGroupsPage.body, /Build Groups/);
-
-  const reviewSavePage = await requestPath('pre', '/tournament-setup/review-save/');
-  assert.equal(reviewSavePage.statusCode, 200);
-  assert.match(reviewSavePage.body, /Final Review &amp; Save/);
-
-  const buildGroupsScript = await requestPath('pre', '/tournament-setup/build-groups/app.js');
-  assert.equal(buildGroupsScript.statusCode, 200);
-  assert.match(buildGroupsScript.body, /window\.buildDivisions/);
+  assert.equal(rootPage.headers.location, '/tournament-management/');
 });
 
-test('legacy pre-tournament routes redirect to the new canonical paths', async () => {
-  const setupAlias = await requestPath('pre', '/setup/');
-  assert.ok([301, 302].includes(setupAlias.statusCode));
-  assert.equal(setupAlias.headers.location, '/tournament-setup/event-definition/');
-
-  const eventAdminAlias = await requestPath('pre', '/event-administration/');
-  assert.ok([301, 302].includes(eventAdminAlias.statusCode));
-  assert.equal(eventAdminAlias.headers.location, '/tournament-setup/event-definition/');
-
-  const launchpadAlias = await requestPath('pre', '/tournament-mgmt/');
-  assert.ok([301, 302].includes(launchpadAlias.statusCode));
-  assert.equal(launchpadAlias.headers.location, '/tournament-setup/');
-
-  const oldLaunchpadFile = await requestPath('pre', '/tournament-mgmt/index.html');
-  assert.ok([301, 302].includes(oldLaunchpadFile.statusCode));
-  assert.equal(oldLaunchpadFile.headers.location, '/tournament-setup/');
-
-  const buildGroupsAlias = await requestPath('pre', '/group-builder/');
-  assert.ok([301, 302].includes(buildGroupsAlias.statusCode));
-  assert.equal(buildGroupsAlias.headers.location, '/tournament-setup/build-groups/');
-
-  const oldBuildGroupsFile = await requestPath('pre', '/group-builder/index.html');
-  assert.ok([301, 302].includes(oldBuildGroupsFile.statusCode));
-  assert.equal(oldBuildGroupsFile.headers.location, '/tournament-setup/build-groups/');
-
-  const oldEventDefinitionFile = await requestPath('pre', '/event-administration/index.html');
-  assert.ok([301, 302].includes(oldEventDefinitionFile.statusCode));
-  assert.equal(oldEventDefinitionFile.headers.location, '/tournament-setup/event-definition/');
-
-  const oldSetupFile = await requestPath('pre', '/setup/index.html');
-  assert.ok([301, 302].includes(oldSetupFile.statusCode));
-  assert.equal(oldSetupFile.headers.location, '/tournament-setup/event-definition/');
+test('retired workflow pages and legacy aliases redirect to matching integrated views', async () => {
+  const workflows = [
+    { prefixes: ['/tournament-setup', '/tournament-mgmt', '/setup', '/event-administration', '/tournament-setup/event-definition'], view: 'event-setup' },
+    { prefixes: ['/tournament-setup/import'], view: 'import' },
+    { prefixes: ['/group-builder', '/tournament-setup/build-groups', '/tournament-setup/review-save'], view: 'groups' }
+  ];
+  for (const { prefixes, view } of workflows) {
+    for (const prefix of prefixes) {
+      for (const suffix of ['', '/', '.html', '/index.html']) {
+        const pathname = prefix + suffix;
+        const response = await requestPath('pre', pathname);
+        assert.equal(response.statusCode, 302, pathname);
+        assert.equal(response.headers.location, `/tournament-management/?view=${view}`, pathname);
+      }
+    }
+  }
+  const saved = await requestPath('pre', '/tournament-setup/review-save/?source=saved');
+  assert.equal(saved.headers.location, '/tournament-management/?view=groups&source=saved');
+  const retiredScript = await requestPath('pre', '/tournament-setup/build-groups/app.js');
+  assert.equal(retiredScript.statusCode, 404);
 });
 
-test('tournament management shell is available as a standalone page', async () => {
+test('integrated tournament management is available directly and through workflow URLs', async () => {
   const shellRoot = await requestPath('pre', '/tournament-management');
   assert.ok([301, 302].includes(shellRoot.statusCode));
   assert.equal(shellRoot.headers.location, '/tournament-management/');
@@ -135,9 +98,27 @@ test('tournament management shell is available as a standalone page', async () =
   assert.match(shellPage.body, /Tournament Management System/);
   assert.match(shellPage.body, /Under Development/);
   assert.match(shellPage.body, /Event Setup/);
-  assert.match(shellPage.body, /Draft/);
+  assert.match(shellPage.body, /Selected event metadata/);
+  assert.match(shellPage.body, /No event selected/);
+  assert.doesNotMatch(shellPage.body, /<strong>Winter Tournament<\/strong>/);
 
   const shellHtml = await requestPath('pre', '/tournament-management.html');
   assert.equal(shellHtml.statusCode, 200);
   assert.match(shellHtml.body, /Tournament Management System/);
+  const directFile = await requestPath('pre', '/tournament-management/index.html');
+  assert.equal(directFile.statusCode, 200);
+  for (const view of ['event-setup', 'import', 'groups']) {
+    const response = await requestPath('pre', `/tournament-management/?view=${view}`);
+    assert.equal(response.statusCode, 200);
+  }
+});
+
+test('day-of pages still serve their existing interfaces and link to integrated setup', async () => {
+  const ringAssignment = await requestPath('ringOps', '/ring-assignment/index.html');
+  assert.equal(ringAssignment.statusCode, 200);
+  assert.match(ringAssignment.body, /href="\/tournament-management\/\?view=event-setup"/);
+  for (const pathname of ['/head-table/index.html', '/competitors/index.html']) {
+    const response = await requestPath('pre', pathname);
+    assert.equal(response.statusCode, 200);
+  }
 });

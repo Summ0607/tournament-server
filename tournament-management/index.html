@@ -909,10 +909,10 @@
           <path d="M5 16.8c1.7-1 4-1.6 7-1.6s5.3.6 7 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
         </svg>
         <div class="banner-title">Tournament Management System</div>
-        <div class="banner-meta" aria-label="Current event metadata">
-          <span>Event: <strong>Winter Tournament</strong></span>
-          <span>Date: <strong id="currentDate">--</strong></span>
-          <span>Status: <strong class="banner-status">Draft</strong></span>
+        <div class="banner-meta" id="bannerMetadata" aria-label="Selected event metadata" aria-live="polite">
+          <span><span id="bannerEventLabel">Selected Event:</span> <strong id="bannerEventName">None selected</strong></span>
+          <span>Event Date: <strong id="bannerEventDate">Not set</strong></span>
+          <span>Status: <strong class="banner-status" id="bannerEventStatus">No event selected</strong></span>
         </div>
       </header>
 
@@ -1075,7 +1075,7 @@
             <div class="view" id="placeholderView" hidden>
               <div class="under-dev">
                 <h2 id="placeholderTitle">Under Development</h2>
-                <p>This section is under development.</p>
+                <p id="placeholderMessage">This section is under development.</p>
               </div>
             </div>
           </div>
@@ -1176,6 +1176,7 @@
         events: [],
         activeEventName: '',
         activeEventMeta: emptyMeta(''),
+        activeEventError: '',
         selectedEventName: '',
         selectedEventMeta: emptyMeta(''),
         metadataMode: '',
@@ -1184,7 +1185,11 @@
         selectionRequestToken: 0
       };
 
-      const dateTarget = document.getElementById('currentDate');
+      const bannerEventNameEl = document.getElementById('bannerEventName');
+      const bannerMetadataEl = document.getElementById('bannerMetadata');
+      const bannerEventLabelEl = document.getElementById('bannerEventLabel');
+      const bannerEventDateEl = document.getElementById('bannerEventDate');
+      const bannerEventStatusEl = document.getElementById('bannerEventStatus');
       const workspaceTitle = document.getElementById('workspaceTitle');
       const sidebar = document.querySelector('.sidebar');
       const navItems = Array.from(document.querySelectorAll('.sidebar-item'));
@@ -1196,7 +1201,6 @@
       const importDetailFileEl = document.getElementById('importDetailFile');
       const importDetailTimeEl = document.getElementById('importDetailTime');
       const pageContent = document.getElementById('pageContent');
-      const defaultTitle = workspaceTitle ? workspaceTitle.textContent.trim() : '';
       const noticeEl = document.getElementById('notice');
       const activeEventChipEl = document.getElementById('activeEventChip');
       const selectedEventChipEl = document.getElementById('selectedEventChip');
@@ -1207,6 +1211,7 @@
       const eventSetupView = document.getElementById('eventSetupView');
       const placeholderView = document.getElementById('placeholderView');
       const placeholderTitle = document.getElementById('placeholderTitle');
+      const placeholderMessage = document.getElementById('placeholderMessage');
       const workspaceSubtitle = document.getElementById('workspaceSubtitle');
       const importEventChipEl = document.getElementById('importEventChip');
       const csvFileInput = document.getElementById('csvFileInput');
@@ -1270,15 +1275,6 @@
           ringConfigX,
           ringConfigY
         };
-      }
-
-      function formatRingConfig(meta) {
-        const x = Number.parseInt(meta && meta.ringConfigX, 10);
-        const y = Number.parseInt(meta && meta.ringConfigY, 10);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) {
-          return '—';
-        }
-        return `${x} × ${y} (${x * y})`;
       }
 
       async function fetchJson(path, options) {
@@ -1397,7 +1393,43 @@
         eventNameInputEl.hidden = !state.newEventMode;
       }
 
+      function renderBanner() {
+        const dayOf = currentView === 'placeholder';
+        bannerEventLabelEl.textContent = dayOf ? 'Active Event:' : 'Selected Event:';
+        bannerMetadataEl.setAttribute('aria-label', dayOf ? 'Active event metadata' : 'Selected event metadata');
+        if (dayOf) {
+          bannerEventNameEl.textContent = state.activeEventName || 'No active event';
+          bannerEventDateEl.textContent = state.activeEventMeta.date || 'Not set';
+          bannerEventStatusEl.textContent = state.activeEventError ? 'Unavailable'
+            : state.activeEventName ? 'Active' : 'No active event';
+          placeholderMessage.textContent = state.activeEventError
+            ? `Unable to load active event: ${state.activeEventError}`
+            : state.activeEventName ? 'This section is under development.'
+            : 'No active event. Activate an event on Event Setup before using day-of operations.';
+          return;
+        }
+        const name = state.selectedEventName;
+        const meta = state.selectedEventMeta;
+        const metadataChanged = state.metadataOpen && (
+          state.metadataMode === 'create' ||
+          normalizeTextValue(locationInputEl.value) !== meta.location ||
+          dateInputEl.value !== meta.date ||
+          Number(ringConfigXInputEl.value) !== Number(meta.ringConfigX) ||
+          Number(ringConfigYInputEl.value) !== Number(meta.ringConfigY)
+        );
+        const groupChanges = name && (gb.eventName === name
+          ? !gb.saved && (gb.groups.length > 0 || gb.unassigned.length > 0 || gb.flagged.length > 0 || Boolean(gbReadDraft(name)))
+          : Boolean(gbReadDraft(name)));
+        bannerEventNameEl.textContent = name || 'None selected';
+        bannerEventDateEl.textContent = meta.date || 'Not set';
+        bannerEventStatusEl.textContent = !name ? 'No event selected'
+          : metadataChanged || groupChanges ? 'Unsaved changes'
+          : name.toLowerCase() === state.activeEventName.toLowerCase() ? 'Active'
+          : 'Not active';
+      }
+
       function renderState() {
+        renderBanner();
         const selectedName = state.selectedEventName || 'None selected';
         activeEventChipEl.textContent = state.activeEventName || 'No event selected';
         syncDayOfNav();
@@ -1457,10 +1489,18 @@
       }
 
       async function refreshActiveEvent() {
-        const data = await fetchJson('/api/events/active');
-        const activeName = normalizeEventName(data.activeEvent);
-        state.activeEventName = activeName;
-        state.activeEventMeta = activeName ? await loadEventConfig(activeName) : emptyMeta('');
+        try {
+          const data = await fetchJson('/api/events/active');
+          const activeName = normalizeEventName(data.activeEvent);
+          const meta = activeName ? await loadEventConfig(activeName) : emptyMeta('');
+          state.activeEventName = activeName;
+          state.activeEventMeta = meta;
+          state.activeEventError = '';
+        } catch (error) {
+          state.activeEventMeta = emptyMeta('');
+          state.activeEventError = error.message;
+          throw error;
+        }
       }
 
       async function refreshSelectedEventFromInput() {
@@ -1663,7 +1703,6 @@
           });
           if (normalizeEventName(state.activeEventName).toLowerCase() === selectedName.toLowerCase()) {
             state.activeEventName = '';
-            state.activeEventMeta = emptyMeta('');
           }
           clearSelectedEvent();
           storeLastSelectedEvent('');
@@ -1729,6 +1768,9 @@
       deleteEventBtn.addEventListener('click', deleteEvent);
       resetEventBtn.addEventListener('click', resetSelection);
       saveMetadataBtn.addEventListener('click', saveMetadata);
+      [locationInputEl, dateInputEl, ringConfigXInputEl, ringConfigYInputEl].forEach((input) => {
+        input.addEventListener('input', renderBanner);
+      });
 
       function setSidebarActive(item) {
         navItems.forEach((navItem) => navItem.classList.toggle('active', navItem === item));
@@ -1743,6 +1785,12 @@
           return;
         }
         currentView = view;
+        if (view !== 'placeholder') {
+          const url = new URL(window.location.href);
+          url.searchParams.set('view', view);
+          if (view !== 'groups') url.searchParams.delete('source');
+          window.history.replaceState(null, '', url);
+        }
         if (view === 'import') {
           importSnapshot.status = 'idle';
         }
@@ -1760,14 +1808,18 @@
           setMetadataPanelVisible(false);
         }
         syncButtons();
-        if (view !== 'placeholder') {
-          refreshAll()
+        {
+          const refresh = view === 'placeholder' ? refreshActiveEvent : refreshAll;
+          refresh()
             .then(() => {
               if (currentView !== view) return;
+              syncButtons();
               return view === 'groups' ? gbLoad() : view === 'import' ? loadImportSnapshot() : null;
             })
             .catch((error) => {
-              if (currentView === 'import') {
+              if (currentView === 'placeholder') {
+                syncButtons();
+              } else if (currentView === 'import') {
                 importSnapshot.status = 'error';
                 renderImportView();
                 setImportNotice(error.message, 'error');
@@ -2140,7 +2192,13 @@
 
       function gbPersist() {
         gb.saved = false;
+        if (new URLSearchParams(window.location.search).has('source')) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('source');
+          window.history.replaceState(null, '', url);
+        }
         gbSyncControls();
+        renderBanner();
         if (!gb.eventName) return;
         try {
           window.localStorage.setItem(GB_DRAFT_KEY, JSON.stringify({
@@ -2344,7 +2402,7 @@
           let unassigned = [];
           let flagged = [];
           let maxSize = gbRecommendedMax(competitors.length);
-          const draft = gbReadDraft(name);
+          const draft = new URLSearchParams(window.location.search).get('source') === 'saved' ? null : gbReadDraft(name);
           if (draft) {
             groups = draft.groups.map(gbGroup);
             unassigned = Array.isArray(draft.unassigned) ? draft.unassigned.map(gbComp) : [];
@@ -2599,7 +2657,7 @@
 
       const dayOfLabels = ['Ring Assignment', 'Head Table', 'Competitors', 'Judges & Volunteers', 'Reports & Results'];
       function syncDayOfNav() {
-        const unlocked = Boolean(state.activeEventName);
+        const unlocked = Boolean(state.activeEventName) && !state.activeEventError;
         navItems.forEach((item) => {
           if (!dayOfLabels.includes(navLabel(item))) return;
           item.classList.toggle('locked', !unlocked);
@@ -2613,15 +2671,6 @@
         if (!importNextBtn.disabled && groupNavItem) showView('groups', groupNavItem);
       });
 
-      if (dateTarget) {
-        const now = new Date();
-        dateTarget.textContent = new Intl.DateTimeFormat(undefined, {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric'
-        }).format(now);
-      }
-
       if (sidebar && navItems.length) {
         navItems.forEach((item) => {
           item.addEventListener('click', () => {
@@ -2633,6 +2682,11 @@
       }
 
       initializePage()
+        .then(() => {
+          const view = new URLSearchParams(window.location.search).get('view');
+          if (view === 'import') showView('import', importNavItem);
+          if (view === 'groups') showView('groups', groupNavItem);
+        })
         .catch((error) => showNotice(error.message, 'error'));
     }());
   </script>

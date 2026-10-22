@@ -43,6 +43,8 @@ function element(text = '') {
     setAttribute(name, next) { this[name] = next; },
     getAttribute(name) { return this[name]; },
     querySelectorAll() { return []; },
+    checkValidity() { return true; },
+    reportValidity() {},
     focus() {}
   };
 }
@@ -52,10 +54,17 @@ async function loadPage(options = {}) {
   for (const match of html.matchAll(/<[^>]+\bid="([^"]+)"[^>]*>/g)) {
     elements.set(match[1], element(html.slice(match.index + match[0].length).split('<')[0]));
   }
-  const nav = ['Event Setup', 'Import', 'Group Builder'].map(element);
-  const storage = new Map([['eventAdmin.lastSelectedEvent', winter]]);
+  const nav = ['Event Setup', 'Import', 'Group Builder', 'Ring Assignment', 'Head Table', 'Competitors', 'Judges & Volunteers', 'Reports & Results'].map(element);
+  let activeEvent = options.activeEvent || '';
+  let activeFailure = false;
+  const storage = new Map([['eventAdmin.lastSelectedEvent', options.selectedEvent ?? winter]]);
   if (options.draft) storage.set(draftKey, JSON.stringify(options.draft));
   const rosters = new Map([[winter, options.competitors || []], [spring, []]]);
+  const configs = new Map([
+    [winter, { name: winter, date: '2027-01-16', ringConfigX: 0, ringConfigY: 0 }],
+    [spring, { name: spring, date: '2027-04-10', ringConfigX: 2, ringConfigY: 3 }]
+  ]);
+  const location = { protocol: 'http:', origin: 'http://localhost:3000', href: `http://localhost:3000/tournament-management/${options.search || ''}`, search: options.search || '' };
   let groups = options.groups || [];
   let dbExists = options.dbExists !== false;
   let failSnapshot = Boolean(options.failSnapshot);
@@ -63,11 +72,19 @@ async function loadPage(options = {}) {
   const confirmations = [];
   const errors = [];
   const context = vm.createContext({
+    URL,
+    URLSearchParams,
     setTimeout: () => 0,
     clearTimeout() {},
     console: { warn: (...args) => errors.push(args), error: (...args) => errors.push(args) },
     window: {
-      location: { protocol: 'http:', origin: 'http://localhost:3000' },
+      location,
+      history: {
+        replaceState: (_state, _title, url) => {
+          location.href = String(url);
+          location.search = new URL(url).search;
+        }
+      },
       localStorage: {
         getItem: (key) => storage.get(key) || null,
         setItem: (key, value) => storage.set(key, value),
@@ -90,11 +107,21 @@ async function loadPage(options = {}) {
       requests.push({ path: request.pathname, name, init });
       let data;
       switch (request.pathname) {
-        case '/api/events/list': data = { events: [winter, spring] }; break;
-        case '/api/events/active': data = { activeEvent: '' }; break;
-        case '/api/events/config':
-          data = { eventConfig: { name }, dbExists: name === winter ? dbExists : false };
+        case '/api/events/list': data = { events: Array.from(configs.keys()) }; break;
+        case '/api/events/active':
+          if (activeFailure) return { ok: false, json: async () => ({ error: 'Active event unavailable' }) };
+          data = { activeEvent };
           break;
+        case '/api/events/config':
+          data = { eventConfig: configs.get(name), dbExists: name === winter ? dbExists : false };
+          break;
+        case '/api/events/create':
+        case '/api/events/modify': {
+          const body = JSON.parse(init.body);
+          configs.set(body.eventName, body);
+          data = { ok: true };
+          break;
+        }
         case '/api/competitors':
           if (options.waitForRoster) await options.waitForRoster;
           if (failSnapshot) return { ok: false, json: async () => ({ error: 'Database unavailable' }) };
@@ -131,6 +158,15 @@ async function loadPage(options = {}) {
     input: (id, name) => dispatch(elements.get(id), name),
     openImport: () => dispatch(nav[1]),
     openGroups: () => dispatch(nav[2]),
+    openDayOf: (index = 3) => dispatch(nav[index]),
+    setActiveEvent: (name) => { activeEvent = name; },
+    failActiveEvent: () => { activeFailure = true; },
+    refreshDayOf: async () => {
+      // An open day-of view refreshes when it is selected again.
+      nav[3].setAttribute('aria-disabled', 'false');
+      await dispatch(nav[3]);
+    },
+    location,
     select: async (name) => {
       elements.get('eventSelect').value = name;
       await dispatch(elements.get('eventSelect'), 'change');
@@ -346,6 +382,7 @@ test('saved groups emphasize activation; drag reorder emphasizes save until succ
     ]
   });
   await page.openGroups();
+  assert.equal(page.element('bannerEventStatus').textContent, 'Not active');
   assert.equal(page.element('gbSaveBtn').classList.contains('primary'), false);
   assert.equal(page.element('gbDoneBtn').hidden, false);
   const banners = page.element('gbBanners');
@@ -360,9 +397,11 @@ test('saved groups emphasize activation; drag reorder emphasizes save until succ
   banners.handlers.drop({ target: banner('22'), preventDefault() {} });
   assert.equal(page.element('gbSaveBtn').classList.contains('primary'), true);
   assert.equal(page.element('gbDoneBtn').hidden, true);
+  assert.equal(page.element('bannerEventStatus').textContent, 'Unsaved changes');
   await page.click('gbSaveBtn');
   assert.equal(page.element('gbSaveBtn').classList.contains('primary'), false);
   assert.equal(page.element('gbDoneBtn').hidden, false);
+  assert.equal(page.element('bannerEventStatus').textContent, 'Not active');
   page.element('gbMaxSize').value = '8';
   await page.input('gbMaxSize', 'change');
   assert.equal(page.element('gbSaveBtn').classList.contains('primary'), true);
@@ -381,4 +420,136 @@ test('unsaved browser drafts and failed saves do not offer activation', async ()
   await page.click('gbSaveBtn');
   assert.equal(page.element('gbSaveBtn').classList.contains('primary'), true);
   assert.equal(page.element('gbDoneBtn').hidden, true);
+});
+
+test('workflow URLs open the requested view and navigation keeps the URL in sync', async () => {
+  for (const view of ['event-setup', 'import', 'groups']) {
+    const page = await loadPage({ search: `?view=${view}`, competitors: [savedCompetitor] });
+    await settle();
+    assert.equal(page.element(view === 'import' ? 'importView' : view === 'groups' ? 'groupsView' : 'eventSetupView').hidden, false);
+    if (view === 'import') assertNextDefault(page);
+    await page.openGroups();
+    assert.equal(new URLSearchParams(page.location.search).get('view'), 'groups');
+    await page.openImport();
+    assert.equal(new URLSearchParams(page.location.search).get('view'), 'import');
+  }
+  const fallback = await loadPage({ search: '?view=unknown' });
+  assert.equal(fallback.element('workspaceTitle').textContent, 'Event Setup');
+});
+
+test('saved-only compatibility URL bypasses browser draft without deleting it', async () => {
+  const draft = { eventName: winter, groups: [{ id: 'draft', competitors: [] }] };
+  const page = await loadPage({
+    search: '?view=groups&source=saved',
+    draft,
+    competitors: [savedCompetitor],
+    groups: [{ id: '20', competitors: [savedCompetitor] }]
+  });
+  await settle();
+  assert.equal(page.element('gbSaveBtn').classList.contains('primary'), false);
+  assert.equal(page.element('gbDoneBtn').hidden, false);
+  assert.equal(page.storage.has(draftKey), true);
+  page.element('gbMaxSize').value = '8';
+  await page.input('gbMaxSize', 'change');
+  assert.equal(new URLSearchParams(page.location.search).has('source'), false);
+  assert.equal(page.element('bannerEventStatus').textContent, 'Unsaved changes');
+  await page.openImport();
+  assert.equal(new URLSearchParams(page.location.search).has('source'), false);
+});
+
+test('banner follows the selected event and its configured date, independently of active event', async () => {
+  const page = await loadPage({ activeEvent: spring });
+  assert.equal(page.element('bannerEventName').textContent, winter);
+  assert.equal(page.element('bannerEventDate').textContent, '2027-01-16');
+  assert.equal(page.element('bannerEventStatus').textContent, 'Not active');
+  assert.equal(page.element('activeEventChip').textContent, spring);
+  await page.select(spring);
+  assert.equal(page.element('bannerEventName').textContent, spring);
+  assert.equal(page.element('bannerEventDate').textContent, '2027-04-10');
+  assert.equal(page.element('bannerEventStatus').textContent, 'Active');
+  await page.click('resetEventBtn');
+  assert.equal(page.element('bannerEventName').textContent, 'None selected');
+  assert.equal(page.element('bannerEventDate').textContent, 'Not set');
+  assert.equal(page.element('bannerEventStatus').textContent, 'No event selected');
+});
+
+test('day-of banner uses active event and date across all day-of sections, not selected drafts', async () => {
+  const page = await loadPage({
+    activeEvent: spring,
+    draft: { eventName: winter, groups: [] }
+  });
+  assert.equal(page.element('bannerEventStatus').textContent, 'Unsaved changes');
+  for (let index = 3; index < 8; index++) {
+    await page.openDayOf(index);
+    assert.equal(page.element('bannerEventLabel').textContent, 'Active Event:');
+    assert.equal(page.element('bannerEventName').textContent, spring);
+    assert.equal(page.element('bannerEventDate').textContent, '2027-04-10');
+    assert.equal(page.element('bannerEventStatus').textContent, 'Active');
+    assert.equal(page.element('bannerMetadata').getAttribute('aria-label'), 'Active event metadata');
+  }
+  await page.openImport();
+  assert.equal(page.element('bannerEventLabel').textContent, 'Selected Event:');
+  assert.equal(page.element('bannerEventName').textContent, winter);
+  assert.equal(page.element('bannerEventDate').textContent, '2027-01-16');
+  assert.equal(page.element('bannerEventStatus').textContent, 'Unsaved changes');
+});
+
+test('day-of context refreshes and never falls back to selection when active event disappears or fails', async () => {
+  const page = await loadPage({ activeEvent: spring });
+  await page.openDayOf();
+  page.setActiveEvent('');
+  await page.openDayOf();
+  assert.equal(page.element('bannerEventName').textContent, 'No active event');
+  assert.equal(page.element('bannerEventDate').textContent, 'Not set');
+  assert.match(page.element('placeholderMessage').textContent, /No active event/);
+  page.setActiveEvent(spring);
+  await page.refreshDayOf();
+  assert.equal(page.element('bannerEventName').textContent, spring);
+  page.failActiveEvent();
+  await page.openDayOf();
+  assert.equal(page.element('bannerEventStatus').textContent, 'Unavailable');
+  assert.equal(page.element('bannerEventDate').textContent, 'Not set');
+  assert.match(page.element('placeholderMessage').textContent, /Unable to load active event/);
+  const noActive = await loadPage();
+  await noActive.openDayOf();
+  assert.equal(noActive.element('workspaceTitle').textContent, 'Event Setup');
+});
+
+test('integrated event metadata sends numeric dimensions, displays zero and blocks invalid input', async () => {
+  const page = await loadPage();
+  await page.click('modifyEventBtn');
+  assert.equal(page.element('ringConfigXInput').value, '0');
+  page.element('ringConfigXInput').value = '2';
+  page.element('ringConfigYInput').value = '3';
+  await page.input('ringConfigXInput', 'input');
+  assert.equal(page.element('bannerEventStatus').textContent, 'Unsaved changes');
+  await page.click('saveMetadataBtn');
+  let post = page.requests.filter((request) => request.init).at(-1);
+  assert.equal(post.path, '/api/events/modify');
+  assert.equal(JSON.parse(post.init.body).ringConfigX, 2);
+  assert.equal(JSON.parse(post.init.body).ringConfigY, 3);
+  assert.equal(page.element('metadataPanel').hidden, true);
+  assert.equal(page.element('ringConfigXInput').value, '');
+  assert.equal(page.element('bannerEventStatus').textContent, 'Not active');
+
+  await page.select('__new__');
+  page.element('eventNameInput').value = 'New Event';
+  await page.input('eventNameInput', 'input');
+  await page.click('createEventBtn');
+  page.element('ringConfigXInput').value = '4';
+  page.element('ringConfigYInput').value = '5';
+  await page.click('saveMetadataBtn');
+  post = page.requests.filter((request) => request.init).at(-1);
+  assert.equal(post.path, '/api/events/create');
+  assert.equal(JSON.parse(post.init.body).ringConfigX, 4);
+  assert.equal(JSON.parse(post.init.body).ringConfigY, 5);
+  assert.equal(page.element('bannerEventName').textContent, 'New Event');
+  assert.equal(page.element('bannerEventDate').textContent, 'Not set');
+
+  await page.click('modifyEventBtn');
+  const beforeInvalidSave = page.requests.filter((request) => request.init).length;
+  page.element('ringConfigXInput').checkValidity = () => false;
+  await page.click('saveMetadataBtn');
+  assert.equal(page.requests.filter((request) => request.init).length, beforeInvalidSave);
+  assert.match(page.element('notice').textContent, /whole numbers/);
 });

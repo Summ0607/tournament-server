@@ -22,7 +22,7 @@ const ACTIVE_SURFACE = resolveSurfaceName(process.env.TOURNAMENT_SURFACE);
 const PORT = resolveSurfacePort(ACTIVE_SURFACE);
 const SURFACE_ENTRY_PATH = ACTIVE_SURFACE === 'adminProgress'
   ? '/administration-progress/'
-  : (ACTIVE_SURFACE === 'monitoring' ? '/event-progress/' : '/tournament-setup/');
+  : (ACTIVE_SURFACE === 'monitoring' ? '/event-progress/' : '/tournament-management/');
 
 // ─────────────────────────────────────────────
 // BASE CONSTANTS
@@ -39,10 +39,6 @@ const EVENTS_RING_ASSIGNMENTS_FILE = (eventName) => path.join(EVENTS_ROOT, event
 const DEFAULT_TOURNAMENT_DB_PATH = path.join(ROOT_DIR, 'db', 'tournament.db');
 const TOURNAMENT_DB_PATH = DEFAULT_TOURNAMENT_DB_PATH;
 const EVENTS_ROOT = path.join(ROOT_DIR, 'events');
-//const EVENTS_ROOT = [
-//  path.join(ROOT_DIR, 'event'),
-//  path.join(ROOT_DIR, 'events')
-//].find((candidate) => fs.existsSync(candidate)) || path.join(ROOT_DIR, 'event');
 const ACTIVE_EVENT_FILE = path.join(EVENTS_ROOT, 'active.json');
 const { readEventConfig, writeEventConfig } = createEventConfigStore(EVENTS_ROOT);
 
