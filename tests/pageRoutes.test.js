@@ -117,6 +117,9 @@ test('day-of pages still serve their existing interfaces and link to integrated 
   const ringAssignment = await requestPath('ringOps', '/ring-assignment/index.html');
   assert.equal(ringAssignment.statusCode, 200);
   assert.match(ringAssignment.body, /href="\/tournament-management\/\?view=event-setup"/);
+  assert.match(ringAssignment.body, /id="ringDetails"/);
+  assert.match(ringAssignment.body, /\/api\/groups\?eventName=' \+ encodeURIComponent\(state\.activeEvent\)/);
+  assert.match(ringAssignment.body, /Select a ring to view its details/);
   for (const pathname of ['/head-table/index.html', '/competitors/index.html']) {
     const response = await requestPath('pre', pathname);
     assert.equal(response.statusCode, 200);

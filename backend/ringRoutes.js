@@ -232,6 +232,14 @@ function createRingRouter(deps) {
     readActiveEvent
   } = deps;
 
+  router.use('/rings', (req, res, next) => {
+    const requestedEvent = String(req.query.eventName || '').trim();
+    if (requestedEvent && requestedEvent !== readActiveEvent()) {
+      return res.status(409).json({ error: 'The active event changed. Refresh the active-event view before continuing.' });
+    }
+    next();
+  });
+
   function touchEventStart(state) {
     if (!state.eventStartedAt) {
       state.eventStartedAt = new Date().toISOString();
@@ -510,6 +518,12 @@ function createRingRouter(deps) {
     const rings = Object.entries(state.rings).map(([ringId, ringState]) => {
       const response = buildRingResponse(req, ringId, ringState, state);
       response.phasePlan = buildPhasePlan(ringState, response.currentGroup);
+      const nextDivision = (ringState.queuedGroupDivisionNumbers || [])[0];
+      const nextGroup = nextDivision ? loadGroup(nextDivision) : null;
+      response.queuedPhasePlan = nextGroup ? {
+        groupDivisionNumber: String(nextDivision),
+        phases: phaseDefinitionsForGroup(nextGroup)
+      } : null;
       response.currentPhase = response.phasePlan.currentPhase;
       response.currentGroupName = (response.currentGroup || {}).name || '';
       return response;
@@ -1075,6 +1089,10 @@ function createRingRouter(deps) {
     }
     normalizeRingAssignmentState(ringState);
 
+    const expectedRequestedAt = req.body && req.body.expectedAssistanceRequestedAt;
+    if (expectedRequestedAt !== undefined && expectedRequestedAt !== (ringState.assistanceRequestedAt || '')) {
+      return res.status(409).json({ error: 'The assistance request changed. Refresh Head Table before clearing it.' });
+    }
     ringState.assistanceType = '';
     ringState.assistanceRequestedAt = '';
     writeAssignmentsState(state);

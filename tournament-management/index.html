@@ -160,6 +160,164 @@
       display: none;
     }
 
+    .ra-board {
+      display: grid;
+      grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .ra-section {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f5f8fc;
+      overflow: hidden;
+    }
+
+    .ra-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .ra-heading h2 { margin: 0; font-size: 14px; }
+    .ra-heading span, .ra-meta { font-size: 12px; color: var(--text-soft); }
+    .ra-search { padding: 10px 12px 0; }
+    .ra-search input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+    .ra-list { display: grid; gap: 8px; padding: 12px; max-height: 65vh; overflow: auto; }
+    .ra-rings { grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); }
+    .ra-card {
+      display: grid;
+      gap: 7px;
+      width: 100%;
+      text-align: left;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+    }
+    .ra-card:hover, .ra-card[aria-pressed="true"], .ra-card.drop {
+      border-color: #2f66c8;
+      background: #e8f0ff;
+    }
+    .ra-card:focus-visible { outline: 3px solid #2f66c8; outline-offset: 2px; }
+    #raDivisions { gap: 5px; }
+    .ra-card.ra-division {
+      gap: 3px;
+      padding: 7px 9px;
+      border-radius: 8px;
+      min-width: 0;
+    }
+    .ra-division-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .ra-division-head strong { font-size: 13px; }
+    .ra-division-head .ra-meta { white-space: nowrap; font-size: 11px; }
+    .ra-division-description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ra-division.dragging { opacity: 0.5; cursor: grabbing; }
+    .ra-ring { border-left: 5px solid var(--ra-connection-color, #64748b); }
+    .ra-ring.connected { --ra-connection-color: #15803d; }
+    .ra-ring.disconnected { --ra-connection-color: #b91c1c; }
+    .ra-connection {
+      display: inline-flex;
+      align-items: center;
+      justify-self: start;
+      gap: 6px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #e2e8f0;
+      color: #334155;
+    }
+    .ra-connection::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ra-connection-color); }
+    .ra-ring.connected .ra-connection { background: #dcfce7; color: #166534; }
+    .ra-ring.disconnected .ra-connection { background: #fee2e2; color: #991b1b; }
+    .ra-assignment { font-size: 13px; font-weight: 700; }
+    .ra-ring:hover, .ra-ring[aria-pressed="true"], .ra-ring.drop { border-left-color: var(--ra-connection-color); }
+    .ra-detail { margin-bottom: 14px; }
+    .ra-detail h3 { font-size: 13px; margin: 0 0 8px; }
+    .ra-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 12px; }
+    .ra-detail dt { color: var(--text-soft); }
+    .ra-detail dd { margin: 0; overflow-wrap: anywhere; }
+    .ra-queue { display: grid; gap: 8px; padding: 0; list-style: none; }
+    .ra-queue li { display: grid; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+    .ra-division-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .ra-division-label { font-size: 13px; overflow-wrap: anywhere; }
+    .ra-members {
+      padding-left: 28px;
+      padding-right: 8px;
+      font-size: 12px;
+      line-height: 20px;
+      display: grid;
+      grid-auto-rows: 20px;
+      gap: 6px;
+      max-height: 254px;
+      overflow-y: auto;
+    }
+    .ra-members li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #ringAssignmentDetails[hidden] { display: none; }
+    #headTableDetails[hidden] { display: none; }
+    .ht-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .ht-toolbar label, .ht-freshness { font-size: 12px; color: var(--text-soft); }
+    .ht-summary { display: grid; gap: 10px; }
+    .ht-primary-counts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .ht-primary-counts .chip { padding: 10px 14px; font-size: 14px; }
+    .ht-primary-counts .chip.warning,
+    .ht-primary-counts .chip.warning strong { color: #991b1b; }
+    .ht-primary-counts .chip.warning { background: #fee2e2; border-color: #fca5a5; }
+    .ht-secondary-counts { display: flex; flex-wrap: wrap; gap: 6px 20px; color: var(--text-soft); font-size: 12px; }
+    .ht-secondary-counts strong { font-weight: 600; }
+    .ht-rings { display: grid; gap: 7px; }
+    .ht-ring {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      text-align: left;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-left: 5px solid #64748b;
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+    }
+    .ht-ring.connected { --ra-connection-color: #15803d; border-left-color: #15803d; }
+    .ht-ring.disconnected { --ra-connection-color: #b91c1c; border-left-color: #b91c1c; }
+    .ht-ring.no-tablet { --ra-connection-color: #64748b; }
+    .ht-ring.connected .ra-connection { color: #166534; background: #dcfce7; }
+    .ht-ring.disconnected .ra-connection { color: #991b1b; background: #fee2e2; }
+    .ht-ring:hover, .ht-ring[aria-pressed="true"] { background: #eff6ff; outline: 2px solid #2f66c8; outline-offset: -2px; }
+    .ht-ring:focus-visible { outline: 3px solid #2f66c8; }
+    .ht-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-width: 0; font-size: 13px; }
+    .ht-identity .ra-connection { font-size: 10px; }
+    .ht-assistance { color: #991b1b; background: #fee2e2; border-radius: 50%; padding: 1px 6px; font-weight: 700; }
+    .ht-alert { display: block; padding: 5px 8px; border-radius: 6px; font-size: 12px; color: #78350f; background: #fef3c7; }
+    .ht-alert.urgent { color: #991b1b; background: #fee2e2; }
+    .ht-phase-pill { display: flex; min-width: 0; overflow: hidden; border: 1px solid #94a3b8; border-radius: 999px; background: #f1f5f9; }
+    .ht-segment { position: relative; flex: 1 1 0; min-width: 0; padding: 4px 3px; text-align: center; font-size: 11px; color: #334155; }
+    .ht-segment + .ht-segment { border-left: 1px solid #64748b; }
+    .ht-segment::before { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--ht-fill, 0%); background: #bfdbfe; }
+    .ht-segment.complete::before { background: #bbf7d0; }
+    .ht-segment.active { font-weight: 700; color: #1e3a8a; }
+    .ht-segment.active::after { content: ''; position: absolute; inset: auto 0 0; height: 2px; background: #2563eb; }
+    .ht-segment-label { position: relative; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ht-phase-list { margin: 0; padding-left: 18px; font-size: 12px; }
+    .ht-phase-list li { margin: 5px 0; }
+    .ht-history { max-height: 260px; overflow: auto; margin-top: 8px; }
+    .ht-history p { padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 12px; }
+    #headTableDetails summary { cursor: pointer; font-size: 13px; }
+    @media (max-width: 580px) { .ht-ring { grid-template-columns: 1fr; } }
+    @media (max-width: 1100px) { .ra-board { grid-template-columns: 1fr; } }
+
     .gb-toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -671,7 +829,10 @@
     .workflow-body button.primary,
     .workflow-body button.danger,
     .workflow-body button,
-    .workflow-body .next-action {
+    .workflow-body .next-action,
+    #ringAssignmentView .overview button,
+    .ht-toolbar button,
+    .ht-toolbar select {
       min-height: 44px;
       padding: 0 16px;
       border-radius: 14px;
@@ -698,7 +859,59 @@
       box-shadow: 0 10px 18px rgba(176, 0, 32, 0.14);
     }
 
-    .workflow-body button:disabled {
+    #ringAssignmentDetails button,
+    #headTableDetails button {
+      min-height: 28px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-soft);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: none;
+    }
+    #ringAssignmentDetails button:hover:not(:disabled) { background: #eef3f9; border-color: var(--line-strong); }
+    #ringAssignmentDetails button:focus-visible { outline: 2px solid #2f66c8; outline-offset: 2px; }
+    #headTableDetails button:focus-visible { outline: 2px solid #2f66c8; outline-offset: 2px; }
+    #headTableDetails button:disabled { opacity: 0.55; cursor: not-allowed; }
+    #headTableDetails [data-ht-clear] { color: #78500e; background: #fff8e8; border-color: #b88b3c; }
+    #ringAssignmentDetails [data-ra-group],
+    #headTableDetails [data-ht-group] {
+      border-color: #7d9fc8;
+      color: #1e4f86;
+      background: #eff6ff;
+    }
+    #ringAssignmentDetails [data-ra-group]:hover:not(:disabled),
+    #headTableDetails [data-ht-group]:hover:not(:disabled) {
+      border-color: #1e4f86;
+      background: #dbeafe;
+    }
+    #ringAssignmentDetails [data-ra-remove] {
+      border-color: #b88b3c;
+      color: #78500e;
+      background: #fff8e8;
+    }
+    #ringAssignmentDetails [data-ra-remove]:hover:not(:disabled) {
+      border-color: #78500e;
+      background: #ffedbf;
+    }
+    #ringAssignmentDetails [data-ra-reset] {
+      border-color: #c76b75;
+      color: #9f2032;
+      background: #fde8ec;
+    }
+    #ringAssignmentDetails [data-ra-reset]:hover:not(:disabled) {
+      border-color: #9f2032;
+      background: #fbd0d8;
+    }
+    .ra-ring-maintenance { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+    .workflow-body button:disabled,
+    #ringAssignmentView button:disabled,
+    #ringAssignmentDetails button:disabled {
       opacity: 0.55;
       cursor: not-allowed;
     }
@@ -1072,6 +1285,41 @@
               </section>
             </div>
 
+            <div class="view" id="ringAssignmentView" hidden>
+              <div class="overview">
+                <span class="chip">Active Event: <strong id="raEvent">No active event</strong></span>
+                <button id="raRefreshBtn" type="button">Refresh</button>
+                <button id="raLayoutBtn" type="button" hidden>Apply saved event ring layout</button>
+              </div>
+              <p class="ra-meta">Select a ring to view its details. Click a division to queue it to the selected ring, or drag a division onto any ring.</p>
+              <div class="notice" id="raNotice" role="status" aria-live="polite"></div>
+              <div class="ra-board">
+                <section class="ra-section" aria-labelledby="raDivisionsTitle">
+                  <div class="ra-heading"><h2 id="raDivisionsTitle">Available Divisions</h2><span id="raDivisionCount"></span></div>
+                  <div class="ra-search"><input id="raSearch" type="search" aria-label="Search available divisions" placeholder="Search divisions"></div>
+                  <div class="ra-list" id="raDivisions"></div>
+                </section>
+                <section class="ra-section" aria-labelledby="raRingsTitle">
+                  <div class="ra-heading"><h2 id="raRingsTitle">Configured Rings</h2><span id="raRingCount"></span></div>
+                  <div class="ra-list ra-rings" id="raRings"></div>
+                </section>
+              </div>
+            </div>
+
+            <div class="view" id="headTableView" hidden>
+              <div class="ht-toolbar">
+                <button type="button" id="htRefreshBtn">Refresh</button>
+                <label for="htOrder">Display order</label>
+                <select id="htOrder"><option value="priority">Priority</option><option value="ring">Ring order</option></select>
+                <button type="button" id="htAssignmentBtn">Open Ring Assignment</button>
+              </div>
+              <div id="htFreshness" class="ht-freshness" role="status" aria-live="polite">Waiting for first refresh.</div>
+              <div id="htNotice" class="notice" role="status" aria-live="polite"></div>
+              <div id="htSummary" class="ht-summary" aria-label="Active event summary"></div>
+              <p class="ra-meta" id="htOrderHint">Priority highlights assistance, connection problems, and rings needing work. Select a ring for details.</p>
+              <div id="htRings" class="ht-rings" aria-label="Ring operations overview"></div>
+            </div>
+
             <div class="view" id="placeholderView" hidden>
               <div class="under-dev">
                 <h2 id="placeholderTitle">Under Development</h2>
@@ -1086,6 +1334,8 @@
             <h2 class="panel-title" id="detailsTitle">Event Details</h2>
           </div>
           <div class="panel-body">
+            <div id="ringAssignmentDetails" hidden></div>
+            <div id="headTableDetails" hidden></div>
             <div id="groupDetails" hidden>
               <div class="summary-label" id="gdName"></div>
               <div class="import-meta" id="gdMeta"></div>
@@ -1197,6 +1447,10 @@
       const importDetailsEl = document.getElementById('importDetails');
       const groupDetailsEl = document.getElementById('groupDetails');
       const groupsView = document.getElementById('groupsView');
+      const ringAssignmentView = document.getElementById('ringAssignmentView');
+      const ringAssignmentDetailsEl = document.getElementById('ringAssignmentDetails');
+      const headTableView = document.getElementById('headTableView');
+      const headTableDetailsEl = document.getElementById('headTableDetails');
       const detailsTitleEl = document.getElementById('detailsTitle');
       const importDetailFileEl = document.getElementById('importDetailFile');
       const importDetailTimeEl = document.getElementById('importDetailTime');
@@ -1229,6 +1483,8 @@
         'event-setup': 'Manage the event that downstream tournament pages will use.',
         import: 'Load competitor registrations into the selected event.',
         groups: 'Build and adjust the competitor groups for the selected event.',
+        'ring-assignment': 'Assign the active event\'s saved divisions to rings.',
+        'head-table': 'Monitor the active event, respond to assistance, and identify rings needing attention.',
         placeholder: ''
       };
       const importResults = new Map();
@@ -1394,7 +1650,7 @@
       }
 
       function renderBanner() {
-        const dayOf = currentView === 'placeholder';
+        const dayOf = ['placeholder', 'ring-assignment', 'head-table'].includes(currentView);
         bannerEventLabelEl.textContent = dayOf ? 'Active Event:' : 'Selected Event:';
         bannerMetadataEl.setAttribute('aria-label', dayOf ? 'Active event metadata' : 'Selected event metadata');
         if (dayOf) {
@@ -1436,22 +1692,28 @@
         selectedEventChipEl.textContent = selectedName;
         const onImport = currentView === 'import';
         const onGroups = currentView === 'groups';
+        const onRings = currentView === 'ring-assignment';
+        const onHeadTable = currentView === 'head-table';
         const detailsVisible = onImport
           ? Boolean(state.selectedEventName) && eventExists(state.selectedEventName)
           : onGroups
             ? gbHasSelection()
+            : onRings ? Boolean(ra.selectedRingId) && ra.ready
+            : onHeadTable ? Boolean(ht.selectedRingId) && ht.ready
             : state.metadataOpen && currentView === 'event-setup';
         if (detailsPanel) {
           detailsPanel.hidden = !detailsVisible;
         }
         if (pageContent) {
           pageContent.classList.toggle('details-hidden', !detailsVisible);
-          pageContent.classList.toggle('import-wide', onImport || onGroups);
+          pageContent.classList.toggle('import-wide', onImport || onGroups || onRings || onHeadTable);
         }
         importDetailsEl.hidden = !onImport;
         groupDetailsEl.hidden = !onGroups;
-        metadataPanelEl.hidden = onImport || onGroups || !state.metadataOpen;
-        detailsTitleEl.textContent = onImport ? 'Import Details' : onGroups ? 'Division Details' : 'Event Details';
+        ringAssignmentDetailsEl.hidden = !onRings;
+        headTableDetailsEl.hidden = !onHeadTable;
+        metadataPanelEl.hidden = onImport || onGroups || onRings || onHeadTable || !state.metadataOpen;
+        detailsTitleEl.textContent = onImport ? 'Import Details' : onGroups ? 'Division Details' : onRings || onHeadTable ? 'Ring Details' : 'Event Details';
         renderImportView();
         if (onGroups) {
           gbSyncControls();
@@ -1785,6 +2047,12 @@
           return;
         }
         currentView = view;
+        ht.requestToken += 1;
+        clearTimeout(ht.timer);
+        clearTimeout(ht.freshnessTimer);
+        ht.hovering = false;
+        ra.requestToken += 1;
+        if (ra.timer) clearTimeout(ra.timer);
         if (view !== 'placeholder') {
           const url = new URL(window.location.href);
           url.searchParams.set('view', view);
@@ -1798,6 +2066,8 @@
         eventSetupView.hidden = view !== 'event-setup';
         importView.hidden = view !== 'import';
         groupsView.hidden = view !== 'groups';
+        ringAssignmentView.hidden = view !== 'ring-assignment';
+        headTableView.hidden = view !== 'head-table';
         placeholderView.hidden = view !== 'placeholder';
         const title = navLabel(item);
         workspaceTitle.textContent = title;
@@ -1808,6 +2078,15 @@
           setMetadataPanelVisible(false);
         }
         syncButtons();
+        if (view === 'ring-assignment') {
+          raLoad();
+          return;
+        }
+        if (view === 'head-table') {
+          htLoad();
+          htTickFreshness();
+          return;
+        }
         {
           const refresh = view === 'placeholder' ? refreshActiveEvent : refreshAll;
           refresh()
@@ -2655,6 +2934,703 @@
         if (eventSetupNavItem) showView('event-setup', eventSetupNavItem);
       });
 
+      const ra = {
+        eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
+        ready: false, busy: false, requestToken: 0, timer: null,
+        heartbeatSeconds: 90, config: {}, pointerDrag: null, nativeDragging: false, suppressClickUntil: 0
+      };
+      const raDivisionsEl = document.getElementById('raDivisions');
+      const raRingsEl = document.getElementById('raRings');
+      const raSearchEl = document.getElementById('raSearch');
+      const raNoticeEl = document.getElementById('raNotice');
+      const raRefreshBtn = document.getElementById('raRefreshBtn');
+      const raLayoutBtn = document.getElementById('raLayoutBtn');
+
+      function raNotice(message, kind = 'info') {
+        raNoticeEl.className = message ? `notice visible ${kind}` : 'notice';
+        raNoticeEl.textContent = message;
+      }
+
+      function raAnchor(group) {
+        return String(group.groupDivisionNumber ?? group.groupId ?? group.id ?? '');
+      }
+
+      function raGroup(id) {
+        return ra.groups.find((group) => raAnchor(group) === String(id));
+      }
+
+      function raGroupLabel(id) {
+        const group = raGroup(id);
+        return `Division ${id}${group && group.name ? ` - ${group.name}` : ''}`;
+      }
+
+      function raConnection(ring, heartbeatSeconds = ra.heartbeatSeconds) {
+        if (!ring.tabletLabel) return { label: 'No tablet', tone: 'no-tablet' };
+        const age = Date.now() - Date.parse(ring.lastHeartbeatAt);
+        if (!Number.isFinite(age) || age >= heartbeatSeconds * 1000) return { label: 'Disconnected', tone: 'disconnected' };
+        return { label: 'Connected', tone: 'connected' };
+      }
+
+      function raStatus(ring) {
+        const assigned = Boolean(ring.groupDivisionNumber) || (ring.queuedGroupDivisionNumbers || []).length > 0;
+        const connection = raConnection(ring);
+        if (connection.tone === 'no-tablet') return assigned ? 'Waiting' : 'Unassigned';
+        return connection.tone === 'connected' && assigned ? 'Active' : connection.label;
+      }
+
+      function raMembers(group) {
+        if (!group) return '';
+        return `<ol class="ra-members" tabindex="0" aria-label="Division competitors">${group.competitors.map((member) => {
+          const description = `${member.fullName} - ${member.rank || 'Unknown rank'} - Age ${member.age}${member.studio ? ` - ${member.studio}` : ''}`;
+          return `<li title="${gbEsc(description)}">${gbEsc(description)}</li>`;
+        }).join('')}</ol>`;
+      }
+
+      function raRenderDetails() {
+        const ring = ra.rings.find((item) => item.ringId === ra.selectedRingId);
+        if (!ra.ready || !ring) {
+          ringAssignmentDetailsEl.innerHTML = '';
+          return;
+        }
+        const queue = ring.queuedGroupDivisionNumbers || [];
+        const current = String(ring.groupDivisionNumber || '');
+        const dateLabel = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : 'Not received';
+        const detailGroup = raGroup(ra.selectedGroupId);
+        const competitorButton = (id) => {
+          const showing = detailGroup && raAnchor(detailGroup) === String(id);
+          return `<button type="button" data-ra-group="${gbEsc(id)}" aria-expanded="${Boolean(showing)}" aria-label="${showing ? 'Hide' : 'Show'} competitors for Division ${gbEsc(id)}"${ra.busy || !raGroup(id) ? ' disabled' : ''}>${showing ? 'Hide competitors' : 'Show competitors'}</button>`;
+        };
+        ringAssignmentDetailsEl.innerHTML = `
+          <section class="ra-detail">
+            <h3>Ring ${gbEsc(ring.ringLabel)}</h3>
+            <dl>
+              <dt>State</dt><dd>${gbEsc(raStatus(ring))}</dd>
+              <dt>Tablet</dt><dd>${gbEsc(ring.tabletLabel || 'Not connected')}</dd>
+              <dt>Phase</dt><dd>${gbEsc(ring.currentPhaseName || ring.currentPhase || ring.phase || 'idle')}</dd>
+              <dt>Progress</dt><dd>${gbEsc(ring.phaseCompletedCount || 0)} / ${gbEsc(ring.phaseTotalCount || 0)} (${gbEsc(ring.phaseProgress || 0)}%)</dd>
+              <dt>Check-in</dt><dd>${gbEsc(ring.checkInCount || 0)} / ${gbEsc(ring.checkInTotal || 0)}</dd>
+              <dt>Assistance</dt><dd>${gbEsc(ring.assistanceType || 'None requested')}</dd>
+              <dt>Started</dt><dd>${ring.assignmentStartedAt ? gbEsc(dateLabel(ring.assignmentStartedAt)) : 'Not started'}</dd>
+              <dt>Last heartbeat</dt><dd>${gbEsc(dateLabel(ring.lastHeartbeatAt))}</dd>
+            </dl>
+          </section>
+          <section class="ra-detail"><h3>Current division</h3>
+            ${current ? `<div class="ra-division-label">${gbEsc(raGroupLabel(current))}</div><div class="ra-division-actions">${competitorButton(current)}</div>` : '<p class="ra-meta">None assigned</p>'}
+          </section>
+          <section class="ra-detail"><h3>Queued divisions (${queue.length})</h3>
+            ${queue.length ? `<ol class="ra-queue">${queue.map((id) => `<li>
+              <div class="ra-division-label">${gbEsc(raGroupLabel(id))}</div>
+              <div class="ra-division-actions">${competitorButton(id)}
+              <button type="button" data-ra-remove="${gbEsc(id)}"${ra.busy ? ' disabled' : ''} aria-label="Remove Division ${gbEsc(id)} from queue">Remove</button>
+              </div>
+            </li>`).join('')}</ol>` : '<p class="ra-meta">No queued divisions</p>'}
+          </section>
+          ${detailGroup ? `<section class="ra-detail"><h3>${gbEsc(raGroupLabel(raAnchor(detailGroup)))}</h3>${raMembers(detailGroup)}</section>` : ''}
+          <div class="ra-ring-maintenance"><button type="button" data-ra-reset${ra.busy ? ' disabled' : ''}>Reset ring</button></div>`;
+      }
+
+      function raRender() {
+        if (ra.pointerDrag || ra.nativeDragging) return;
+        document.getElementById('raEvent').textContent = ra.eventName || 'No active event';
+        const available = new Set(ra.available.map(String));
+        const query = raSearchEl.value.trim().toLowerCase();
+        const groups = ra.groups.filter((group) => available.has(raAnchor(group)))
+          .filter((group) => [raGroupLabel(raAnchor(group)), gbRankRange(group.competitors), gbAgeRange(group.competitors)]
+            .join(' ').toLowerCase().includes(query))
+          .sort((a, b) => raAnchor(a).localeCompare(raAnchor(b), undefined, { numeric: true }));
+        document.getElementById('raDivisionCount').textContent = `${groups.length} divisions`;
+        raDivisionsEl.innerHTML = groups.length ? groups.map((group) => {
+          const title = `Division ${raAnchor(group)}`;
+          const count = group.competitors.length;
+          const countLabel = `${count} ${count === 1 ? 'competitor' : 'competitors'}`;
+          const description = group.name && group.name !== title ? group.name
+            : [gbRankRange(group.competitors), gbAgeRange(group.competitors)].filter(Boolean).join(' - ');
+          return `<button type="button" class="ra-card ra-division" draggable="${!ra.busy}" data-ra-division="${gbEsc(raAnchor(group))}" title="${gbEsc([title, description, countLabel].filter(Boolean).join(' - '))}"${ra.busy ? ' disabled' : ''}>
+            <span class="ra-division-head"><strong>${gbEsc(title)}</strong><span class="ra-meta">${countLabel}</span></span>
+            ${description ? `<span class="ra-meta ra-division-description">${gbEsc(description)}</span>` : ''}
+          </button>`;
+        }).join('') : `<p class="ra-meta">${!ra.ready ? 'Divisions unavailable.' : !ra.groups.length
+            ? 'No saved divisions for the active event. Build and save groups first.'
+            : 'No available divisions match this search.'}</p>`;
+        document.getElementById('raRingCount').textContent = `${ra.rings.length} rings`;
+        raRingsEl.innerHTML = ra.rings.map((ring) => {
+          const connection = raConnection(ring);
+          const queued = (ring.queuedGroupDivisionNumbers || []).length;
+          const assignment = ring.groupDivisionNumber ? `Running division ${ring.groupDivisionNumber}` : queued ? 'Queued' : 'Available';
+          return `<button type="button" class="ra-card ra-ring ${connection.tone}" data-ra-ring="${gbEsc(ring.ringId)}" aria-pressed="${ra.selectedRingId === ring.ringId}">
+            <strong>Ring ${gbEsc(ring.ringLabel)}</strong>
+            <span class="ra-connection">${connection.label}</span>
+            <span class="ra-assignment">${gbEsc(assignment)}</span>
+            <span class="ra-meta">${queued} queued</span>
+          </button>`;
+        }).join('') || '<p class="ra-meta">No configured rings available.</p>';
+        const x = Number(state.activeEventMeta.ringConfigX);
+        const y = Number(state.activeEventMeta.ringConfigY);
+        raLayoutBtn.hidden = !ra.ready || x === Number(ra.config.letterCount) && y === Number(ra.config.numberCount);
+        raLayoutBtn.disabled = ra.busy || !Number.isInteger(x) || !Number.isInteger(y) || x < 1 || x > 26 || y < 1 || y > 50;
+        raLayoutBtn.textContent = `Apply saved event ring layout (${x} x ${y})`;
+        raRefreshBtn.disabled = ra.busy;
+        raRenderDetails();
+        renderState();
+      }
+
+      async function raLoad() {
+        if (ra.pointerDrag || ra.nativeDragging || currentView !== 'ring-assignment') return;
+        const token = ++ra.requestToken;
+        if (ra.timer) clearTimeout(ra.timer);
+        try {
+          await refreshActiveEvent();
+          if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
+          const eventName = state.activeEventName;
+          if (!eventName) throw new Error('No active event. Activate an event on Event Setup first.');
+          if (ra.eventName !== eventName) {
+            ra.groups = [];
+            ra.rings = [];
+            ra.selectedRingId = '';
+            ra.selectedGroupId = '';
+            ra.ready = false;
+          }
+          ra.eventName = eventName;
+          // Loading saved groups first also primes the server's active-event division cache.
+          const divisions = await fetchJson(`/api/groups?eventName=${encodeURIComponent(eventName)}`);
+          const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(eventName)}`);
+          if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
+          if (ra.pointerDrag || ra.nativeDragging) return;
+          if (!Array.isArray(divisions.groups) || !Array.isArray(board.rings) || !Array.isArray(board.availableGroupDivisionNumbers)) {
+            throw new Error('The server returned invalid ring-assignment data.');
+          }
+          ra.groups = divisions.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
+          ra.rings = board.rings.slice().sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
+          ra.available = board.availableGroupDivisionNumbers;
+          ra.config = board.ringConfig || {};
+          ra.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
+          if (!ra.rings.some((ring) => ring.ringId === ra.selectedRingId)) ra.selectedRingId = '';
+          if (!raGroup(ra.selectedGroupId)) ra.selectedGroupId = '';
+          ra.ready = true;
+          raNotice('');
+          raRender();
+        } catch (error) {
+          if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
+          ra.ready = false;
+          ra.groups = [];
+          ra.rings = [];
+          ra.available = [];
+          ra.selectedRingId = '';
+          ra.selectedGroupId = '';
+          ra.eventName = state.activeEventError ? '' : state.activeEventName;
+          raRender();
+          raNotice(`Unable to load Ring Assignment: ${error.message}`, 'error');
+        } finally {
+          if (token === ra.requestToken && currentView === 'ring-assignment' && !ra.pointerDrag && !ra.nativeDragging) {
+            ra.timer = setTimeout(raLoad, 10000);
+          }
+        }
+      }
+
+      async function raUpdate(path, options, message) {
+        if (ra.busy || !ra.ready) return;
+        ra.busy = true;
+        ra.requestToken += 1;
+        if (ra.timer) clearTimeout(ra.timer);
+        raRender();
+        try {
+          await fetchJson(`${path}?eventName=${encodeURIComponent(ra.eventName)}`, options);
+          await raLoad();
+          if (currentView === 'ring-assignment' && ra.ready) raNotice(message, 'ok');
+        } catch (error) {
+          await raLoad();
+          if (currentView === 'ring-assignment') raNotice(`Update failed: ${error.message}`, 'error');
+        } finally {
+          ra.busy = false;
+          if (currentView === 'ring-assignment') raRender();
+        }
+      }
+
+      async function raQueue(ringId, divisionId) {
+        if (!ra.ready || ra.busy) return;
+        if (!ra.rings.some((ring) => ring.ringId === ringId)) {
+          raNotice('Select a ring before assigning a division.', 'warn');
+          return;
+        }
+        if (!ra.available.map(String).includes(divisionId) || !raGroup(divisionId)) {
+          raNotice('That division is no longer available. Refresh Ring Assignment.', 'warn');
+          return;
+        }
+        ra.selectedRingId = ringId;
+        ra.selectedGroupId = divisionId;
+        await raUpdate(`/api/rings/${encodeURIComponent(ringId)}/queue`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupDivisionNumber: divisionId })
+        }, `Division ${divisionId} queued.`);
+      }
+
+      raRefreshBtn.addEventListener('click', raLoad);
+      raSearchEl.addEventListener('input', raRender);
+      raRingsEl.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-ra-ring]');
+        if (!button) return;
+        ra.selectedRingId = button.dataset.raRing;
+        ra.selectedGroupId = '';
+        raRingsEl.querySelectorAll('[data-ra-ring]').forEach((ring) => {
+          ring.setAttribute('aria-pressed', String(ring.dataset.raRing === ra.selectedRingId));
+        });
+        raRenderDetails();
+        renderState();
+      });
+      raDivisionsEl.addEventListener('click', async (event) => {
+        if (Date.now() < ra.suppressClickUntil) return;
+        const button = event.target.closest('[data-ra-division]');
+        if (button) await raQueue(ra.selectedRingId, button.dataset.raDivision);
+      });
+      ringAssignmentDetailsEl.addEventListener('click', async (event) => {
+        const button = event.target.closest('button');
+        if (!button || ra.busy || !ra.ready) return;
+        if (button.dataset.raGroup) {
+          ra.selectedGroupId = ra.selectedGroupId === button.dataset.raGroup ? '' : button.dataset.raGroup;
+          raRenderDetails();
+        } else if (button.dataset.raRemove) {
+          await raUpdate(`/api/rings/${encodeURIComponent(ra.selectedRingId)}/queue/${encodeURIComponent(button.dataset.raRemove)}`,
+            { method: 'DELETE' }, 'Queued division removed.');
+        } else if (button.hasAttribute('data-ra-reset')) {
+          if (!window.confirm('Reset this ring? This clears its current division, queue, completed-division history, tablet, progress, and assistance state.')) return;
+          ra.selectedGroupId = '';
+          await raUpdate(`/api/rings/${encodeURIComponent(ra.selectedRingId)}/reset`, { method: 'POST' }, 'Ring reset.');
+        }
+      });
+      raLayoutBtn.addEventListener('click', async () => {
+        if (raLayoutBtn.disabled || !ra.ready || ra.busy) return;
+        if (!window.confirm('Apply the saved event ring layout? This resets ALL ring assignments, queues, completed-division history, tablet connections, and progress for the active event.')) return;
+        await raUpdate('/api/rings/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ letterCount: Number(state.activeEventMeta.ringConfigX), numberCount: Number(state.activeEventMeta.ringConfigY) })
+        }, 'Saved event ring layout applied.');
+      });
+      function raEndDrag() {
+        raRingsEl.querySelectorAll('.drop').forEach((card) => card.classList.remove('drop'));
+        raDivisionsEl.querySelectorAll('.dragging').forEach((card) => card.classList.remove('dragging'));
+        ra.pointerDrag = null;
+        ra.nativeDragging = false;
+        if (ra.timer) clearTimeout(ra.timer);
+        if (currentView === 'ring-assignment') ra.timer = setTimeout(raLoad, 10000);
+      }
+
+      raDivisionsEl.addEventListener('pointerdown', (event) => {
+        const card = event.target.closest('[data-ra-division]');
+        if (!card || event.pointerType !== 'mouse' || event.button !== 0 || !ra.ready || ra.busy) return;
+        event.preventDefault();
+        card.focus({ preventScroll: true });
+        card.setPointerCapture(event.pointerId);
+        ra.pointerDrag = { pointerId: event.pointerId, divisionId: card.dataset.raDivision, x: event.clientX, y: event.clientY, moved: false };
+        if (ra.timer) clearTimeout(ra.timer);
+      });
+      raDivisionsEl.addEventListener('pointermove', (event) => {
+        const drag = ra.pointerDrag;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) return;
+        drag.moved = true;
+        event.target.closest('[data-ra-division]').classList.add('dragging');
+        const target = document.elementFromPoint(event.clientX, event.clientY);
+        const ring = target && target.closest('[data-ra-ring]');
+        raRingsEl.querySelectorAll('[data-ra-ring]').forEach((card) => card.classList.toggle('drop', card === ring));
+      });
+      raDivisionsEl.addEventListener('pointerup', async (event) => {
+        const drag = ra.pointerDrag;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const target = document.elementFromPoint(event.clientX, event.clientY);
+        const ring = target && target.closest('[data-ra-ring]');
+        const ringId = ring && ring.dataset.raRing;
+        const card = event.target.closest('[data-ra-division]');
+        ra.suppressClickUntil = Date.now() + 500;
+        raEndDrag();
+        if (card && card.hasPointerCapture(event.pointerId)) card.releasePointerCapture(event.pointerId);
+        if (drag.moved) {
+          if (ringId) await raQueue(ringId, drag.divisionId);
+        } else {
+          await raQueue(ra.selectedRingId, drag.divisionId);
+        }
+      });
+      ['pointercancel', 'lostpointercapture'].forEach((type) => {
+        raDivisionsEl.addEventListener(type, () => {
+          if (!ra.pointerDrag) return;
+          ra.suppressClickUntil = Date.now() + 500;
+          raEndDrag();
+        });
+      });
+      raDivisionsEl.addEventListener('dragstart', (event) => {
+        if (ra.pointerDrag) { event.preventDefault(); return; }
+        const card = event.target.closest('[data-ra-division]');
+        if (!card || !ra.ready || ra.busy) { event.preventDefault(); return; }
+        ra.nativeDragging = true;
+        if (ra.timer) clearTimeout(ra.timer);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', card.dataset.raDivision);
+      });
+      raDivisionsEl.addEventListener('dragend', raEndDrag);
+      raRingsEl.addEventListener('dragover', (event) => {
+        const card = event.target.closest('[data-ra-ring]');
+        if (!card || !ra.ready || ra.busy) return;
+        event.preventDefault();
+        card.classList.add('drop');
+        event.dataTransfer.dropEffect = 'move';
+      });
+      raRingsEl.addEventListener('dragleave', (event) => {
+        const card = event.target.closest('[data-ra-ring]');
+        if (card && !card.contains(event.relatedTarget)) card.classList.remove('drop');
+      });
+      raRingsEl.addEventListener('drop', async (event) => {
+        const card = event.target.closest('[data-ra-ring]');
+        if (!card) return;
+        event.preventDefault();
+        card.classList.remove('drop');
+        raEndDrag();
+        await raQueue(card.dataset.raRing, event.dataTransfer.getData('text/plain'));
+      });
+
+      const ht = {
+        eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
+        ready: false, busy: false, error: '', lastLoadedAt: null, heartbeatSeconds: 90,
+        requestToken: 0, timer: null, freshnessTimer: null, historyOpen: false, order: [], hovering: false
+      };
+      const htRingsEl = document.getElementById('htRings');
+      const htSummaryEl = document.getElementById('htSummary');
+      const htNoticeEl = document.getElementById('htNotice');
+      const htFreshnessEl = document.getElementById('htFreshness');
+      const htOrderEl = document.getElementById('htOrder');
+      const htRefreshBtn = document.getElementById('htRefreshBtn');
+
+      function htNotice(message, kind = 'error') {
+        htNoticeEl.className = message ? `notice visible ${kind}` : 'notice';
+        htNoticeEl.textContent = message;
+      }
+
+      function htDuration(value) {
+        if (typeof value !== 'string' || !/^\d+:[0-5]\d(?::[0-5]\d)?$/.test(value)) return null;
+        return value.split(':').reduce((seconds, part) => seconds * 60 + Number(part), 0) * 1000;
+      }
+
+      function htElapsed(start) {
+        const time = Date.parse(start);
+        if (!Number.isFinite(time)) return 'Time unavailable';
+        const seconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
+        const minutes = Math.floor(seconds / 60);
+        return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+      }
+
+      function htDate(value) {
+        return value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : 'Unavailable';
+      }
+
+      function htGroupLabel(id) {
+        const group = ht.groups.find((item) => raAnchor(item) === String(id));
+        return `Division ${id}${group && group.name ? ` - ${group.name}` : ''}`;
+      }
+
+      function htPace(ring) {
+        if (!ring.groupDivisionNumber) return { label: 'No active division', late: false };
+        const estimate = htDuration(ring.ringEstimated);
+        const elapsed = htDuration(ring.ringElapsed);
+        if (!(estimate > 0)) return { label: 'Estimate unavailable', late: false };
+        const started = Date.parse(ring.assignmentStartedAt || ring.currentPhaseStartTime || ring.phaseStartedAt);
+        if (elapsed == null || !Number.isFinite(started)) return { label: 'Timing unavailable', late: false };
+        const percent = Number(ring.ringPacePercent);
+        if (ring.ringPacePercent == null || ring.ringPacePercent === '' || !Number.isFinite(percent)) {
+          return { label: 'Pace unavailable', late: false };
+        }
+        return {
+          label: percent <= -15 ? 'Ahead of estimate' : percent <= 14 ? 'Within estimate'
+            : percent <= 35 ? 'Running late' : 'Significantly over estimate',
+          late: percent > 14
+        };
+      }
+
+      function htAttention(ring) {
+        const connection = raConnection(ring, ht.heartbeatSeconds);
+        const current = Boolean(ring.groupDivisionNumber);
+        const queued = (ring.queuedGroupDivisionNumbers || []).length;
+        if (ring.assistanceType) return {
+          rank: ring.assistanceType === 'medical' ? 0 : 1,
+          label: `${ring.assistanceType} assistance - waiting ${htElapsed(ring.assistanceRequestedAt)}`, urgent: true
+        };
+        if (current && connection.tone !== 'connected') return {
+          rank: 2, label: 'Connection problem - active division preserved', urgent: true
+        };
+        if (connection.tone === 'connected' && !current && !queued) return { rank: 3, label: 'Needs a division', urgent: false };
+        if (current && htPace(ring).late) return { rank: 4, label: htPace(ring).label, urgent: false };
+        if (connection.tone !== 'connected' && queued) return { rank: 5, label: 'Queued divisions waiting for tablet', urgent: false };
+        if (current && !queued) return { rank: 6, label: 'Queue empty - plan next division', urgent: false };
+        if (connection.tone === 'connected' && !current && queued) return { rank: 6, label: 'Queued - waiting to start', urgent: false };
+        return { rank: current || connection.tone === 'connected' ? 7 : 8, label: '', urgent: false };
+      }
+
+      function htProgress(ring) {
+        const count = ring.currentPhaseCompletedCount ?? ring.phaseCompletedCount;
+        const total = ring.currentPhaseTotalCount ?? ring.phaseTotalCount;
+        const completed = Number(count);
+        const maximum = Number(total);
+        if (count != null && Number.isFinite(completed) && total != null && Number.isFinite(maximum) && maximum > 0) {
+          return { label: `${completed} / ${maximum}`, percent: Math.max(0, Math.min(100, completed / maximum * 100)) };
+        }
+        const phase = ring.phasePlan && (ring.phasePlan.phases || []).find((item) => item.state === 'active');
+        const value = phase ? phase.progress : ring.phaseProgress;
+        if (value == null || value === '' || !Number.isFinite(Number(value))) return { label: 'Progress unavailable', percent: null };
+        const percent = Math.max(0, Math.min(100, Number(value)));
+        return { label: `${Math.round(percent)}%`, percent };
+      }
+
+      function htIsStale() {
+        return Boolean(ht.error) || ht.lastLoadedAt == null || Date.now() - ht.lastLoadedAt > 30000;
+      }
+
+      function htPhases(ring) {
+        const preview = !ring.groupDivisionNumber;
+        const plan = preview ? ring.queuedPhasePlan : ring.phasePlan;
+        if (!plan || !Array.isArray(plan.phases)) return [];
+        if (preview && String(plan.groupDivisionNumber) !== String((ring.queuedGroupDivisionNumbers || [])[0])) return [];
+        return plan.phases.map((phase) => {
+          const state = !preview && ['complete', 'active'].includes(phase.state) ? phase.state : 'upcoming';
+          const progress = Number(phase.progress);
+          const percent = state === 'complete' ? 100 : state === 'upcoming' ? 0
+            : phase.progress == null || phase.progress === '' || !Number.isFinite(progress) ? null
+              : Math.max(0, Math.min(100, progress));
+          return { label: String(phase.label || phase.key), state, percent };
+        });
+      }
+
+      function htPhasePill(ring) {
+        const phases = htPhases(ring);
+        if (!phases.length) {
+          const label = ring.groupDivisionNumber ? 'Phase progress unavailable'
+            : (ring.queuedGroupDivisionNumbers || []).length ? 'Queued - waiting to start' : 'No current division';
+          return `<span class="ht-phase-pill"><span class="ht-segment"><span class="ht-segment-label">${label}</span></span></span>`;
+        }
+        const description = phases.map((phase) => `${phase.label}: ${phase.state}${phase.percent == null ? ', progress unavailable' : `, ${Math.round(phase.percent)}%`}`).join('; ');
+        const known = phases.every((phase) => phase.percent != null);
+        const overall = known ? phases.reduce((sum, phase) => sum + phase.percent, 0) / phases.length : null;
+        const division = ring.groupDivisionNumber || (ring.queuedGroupDivisionNumbers || [])[0];
+        const label = `${htGroupLabel(division)}${ring.groupDivisionNumber ? '' : ' - queued, not started'}`;
+        return `<span class="ht-phase-pill" role="progressbar" aria-label="${gbEsc(label)} phase progression" aria-valuemin="0" aria-valuemax="100"${known ? ` aria-valuenow="${Math.round(overall)}"` : ''} aria-valuetext="${gbEsc(description)}" title="${gbEsc(label)}: ${gbEsc(description)}">
+          ${phases.map((phase) => `<span class="ht-segment ${phase.state}" style="--ht-fill: ${phase.percent ?? 0}%"><span class="ht-segment-label">${gbEsc(phase.label)}</span></span>`).join('')}
+        </span>`;
+      }
+
+      function htOrderHint() {
+        document.getElementById('htOrderHint').textContent = ht.selectedRingId && htOrderEl.value !== 'ring'
+          ? 'Ring positions are held while details are open. Close ring details to resume automatic priority ordering.'
+          : 'Priority highlights assistance, connection problems, and rings needing work. Ring order keeps label positions fixed.';
+      }
+
+      function htTickFreshness() {
+        if (currentView !== 'head-table') return;
+        const stale = htIsStale();
+        htFreshnessEl.textContent = ht.lastLoadedAt
+          ? `${stale ? 'STALE DATA - ' : ''}Last successful refresh: ${new Date(ht.lastLoadedAt).toLocaleTimeString()}. ${ht.ready ? 'Refreshes every 10 seconds.' : 'Monitoring unavailable.'}`
+          : 'Monitoring unavailable until the first successful refresh.';
+        htFreshnessEl.className = stale ? 'ht-freshness ht-alert urgent' : 'ht-freshness';
+        const clearButton = headTableDetailsEl.querySelector('[data-ht-clear]');
+        if (clearButton) clearButton.disabled = ht.busy || stale;
+        clearTimeout(ht.freshnessTimer);
+        ht.freshnessTimer = setTimeout(htTickFreshness, 1000);
+      }
+
+      function htRenderDetails() {
+        const ring = ht.rings.find((item) => item.ringId === ht.selectedRingId);
+        if (!ht.ready || !ring) { headTableDetailsEl.innerHTML = ''; return; }
+        const memberList = headTableDetailsEl.querySelector('.ra-members');
+        const memberScroll = memberList ? memberList.scrollTop : 0;
+        const row = (label, value) => `<dt>${gbEsc(label)}</dt><dd>${gbEsc(value)}</dd>`;
+        const connection = raConnection(ring, ht.heartbeatSeconds);
+        const queue = ring.queuedGroupDivisionNumbers || [];
+        const history = Array.isArray(ring.phaseHistory) ? ring.phaseHistory : [];
+        const group = ht.groups.find((item) => raAnchor(item) === ht.selectedGroupId);
+        const memberControl = (id) => {
+          const available = ht.groups.some((item) => raAnchor(item) === String(id));
+          const action = ht.selectedGroupId === String(id) ? 'Hide' : 'Show';
+          return `<button type="button" data-ht-group="${gbEsc(id)}" aria-expanded="${ht.selectedGroupId === String(id)}" aria-label="${action} competitors for Division ${gbEsc(id)}"${available ? '' : ' disabled'}>${available ? `${action} competitors` : 'Competitors unavailable'}</button>`;
+        };
+        const phase = String(ring.currentPhaseName || ring.currentPhase || ring.phase || 'idle');
+        const attention = htAttention(ring);
+        const phases = htPhases(ring);
+        headTableDetailsEl.innerHTML = `
+          <section class="ra-detail"><h3>Ring ${gbEsc(ring.ringLabel)}</h3><dl>
+            ${row('Connection', connection.label)}${row('Tablet', ring.tabletLabel || 'No tablet')}
+            ${row('Last heartbeat', htDate(ring.lastHeartbeatAt))}
+            ${row('Attention', attention.label || 'None')}
+            ${row('Phase', phase)}${row('Phase completion', htProgress(ring).label)}
+            ${row('Check-in', ring.checkInTotal > 0 ? `${ring.checkInCount || 0} / ${ring.checkInTotal}` : 'Unavailable')}
+            ${row('Division elapsed', ring.groupDivisionNumber && htDuration(ring.ringElapsed) != null ? ring.ringElapsed : 'Unavailable')}
+            ${row('Division estimate', ring.groupDivisionNumber && htDuration(ring.ringEstimated) > 0 ? ring.ringEstimated : 'Estimate unavailable')}
+            ${row('Pace', htPace(ring).label)}
+            ${row('Phase elapsed', htDuration(ring.currentPhaseElapsed) != null ? ring.currentPhaseElapsed : 'Unavailable')}
+            ${row('Phase estimate', htDuration(ring.currentPhaseEstimated) > 0 ? ring.currentPhaseEstimated : 'Estimate unavailable')}
+            ${row('Phase started', htDate(ring.currentPhaseStartTime))}
+            ${ring.currentPhaseEndTime ? row('Phase ended', htDate(ring.currentPhaseEndTime)) : ''}
+          </dl></section>
+          ${phases.length ? `<section class="ra-detail"><h3>${ring.groupDivisionNumber ? 'Phase progression' : 'Next phase - not started'}</h3><ol class="ht-phase-list">${phases.map((item) => `<li>${gbEsc(item.label)} - ${item.state}${item.percent == null ? ' (progress unavailable)' : ` (${Math.round(item.percent)}%)`}</li>`).join('')}</ol></section>` : ''}
+          ${ring.assistanceType ? `<section class="ra-detail ht-alert urgent"><h3>${gbEsc(ring.assistanceType)} assistance</h3>
+            <p>Waiting ${gbEsc(htElapsed(ring.assistanceRequestedAt))}. Requested: ${gbEsc(htDate(ring.assistanceRequestedAt))}</p>
+            <button type="button" data-ht-clear${ht.busy || htIsStale() ? ' disabled' : ''}>Clear assistance request</button>
+            <p class="ra-meta">Clear only after the request has been addressed. This does not record a separate acknowledgement.</p></section>` : ''}
+          ${phase.toLowerCase().includes('sparring') ? `<section class="ra-detail"><h3>Sparring</h3><dl>
+            ${row('Bouts', ring.sparringActualBoutCount != null ? `${ring.sparringCompletedBoutCount || 0} / ${ring.sparringActualBoutCount}` : 'Unavailable')}
+            ${row('Byes', ring.sparringByeCount ?? 'Unavailable')}</dl></section>` : ''}
+          <section class="ra-detail"><h3>Current phase</h3>
+            ${ring.groupDivisionNumber ? `<p class="ra-division-label">${gbEsc(htGroupLabel(ring.groupDivisionNumber))}</p>${memberControl(ring.groupDivisionNumber)}` : '<p class="ra-meta">None assigned</p>'}
+          </section>
+          <section class="ra-detail"><h3>Queue (${queue.length})</h3>
+            ${queue.length ? `<ol class="ra-queue">${queue.map((id) => `<li><span class="ra-division-label">${gbEsc(htGroupLabel(id))}</span><span>${memberControl(id)}</span></li>`).join('')}</ol>` : '<p class="ra-meta">No queued divisions</p>'}
+          </section>
+          ${group ? `<section class="ra-detail"><h3>${gbEsc(htGroupLabel(ht.selectedGroupId))}</h3>${raMembers(group)}</section>` : ''}
+          <section class="ra-detail"><details id="htHistory"${ht.historyOpen ? ' open' : ''}><summary>Phase history (${history.length})</summary>
+            <div class="ht-history">${history.length ? history.map((entry) => `<p><strong>${gbEsc(entry.name)}</strong><br>
+              Started: ${gbEsc(htDate(entry.startTime))}<br>Ended: ${entry.endTime ? gbEsc(htDate(entry.endTime)) : 'In progress'}<br>
+              Elapsed: ${gbEsc(entry.elapsed || 'Unavailable')} / Estimate: ${gbEsc(entry.estimated || 'Unavailable')}</p>`).join('') : '<p>No phase history reported.</p>'}</div>
+          </details></section>
+          <button type="button" data-ht-close>Close ring details</button>`;
+        const nextList = headTableDetailsEl.querySelector('.ra-members');
+        if (nextList) nextList.scrollTop = memberScroll;
+      }
+
+      function htRender() {
+        const focused = document.activeElement && document.activeElement.closest('[data-ht-ring]');
+        const focusedId = focused && focused.dataset.htRing;
+        const known = new Set(ht.groups.map(raAnchor));
+        const running = new Set(ht.rings.map((ring) => String(ring.groupDivisionNumber || '')).filter((id) => known.has(id)));
+        const queued = new Set(ht.rings.flatMap((ring) => ring.queuedGroupDivisionNumbers || []).map(String).filter((id) => known.has(id) && !running.has(id)));
+        const completed = new Set(ht.rings.flatMap((ring) => ring.completedGroupDivisionNumbers || []).map(String).filter((id) => known.has(id) && !running.has(id) && !queued.has(id)));
+        const primaryCounts = [
+          ['Available', ht.available.filter((id) => known.has(String(id))).length],
+          ['Active', running.size],
+          ['Disconnected', ht.rings.filter((ring) => raConnection(ring, ht.heartbeatSeconds).tone === 'disconnected').length],
+          ['Assistance', ht.rings.filter((ring) => ring.assistanceType).length]
+        ];
+        htSummaryEl.innerHTML = ht.ready ? `
+          <div class="ht-primary-counts" role="group" aria-label="Primary counts: available and active divisions, disconnected rings, assistance requests">
+            ${primaryCounts.map(([label, count]) => `<span class="chip${count > 0 && ['Disconnected', 'Assistance'].includes(label) ? ' warning' : ''}">${label}: <strong>${count}</strong></span>`).join('')}
+          </div>
+          <div class="ht-secondary-counts" role="group" aria-label="Supporting division counts">
+            <span>Queued: <strong>${queued.size}</strong></span>
+            <span>Completed: <strong>${completed.size}</strong></span>
+            <span>Overall progress: <strong>${completed.size} of ${known.size}</strong> divisions completed</span>
+          </div>` : '<span class="ra-meta">Event totals unavailable.</span>';
+        let rings = ht.rings.slice().sort((a, b) =>
+          (htOrderEl.value === 'ring' ? 0 : htAttention(a).rank - htAttention(b).rank) || a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
+        if (ht.order.length && (ht.selectedRingId || ht.hovering || focusedId)) {
+          const positions = new Map(ht.order.map((id, index) => [id, index]));
+          rings.sort((a, b) => (positions.get(a.ringId) ?? Infinity) - (positions.get(b.ringId) ?? Infinity));
+        }
+        ht.order = rings.map((ring) => ring.ringId);
+        htRingsEl.innerHTML = ht.ready ? rings.map((ring) => {
+          const connection = raConnection(ring, ht.heartbeatSeconds);
+          const attention = htAttention(ring);
+          return `<button type="button" class="ht-ring ${connection.tone}" data-ht-ring="${gbEsc(ring.ringId)}" aria-pressed="${ht.selectedRingId === ring.ringId}" title="${gbEsc([ring.groupDivisionNumber ? htGroupLabel(ring.groupDivisionNumber) : 'No current division', attention.label].filter(Boolean).join(' - '))}">
+            <span class="ht-identity"><strong>Ring ${gbEsc(ring.ringLabel)}</strong><span class="ra-connection">${connection.label}</span>${ring.assistanceType ? `<span class="ht-assistance" aria-label="${gbEsc(ring.assistanceType)} assistance requested" title="${gbEsc(attention.label)}">!</span>` : ''}</span>
+            ${htPhasePill(ring)}</button>`;
+        }).join('') || '<p class="ra-meta">No configured rings for this event.</p>' : '<p class="ra-meta">Ring monitoring unavailable.</p>';
+        if (focusedId) {
+          const button = Array.from(htRingsEl.querySelectorAll('[data-ht-ring]')).find((item) => item.dataset.htRing === focusedId);
+          if (button) button.focus({ preventScroll: true });
+        }
+        htOrderHint();
+        htRefreshBtn.disabled = ht.busy;
+        htRenderDetails();
+        renderState();
+        htTickFreshness();
+      }
+
+      async function htLoad() {
+        if (currentView !== 'head-table') return;
+        const token = ++ht.requestToken;
+        clearTimeout(ht.timer);
+        let verifiedEvent = '';
+        try {
+          await refreshActiveEvent();
+          if (token !== ht.requestToken || currentView !== 'head-table') return;
+          verifiedEvent = state.activeEventName;
+          if (!verifiedEvent) throw new Error('No active event. Activate an event on Event Setup first.');
+          if (verifiedEvent !== ht.eventName) {
+            ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
+            ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = []; ht.lastLoadedAt = null;
+            htRender();
+          }
+          ht.eventName = verifiedEvent;
+          const groups = await fetchJson(`/api/groups?eventName=${encodeURIComponent(verifiedEvent)}`);
+          const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(verifiedEvent)}`);
+          if (token !== ht.requestToken || currentView !== 'head-table') return;
+          if (!Array.isArray(groups.groups) || !Array.isArray(board.rings) || !Array.isArray(board.availableGroupDivisionNumbers)) throw new Error('Invalid Head Table data returned by server.');
+          ht.groups = groups.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
+          ht.rings = board.rings;
+          ht.available = board.availableGroupDivisionNumbers;
+          ht.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
+          if (!ht.rings.some((ring) => ring.ringId === ht.selectedRingId)) ht.selectedRingId = '';
+          if (!ht.groups.some((group) => raAnchor(group) === ht.selectedGroupId)) ht.selectedGroupId = '';
+          ht.ready = true; ht.error = ''; ht.lastLoadedAt = Date.now();
+          htNotice('');
+          htRender();
+        } catch (error) {
+          if (token !== ht.requestToken || currentView !== 'head-table') return;
+          ht.error = error.message;
+          if (!verifiedEvent || ht.eventName !== verifiedEvent) {
+            ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
+            ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = [];
+          }
+          htNotice(`Head Table refresh failed: ${error.message}`);
+          htRender();
+        } finally {
+          if (token === ht.requestToken && currentView === 'head-table') ht.timer = setTimeout(htLoad, 10000);
+        }
+      }
+
+      htRefreshBtn.addEventListener('click', htLoad);
+      htOrderEl.addEventListener('change', () => { ht.order = []; htRender(); });
+      document.getElementById('htAssignmentBtn').addEventListener('click', () => {
+        showView('ring-assignment', navItems.find((item) => navLabel(item) === 'Ring Assignment'));
+      });
+      htRingsEl.addEventListener('mouseenter', () => { ht.hovering = true; });
+      htRingsEl.addEventListener('mouseleave', () => { ht.hovering = false; });
+      htRingsEl.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-ht-ring]');
+        if (!button) return;
+        ht.selectedRingId = button.dataset.htRing;
+        ht.selectedGroupId = ''; ht.historyOpen = false;
+        htRingsEl.querySelectorAll('[data-ht-ring]').forEach((card) => card.setAttribute('aria-pressed', String(card.dataset.htRing === ht.selectedRingId)));
+        htOrderHint(); htRenderDetails(); renderState();
+      });
+      headTableDetailsEl.addEventListener('toggle', (event) => {
+        if (event.target.id === 'htHistory') ht.historyOpen = event.target.open;
+      }, true);
+      headTableDetailsEl.addEventListener('click', async (event) => {
+        const button = event.target.closest('button');
+        if (!button || !ht.ready || ht.busy) return;
+        if (button.dataset.htGroup) {
+          ht.selectedGroupId = ht.selectedGroupId === button.dataset.htGroup ? '' : button.dataset.htGroup;
+          htRenderDetails();
+        } else if (button.hasAttribute('data-ht-close')) {
+          ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.historyOpen = false;
+          htRender();
+        } else if (button.hasAttribute('data-ht-clear') && !htIsStale()) {
+          const ring = ht.rings.find((item) => item.ringId === ht.selectedRingId);
+          if (!ring || !ring.assistanceType || !window.confirm(`Clear the ${ring.assistanceType} assistance request for Ring ${ring.ringLabel}? Confirm the request has been addressed.`)) return;
+          ht.busy = true; clearTimeout(ht.timer); ht.requestToken += 1;
+          htRefreshBtn.disabled = true;
+          htRenderDetails();
+          try {
+            await fetchJson(`/api/rings/${encodeURIComponent(ring.ringId)}/assistance/clear?eventName=${encodeURIComponent(ht.eventName)}`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ expectedAssistanceRequestedAt: ring.assistanceRequestedAt || '' })
+            });
+            await htLoad();
+            if (currentView === 'head-table' && !ht.error) htNotice('Assistance request cleared.', 'ok');
+          } catch (error) {
+            await htLoad();
+            if (currentView === 'head-table') htNotice(`Unable to clear assistance: ${error.message}`);
+          } finally {
+            ht.busy = false;
+            htRefreshBtn.disabled = false;
+            if (currentView === 'head-table') htRenderDetails();
+          }
+        }
+      });
+
       const dayOfLabels = ['Ring Assignment', 'Head Table', 'Competitors', 'Judges & Volunteers', 'Reports & Results'];
       function syncDayOfNav() {
         const unlocked = Boolean(state.activeEventName) && !state.activeEventError;
@@ -2676,7 +3652,7 @@
           item.addEventListener('click', () => {
             const label = navLabel(item);
             if (item.getAttribute('aria-disabled') === 'true') return;
-            showView(label === 'Event Setup' ? 'event-setup' : label === 'Import' ? 'import' : label === 'Group Builder' ? 'groups' : 'placeholder', item);
+            showView(label === 'Event Setup' ? 'event-setup' : label === 'Import' ? 'import' : label === 'Group Builder' ? 'groups' : label === 'Ring Assignment' ? 'ring-assignment' : label === 'Head Table' ? 'head-table' : 'placeholder', item);
           });
         });
       }
@@ -2686,6 +3662,8 @@
           const view = new URLSearchParams(window.location.search).get('view');
           if (view === 'import') showView('import', importNavItem);
           if (view === 'groups') showView('groups', groupNavItem);
+          if (view === 'ring-assignment') showView('ring-assignment', navItems.find((item) => navLabel(item) === 'Ring Assignment'));
+          if (view === 'head-table') showView('head-table', navItems.find((item) => navLabel(item) === 'Head Table'));
         })
         .catch((error) => showNotice(error.message, 'error'));
     }());

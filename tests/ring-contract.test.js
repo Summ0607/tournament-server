@@ -313,6 +313,7 @@ async function main() {
 
   const app = express();
   app.use(express.json());
+  const previewGroups = new Map();
 
   const router = createRingRouter({
     readAssignmentsState: () => state,
@@ -342,7 +343,7 @@ async function main() {
     resetAssignments: () => {},
     groupExists: () => true,
     findGroupUsageAcrossRings: () => null,
-    loadGroup: () => null,
+    loadGroup: (id) => previewGroups.get(String(id)) || null,
     loadGroups: () => ([
       { groupDivisionNumber: '21', name: 'Division 21' },
       { groupDivisionNumber: '22', name: 'Division 22' },
@@ -368,6 +369,35 @@ async function main() {
   });
 
   try {
+    for (const [method, pathname, body] of [
+      ['GET', '/api/rings', null],
+      ['POST', '/api/rings/ring-a-1/queue', { groupDivisionNumber: '22' }],
+      ['DELETE', '/api/rings/ring-a-1/queue/22', null],
+      ['POST', '/api/rings/ring-a-1/reset', {}],
+      ['POST', '/api/rings/ring-a-1/assistance/clear', {}],
+      ['POST', '/api/rings/config', { letterCount: 2, numberCount: 3 }]
+    ]) {
+      const rejected = await requestJson(server, method, `${pathname}?eventName=OldEvent`, body);
+      assert.strictEqual(rejected.status, 409);
+      assert.match(rejected.body.error, /active event changed/);
+      assert.deepStrictEqual(state.rings['ring-a-1'].queuedGroupDivisionNumbers, []);
+    }
+    const scopedRings = await requestJson(server, 'GET', '/api/rings?eventName=InHouse_Tourn_2027');
+    assert.strictEqual(scopedRings.status, 200);
+
+    state.rings['ring-a-1'].assistanceType = 'medical';
+    state.rings['ring-a-1'].assistanceRequestedAt = '2026-10-25T15:00:00.000Z';
+    const staleClear = await requestJson(server, 'POST', '/api/rings/ring-a-1/assistance/clear?eventName=InHouse_Tourn_2027', {
+      expectedAssistanceRequestedAt: 'older-request'
+    });
+    assert.strictEqual(staleClear.status, 409);
+    assert.strictEqual(state.rings['ring-a-1'].assistanceType, 'medical');
+    const clear = await requestJson(server, 'POST', '/api/rings/ring-a-1/assistance/clear?eventName=InHouse_Tourn_2027', {
+      expectedAssistanceRequestedAt: '2026-10-25T15:00:00.000Z'
+    });
+    assert.strictEqual(clear.status, 200);
+    assert.strictEqual(state.rings['ring-a-1'].assistanceType, '');
+
     const queueResponse = await requestJson(server, 'POST', '/api/rings/ring-a-1/queue', { groupId: '22' });
     assert.strictEqual(queueResponse.status, 200);
     assert.strictEqual(queueResponse.body.groupDivisionNumber, '');
@@ -390,9 +420,18 @@ async function main() {
       queuedGroupIds: ['23']
     });
 
+    previewGroups.set('22', { competitors: [{ weaponsEligible: true }] });
+    previewGroups.set('23', { competitors: [{ weaponsEligible: false }] });
     const ringsResponse = await requestJson(server, 'GET', '/api/rings');
     assert.strictEqual(ringsResponse.status, 200);
     assert.deepStrictEqual(ringsResponse.body.availableGroupDivisionNumbers, ['24']);
+    const previewA1 = ringsResponse.body.rings.find((ring) => ring.ringId === 'ring-a-1').queuedPhasePlan;
+    const previewA3 = ringsResponse.body.rings.find((ring) => ring.ringId === 'ring-a-3').queuedPhasePlan;
+    assert.strictEqual(previewA1.groupDivisionNumber, '22');
+    assert.deepStrictEqual(previewA1.phases.map((phase) => phase.key), ['setup', 'weapons', 'hyungs', 'sparring', 'awards']);
+    assert.deepStrictEqual(previewA3.phases.map((phase) => phase.key), ['setup', 'hyungs', 'sparring', 'awards']);
+    assert.strictEqual(ringsResponse.body.rings.find((ring) => ring.ringId === 'ring-a-2').queuedPhasePlan, null);
+    previewGroups.clear();
 
     state.rings['ring-a-1'] = makeRingState({
       groupDivisionNumber: '22',
