@@ -125,15 +125,18 @@
             font-style: italic;
         }
     </style>
+    <link rel="stylesheet" href="/assets/help-tooltips.css">
+    <script src="/assets/help-tooltips.js" defer></script>
 </head>
-<body>
+<body data-help-page="competitors" data-help-title="Competitor Roster">
 
 <div class="container">
-    <header>
-        <h1>Competitors Roster</h1>
+    <header data-help-root>
+        <h1 id="rosterTitle">Competitors Roster</h1>
+        <p data-help-source="Searching the roster">Search to filter the displayed roster by name, rank, studio, or other visible table values. Filtering does not change saved registrations.</p>
         <div class="controls">
             <span id="rowCounter" class="counter">Loading competitors...</span>
-            <input type="text" id="searchInput" class="search-box" placeholder="Search by name, rank, studio..." onkeyup="filterTable()">
+            <input type="text" id="searchInput" class="search-box" aria-label="Search competitors" title="Filter the roster by any displayed value. Clear the search to show all competitors." placeholder="Search by name, rank, studio..." onkeyup="filterTable()">
         </div>
     </header>
 

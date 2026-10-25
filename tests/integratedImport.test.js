@@ -664,17 +664,17 @@ test('ring details use plain division names and explicit competitor buttons', as
   let markup = page.element('ringAssignmentDetails').innerHTML;
   assert.match(markup, /class="ra-division-label">Division 20 - Active division<\/div>/);
   assert.match(markup, /class="ra-division-label">Division 22 - Queued division<\/div>/);
-  assert.match(markup, /data-ra-group="20" aria-expanded="false"[^>]*>Show competitors<\/button>/);
+  assert.match(markup, /data-ra-group="20"[^>]* aria-expanded="false"[^>]*>Show competitors<\/button>/);
   assert.match(markup, /data-ra-group="22"[^>]*>Show competitors<\/button>/);
   assert.doesNotMatch(markup, /ra-link/);
   await page.ringAction('ringAssignmentDetails', { raGroup: '22' });
   markup = page.element('ringAssignmentDetails').innerHTML;
-  assert.match(markup, /data-ra-group="22" aria-expanded="true"[^>]*>Hide competitors<\/button>/);
+  assert.match(markup, /data-ra-group="22"[^>]* aria-expanded="true"[^>]*>Hide competitors<\/button>/);
   assert.match(markup, /data-ra-group="20"[^>]*>Show competitors<\/button>/);
   assert.match(markup, /Saved Competitor/);
   await page.ringAction('ringAssignmentDetails', { raGroup: '22' });
   markup = page.element('ringAssignmentDetails').innerHTML;
-  assert.match(markup, /data-ra-group="22" aria-expanded="false"[^>]*>Show competitors<\/button>/);
+  assert.match(markup, /data-ra-group="22"[^>]* aria-expanded="false"[^>]*>Show competitors<\/button>/);
   assert.doesNotMatch(markup, /Saved Competitor|Showing competitors|class="danger"/);
   assert.match(markup, /class="ra-ring-maintenance"/);
 });
@@ -697,6 +697,11 @@ test('ring tiles separate connection from assignment and retain label order acro
   const order = () => cards().map((card) => card.match(/data-ra-ring="([^"]+)"/)[1]);
   const expectedOrder = ['ring-a-1', 'ring-a-2', 'ring-a-3', 'ring-b-1', 'ring-b-2', 'ring-b-3', 'ring-b-4'];
   assert.deepEqual(order(), expectedOrder);
+  for (const card of cards()) {
+    assert.equal((card.match(/class="ra-ring-line"/g) || []).length, 2, 'ring information occupies two compact lines');
+    assert.match(card, /ra-ring-line"><strong>Ring [^<]+<\/strong><span class="ra-connection">/);
+    assert.match(card, /ra-ring-line"><span class="ra-assignment"[^>]*>[^<]+<\/span><span class="ra-meta">\d+ queued<\/span>/);
+  }
   assert.match(byLabel('A1'), /ra-ring no-tablet/);
   assert.match(byLabel('A1'), />No tablet<\/span>/);
   assert.match(byLabel('A1'), />Queued<\/span>/);

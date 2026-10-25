@@ -818,11 +818,13 @@ feature/multi-surface-tournament-backend,<!DOCTYPE html>
       .timer-box { text-align: left; }
     }
   </style>
+  <link rel="stylesheet" href="/assets/help-tooltips.css">
+  <script src="/assets/help-tooltips.js" defer></script>
 </head>
-<body>
+<body data-help-page="event-progress" data-help-title="Event Progress">
   <div class="shell">
     <div class="hero">
-      <div class="title-block">
+      <div class="title-block" data-help-root>
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
         <h1 class="tournament-name" id="tournamentName">Event Progress</h1>
         <div class="banner-timer">Event Timer: <strong id="eventTimer">--:--:--</strong></div>
@@ -830,6 +832,7 @@ feature/multi-surface-tournament-backend,<!DOCTYPE html>
     </div>
 
     <div class="summary" id="summaryCards"></div>
+    <p data-help-source="Ring progress and details">This view monitors the active event. Select a ring for phase, timing, queue, and competitor details. Connection state and assistance are distinct from division progress. Unavailable timing is not an on-time estimate.</p>
     <div class="meta" id="metaLine">Loading dashboard...</div>
     <div class="notice" id="notice" aria-live="polite"></div>
 
@@ -854,7 +857,7 @@ feature/multi-surface-tournament-backend,<!DOCTYPE html>
             <h3 id="ringModalTitle">Ring details</h3>
             <div class="sub" id="ringModalSubtitle">Select a ring</div>
           </div>
-          <button class="ring-modal-close" id="ringModalClose" aria-label="Close ring details">×</button>
+          <button class="ring-modal-close" id="ringModalClose" aria-label="Close ring details" data-help="Close the selected ring's details.">×</button>
         </div>
         <div class="ring-modal-body" id="ringModalBody"></div>
       </div>
@@ -1386,6 +1389,7 @@ feature/multi-surface-tournament-backend,<!DOCTYPE html>
 
     function renderBoard() {
       tournamentNameEl.textContent = PRESENTATION.title;
+      document.body.dataset.helpTitle = PRESENTATION.title;
       document.title = PRESENTATION.title;
       const loadedAt = state.lastBoardLoadedAt ? new Date(state.lastBoardLoadedAt).toLocaleTimeString() : '--';
       metaLineEl.innerHTML = `<span>Last board refresh: ${escapeHtml(loadedAt)}</span>`;
@@ -1404,7 +1408,7 @@ feature/multi-surface-tournament-backend,<!DOCTYPE html>
               <div class="ring-row">
                 <div class="ring-id-cell">
                   ${PRESENTATION.showRingDetails
-                    ? `<button class="ring-link" data-action="open-ring" data-ring-id="${escapeHtml(ring.ringId)}">${escapeHtml(ring.ringLabel)}</button>`
+                    ? `<button class="ring-link" data-help="Open this ring's phase, timing, queue, and competitor details." data-action="open-ring" data-ring-id="${escapeHtml(ring.ringId)}">${escapeHtml(ring.ringLabel)}</button>`
                     : `<span class="ring-link-static">${escapeHtml(ring.ringLabel)}</span>`}
                   <div class="ring-status"><span class="status-chip ${view.statusTone}">${escapeHtml(statusLabel)}</span></div>
                 </div>

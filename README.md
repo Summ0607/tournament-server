@@ -1,6 +1,33 @@
 # tournament-server
 Tournament Management Server Source
 
+## Tooltip and UI cleanup checkpoint: 2026-10-25
+
+Branch `feature/tooltip-updates` builds on `feature/tournament-day-of` and
+includes:
+
+- One page-level **?** control per completed page, replacing scattered help
+  icons with consolidated, scrollable guidance that includes details panels.
+- Consistent action hover/focus explanations, including Import CSV, Clear,
+  Next: Build Groups, queue maintenance, and dynamically rendered controls.
+- Shared tooltip/modal assets across integrated workflows, standalone Ring
+  Assignment, Event Progress/administration aliases, and the competitor roster.
+- Keyboard access, Escape dismissal, focus restoration, viewport-positioned
+  tooltips, and refreshed guidance when the selected page or ring state changes.
+- Reduced routine instructional text while preserving visible status, errors,
+  stale-data warnings, validation, and destructive-action confirmations.
+- Compact two-line Ring Assignment cards: identity/connection on the first
+  line, assignment/queue count on the second. The responsive grid preserves
+  stable label order and existing click/drag assignment behavior.
+- Automated help, action-coverage, page, and workflow regression tests wired
+  into `npm test`.
+
+Refresh the browser to load this checkpoint; no backend or dependency changes
+are introduced here. Validate with `npm test` and `git diff --check`.
+Prediction/estimation work starts on `feature/prediction-estimation` from this
+checkpoint to retain the reviewed UI. It does not yet implement start-time
+predictions, automatic scheduling, or a new audience monitor.
+
 ## Development checkpoint: 2026-10-25
 
 This checkpoint integrates the day-of Ring Assignment and Head Table workflows
@@ -28,10 +55,49 @@ No dependency changes or automatic ring-layout resets are introduced.
 The standalone Ring Assignment page also retains its related active-event and
 details-panel updates.
 
-Tooltips currently supplement, rather than replace, instructional text.
+Tooltips at this checkpoint supplemented, rather than replaced, instructional text.
 Late-ring priority and details are implemented; a dedicated amber pace indicator
 is not. Viewer/competitor enhancements and tournament simulation are future work,
 not part of this checkpoint. No Android tablet-project changes are included.
+
+## Consistent contextual help
+
+Tournament Management (Event Setup, Import, Group Builder, Ring Assignment,
+Head Table and their details panels), standalone Ring Assignment, Event Progress
+and administration aliases, and the competitor roster use shared help styling
+and behavior from `assets/help-tooltips.css` and `assets/help-tooltips.js`.
+
+Each completed page has **one ? button** in its header. Click/tap it, or use
+Enter/Space while focused, to open that page's consolidated guidance, including
+its details panel. Help opens as a scrollable modal with keyboard focus contained
+inside; Close help, Escape, or clicking the backdrop dismisses it and returns
+focus to the help button. Incomplete placeholder views do not show a help button.
+Changing integrated views updates the help content without accumulating buttons.
+
+Action buttons separately provide short hover/focus explanations of their
+outcomes, including Import CSV, Clear, Next: Build Groups, maintenance actions,
+and dynamically rendered details controls. Existing data hover summaries use
+the same tooltip styling. Tooltips are viewport-positioned to avoid panel
+clipping; Escape dismisses them and they remain readable when hovered.
+Neither hovering nor focusing an action activates it. Data summaries can also
+be read in the selected item's details.
+
+Page descriptions, ordering instructions, metadata guidance, assignment
+instructions and assistance-clear guidance move into contextual help. Import
+keeps concise roster/load/input status visible. Live counts, empty states,
+errors, stale-data warnings, validation, and destructive confirmations remain
+visible; these are not hidden as instructional text.
+
+To add a page, mark its container with `data-help-page="key"` and
+`data-help-title="Page name"`, and mark its header with `data-help-root`.
+Use `data-help` on actions for brief explanations. Use
+`data-help-source="Section heading"` on instructional text for consolidated
+guidance; sources outside the page container, such as details-panel guidance,
+use `data-help-for="key"` (`*` for the current page overview).
+Source text remains visible if the help script cannot load.
+Dynamic sources keep descriptions up to date. Native `title` summaries
+are upgraded to shared tooltips without changing the original action.
+Run `npm test` for help behavior and workflow regressions.
 
 ## Pre-tournament management
 
@@ -79,6 +145,9 @@ Ring tiles distinguish connection (green Connected, red Disconnected, or gray
 No tablet badges and left-edge accents) from assignment (Available, Queued, or
 Running division). The blue outline remains reserved for selection or a drop
 target. Rings stay in label order regardless of connection or assignment changes.
+Ring Assignment cards use two compact lines: ring name with connection status,
+then assignment status with queue count. Cards wrap into a responsive grid
+without horizontal scrolling and remain distinct click/drag targets.
 
 Saved event layout dimensions and the operational ring layout are separate.
 When they differ, **Apply saved event ring layout** offers an explicit,

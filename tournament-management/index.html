@@ -189,7 +189,7 @@
     .ra-search { padding: 10px 12px 0; }
     .ra-search input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
     .ra-list { display: grid; gap: 8px; padding: 12px; max-height: 65vh; overflow: auto; }
-    .ra-rings { grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); }
+    .ra-rings { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); align-content: start; }
     .ra-card {
       display: grid;
       gap: 7px;
@@ -220,7 +220,12 @@
     .ra-division-head .ra-meta { white-space: nowrap; font-size: 11px; }
     .ra-division-description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ra-division.dragging { opacity: 0.5; cursor: grabbing; }
-    .ra-ring { border-left: 5px solid var(--ra-connection-color, #64748b); }
+    .ra-card.ra-ring { border-left: 5px solid var(--ra-connection-color, #64748b); padding: 9px 10px; gap: 6px; min-width: 0; }
+    .ra-ring-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+    .ra-ring-line strong { font-size: 13px; white-space: nowrap; }
+    .ra-ring-line .ra-connection { font-size: 11px; white-space: nowrap; gap: 4px; padding: 2px 6px; }
+    .ra-ring-line .ra-assignment { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ra-ring-line .ra-meta { flex-shrink: 0; font-size: 11px; white-space: nowrap; }
     .ra-ring.connected { --ra-connection-color: #15803d; }
     .ra-ring.disconnected { --ra-connection-color: #b91c1c; }
     .ra-connection {
@@ -1109,6 +1114,8 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="/assets/help-tooltips.css">
+  <script src="/assets/help-tooltips.js" defer></script>
 </head>
 <body>
   <main class="shell">
@@ -1184,12 +1191,12 @@
         </aside>
 
         <section class="workspace" aria-label="Event setup workspace">
-          <div class="workspace-head">
+          <div class="workspace-head" data-help-root>
             <h1 id="workspaceTitle" aria-live="polite">Event Setup</h1>
-            <p id="workspaceSubtitle">Manage the event that downstream tournament pages will use.</p>
+            <p id="workspaceSubtitle" data-help-source="Overview" data-help-for="*">Manage the event that downstream tournament pages will use.</p>
           </div>
           <div class="workspace-body">
-            <div class="view" id="eventSetupView">
+            <div class="view" id="eventSetupView" data-help-page="event-setup" data-help-title="Event Setup">
             <div class="overview">
               <span class="chip">Active Event: <strong id="activeEventChip">No event selected</strong></span>
               <span class="chip">Selected Event: <strong id="selectedEventChip">None selected</strong></span>
@@ -1197,8 +1204,8 @@
 
             <section class="workflow-panel" aria-label="Event setup workflow">
               <div class="workflow-head">
-                <h2>Create, Select, Modify, Delete</h2>
-                <p>Choose an existing event or enter a new name. Creating or modifying an event does not activate it. Use ‘Activate Event’ to set the event used by workflow pages.</p>
+                <h2 id="eventWorkflowTitle">Create, Select, Modify, Delete</h2>
+                <p data-help-source="Event setup">Choose an existing event or enter a new name. Create or Modify saves event details without activating the event. Activate Event explicitly selects the event used by day-of pages. Preparation selection and active event are separate.</p>
               </div>
               <div class="workflow-body">
                 <div class="field-stack">
@@ -1210,24 +1217,24 @@
                 <div class="button-cluster">
                   <div class="button-cluster-label">Primary Actions</div>
                   <div class="button-row">
-                    <button class="primary" id="createEventBtn" type="button">Create Event</button>
-                    <button id="modifyEventBtn" type="button">Modify Event</button>
-                    <button id="activateEventBtn" type="button">Activate Event</button>
+                    <button class="primary" id="createEventBtn" type="button" data-help="Open details for a new event. Save the details to create it.">Create Event</button>
+                    <button id="modifyEventBtn" type="button" data-help="Open the selected event's saved details for editing.">Modify Event</button>
+                    <button id="activateEventBtn" type="button" title="Make this the active event for all day-of pages. Selecting or editing an event alone does not activate it.">Activate Event</button>
                   </div>
                 </div>
 
                 <div class="button-cluster">
                   <div class="button-cluster-label">Next Step</div>
                   <div class="button-row">
-                    <button class="next-action" id="goToImportBtn" type="button">Next: Import Registration</button>
+                    <button class="next-action" id="goToImportBtn" type="button" data-help="Open registration import for the selected saved event.">Next: Import Registration</button>
                   </div>
                 </div>
 
                 <div class="button-cluster">
                   <div class="button-cluster-label">Secondary Actions</div>
                   <div class="button-row">
-                    <button class="danger" id="deleteEventBtn" type="button">Delete Event</button>
-                    <button id="resetEventBtn" type="button">Reset</button>
+                    <button class="danger" id="deleteEventBtn" type="button" data-help="Delete the selected event after confirmation.">Delete Event</button>
+                    <button id="resetEventBtn" type="button" title="Discard unsaved form edits and reload the selected event. Does not reset ring assignments.">Reset</button>
                   </div>
                 </div>
 
@@ -1236,10 +1243,11 @@
             </section>
             </div>
 
-            <div class="view" id="importView" hidden>
+            <div class="view" id="importView" data-help-page="import" data-help-title="Import" hidden>
               <section class="workflow-panel" aria-label="Import registration">
                 <div class="workflow-head">
-                  <h2>Upload CSV</h2>
+                  <h2 id="importWorkflowTitle">Upload CSV</h2>
+                  <p data-help-source="Import or continue">Continue with Next: Build Groups when saved competitors are loaded. Selecting a file or entering CSV text switches to Import CSV. Clear removes pending input, not saved registration. Replacing registration requires confirmation.</p>
                   <p id="importSummary">Saved registrations can continue directly to Build Groups. Choosing a file or entering CSV text makes Import CSV the next action.</p>
                 </div>
                 <div class="workflow-body">
@@ -1255,29 +1263,31 @@
                     <textarea id="csvTextInput" placeholder="Paste CSV data here, or choose a file above."></textarea>
                   </div>
                   <div class="button-row">
-                    <button id="importBtn" type="button" disabled>Import CSV</button>
-                    <button id="clearImportBtn" type="button">Clear</button>
-                    <button id="importNextBtn" type="button" disabled>Next: Build Groups</button>
+                    <button id="importBtn" type="button" data-help="Import the chosen CSV file or pasted CSV into the selected event. Replacing a saved roster requires confirmation." disabled>Import CSV</button>
+                    <button id="clearImportBtn" type="button" title="Clear pending CSV input and return to the saved roster. Saved competitors are not deleted.">Clear</button>
+                    <button id="importNextBtn" type="button" data-help="Continue to Group Builder using the saved competitor roster. Import or clear any pending CSV input first." disabled>Next: Build Groups</button>
                   </div>
                   <div class="notice" id="importNotice" aria-live="polite"></div>
                 </div>
               </section>
             </div>
 
-            <div class="view" id="groupsView" hidden>
+            <div class="view" id="groupsView" data-help-page="groups" data-help-title="Group Builder" hidden>
               <section class="workflow-panel" aria-label="Group builder">
                 <div class="workflow-head">
-                  <h2>Groups</h2>
+                  <h2 id="groupsWorkflowTitle">Groups</h2>
+                  <p data-help-source="Building and saving groups">Build Groups uses the selected event's roster. Select a group for competitor details. Drag group handles to reorder groups, or drag competitors between groups. Building and editing do not save automatically; use Save &amp; Finish Setup. Unsaved drafts do not affect day-of pages.</p>
                 </div>
                 <div class="workflow-body">
                   <div class="overview" id="gbStats"></div>
                   <div class="gb-toolbar">
                     <label for="gbMaxSize">Max size</label>
+                    <span data-help-source="Maximum group size help">Choose a maximum group size from 6 to 13 before building groups.</span>
                     <input id="gbMaxSize" type="number" min="6" max="13" value="6">
-                    <button class="primary" id="gbBuildBtn" type="button">Build Groups</button>
-                    <button id="gbAddBtn" type="button">+ Add Group</button>
-                    <button id="gbSaveBtn" type="button">Save &amp; Finish Setup</button>
-                    <button class="primary" id="gbDoneBtn" type="button" hidden>Go to Event Setup to Activate</button>
+                    <button class="primary" id="gbBuildBtn" type="button" title="Build groups from the selected event's roster using the chosen maximum size. Review and save separately.">Build Groups</button>
+                    <button id="gbAddBtn" type="button" data-help="Add an empty group to arrange competitors manually. Save your changes separately.">+ Add Group</button>
+                    <button id="gbSaveBtn" type="button" data-help="Save the reviewed groups for this event. Day-of pages use saved groups, not unsaved drafts.">Save &amp; Finish Setup</button>
+                    <button class="primary" id="gbDoneBtn" type="button" data-help="Return to Event Setup to activate this event. This button does not activate it automatically." hidden>Go to Event Setup to Activate</button>
                   </div>
                   <div class="notice" id="gbNotice" aria-live="polite"></div>
                   <div class="gb-banners" id="gbBanners"></div>
@@ -1285,13 +1295,14 @@
               </section>
             </div>
 
-            <div class="view" id="ringAssignmentView" hidden>
+            <div class="view" id="ringAssignmentView" data-help-page="ring-assignment" data-help-title="Ring Assignment" hidden>
               <div class="overview">
                 <span class="chip">Active Event: <strong id="raEvent">No active event</strong></span>
-                <button id="raRefreshBtn" type="button">Refresh</button>
-                <button id="raLayoutBtn" type="button" hidden>Apply saved event ring layout</button>
+                <button id="raRefreshBtn" type="button" data-help="Reload the active event's saved divisions and current ring assignments.">Refresh</button>
+                <button id="raLayoutBtn" type="button" title="Apply the event's saved ring dimensions. Confirmation is required because this clears operational ring state and assignments." hidden>Apply saved event ring layout</button>
               </div>
-              <p class="ra-meta">Select a ring to view its details. Click a division to queue it to the selected ring, or drag a division onto any ring.</p>
+              <p class="ra-meta" data-help-source="Assigning divisions">Select a ring to view its details. Click a division to queue it to the selected ring, or drag a division onto any ring. Rings remain in label order. Green means connected, red disconnected, and gray no tablet; blue indicates selection or a drop target.</p>
+              <p data-help-source="Ring details and maintenance">Show or hide a division's competitor list in Ring Details. Lists scroll after ten rows. Remove takes a division out of the queue without deleting it. Reset ring and applying a saved layout require confirmation because they clear operational state.</p>
               <div class="notice" id="raNotice" role="status" aria-live="polite"></div>
               <div class="ra-board">
                 <section class="ra-section" aria-labelledby="raDivisionsTitle">
@@ -1306,17 +1317,19 @@
               </div>
             </div>
 
-            <div class="view" id="headTableView" hidden>
+            <div class="view" id="headTableView" data-help-page="head-table" data-help-title="Head Table" hidden>
               <div class="ht-toolbar">
-                <button type="button" id="htRefreshBtn">Refresh</button>
+                <button type="button" id="htRefreshBtn" data-help="Reload ring progress and summary counts for the active event.">Refresh</button>
                 <label for="htOrder">Display order</label>
                 <select id="htOrder"><option value="priority">Priority</option><option value="ring">Ring order</option></select>
-                <button type="button" id="htAssignmentBtn">Open Ring Assignment</button>
+                <button type="button" id="htAssignmentBtn" data-help="Open Ring Assignment to manage queues and ring assignments.">Open Ring Assignment</button>
               </div>
               <div id="htFreshness" class="ht-freshness" role="status" aria-live="polite">Waiting for first refresh.</div>
               <div id="htNotice" class="notice" role="status" aria-live="polite"></div>
               <div id="htSummary" class="ht-summary" aria-label="Active event summary"></div>
-              <p class="ra-meta" id="htOrderHint">Priority highlights assistance, connection problems, and rings needing work. Select a ring for details.</p>
+              <p data-help-source="Ring progression and status">Select a ring for details. Green phases are complete, blue fills the active phase, and neutral phases are upcoming. Queued previews are unfilled. Weapons appears only when applicable. Connection badges use green for connected, red for disconnected, and gray for no tablet. A red exclamation mark indicates assistance. Missing timing does not imply a delay. Counts are status indicators, not filters.</p>
+              <p data-help-source="Ring details and assistance">Ring Details shows timing, the queue, competitors, and expandable phase history. Competitor lists scroll after ten rows. Clear assistance only after the request has been addressed; confirmation is required. Clearing is not a separate acknowledgement and is disabled when data is stale. Use Ring Assignment for queue editing or ring reset.</p>
+              <p class="ra-meta" id="htOrderHint" data-help-source="Display order">Priority highlights assistance, connection problems, and rings needing work. Select a ring for details.</p>
               <div id="htRings" class="ht-rings" aria-label="Ring operations overview"></div>
             </div>
 
@@ -1339,10 +1352,12 @@
             <div id="groupDetails" hidden>
               <div class="summary-label" id="gdName"></div>
               <div class="import-meta" id="gdMeta"></div>
+              <p data-help-source="Competitor details" data-help-for="groups">Drag a competitor to another group or to Unassigned. The remove control moves the competitor to Unassigned; it does not delete registration. Correct flagged ranks before saving.</p>
               <div class="gd-members" id="gdMembers"></div>
             </div>
             <div id="importDetails" hidden>
-              <div class="summary-label">Registration Snapshot</div>
+              <div class="summary-label" id="importSnapshotTitle">Registration Snapshot</div>
+              <p data-help-source="Registration snapshot" data-help-for="import">This is the saved roster for the selected event. Historical import warnings are not retained and display Not available after reloading.</p>
               <div class="import-meta">
                 <span id="importDetailFile">—</span>
                 <span id="importDetailTime">Select an event</span>
@@ -1362,7 +1377,8 @@
               <div class="warning-list" id="importWarningList"></div>
             </div>
             <div class="metadata-panel" id="metadataPanel" hidden>
-              <div class="summary-label">Edit Event</div>
+              <div class="summary-label" id="metadataTitle">Edit Event</div>
+              <p data-help-source="Event details" data-help-for="event-setup">Save Changes stores event metadata. Ring columns use letters and rows use numbers. Saved dimensions do not automatically change operational rings; applying a layout is a separate confirmed action in Ring Assignment.</p>
               <div class="field-stack">
                 <label for="locationInput">Location</label>
                 <input id="locationInput" type="text" placeholder="Tournament location">
@@ -1380,7 +1396,7 @@
                 <input id="ringConfigYInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
               </div>
               <div class="button-row">
-                <button class="metadata-action" id="saveMetadataBtn" type="button">Save Changes</button>
+                <button class="metadata-action" id="saveMetadataBtn" type="button" data-help="Save the event details shown here without activating the event or applying its ring layout.">Save Changes</button>
               </div>
             </div>
           </div>
@@ -1443,6 +1459,7 @@
       const workspaceTitle = document.getElementById('workspaceTitle');
       const sidebar = document.querySelector('.sidebar');
       const navItems = Array.from(document.querySelectorAll('.sidebar-item'));
+      navItems.forEach((item) => item.setAttribute('data-help', `Open ${item.textContent.trim()}.`));
       const detailsPanel = document.getElementById('detailsPanel');
       const importDetailsEl = document.getElementById('importDetails');
       const groupDetailsEl = document.getElementById('groupDetails');
@@ -2213,10 +2230,10 @@
         importNextBtn.classList.toggle('next-action', canContinue);
         importSummaryEl.textContent = !ready ? 'Select an existing event on Event Setup.'
           : !loaded ? (importSnapshot.status === 'error' ? 'Saved registration is unavailable. Reopen Import to retry.' : 'Loading saved registration...')
-          : pendingCsv ? 'CSV selected or entered. Import it before continuing, or Clear to resume the saved roster.'
-          : canContinue ? `Loaded ${importSnapshot.competitors.length} saved competitors. Next: Build Groups; no import is required.`
-          : importSnapshot.dbExists ? 'The database exists but has no competitors. Import a CSV to begin.'
-          : 'No saved database exists. Import a CSV to begin.';
+          : pendingCsv ? 'CSV input pending.'
+          : canContinue ? `${importSnapshot.competitors.length} saved competitors loaded.`
+          : importSnapshot.dbExists ? 'The database exists but has no competitors.'
+          : 'No saved database exists.';
         if (!ready && currentView === 'import') {
           setImportNotice('Select an existing event on Event Setup before importing.', 'warn');
         }
@@ -2518,7 +2535,7 @@
         const pending = gb.unassigned.length + gb.flagged.length;
         const canFinish = !gb.busy && ready && gb.groups.length > 0 && pending === 0;
         gbSaveBtn.disabled = !canFinish;
-        gbSaveBtn.title = canFinish || !gb.groups.length ? '' : `${pending} competitor${pending === 1 ? '' : 's'} still unassigned or flagged`;
+        gbSaveBtn.title = canFinish || !gb.groups.length ? 'Save the reviewed groups for this event. Building and editing do not save automatically.' : `${pending} competitor${pending === 1 ? '' : 's'} still unassigned or flagged`;
         gbSaveBtn.classList.toggle('primary', gb.groups.length > 0 && !gb.saved);
         gbBuildBtn.classList.toggle('primary', gb.groups.length === 0);
         const isActive = normalizeEventName(state.activeEventName).toLowerCase() === normalizeEventName(gb.eventName).toLowerCase();
@@ -2629,7 +2646,7 @@
           const sub = `<div class="gd-sub"><span class="gd-badge">${gbEsc(c.gender.charAt(0))}</span><span class="gd-badge">${gbEsc(c.rank || '?')}</span><span>Age ${c.age}</span></div>`;
           if (id === GB_FLAGGED) {
             const options = ['<option value="">Corrected rank…</option>'].concat(GB_RANKS.map((r) => `<option value="${r}">${r}</option>`)).join('');
-            return `<div class="gd-row static" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}<div class="gd-sub">${gbEsc(c.reviewReason || 'review required')}</div></div><div class="gd-fix"><select>${options}</select><button class="gd-apply" type="button" data-apply>Apply</button></div></div>`;
+            return `<div class="gd-row static" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}<div class="gd-sub">${gbEsc(c.reviewReason || 'review required')}</div></div><div class="gd-fix"><select>${options}</select><button class="gd-apply" type="button" data-apply data-help="Apply the corrected rank and move this competitor to Unassigned for grouping.">Apply</button></div></div>`;
           }
           return `<div class="gd-row" draggable="true" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}</div>${id === GB_UNASSIGNED ? '' : '<button class="gd-x" type="button" data-unassign title="Move to Unassigned">✕</button>'}</div>`;
         }).join('');
@@ -2998,7 +3015,7 @@
         const detailGroup = raGroup(ra.selectedGroupId);
         const competitorButton = (id) => {
           const showing = detailGroup && raAnchor(detailGroup) === String(id);
-          return `<button type="button" data-ra-group="${gbEsc(id)}" aria-expanded="${Boolean(showing)}" aria-label="${showing ? 'Hide' : 'Show'} competitors for Division ${gbEsc(id)}"${ra.busy || !raGroup(id) ? ' disabled' : ''}>${showing ? 'Hide competitors' : 'Show competitors'}</button>`;
+          return `<button type="button" data-ra-group="${gbEsc(id)}" data-help="${showing ? 'Hide' : 'Show'} this division's competitor list in Ring Details." aria-expanded="${Boolean(showing)}" aria-label="${showing ? 'Hide' : 'Show'} competitors for Division ${gbEsc(id)}"${ra.busy || !raGroup(id) ? ' disabled' : ''}>${showing ? 'Hide competitors' : 'Show competitors'}</button>`;
         };
         ringAssignmentDetailsEl.innerHTML = `
           <section class="ra-detail">
@@ -3021,12 +3038,12 @@
             ${queue.length ? `<ol class="ra-queue">${queue.map((id) => `<li>
               <div class="ra-division-label">${gbEsc(raGroupLabel(id))}</div>
               <div class="ra-division-actions">${competitorButton(id)}
-              <button type="button" data-ra-remove="${gbEsc(id)}"${ra.busy ? ' disabled' : ''} aria-label="Remove Division ${gbEsc(id)} from queue">Remove</button>
+              <button type="button" data-ra-remove="${gbEsc(id)}" data-help="Remove this division from the ring queue without deleting the division."${ra.busy ? ' disabled' : ''} aria-label="Remove Division ${gbEsc(id)} from queue">Remove</button>
               </div>
             </li>`).join('')}</ol>` : '<p class="ra-meta">No queued divisions</p>'}
           </section>
           ${detailGroup ? `<section class="ra-detail"><h3>${gbEsc(raGroupLabel(raAnchor(detailGroup)))}</h3>${raMembers(detailGroup)}</section>` : ''}
-          <div class="ra-ring-maintenance"><button type="button" data-ra-reset${ra.busy ? ' disabled' : ''}>Reset ring</button></div>`;
+          <div class="ra-ring-maintenance"><button type="button" data-ra-reset data-help="Clear this ring's assignments and operational state after confirmation."${ra.busy ? ' disabled' : ''}>Reset ring</button></div>`;
       }
 
       function raRender() {
@@ -3057,11 +3074,9 @@
           const connection = raConnection(ring);
           const queued = (ring.queuedGroupDivisionNumbers || []).length;
           const assignment = ring.groupDivisionNumber ? `Running division ${ring.groupDivisionNumber}` : queued ? 'Queued' : 'Available';
-          return `<button type="button" class="ra-card ra-ring ${connection.tone}" data-ra-ring="${gbEsc(ring.ringId)}" aria-pressed="${ra.selectedRingId === ring.ringId}">
-            <strong>Ring ${gbEsc(ring.ringLabel)}</strong>
-            <span class="ra-connection">${connection.label}</span>
-            <span class="ra-assignment">${gbEsc(assignment)}</span>
-            <span class="ra-meta">${queued} queued</span>
+          return `<button type="button" class="ra-card ra-ring ${connection.tone}" data-ra-ring="${gbEsc(ring.ringId)}" data-help="Select this ring to view details or queue a division to it." aria-pressed="${ra.selectedRingId === ring.ringId}">
+            <span class="ra-ring-line"><strong>Ring ${gbEsc(ring.ringLabel)}</strong><span class="ra-connection">${connection.label}</span></span>
+            <span class="ra-ring-line"><span class="ra-assignment" title="${gbEsc(assignment)}">${gbEsc(assignment)}</span><span class="ra-meta">${queued} queued</span></span>
           </button>`;
         }).join('') || '<p class="ra-meta">No configured rings available.</p>';
         const x = Number(state.activeEventMeta.ringConfigX);
@@ -3445,7 +3460,7 @@
         const memberControl = (id) => {
           const available = ht.groups.some((item) => raAnchor(item) === String(id));
           const action = ht.selectedGroupId === String(id) ? 'Hide' : 'Show';
-          return `<button type="button" data-ht-group="${gbEsc(id)}" aria-expanded="${ht.selectedGroupId === String(id)}" aria-label="${action} competitors for Division ${gbEsc(id)}"${available ? '' : ' disabled'}>${available ? `${action} competitors` : 'Competitors unavailable'}</button>`;
+          return `<button type="button" data-ht-group="${gbEsc(id)}" data-help="${available ? `${action} this division's competitor list in Ring Details.` : 'The saved competitor list is unavailable for this division.'}" aria-expanded="${ht.selectedGroupId === String(id)}" aria-label="${action} competitors for Division ${gbEsc(id)}"${available ? '' : ' disabled'}>${available ? `${action} competitors` : 'Competitors unavailable'}</button>`;
         };
         const phase = String(ring.currentPhaseName || ring.currentPhase || ring.phase || 'idle');
         const attention = htAttention(ring);
@@ -3468,8 +3483,7 @@
           ${phases.length ? `<section class="ra-detail"><h3>${ring.groupDivisionNumber ? 'Phase progression' : 'Next phase - not started'}</h3><ol class="ht-phase-list">${phases.map((item) => `<li>${gbEsc(item.label)} - ${item.state}${item.percent == null ? ' (progress unavailable)' : ` (${Math.round(item.percent)}%)`}</li>`).join('')}</ol></section>` : ''}
           ${ring.assistanceType ? `<section class="ra-detail ht-alert urgent"><h3>${gbEsc(ring.assistanceType)} assistance</h3>
             <p>Waiting ${gbEsc(htElapsed(ring.assistanceRequestedAt))}. Requested: ${gbEsc(htDate(ring.assistanceRequestedAt))}</p>
-            <button type="button" data-ht-clear${ht.busy || htIsStale() ? ' disabled' : ''}>Clear assistance request</button>
-            <p class="ra-meta">Clear only after the request has been addressed. This does not record a separate acknowledgement.</p></section>` : ''}
+            <button type="button" data-ht-clear data-help="Clear this request after confirming it has been addressed. Unavailable while ring data is stale."${ht.busy || htIsStale() ? ' disabled' : ''}>Clear assistance request</button></section>` : ''}
           ${phase.toLowerCase().includes('sparring') ? `<section class="ra-detail"><h3>Sparring</h3><dl>
             ${row('Bouts', ring.sparringActualBoutCount != null ? `${ring.sparringCompletedBoutCount || 0} / ${ring.sparringActualBoutCount}` : 'Unavailable')}
             ${row('Byes', ring.sparringByeCount ?? 'Unavailable')}</dl></section>` : ''}
@@ -3485,7 +3499,7 @@
               Started: ${gbEsc(htDate(entry.startTime))}<br>Ended: ${entry.endTime ? gbEsc(htDate(entry.endTime)) : 'In progress'}<br>
               Elapsed: ${gbEsc(entry.elapsed || 'Unavailable')} / Estimate: ${gbEsc(entry.estimated || 'Unavailable')}</p>`).join('') : '<p>No phase history reported.</p>'}</div>
           </details></section>
-          <button type="button" data-ht-close>Close ring details</button>`;
+          <button type="button" data-ht-close data-help="Close Ring Details and release its hold on priority ordering.">Close ring details</button>`;
         const nextList = headTableDetailsEl.querySelector('.ra-members');
         if (nextList) nextList.scrollTop = memberScroll;
       }
@@ -3638,7 +3652,7 @@
           if (!dayOfLabels.includes(navLabel(item))) return;
           item.classList.toggle('locked', !unlocked);
           item.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
-          item.title = unlocked ? '' : 'Activate an event on Event Setup to unlock';
+          item.title = unlocked ? `Open ${navLabel(item)}.` : 'Activate an event on Event Setup to unlock';
         });
       }
 

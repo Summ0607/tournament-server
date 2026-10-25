@@ -777,11 +777,13 @@
       .modal-head { align-items: flex-start; flex-direction: column; }
     }
   </style>
+  <link rel="stylesheet" href="/assets/help-tooltips.css">
+  <script src="/assets/help-tooltips.js" defer></script>
 </head>
-<body>
+<body data-help-page="ring-assignment" data-help-title="Ring Assignment">
   <div class="shell">
     <div class="hero">
-      <div class="title-block">
+      <div class="title-block" data-help-root>
         <h1 class="tournament-name" id="tournamentName">Tournament</h1>
         <div class="title-row">
           <div class="title-secondary">Ring Assignment</div>
@@ -791,9 +793,9 @@
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
       <div class="toolbar panel">
-        <a class="btn" href="/tournament-management/?view=event-setup">Event Setup</a>
-        <a class="btn" href="/head-table/">Head Table</a>
-        <button id="refreshBtn">Refresh</button>
+        <a class="btn" href="/tournament-management/?view=event-setup" data-help="Open the integrated event setup page.">Event Setup</a>
+        <a class="btn" href="/head-table/" data-help="Open the standalone Head Table dashboard.">Head Table</a>
+        <button id="refreshBtn" data-help="Reload the active event's divisions and ring assignments.">Refresh</button>
       </div>
     </div>
 
@@ -822,7 +824,7 @@
           <div class="meta" id="ringAssignmentMeta">0 rings</div>
         </div>
         <div class="ring-actions">
-          <div class="tip">Select a ring to view its details. Click a division to queue it there, or drag it to a ring.</div>
+          <div class="tip" data-help-source="Assigning divisions">Select a ring to view its details. Click a division to queue it there, or drag it to a ring.</div>
         </div>
         <div class="ring-list" id="ringList"></div>
       </section>
@@ -834,7 +836,7 @@
         <div class="ring-details-body" id="ringDetailsBody"></div>
       </aside>
     </div>
-    <div class="foot">Click a group id for details. Use x to remove a group from a queue.</div>
+    <div class="foot" data-help-source="Queue and competitor details">Select a division to see its competitors. Queue removal does not delete the division or its registration. Reset ring clears operational state after confirmation.</div>
   </div>
 
   <div class="modal" id="groupModal" aria-hidden="true">
@@ -844,7 +846,7 @@
           <h3 id="groupModalTitle">Group details</h3>
           <div class="sub" id="groupModalSubtitle">Select a group</div>
         </div>
-        <button class="modal-close" id="groupModalClose" aria-label="Close group details">×</button>
+        <button class="modal-close" id="groupModalClose" aria-label="Close group details" data-help="Close competitor details and return to ring assignments.">×</button>
       </div>
       <div class="modal-body" id="groupModalBody"></div>
     </div>
@@ -1165,7 +1167,7 @@
       var queuedHtml = queuedDivisionNumbers.length
         ? queuedDivisionNumbers.map(function (groupId) {
             var label = groupLabel(groupId);
-            return '<span class="ring-queue-chip"><button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(groupId) + '">' + escapeHtml(label) + '</button><button class="queue-remove" data-action="remove-queue" data-ring-id="' + escapeHtml(ring.ringId) + '" data-group-id="' + escapeHtml(groupId) + '" aria-label="Remove ' + escapeHtml(label) + ' from queue">×</button></span>';
+            return '<span class="ring-queue-chip"><button class="group-link" data-help="Show this division and its competitors." data-action="group-details" data-group-id="' + escapeHtml(groupId) + '">' + escapeHtml(label) + '</button><button class="queue-remove" data-help="Remove this division from the queue without deleting it." data-action="remove-queue" data-ring-id="' + escapeHtml(ring.ringId) + '" data-group-id="' + escapeHtml(groupId) + '" aria-label="Remove ' + escapeHtml(label) + ' from queue">×</button></span>';
           }).join('')
         : '<span class="ring-queue-empty">No queued divisions</span>';
       var assistance = ring.assistanceType
@@ -1178,7 +1180,7 @@
       ringDetailsBodyEl.innerHTML = [
         '<div class="detail-card"><span>Current division</span><strong>' +
           (currentDivisionNumber
-            ? '<button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(currentDivisionNumber) + '">' + escapeHtml(groupLabel(currentDivisionNumber)) + '</button>'
+            ? '<button class="group-link" data-help="Show this division and its competitors." data-action="group-details" data-group-id="' + escapeHtml(currentDivisionNumber) + '">' + escapeHtml(groupLabel(currentDivisionNumber)) + '</button>'
             : 'None assigned') +
           '</strong></div>',
         '<div class="detail-card"><span>Queue · ' + queuedDivisionNumbers.length + '</span><div class="ring-queue-list">' + queuedHtml + '</div></div>',
@@ -1188,7 +1190,7 @@
         '<div class="detail-card"><span>Assistance</span><strong>' + escapeHtml(assistance) + '</strong></div>',
         '<div class="detail-card"><span>Assignment started</span><strong>' + escapeHtml(ring.assignmentStartedAt ? new Date(ring.assignmentStartedAt).toLocaleString() : 'Not started') + '</strong></div>',
         '<div class="detail-card"><span>Last heartbeat</span><strong>' + escapeHtml(ring.lastHeartbeatAt ? new Date(ring.lastHeartbeatAt).toLocaleString() : 'Not received') + '</strong></div>',
-        '<button type="button" class="ring-reset-button" data-action="reset-ring" data-ring-id="' + escapeHtml(ring.ringId) + '">Reset ring</button>'
+        '<button type="button" class="ring-reset-button" data-help="Reset this ring and clear its operational state after confirmation." data-action="reset-ring" data-ring-id="' + escapeHtml(ring.ringId) + '">Reset ring</button>'
       ].join('');
     }
 
@@ -1199,7 +1201,7 @@
         ? groups.map(function (group) {
             var display = divisionDisplayData(group);
             return [
-              '<button type="button" class="division-card" draggable="true" data-group-id="' + escapeHtml(display.anchor) + '" aria-label="Assign ' + escapeHtml(display.title) + ' to a ring">',
+              '<button type="button" class="division-card" draggable="true" data-help="Queue this division to the selected ring, or drag it onto a ring." data-group-id="' + escapeHtml(display.anchor) + '" aria-label="Assign ' + escapeHtml(display.title) + ' to a ring">',
                 '<div class="division-card-title">',
                   '<span class="division-name">' + escapeHtml(display.title) + '</span>',
                 '</div>',
