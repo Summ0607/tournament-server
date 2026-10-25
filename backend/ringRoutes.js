@@ -4,6 +4,7 @@ const fs = require('fs');
 const { appendDivisionTrace, summarizeGroupDivisionNumbers } = require('./groupDivisionAssignments');
 const { buildAvailableGroupDivisionNumbers } = require('./ringAvailability');
 const { sanitizePhaseHistory } = require('./resultPacket');
+const { buildEstimates } = require('./ringEstimates');
 
 function resolveGroupAnchorValue(value) {
   const parsed = Number.parseInt(value, 10);
@@ -512,7 +513,7 @@ function createRingRouter(deps) {
     });
   });
 
-  router.get('/rings', (req, res) => {
+  function ringBoard(req, res) {
     const state = readAssignmentsState();
     if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
     const rings = Object.entries(state.rings).map(([ringId, ringState]) => {
@@ -533,6 +534,13 @@ function createRingRouter(deps) {
       state.rings
     );
 
+    const estimates = buildEstimates({
+      eventName: readActiveEvent(), rings,
+      groups: typeof loadGroups === 'function' ? loadGroups() : [],
+      heartbeatSeconds: DISCONNECT_AFTER_MS / 1000
+    });
+    res.set('Cache-Control', 'no-store');
+    if (req.path.endsWith('/estimates')) return res.json(estimates);
     return res.json({
       serverBaseUrl: serverBaseUrlForRequest(req),
       ringConfig: state.config,
@@ -542,9 +550,27 @@ function createRingRouter(deps) {
         disconnectAfterSeconds: DISCONNECT_AFTER_MS / 1000,
         resetMode: 'manual'
       },
-      rings
+      rings,
+      estimates
     });
-  });
+  }
+
+  async function loadRingBoard(req, res) {
+    res.set('Cache-Control', 'no-store');
+    const eventName = readActiveEvent();
+    try {
+      if (eventName && typeof deps.loadSavedGroups === 'function') await deps.loadSavedGroups(eventName);
+      if (readActiveEvent() !== eventName) {
+        return res.status(409).json({ error: 'The active event changed. Refresh estimates before continuing.' });
+      }
+      return ringBoard(req, res);
+    } catch (error) {
+      console.error('Failed to load ring estimates:', error);
+      return res.status(500).json({ error: 'Unable to load saved divisions for estimation.' });
+    }
+  }
+  router.get('/rings', loadRingBoard);
+  router.get('/rings/estimates', loadRingBoard);
 
   router.get('/rings/:ringId/bootstrap', handleRequestGroup);
   router.post('/rings/:ringId/request-group', handleRequestGroup);

@@ -12,6 +12,7 @@ const { createCompetitorStore } = require('./backend/competitorStore');
 const { createGroupStore } = require('./backend/groupStore');
 const { createDivisionRouter } = require('./backend/divisionRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
+const { divisionDurationMs } = require('./backend/ringEstimates');
 const { createResultPacketStore } = require('./backend/resultPacket');
 const { resolveSurfaceName, resolveSurfacePort } = require('./backend/surfacePorts');
 const { registerPageRoutes } = require('./backend/pages');
@@ -494,9 +495,7 @@ function buildPhaseEstimateMs(phaseName, ringState, currentGroup) {
 }
 
 function buildRingEstimateMs(currentGroup) {
-  const competitorCount = currentGroup && Array.isArray(currentGroup.competitors) ? currentGroup.competitors.length : 0;
-  if (competitorCount <= 0) return 0;
-  return competitorCount * 7 * 60 * 1000;
+  return divisionDurationMs(currentGroup) || 0;
 }
 
 function buildSparkringMetrics(ringState, currentGroup) {
@@ -1298,6 +1297,7 @@ app.use('/api', createRingRouter({
   findGroupUsageAcrossRings,
   loadGroup: groupStore.loadGroup,
   loadGroups: groupStore.loadGroups,
+  loadSavedGroups: primeGroupCacheFromDatabase,
   serverBaseUrlForRequest,
   DISCONNECT_AFTER_MS,
   saveUploadedDivisionPacket,

@@ -1,6 +1,118 @@
 # tournament-server
 Tournament Management Server Source
 
+## Prediction/estimation checkpoint: 2026-10-25
+
+Branch `feature/prediction-estimation` builds on the tooltip/UI cleanup
+checkpoint and includes the shared estimation engine, active-event APIs,
+Ring Assignment tile estimates, Head Table planning windows, freshness guards,
+page help, and stable success feedback documented below.
+
+This checkpoint does not implement Audience Monitor or Competitor/Volunteer
+Lookup screens. Their next development branch, `feature/audience-monitor-lookup`,
+starts from this checkpoint so it retains the shared estimation support and
+reviewed day-of UI. No merge into `feature/tournament-day-of` is included.
+
+Validation: `npm test` (including estimation, integrated UI, help, and ring
+contracts) and `git diff --check`. Browser checks covered compact tile layout,
+visible start/duration text, next-day dates, stale-start replacement, page help,
+and removal of division hover summaries using read-only fixtures.
+
+## Ring planning estimates
+
+Branch `feature/prediction-estimation` adds shared active-event forecasts to
+the integrated Ring Assignment and Head Table pages. Restart the server and
+refresh the browser to load the backend and UI together. No new dependencies,
+automatic assignments, ring resets, or saved-data migrations are required.
+
+- Select a ring for its current division's approximate completion, ordered
+  queued-division start windows, and availability after its existing queue.
+- Available division tiles show one additional line, for example
+  `Start ~10:40 AM · Ring ~42 min`, without a hover summary.
+  The start assumes the earliest projected available ring. Suggestions are independent:
+  they do not reserve capacity, reorder the queue, or promise a call time.
+  If a start cannot be predicted, `Start TBD` is shown; a valid saved-roster
+  duration remains visible. Missing duration data explicitly shows `Ring time TBD`.
+- A compact summary identifies the earliest projected ring availability.
+  Existing compact cards, phase pills, connection indicators and assistance
+  actions are preserved. Each page's **?** explains the model and limitations.
+- Ring Assignment confirms successful queue, removal, reset, and layout actions
+  through the updated ring/queue state, without transient success banners that
+  shift the board. Errors, validation warnings, and destructive confirmations
+  remain explicit.
+- Empty configured rings without connected tablets contribute **planning-only**
+  availability, assuming staffing/connection before use. Their connection badges
+  remain unchanged. Current or queued work still requires a connected tablet;
+  the exception never overrides outstanding assistance.
+- Missing roster/start/progress data, disconnection on rings with work, and outstanding assistance
+  produce explicit unavailable reasons. An unknown queued predecessor blocks
+  later predictions on that ring without discarding earlier valid projections.
+- Estimated starts and ring hover help expire without a successful refresh, even
+  when a drag/interaction temporarily pauses normal polling.
+  A tile's expired start becomes `Start TBD (stale)` without removing its duration.
+
+### Initial model and confidence
+
+The existing **seven minutes per saved competitor** remains the total division
+baseline; it is not a learned or calibrated average. Total ring time assumes
+every saved competitor participates in all applicable disciplines (Weapons only
+where applicable). This is a rough total, not a separate per-discipline timing
+calculation; the seven-minute baseline is unchanged. Applicable server-defined
+phases (including Weapons where appropriate) use equal work shares. Reported
+progress reduces remaining work; after at least 10% overall progress, slower
+observed pace extends it. Faster early progress never accelerates the model
+below the baseline pace. A running division retains at least two minutes of
+remaining work until staff/tablet completion is reported.
+
+Every queued start includes a two-minute transition. The model assumes prompt
+manual starts, existing queue order, and no unreported breaks. Windows use 25%
+uncertainty, accumulated through preceding work and transitions; current-work
+uncertainty has a two-minute minimum and expands for overdue work without useful
+progress. Confidence is explicitly **low**. Future assistance, staffing changes,
+scheduled breaks, ring suitability constraints, and actual call times cannot be
+predicted by this initial model.
+
+### Shared API for future monitors
+
+`GET /api/rings` includes an additive `estimates` field.
+`GET /api/rings/estimates` returns that same versioned projection contract
+without competitor rosters, names, dates of birth, tablet identities, or results.
+Both load saved divisions for the **active event**, set `Cache-Control: no-store`,
+and return HTTP 409 if the active event changes while loading. The optional
+`?eventName=...` guard rejects a mismatched event. Loading failures return HTTP
+500 rather than an empty successful forecast.
+
+The snapshot contains:
+
+- `version: 1`, `eventName`, `generatedAt`, `validUntil`, `status`, `reason`,
+  `advisory`, `policy`, and human-readable `assumptions`.
+- `rings[]`: ring identity/connection, `current` (or `null`), ordered `queue[]`
+  with division IDs/positions, and `availability` after the queue. Current work
+  includes `remainingMs` and a `completionWindow`; queue entries include
+  `durationMs`, a start `window`, and a `completionWindow`.
+- `unassigned[]`: independent hypothetical starts, division IDs, duration,
+  and suggested ring identity where available.
+- Estimated ring availability and unassigned suggestions include `planningOnly`
+  to distinguish an empty unconnected ring from operationally connected capacity.
+- Estimated items have `status: "estimated"`, `confidence: "low"`, and ISO
+  `earliestAt`, `expectedAt`, `latestAt` timestamps in their window. Unavailable
+  items instead have `status: "unavailable"`, a `reason`, and `window: null`.
+
+Snapshot `status: "ready"` means the active-event snapshot was built, not that
+every ring has an estimate. With no active event the snapshot is explicitly
+unavailable. A consumer must verify event identity, version, item status, window
+ordering, and freshness before presenting predictions. Reject future/invalid
+timestamps and discard forecasts by `validUntil`, never later than 30 seconds
+after `generatedAt`. Expiry may be earlier when a tablet approaches the normal
+90-second disconnect threshold. Refresh at the day-of pages' 10-second cadence;
+keep visible unavailable/stale status on errors rather than retaining old times.
+Times include dates when needed for queues extending into another day.
+
+The audience-safe projection endpoint is support for future monitor development,
+not a separate access-control boundary. Audience Monitor and competitor-facing
+UI, automatic scheduling, simulation, learned timings, and Android changes are
+deliberately deferred. Validate with `npm test` and `git diff --check`.
+
 ## Tooltip and UI cleanup checkpoint: 2026-10-25
 
 Branch `feature/tooltip-updates` builds on `feature/tournament-day-of` and

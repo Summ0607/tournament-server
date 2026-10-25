@@ -226,6 +226,10 @@
     .ra-ring-line .ra-connection { font-size: 11px; white-space: nowrap; gap: 4px; padding: 2px 6px; }
     .ra-ring-line .ra-assignment { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ra-ring-line .ra-meta { flex-shrink: 0; font-size: 11px; white-space: nowrap; }
+    .estimate-text { font-size: 11px; color: #475569; font-weight: 400; }
+    .ra-division-estimate { white-space: nowrap; font-size: 11px; color: #475569; }
+    .estimate-summary { font-size: 12px; color: #475569; }
+    .estimate-details p { margin: 5px 0; font-size: 12px; }
     .ra-ring.connected { --ra-connection-color: #15803d; }
     .ra-ring.disconnected { --ra-connection-color: #b91c1c; }
     .ra-connection {
@@ -1303,7 +1307,9 @@
               </div>
               <p class="ra-meta" data-help-source="Assigning divisions">Select a ring to view its details. Click a division to queue it to the selected ring, or drag a division onto any ring. Rings remain in label order. Green means connected, red disconnected, and gray no tablet; blue indicates selection or a drop target.</p>
               <p data-help-source="Ring details and maintenance">Show or hide a division's competitor list in Ring Details. Lists scroll after ten rows. Remove takes a division out of the queue without deleting it. Reset ring and applying a saved layout require confirmation because they clear operational state.</p>
+              <p data-help-source="Planning estimates">Available division tiles show an approximate start and total ring time on one extra line; no hover is needed. Each start assumes assigning that division next to the earliest projected available ring, independently of other available divisions. It is not a reservation or automatic assignment. Start TBD means no usable prediction; ring time can still be shown. Ring time assumes everyone competes in all applicable disciplines, including Weapons only where applicable. Seven minutes per saved competitor is a rough total baseline, not a learned average or a separate calculation for each discipline. Empty configured rings may contribute planning starts even without a connected tablet; this does not mean they are operationally ready. Rings with current or queued work still need a connected tablet. Assistance and missing saved data can block predictions. Select a ring for queue windows and completion estimates. Two-minute transitions assume prompt starts without unreported breaks. Times are low confidence, not call times, and starts expire after 30 seconds without refresh.</p>
               <div class="notice" id="raNotice" role="status" aria-live="polite"></div>
+              <div id="raEstimateSummary" class="estimate-summary" role="status"></div>
               <div class="ra-board">
                 <section class="ra-section" aria-labelledby="raDivisionsTitle">
                   <div class="ra-heading"><h2 id="raDivisionsTitle">Available Divisions</h2><span id="raDivisionCount"></span></div>
@@ -1327,8 +1333,10 @@
               <div id="htFreshness" class="ht-freshness" role="status" aria-live="polite">Waiting for first refresh.</div>
               <div id="htNotice" class="notice" role="status" aria-live="polite"></div>
               <div id="htSummary" class="ht-summary" aria-label="Active event summary"></div>
+              <div id="htEstimateSummary" class="estimate-summary" role="status"></div>
               <p data-help-source="Ring progression and status">Select a ring for details. Green phases are complete, blue fills the active phase, and neutral phases are upcoming. Queued previews are unfilled. Weapons appears only when applicable. Connection badges use green for connected, red for disconnected, and gray for no tablet. A red exclamation mark indicates assistance. Missing timing does not imply a delay. Counts are status indicators, not filters.</p>
               <p data-help-source="Ring details and assistance">Ring Details shows timing, the queue, competitors, and expandable phase history. Competitor lists scroll after ten rows. Clear assistance only after the request has been addressed; confirmation is required. Clearing is not a separate acknowledgement and is disabled when data is stale. Use Ring Assignment for queue editing or ring reset.</p>
+              <p data-help-source="Planning estimates">Select a ring for approximate current completion, queued starts, and availability after the queue. These are not call times. Seven minutes per saved competitor is a total planning baseline assuming everyone competes in all applicable disciplines, not a learned average or per-discipline calculation; equal applicable-phase shares and slower observed pace adjust remaining work. Empty configured rings without connected tablets contribute planning-only availability, not operational readiness. Rings with current or queued work still require a connected tablet. Two-minute transitions assume staff start queued work promptly without unreported breaks. Windows widen through the queue, are low confidence, and expire after 30 seconds. Assistance, missing rosters, or unknown phase progress block affected predictions.</p>
               <p class="ra-meta" id="htOrderHint" data-help-source="Display order">Priority highlights assistance, connection problems, and rings needing work. Select a ring for details.</p>
               <div id="htRings" class="ht-rings" aria-label="Ring operations overview"></div>
             </div>
@@ -2064,6 +2072,7 @@
           return;
         }
         currentView = view;
+        clearTimeout(estimateTimer);
         ht.requestToken += 1;
         clearTimeout(ht.timer);
         clearTimeout(ht.freshnessTimer);
@@ -2953,7 +2962,7 @@
 
       const ra = {
         eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
-        ready: false, busy: false, requestToken: 0, timer: null,
+        ready: false, busy: false, requestToken: 0, timer: null, estimates: null,
         heartbeatSeconds: 90, config: {}, pointerDrag: null, nativeDragging: false, suppressClickUntil: 0
       };
       const raDivisionsEl = document.getElementById('raDivisions');
@@ -2970,6 +2979,121 @@
 
       function raAnchor(group) {
         return String(group.groupDivisionNumber ?? group.groupId ?? group.id ?? '');
+      }
+
+      let estimateTimer = null;
+
+      function estimateContext(context) {
+        const snapshot = context.estimates;
+        if (context.error) return 'Ring data could not be refreshed.';
+        if (!snapshot || snapshot.version !== 1) return 'Server estimation support is unavailable; restart the server if recently updated.';
+        if (snapshot.eventName !== context.eventName) return 'Estimate event context does not match.';
+        if (snapshot.status !== 'ready') return snapshot.reason || 'Estimates unavailable.';
+        if (!Array.isArray(snapshot.rings) || !Array.isArray(snapshot.unassigned)
+          || snapshot.rings.some((ring) => !ring || !Array.isArray(ring.queue) || !ring.availability)) return 'Invalid estimation snapshot; refresh required.';
+        const generated = Date.parse(snapshot.generatedAt);
+        const expiry = Date.parse(snapshot.validUntil);
+        if (!Number.isFinite(generated) || !Number.isFinite(expiry) || generated > Date.now() + 5000
+          || Date.now() - generated > 30000 || expiry <= Date.now()) return 'Estimate data is stale; refresh required.';
+        return '';
+      }
+
+      function estimateWindow(window) {
+        if (!validEstimateWindow(window)) return '';
+        const earliest = Date.parse(window.earliestAt);
+        const latest = Date.parse(window.latestAt);
+        const format = (value) => new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const day = (value) => new Date(value).toLocaleDateString([], { month: 'short', day: 'numeric' });
+        return new Date(earliest).toDateString() === new Date(latest).toDateString()
+          && new Date(earliest).toDateString() === new Date().toDateString()
+          ? `${format(earliest)} - ${format(latest)}`
+          : `${day(earliest)} ${format(earliest)} - ${day(latest)} ${format(latest)}`;
+      }
+
+      function validEstimateWindow(window) {
+        if (!window) return false;
+        const times = [window.earliestAt, window.expectedAt, window.latestAt].map(Date.parse);
+        return times.every(Number.isFinite) && times[0] <= times[1] && times[1] <= times[2];
+      }
+
+      function estimateText(context, estimate, label) {
+        const reason = estimateContext(context) || (!estimate || estimate.status !== 'estimated' ? estimate && estimate.reason || 'No estimate reported.' : '');
+        if (reason) return `${label} unavailable: ${reason}`;
+        if (!validEstimateWindow(estimate.window)) return `${label} unavailable: No valid estimate window reported.`;
+        if (estimate.window && Date.parse(estimate.window.latestAt) <= Date.now()) return `${label}: Now (approx.)`;
+        return `${label}: ${estimateWindow(estimate.window)} (approx.)`;
+      }
+
+      function estimateSpan(context, estimate, label) {
+        const valid = !estimateContext(context) && estimate && estimate.status === 'estimated' && validEstimateWindow(estimate.window);
+        return `<span class="estimate-text"${valid ? ` data-estimate-expiry="${estimateExpiry(context)}"` : ''}>${gbEsc(estimateText(context, estimate, label))}</span>`;
+      }
+
+      function estimateRing(context, ringId) {
+        return !estimateContext(context)
+          ? context.estimates.rings.find((item) => item && item.ringId === ringId) : null;
+      }
+
+      function estimateExpiry(context) {
+        return new Date(Math.min(Date.parse(context.estimates.validUntil), Date.parse(context.estimates.generatedAt) + 30000)).toISOString();
+      }
+
+      function estimateHelpExpiry(context) {
+        return !estimateContext(context) ? ` data-estimate-help-expiry="${estimateExpiry(context)}"` : '';
+      }
+
+      function estimateDetails(context, ring) {
+        const estimate = estimateRing(context, ring.ringId);
+        const current = estimate && estimate.current;
+        const completion = current && { ...current, window: current.completionWindow };
+        return `<section class="ra-detail estimate-details"><h3>Planning estimates</h3>
+          ${ring.groupDivisionNumber ? `<p>${estimateSpan(context, completion, 'Current completion')}</p>` : ''}
+          <p>${estimateSpan(context, estimate && estimate.availability, 'Ring free after queue')}</p>
+          ${estimate?.availability?.planningOnly ? '<p class="ra-meta">Planning only: assumes this empty ring can be staffed and connected before starting.</p>' : ''}
+          <p class="ra-meta">Low-confidence planning windows, not call times. Subject to change.</p>
+        </section>`;
+      }
+
+      function estimateSummary(context, id) {
+        const reason = estimateContext(context);
+        const candidates = !reason && context.estimates.rings.filter((item) => item?.availability?.status === 'estimated' && validEstimateWindow(item.availability.window))
+          .sort((a, b) => Date.parse(a.availability.window.expectedAt) - Date.parse(b.availability.window.expectedAt));
+        const next = candidates && candidates[0];
+        document.getElementById(id).innerHTML = next
+          ? `${estimateSpan(context, next.availability, `Next ring free after queue: ${next.ringLabel}`)} <span class="estimate-text">Subject to change.${context.estimates.rings.some((ring) => ring.availability.planningOnly) ? ' Includes empty unconnected rings for planning only.' : ''}</span>`
+          : `<span class="estimate-text">Planning estimates unavailable: ${gbEsc(reason || 'No ring has reliable availability data.')}</span>`;
+        estimateTick();
+      }
+
+      function estimateTick() {
+        clearTimeout(estimateTimer);
+        if (!['ring-assignment', 'head-table'].includes(currentView)) return;
+        document.querySelectorAll('[data-estimate-expiry]').forEach((element) => {
+          if (Date.parse(element.getAttribute('data-estimate-expiry')) <= Date.now()) {
+            element.textContent = element.getAttribute('data-estimate-stale-text') || 'Estimate unavailable: data is stale; refresh required.';
+            element.removeAttribute('data-estimate-expiry');
+          }
+        });
+        document.querySelectorAll('[data-estimate-help-expiry]').forEach((element) => {
+          if (Date.parse(element.getAttribute('data-estimate-help-expiry')) <= Date.now()) {
+            element.setAttribute('data-help', 'Planning estimate unavailable: data is stale; refresh required. Select a ring for details.');
+            element.removeAttribute('title');
+            element.removeAttribute('data-estimate-help-expiry');
+          }
+        });
+        estimateTimer = setTimeout(estimateTick, 1000);
+      }
+
+      function raDivisionEstimate(group) {
+        const suggestion = !estimateContext(ra)
+          && ra.estimates.unassigned.find((item) => item && item.groupDivisionNumber === raAnchor(group));
+        const validStart = suggestion && suggestion.status === 'estimated' && validEstimateWindow(suggestion.window);
+        const time = validStart ? new Date(suggestion.window.expectedAt) : null;
+        const clock = time && time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const start = time ? `Start ~${time.toDateString() === new Date().toDateString() ? '' : `${time.toLocaleDateString([], { month: 'short', day: 'numeric' })} `}${clock}` : 'Start TBD';
+        const duration = suggestion && Number.isFinite(suggestion.durationMs) && suggestion.durationMs > 0
+          ? `Ring ~${Math.ceil(suggestion.durationMs / 60000)} min` : 'Ring time TBD';
+        return `<span class="ra-division-estimate"><span${validStart ? ` data-estimate-expiry="${estimateExpiry(ra)}" data-estimate-stale-text="Start TBD (stale)"` : ''}>${gbEsc(start)}</span> &middot; ${gbEsc(duration)}</span>`;
       }
 
       function raGroup(id) {
@@ -3031,12 +3155,13 @@
               <dt>Last heartbeat</dt><dd>${gbEsc(dateLabel(ring.lastHeartbeatAt))}</dd>
             </dl>
           </section>
+          ${estimateDetails(ra, ring)}
           <section class="ra-detail"><h3>Current division</h3>
             ${current ? `<div class="ra-division-label">${gbEsc(raGroupLabel(current))}</div><div class="ra-division-actions">${competitorButton(current)}</div>` : '<p class="ra-meta">None assigned</p>'}
           </section>
           <section class="ra-detail"><h3>Queued divisions (${queue.length})</h3>
             ${queue.length ? `<ol class="ra-queue">${queue.map((id) => `<li>
-              <div class="ra-division-label">${gbEsc(raGroupLabel(id))}</div>
+              <div class="ra-division-label">${gbEsc(raGroupLabel(id))}<br>${estimateSpan(ra, (estimateRing(ra, ring.ringId) || { queue: [] }).queue.find((item) => item.groupDivisionNumber === String(id)), 'Estimated start')}</div>
               <div class="ra-division-actions">${competitorButton(id)}
               <button type="button" data-ra-remove="${gbEsc(id)}" data-help="Remove this division from the ring queue without deleting the division."${ra.busy ? ' disabled' : ''} aria-label="Remove Division ${gbEsc(id)} from queue">Remove</button>
               </div>
@@ -3062,9 +3187,10 @@
           const countLabel = `${count} ${count === 1 ? 'competitor' : 'competitors'}`;
           const description = group.name && group.name !== title ? group.name
             : [gbRankRange(group.competitors), gbAgeRange(group.competitors)].filter(Boolean).join(' - ');
-          return `<button type="button" class="ra-card ra-division" draggable="${!ra.busy}" data-ra-division="${gbEsc(raAnchor(group))}" title="${gbEsc([title, description, countLabel].filter(Boolean).join(' - '))}"${ra.busy ? ' disabled' : ''}>
+          return `<button type="button" class="ra-card ra-division" draggable="${!ra.busy}" data-ra-division="${gbEsc(raAnchor(group))}"${ra.busy ? ' disabled' : ''}>
             <span class="ra-division-head"><strong>${gbEsc(title)}</strong><span class="ra-meta">${countLabel}</span></span>
             ${description ? `<span class="ra-meta ra-division-description">${gbEsc(description)}</span>` : ''}
+            ${raDivisionEstimate(group)}
           </button>`;
         }).join('') : `<p class="ra-meta">${!ra.ready ? 'Divisions unavailable.' : !ra.groups.length
             ? 'No saved divisions for the active event. Build and save groups first.'
@@ -3074,7 +3200,7 @@
           const connection = raConnection(ring);
           const queued = (ring.queuedGroupDivisionNumbers || []).length;
           const assignment = ring.groupDivisionNumber ? `Running division ${ring.groupDivisionNumber}` : queued ? 'Queued' : 'Available';
-          return `<button type="button" class="ra-card ra-ring ${connection.tone}" data-ra-ring="${gbEsc(ring.ringId)}" data-help="Select this ring to view details or queue a division to it." aria-pressed="${ra.selectedRingId === ring.ringId}">
+          return `<button type="button" class="ra-card ra-ring ${connection.tone}" data-ra-ring="${gbEsc(ring.ringId)}"${estimateHelpExpiry(ra)} title="${gbEsc(`Select this ring for queue start estimates and details. ${estimateText(ra, estimateRing(ra, ring.ringId)?.availability, 'Ring free after queue')}`)}" aria-pressed="${ra.selectedRingId === ring.ringId}">
             <span class="ra-ring-line"><strong>Ring ${gbEsc(ring.ringLabel)}</strong><span class="ra-connection">${connection.label}</span></span>
             <span class="ra-ring-line"><span class="ra-assignment" title="${gbEsc(assignment)}">${gbEsc(assignment)}</span><span class="ra-meta">${queued} queued</span></span>
           </button>`;
@@ -3086,6 +3212,7 @@
         raLayoutBtn.textContent = `Apply saved event ring layout (${x} x ${y})`;
         raRefreshBtn.disabled = ra.busy;
         raRenderDetails();
+        estimateSummary(ra, 'raEstimateSummary');
         renderState();
       }
 
@@ -3099,6 +3226,7 @@
           const eventName = state.activeEventName;
           if (!eventName) throw new Error('No active event. Activate an event on Event Setup first.');
           if (ra.eventName !== eventName) {
+            ra.estimates = null;
             ra.groups = [];
             ra.rings = [];
             ra.selectedRingId = '';
@@ -3117,6 +3245,7 @@
           ra.groups = divisions.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
           ra.rings = board.rings.slice().sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
           ra.available = board.availableGroupDivisionNumbers;
+          ra.estimates = board.estimates || null;
           ra.config = board.ringConfig || {};
           ra.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
           if (!ra.rings.some((ring) => ring.ringId === ra.selectedRingId)) ra.selectedRingId = '';
@@ -3127,6 +3256,7 @@
         } catch (error) {
           if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
           ra.ready = false;
+          ra.estimates = null;
           ra.groups = [];
           ra.rings = [];
           ra.available = [];
@@ -3142,7 +3272,7 @@
         }
       }
 
-      async function raUpdate(path, options, message) {
+      async function raUpdate(path, options) {
         if (ra.busy || !ra.ready) return;
         ra.busy = true;
         ra.requestToken += 1;
@@ -3151,7 +3281,6 @@
         try {
           await fetchJson(`${path}?eventName=${encodeURIComponent(ra.eventName)}`, options);
           await raLoad();
-          if (currentView === 'ring-assignment' && ra.ready) raNotice(message, 'ok');
         } catch (error) {
           await raLoad();
           if (currentView === 'ring-assignment') raNotice(`Update failed: ${error.message}`, 'error');
@@ -3176,7 +3305,7 @@
         await raUpdate(`/api/rings/${encodeURIComponent(ringId)}/queue`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ groupDivisionNumber: divisionId })
-        }, `Division ${divisionId} queued.`);
+        });
       }
 
       raRefreshBtn.addEventListener('click', raLoad);
@@ -3205,11 +3334,11 @@
           raRenderDetails();
         } else if (button.dataset.raRemove) {
           await raUpdate(`/api/rings/${encodeURIComponent(ra.selectedRingId)}/queue/${encodeURIComponent(button.dataset.raRemove)}`,
-            { method: 'DELETE' }, 'Queued division removed.');
+            { method: 'DELETE' });
         } else if (button.hasAttribute('data-ra-reset')) {
           if (!window.confirm('Reset this ring? This clears its current division, queue, completed-division history, tablet, progress, and assistance state.')) return;
           ra.selectedGroupId = '';
-          await raUpdate(`/api/rings/${encodeURIComponent(ra.selectedRingId)}/reset`, { method: 'POST' }, 'Ring reset.');
+          await raUpdate(`/api/rings/${encodeURIComponent(ra.selectedRingId)}/reset`, { method: 'POST' });
         }
       });
       raLayoutBtn.addEventListener('click', async () => {
@@ -3218,7 +3347,7 @@
         await raUpdate('/api/rings/config', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ letterCount: Number(state.activeEventMeta.ringConfigX), numberCount: Number(state.activeEventMeta.ringConfigY) })
-        }, 'Saved event ring layout applied.');
+        });
       });
       function raEndDrag() {
         raRingsEl.querySelectorAll('.drop').forEach((card) => card.classList.remove('drop'));
@@ -3303,7 +3432,7 @@
 
       const ht = {
         eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
-        ready: false, busy: false, error: '', lastLoadedAt: null, heartbeatSeconds: 90,
+        ready: false, busy: false, error: '', lastLoadedAt: null, heartbeatSeconds: 90, estimates: null,
         requestToken: 0, timer: null, freshnessTimer: null, historyOpen: false, order: [], hovering: false
       };
       const htRingsEl = document.getElementById('htRings');
@@ -3480,6 +3609,7 @@
             ${row('Phase started', htDate(ring.currentPhaseStartTime))}
             ${ring.currentPhaseEndTime ? row('Phase ended', htDate(ring.currentPhaseEndTime)) : ''}
           </dl></section>
+          ${estimateDetails(ht, ring)}
           ${phases.length ? `<section class="ra-detail"><h3>${ring.groupDivisionNumber ? 'Phase progression' : 'Next phase - not started'}</h3><ol class="ht-phase-list">${phases.map((item) => `<li>${gbEsc(item.label)} - ${item.state}${item.percent == null ? ' (progress unavailable)' : ` (${Math.round(item.percent)}%)`}</li>`).join('')}</ol></section>` : ''}
           ${ring.assistanceType ? `<section class="ra-detail ht-alert urgent"><h3>${gbEsc(ring.assistanceType)} assistance</h3>
             <p>Waiting ${gbEsc(htElapsed(ring.assistanceRequestedAt))}. Requested: ${gbEsc(htDate(ring.assistanceRequestedAt))}</p>
@@ -3491,7 +3621,7 @@
             ${ring.groupDivisionNumber ? `<p class="ra-division-label">${gbEsc(htGroupLabel(ring.groupDivisionNumber))}</p>${memberControl(ring.groupDivisionNumber)}` : '<p class="ra-meta">None assigned</p>'}
           </section>
           <section class="ra-detail"><h3>Queue (${queue.length})</h3>
-            ${queue.length ? `<ol class="ra-queue">${queue.map((id) => `<li><span class="ra-division-label">${gbEsc(htGroupLabel(id))}</span><span>${memberControl(id)}</span></li>`).join('')}</ol>` : '<p class="ra-meta">No queued divisions</p>'}
+            ${queue.length ? `<ol class="ra-queue">${queue.map((id) => `<li><span class="ra-division-label">${gbEsc(htGroupLabel(id))}<br>${estimateSpan(ht, (estimateRing(ht, ring.ringId) || { queue: [] }).queue.find((item) => item.groupDivisionNumber === String(id)), 'Estimated start')}</span><span>${memberControl(id)}</span></li>`).join('')}</ol>` : '<p class="ra-meta">No queued divisions</p>'}
           </section>
           ${group ? `<section class="ra-detail"><h3>${gbEsc(htGroupLabel(ht.selectedGroupId))}</h3>${raMembers(group)}</section>` : ''}
           <section class="ra-detail"><details id="htHistory"${ht.historyOpen ? ' open' : ''}><summary>Phase history (${history.length})</summary>
@@ -3536,7 +3666,7 @@
         htRingsEl.innerHTML = ht.ready ? rings.map((ring) => {
           const connection = raConnection(ring, ht.heartbeatSeconds);
           const attention = htAttention(ring);
-          return `<button type="button" class="ht-ring ${connection.tone}" data-ht-ring="${gbEsc(ring.ringId)}" aria-pressed="${ht.selectedRingId === ring.ringId}" title="${gbEsc([ring.groupDivisionNumber ? htGroupLabel(ring.groupDivisionNumber) : 'No current division', attention.label].filter(Boolean).join(' - '))}">
+          return `<button type="button" class="ht-ring ${connection.tone}" data-ht-ring="${gbEsc(ring.ringId)}"${estimateHelpExpiry(ht)} aria-pressed="${ht.selectedRingId === ring.ringId}" title="${gbEsc([ring.groupDivisionNumber ? htGroupLabel(ring.groupDivisionNumber) : 'No current division', attention.label, estimateText(ht, estimateRing(ht, ring.ringId)?.availability, 'Ring free after queue')].filter(Boolean).join(' - '))}">
             <span class="ht-identity"><strong>Ring ${gbEsc(ring.ringLabel)}</strong><span class="ra-connection">${connection.label}</span>${ring.assistanceType ? `<span class="ht-assistance" aria-label="${gbEsc(ring.assistanceType)} assistance requested" title="${gbEsc(attention.label)}">!</span>` : ''}</span>
             ${htPhasePill(ring)}</button>`;
         }).join('') || '<p class="ra-meta">No configured rings for this event.</p>' : '<p class="ra-meta">Ring monitoring unavailable.</p>';
@@ -3549,6 +3679,7 @@
         htRenderDetails();
         renderState();
         htTickFreshness();
+        estimateSummary(ht, 'htEstimateSummary');
       }
 
       async function htLoad() {
@@ -3562,6 +3693,7 @@
           verifiedEvent = state.activeEventName;
           if (!verifiedEvent) throw new Error('No active event. Activate an event on Event Setup first.');
           if (verifiedEvent !== ht.eventName) {
+            ht.estimates = null;
             ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
             ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = []; ht.lastLoadedAt = null;
             htRender();
@@ -3574,6 +3706,7 @@
           ht.groups = groups.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
           ht.rings = board.rings;
           ht.available = board.availableGroupDivisionNumbers;
+          ht.estimates = board.estimates || null;
           ht.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
           if (!ht.rings.some((ring) => ring.ringId === ht.selectedRingId)) ht.selectedRingId = '';
           if (!ht.groups.some((group) => raAnchor(group) === ht.selectedGroupId)) ht.selectedGroupId = '';
@@ -3584,6 +3717,7 @@
           if (token !== ht.requestToken || currentView !== 'head-table') return;
           ht.error = error.message;
           if (!verifiedEvent || ht.eventName !== verifiedEvent) {
+            ht.estimates = null;
             ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
             ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = [];
           }

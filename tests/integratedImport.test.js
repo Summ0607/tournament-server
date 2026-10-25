@@ -7,6 +7,7 @@ const { test } = require('node:test');
 const initializeDatabase = require('../db/init');
 const importCSV = require('../db/import-csv');
 const { createCompetitorStore } = require('../backend/competitorStore');
+const { buildEstimates } = require('../backend/ringEstimates');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
 const winter = 'Winter Tournament 2027';
@@ -44,6 +45,7 @@ function element(text = '') {
     insertCell() { const cell = element(); this.children.push(cell); return cell; },
     setAttribute(name, next) { this[name] = next; },
     getAttribute(name) { return this[name]; },
+    removeAttribute(name) { delete this[name]; },
     hasAttribute(name) { return Object.hasOwn(this, name); },
     querySelectorAll() { return []; },
     querySelector() { return null; },
@@ -115,7 +117,8 @@ async function loadPage(options = {}) {
         return elements.get(id);
       },
       querySelector: () => element(),
-      querySelectorAll: () => nav,
+      querySelectorAll: (selector) => selector === '.sidebar-item' ? nav
+        : (options.estimateNodes || []).filter((node) => node.hasAttribute(selector.slice(1, -1))),
       createElement: () => element(),
       elementFromPoint: () => pointerTarget
     },
@@ -154,7 +157,9 @@ async function loadPage(options = {}) {
           if (name !== activeEvent) return { ok: false, json: async () => ({ error: 'The active event changed. Refresh Ring Assignment before continuing.' }) };
           const assigned = new Set(rings.flatMap((ring) => [ring.groupDivisionNumber, ...(ring.queuedGroupDivisionNumbers || []), ...(ring.completedGroupDivisionNumbers || [])]).map(String));
           const eventGroups = options.groupsByEvent ? options.groupsByEvent[name] || [] : groups;
-          data = { rings: JSON.parse(JSON.stringify(rings)), ringConfig, availableGroupDivisionNumbers: eventGroups.map((group) => String(group.groupDivisionNumber)).filter((id) => !assigned.has(id)) };
+          data = { rings: JSON.parse(JSON.stringify(rings)), ringConfig,
+            estimates: typeof options.estimates === 'function' ? options.estimates() : options.estimates,
+            availableGroupDivisionNumbers: eventGroups.map((group) => String(group.groupDivisionNumber)).filter((id) => !assigned.has(id)) };
           break;
         }
         case '/api/rings/config': {
@@ -253,8 +258,10 @@ async function loadPage(options = {}) {
     failRings: (fail = true) => { ringFailure = fail; },
     advanceTime: async (milliseconds) => {
       clockOffset += milliseconds;
-      const tick = [...timers.values()].find((timer) => timer.delay === 1000);
-      if (tick) tick.callback();
+      const ticks = [...timers.entries()].filter(([, timer]) => timer.delay === 1000);
+      for (const [id, timer] of ticks) {
+        if (timers.delete(id)) timer.callback();
+      }
       await settle();
     },
     refreshDayOf: async () => {
@@ -663,7 +670,7 @@ test('ring details use plain division names and explicit competitor buttons', as
   await page.ringAction('raRings', { raRing: 'ring-a-1' });
   let markup = page.element('ringAssignmentDetails').innerHTML;
   assert.match(markup, /class="ra-division-label">Division 20 - Active division<\/div>/);
-  assert.match(markup, /class="ra-division-label">Division 22 - Queued division<\/div>/);
+  assert.match(markup, /class="ra-division-label">Division 22 - Queued division<br>/);
   assert.match(markup, /data-ra-group="20"[^>]* aria-expanded="false"[^>]*>Show competitors<\/button>/);
   assert.match(markup, /data-ra-group="22"[^>]*>Show competitors<\/button>/);
   assert.doesNotMatch(markup, /ra-link/);
@@ -819,14 +826,19 @@ test('ring assignment queues by click and drop, displays members, removes queue 
   assert.match(page.element('raRings').innerHTML, /No tablet/);
   assert.match(page.element('raRings').innerHTML, /Queued/);
   assert.match(page.element('ringAssignmentDetails').innerHTML, /Saved Competitor/);
+  assert.equal(page.element('raNotice').textContent, '');
+  assert.equal(page.element('raNotice').className, 'notice');
   await page.ringAction('ringAssignmentDetails', { raRemove: '20' });
   assert.match(page.element('raDivisions').innerHTML, /data-ra-division="20"/);
+  assert.equal(page.element('raNotice').className, 'notice');
   await page.ringAction('raRings', { raRing: 'ring-a-1' }, { event: 'drop', divisionId: '20' });
   assert.doesNotMatch(page.element('raDivisions').innerHTML, /data-ra-division="20"/);
+  assert.equal(page.element('raNotice').className, 'notice');
   await page.ringAction('ringAssignmentDetails', {}, { reset: true });
   assert.match(page.confirmations.at(-1), /Reset this ring/);
   assert.match(page.element('raDivisions').innerHTML, /data-ra-division="20"/);
-  assert.match(page.element('raNotice').textContent, /Ring reset/);
+  assert.equal(page.element('raNotice').textContent, '');
+  assert.equal(page.element('raNotice').className, 'notice');
 });
 
 test('ring assignment direct link, search, empty state, errors and event switching stay scoped', async () => {
@@ -884,6 +896,8 @@ test('saved ring layout is explicit and confirmed instead of resetting assignmen
   assert.deepEqual(JSON.parse(apply.init.body), { letterCount: 2, numberCount: 3 });
   assert.equal(page.element('raRingCount').textContent, '6 rings');
   assert.equal(page.element('raLayoutBtn').hidden, true);
+  assert.equal(page.element('raNotice').textContent, '');
+  assert.equal(page.element('raNotice').className, 'notice');
 });
 
 test('Head Table integrates active-event totals, preserves disconnected divisions and has no assignment/reset controls', async () => {
@@ -1163,4 +1177,139 @@ test('Head Table clearing rejects stale event and replaced assistance requests',
     assert.match(page.element('htNotice').textContent, /Unable to clear assistance: The (active event|assistance request) changed/);
     assert.equal(ring.assistanceType, 'general');
   }
+});
+
+function estimationFixture() {
+  const now = Date.now();
+  const groups = [division20, { ...division20, groupDivisionNumber: 22 }, { ...division20, groupDivisionNumber: 24 }];
+  const rings = [{
+    ...ringA1, tabletLabel: 'Tablet', lastHeartbeatAt: new Date(now).toISOString(),
+    groupDivisionNumber: '20', queuedGroupDivisionNumbers: ['22'],
+    assignmentStartedAt: new Date(now - 2 * 60000).toISOString(),
+    phasePlan: { phases: [
+      { key: 'setup', state: 'complete', progress: 100 }, { key: 'hyungs', state: 'active', progress: 0 },
+      { key: 'sparring', state: 'upcoming', progress: 0 }, { key: 'awards', state: 'upcoming', progress: 0 }
+    ] }
+  }];
+  return { activeEvent: winter, selectedEvent: spring, groups, rings,
+    estimates: buildEstimates({ eventName: winter, groups, rings, now }) };
+}
+
+test('Ring Assignment and Head Table show the same queue start and completion windows for the active event', async () => {
+  const fixture = estimationFixture();
+  const page = await loadPage(fixture);
+  await page.openDayOf();
+  await page.ringAction('raRings', { raRing: 'ring-a-1' });
+  const assignment = page.element('ringAssignmentDetails').innerHTML;
+  assert.match(assignment, /Current completion: .+ \(approx\.\)/);
+  assert.match(assignment, /Estimated start: .+ \(approx\.\)/);
+  assert.match(assignment, /Ring free after queue: .+ \(approx\.\)/);
+  assert.match(page.element('raDivisions').innerHTML, /Start ~[^<]+/);
+  assert.match(page.element('raDivisions').innerHTML, /Ring ~7 min/);
+  assert.doesNotMatch(page.element('raDivisions').innerHTML, /\btitle=|\bdata-help=|data-estimate-help-expiry/);
+  assert.match(page.element('raEstimateSummary').innerHTML, /Next ring free after queue: A1/);
+  await page.openDayOf(4);
+  await page.ringAction('htRings', { htRing: 'ring-a-1' });
+  const headTable = page.element('headTableDetails').innerHTML;
+  assert.match(headTable, /Current completion: .+ \(approx\.\)/);
+  assert.equal(headTable.match(/Estimated start: [^<]+/)[0], assignment.match(/Estimated start: [^<]+/)[0]);
+  assert.match(headTable, /Low-confidence planning windows, not call times/);
+  assert.equal(page.requests.some((request) => request.init), false, 'Predictions never schedule or write assignments');
+});
+
+test('predictions reject missing, stale, wrong-event and malformed snapshots and refresh failures explicitly', async () => {
+  for (const invalid of ['missing', 'stale', 'event', 'shape', 'window', 'future']) {
+    const fixture = estimationFixture();
+    if (invalid === 'missing') fixture.estimates = null;
+    if (invalid === 'stale') fixture.estimates.validUntil = new Date(Date.now() - 1).toISOString();
+    if (invalid === 'event') fixture.estimates.eventName = spring;
+    if (invalid === 'shape') fixture.estimates.unassigned = {};
+    if (invalid === 'window') fixture.estimates.rings[0].availability.window.expectedAt = 'invalid';
+    if (invalid === 'future') fixture.estimates.generatedAt = new Date(Date.now() + 60000).toISOString();
+    const page = await loadPage(fixture);
+    await page.openDayOf(4);
+    await page.ringAction('htRings', { htRing: 'ring-a-1' });
+    assert.match(page.element('headTableDetails').innerHTML, /Ring free after queue unavailable:/, invalid);
+    assert.match(page.element('htEstimateSummary').innerHTML, /unavailable/i, invalid);
+  }
+  const page = await loadPage(estimationFixture());
+  await page.openDayOf(4);
+  await page.ringAction('htRings', { htRing: 'ring-a-1' });
+  page.failRings();
+  await page.click('htRefreshBtn');
+  assert.match(page.element('headTableDetails').innerHTML, /Ring free after queue unavailable: Ring data could not be refreshed/);
+});
+
+test('expired prediction text and hover help are invalidated even when automatic board refresh stops', async () => {
+  const fixture = estimationFixture();
+  const text = element('Old projected time');
+  text.setAttribute('data-estimate-expiry', fixture.estimates.validUntil);
+  const help = element();
+  help.setAttribute('title', 'Old projected time');
+  help.setAttribute('data-help', 'Old projected time');
+  help.setAttribute('data-estimate-help-expiry', fixture.estimates.validUntil);
+  const tileStart = element('Est. start ~10:40 AM');
+  tileStart.setAttribute('data-estimate-expiry', fixture.estimates.validUntil);
+  tileStart.setAttribute('data-estimate-stale-text', 'Start TBD (stale)');
+  const page = await loadPage({ ...fixture, estimateNodes: [text, help, tileStart] });
+  await page.openDayOf();
+  await page.advanceTime(31000);
+  assert.match(text.textContent, /stale/);
+  assert.match(help.getAttribute('data-help'), /stale/);
+  assert.equal(help.hasAttribute('title'), false);
+  assert.equal(help.hasAttribute('data-estimate-help-expiry'), false);
+  assert.equal(tileStart.textContent, 'Start TBD (stale)');
+});
+
+test('available tile has exactly one additional estimate line, including planning-only starts and saved duration', async () => {
+  const groups = [{ ...division20, competitors: Array.from({ length: 6 }, () => savedCompetitor) }];
+  const rings = [{ ...ringA1 }];
+  const estimates = buildEstimates({ eventName: winter, groups, rings });
+  const page = await loadPage({ activeEvent: winter, groups, rings, estimates });
+  await page.openDayOf();
+  const markup = page.element('raDivisions').innerHTML;
+  assert.equal((markup.match(/class="ra-division-estimate"/g) || []).length, 1);
+  assert.match(markup, /Start ~/);
+  assert.match(markup, /Ring ~42 min/);
+  assert.doesNotMatch(markup, /\btitle=|\bdata-help=|data-estimate-help-expiry/);
+  assert.match(page.element('raRings').innerHTML, /No tablet/);
+  assert.match(page.element('raEstimateSummary').innerHTML, /planning only/);
+  assert.match(html, /\.ra-division-estimate \{ white-space: nowrap;/);
+  assert.match(html, /no hover is needed/);
+});
+
+test('available tile retains duration when start is unavailable and rejects malformed or stale predictions', async () => {
+  for (const condition of ['no-rings', 'assistance', 'window', 'stale', 'event', 'missing-roster']) {
+    const groups = [{ ...division20, competitors: condition === 'missing-roster' ? [] : [savedCompetitor] }];
+    const rings = condition === 'no-rings' ? [] : [{ ...ringA1, assistanceType: condition === 'assistance' ? 'medical' : '' }];
+    const estimates = buildEstimates({ eventName: winter, groups, rings });
+    if (condition === 'window') estimates.unassigned[0].window.expectedAt = 'invalid';
+    if (condition === 'stale') estimates.validUntil = new Date(Date.now() - 1).toISOString();
+    if (condition === 'event') estimates.eventName = spring;
+    const page = await loadPage({ activeEvent: winter, groups, rings, estimates });
+    await page.openDayOf();
+    const markup = page.element('raDivisions').innerHTML;
+    assert.match(markup, /Start TBD/, condition);
+    assert.match(markup, ['stale', 'event', 'missing-roster'].includes(condition) ? /Ring time TBD/ : /Ring ~7 min/, condition);
+    assert.doesNotMatch(markup, /Start ~/);
+  }
+});
+
+test('available tile keeps the date for a next-day start without adding another estimate line', async () => {
+  const fixture = estimationFixture();
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(10, 40, 0, 0);
+  const suggestion = fixture.estimates.unassigned[0];
+  suggestion.window = {
+    earliestAt: new Date(date.getTime() - 60000).toISOString(),
+    expectedAt: date.toISOString(),
+    latestAt: new Date(date.getTime() + 60000).toISOString()
+  };
+  const page = await loadPage(fixture);
+  await page.openDayOf();
+  const markup = page.element('raDivisions').innerHTML;
+  assert.ok(markup.includes(date.toLocaleDateString([], { month: 'short', day: 'numeric' })));
+  assert.equal((markup.match(/class="ra-division-estimate"/g) || []).length, 1);
+  assert.doesNotMatch(markup, /<br/);
 });
