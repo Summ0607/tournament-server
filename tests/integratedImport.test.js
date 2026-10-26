@@ -146,7 +146,7 @@ async function loadPage(options = {}) {
         case '/api/competitors':
           if (options.waitForRoster) await options.waitForRoster;
           if (failSnapshot) return { ok: false, json: async () => ({ error: 'Database unavailable' }) };
-          data = rosters.get(name);
+          data = options.rostersByEvent ? options.rostersByEvent[name] || [] : rosters.get(name);
           break;
         case '/api/groups':
           if (options.waitForGroups) await options.waitForGroups;
@@ -158,6 +158,7 @@ async function loadPage(options = {}) {
           const assigned = new Set(rings.flatMap((ring) => [ring.groupDivisionNumber, ...(ring.queuedGroupDivisionNumbers || []), ...(ring.completedGroupDivisionNumbers || [])]).map(String));
           const eventGroups = options.groupsByEvent ? options.groupsByEvent[name] || [] : groups;
           data = { rings: JSON.parse(JSON.stringify(rings)), ringConfig,
+            eventStartedAt: typeof options.eventStartedAt === 'function' ? options.eventStartedAt() : options.eventStartedAt || '',
             estimates: typeof options.estimates === 'function' ? options.estimates() : options.estimates,
             availableGroupDivisionNumbers: eventGroups.map((group) => String(group.groupDivisionNumber)).filter((id) => !assigned.has(id)) };
           break;
@@ -917,17 +918,17 @@ test('Head Table integrates active-event totals, preserves disconnected division
   assert.equal(page.element('bannerEventName').textContent, spring);
   assert.equal(new URLSearchParams(page.location.search).get('view'), 'head-table');
   const summary = page.element('htSummary').innerHTML;
-  for (const [label, count] of [['Completed', 1], ['Active', 1], ['Queued', 1], ['Available', 2], ['Disconnected', 1], ['Assistance', 0]]) {
-    assert.ok(summary.includes(`${label}: <strong>${count}</strong>`), `${label} count`);
-  }
-  const primary = summary.match(/<div class="ht-primary-counts"[^>]*>([\s\S]*?)<\/div>/)[1];
-  assert.deepEqual([...primary.matchAll(/>(Available|Active|Disconnected|Assistance):/g)].map((match) => match[1]),
-    ['Available', 'Active', 'Disconnected', 'Assistance']);
-  assert.match(primary, /class="chip warning">Disconnected: <strong>1/);
-  assert.match(primary, /class="chip">Assistance: <strong>0/);
-  assert.doesNotMatch(primary, /Queued:|Completed:|<button/);
-  assert.match(summary, /Overall progress: <strong>1 of 5<\/strong> divisions completed/);
-  assert.doesNotMatch(summary, /Saved divisions|Connected rings/);
+  const divisions = summary.match(/aria-label="Division counts">([\s\S]*?)<\/div>/)[1];
+  const ringGroup = summary.match(/aria-label="Ring counts">([\s\S]*?)<\/div>/)[1];
+  assert.deepEqual([...divisions.matchAll(/class="ht-count">(\w[\w ]*) <strong>(\d+)/g)].map((match) => [match[1], Number(match[2])]),
+    [['Unassigned', 2], ['Queued', 1], ['Active', 1], ['Completed', 1]]);
+  assert.match(divisions, /<strong>1 of 5<\/strong> completed/);
+  assert.match(divisions, /style="width: 20%"/);
+  assert.match(ringGroup, /Rings \(2\)/);
+  assert.match(ringGroup, /class="ht-count">Connected <strong>1/);
+  assert.match(ringGroup, /class="ht-count warning">Disconnected <strong>1/);
+  assert.match(ringGroup, /class="ht-count">Assistance <strong>0/);
+  assert.doesNotMatch(summary, /Available|<button|chip/);
   assert.match(page.element('htRings').innerHTML, /Disconnected|active division preserved/);
   assert.doesNotMatch(page.element('htRings').innerHTML, /Wrong event/);
   assert.equal(page.requests.filter((request) => request.path === '/api/groups').at(-1).name, spring);
@@ -1095,7 +1096,7 @@ test('Head Table stale data is explicit, recovers, and never falls back to selec
   await page.click('htRefreshBtn');
   assert.equal(page.element('bannerEventName').textContent, winter);
   assert.equal(page.element('detailsPanel').hidden, true);
-  assert.match(page.element('htSummary').innerHTML, /Overall progress: <strong>0 of 0/);
+  assert.match(page.element('htSummary').innerHTML, /<strong>0 of 0<\/strong> completed/);
   page.setActiveEvent('');
   await page.click('htRefreshBtn');
   assert.match(page.element('htNotice').textContent, /No active event/);
@@ -1113,8 +1114,8 @@ test('Head Table clears assistance only after confirmation, scopes requests and 
     const now = new Date().toISOString();
     const page = await loadPage({ activeEvent: winter, confirm, rings: [{ ...ringA1, assistanceType: 'medical', assistanceRequestedAt: now }] });
     await page.openDayOf(4);
-    assert.match(page.element('htSummary').innerHTML, /class="chip warning">Assistance: <strong>1/);
-    assert.match(page.element('htSummary').innerHTML, /class="chip">Disconnected: <strong>0/);
+    assert.match(page.element('htSummary').innerHTML, /class="ht-count warning">Assistance <strong>1/);
+    assert.match(page.element('htSummary').innerHTML, /class="ht-count">Disconnected <strong>0/);
     await page.ringAction('htRings', { htRing: 'ring-a-1' });
     await page.ringAction('headTableDetails', {}, { clear: true });
     const writes = page.requests.filter((request) => request.path.endsWith('/assistance/clear'));
@@ -1217,6 +1218,45 @@ test('Ring Assignment and Head Table show the same queue start and completion wi
   assert.equal(page.requests.some((request) => request.init), false, 'Predictions never schedule or write assignments');
 });
 
+test('Ring Assignment and Head Table show event start and a held all-division completion estimate, TBD until start', async () => {
+  const fixture = estimationFixture();
+  let offset = 0;
+  let started = '';
+  const page = await loadPage({ ...fixture, eventStartedAt: () => started,
+    estimates: () => buildEstimates({ eventName: winter, groups: fixture.groups, rings: fixture.rings, now: Date.now() + offset }) });
+  await page.openDayOf();
+  assert.match(page.element('raEventTiming').innerHTML, /Event started <strong>TBD<\/strong>[\s\S]*Est\. completion <strong>TBD<\/strong>/);
+  started = new Date(Date.now() - 5 * 60000).toISOString();
+  await page.refreshTimer();
+  const first = page.element('raEventTiming').innerHTML;
+  assert.doesNotMatch(first, /Event started <strong>TBD/);
+  assert.match(first, /Est\. completion <strong>~[^<]+<\/strong><small>\([^)]+\)<\/small>/);
+  assert.match(first, /including unassigned divisions/);
+  fixture.rings[0].queuedGroupDivisionNumbers = ['22', '24'];
+  await page.refreshTimer();
+  assert.equal(page.element('raEventTiming').innerHTML, first, 'completion is held between minute refreshes');
+  offset += 61000;
+  await page.advanceTime(61000);
+  await page.refreshTimer();
+  assert.notEqual(page.element('raEventTiming').innerHTML.match(/~[^<]+/)[0], first.match(/~[^<]+/)[0]);
+  await page.openDayOf(4);
+  assert.match(page.element('htEventTiming').innerHTML, /Est\. completion <strong>~/);
+  fixture.rings[0].tabletLabel = '';
+  await page.refreshTimer();
+  assert.match(page.element('htEventTiming').innerHTML, /Est\. completion <strong>Unavailable<\/strong>/);
+  assert.match(page.element('htEventTiming').innerHTML, /Ring A1: No tablet connected/);
+});
+
+test('Day-of pages show a running current-time clock in the shared header', async () => {
+  const page = await loadPage(estimationFixture());
+  assert.notEqual(page.element('bannerClockTime').textContent, '');
+  await page.openDayOf();
+  assert.equal(page.element('bannerClock').hidden, false);
+  const before = page.element('bannerClockTime').textContent;
+  await page.advanceTime(60000);
+  assert.notEqual(page.element('bannerClockTime').textContent, before);
+});
+
 test('predictions reject missing, stale, wrong-event and malformed snapshots and refresh failures explicitly', async () => {
   for (const invalid of ['missing', 'stale', 'event', 'shape', 'window', 'future']) {
     const fixture = estimationFixture();
@@ -1312,4 +1352,302 @@ test('available tile keeps the date for a next-day start without adding another 
   assert.ok(markup.includes(date.toLocaleDateString([], { month: 'short', day: 'numeric' })));
   assert.equal((markup.match(/class="ra-division-estimate"/g) || []).length, 1);
   assert.doesNotMatch(markup, /<br/);
+});
+
+const lookupPerson = {
+  ...savedCompetitor, firstName: 'Anna', lastName: 'Hannah', parentFirstName: 'Pat',
+  parentLastName: 'Guardian', phone: '555-0100', studio: 'North Studio',
+  groupDivisionNumber: 20, groupDivisionName: 'Saved division'
+};
+async function searchLookup(page, query) {
+  page.element('clSearch').value = query;
+  await page.input('clSearch', 'input');
+}
+
+test('Competitor main panel searches active saved roster at two characters and reveals private details only on selection', async () => {
+  const page = await loadPage({
+    activeEvent: winter, selectedEvent: spring,
+    competitors: [lookupPerson, { ...lookupPerson, id: 2, firstName: 'Annabel', phone: '555-0200' }],
+    rings: [{ ...ringA1, queuedGroupDivisionNumbers: ['20'] }]
+  });
+  await page.openDayOf(5);
+  assert.equal(page.element('workspaceTitle').textContent, 'Competitors');
+  assert.equal(page.element('competitorLookupView').hidden, false);
+  assert.equal(page.element('detailsPanel').hidden, true);
+  await searchLookup(page, 'a');
+  assert.equal(page.element('clResults').innerHTML, '');
+  await searchLookup(page, 'AN');
+  assert.match(page.element('clStatus').textContent, /2 matches/);
+  assert.match(page.element('clResults').innerHTML, /<mark>An<\/mark>na/);
+  assert.match(page.element('clResults').innerHTML, /H<mark>an<\/mark>nah/);
+  assert.match(page.element('clResults').innerHTML, /Division 20/);
+  assert.match(page.element('clResults').innerHTML, /Ring A1 - queued/);
+  assert.doesNotMatch(page.element('clResults').innerHTML, /555-0100|Guardian|Pat/);
+  await page.ringAction('clResults', { clRow: '1' });
+  assert.equal(page.element('detailsPanel').hidden, false);
+  assert.equal(page.element('detailsTitle').textContent, 'Competitor Details');
+  for (const value of ['Anna', 'Hannah', 'Pat Guardian', '555-0100', 'G1', 'North Studio', 'Saved division', 'Ring A1 - queued']) {
+    assert.ok(page.element('competitorLookupDetails').innerHTML.includes(value), value);
+  }
+  await searchLookup(page, 'g1');
+  assert.match(page.element('clResults').innerHTML, /<mark>G1<\/mark>/);
+  await searchLookup(page, 'North');
+  assert.match(page.element('clStatus').textContent, /0 matches/);
+  assert.equal(page.element('detailsPanel').hidden, true);
+  assert.equal(page.element('competitorLookupDetails').innerHTML, '');
+  assert.ok(page.requests.filter((request) => request.path === '/api/competitors').every((request) => request.name === winter));
+  assert.equal(page.requests.some((request) => request.init), false);
+});
+
+test('lookup escapes literal highlights, displays all matches and handles missing fields, completed history and ambiguity', async () => {
+  const competitors = Array.from({ length: 125 }, (_, id) => ({
+    id, firstName: 'A[<script>', lastName: 'Same', rank: 'G1', groupDivisionNumber: 20
+  }));
+  const rings = [
+    { ...ringA1, completedGroupDivisionNumbers: ['20'] },
+    { ...ringA1, ringId: 'ring-b-1', ringLabel: 'B1', queuedGroupDivisionNumbers: ['20'] }
+  ];
+  const page = await loadPage({ activeEvent: winter, competitors, rings, search: '?view=competitors' });
+  await settle();
+  await settle();
+  await searchLookup(page, '[<');
+  assert.match(page.element('clStatus').textContent, /125 matches/);
+  assert.equal((page.element('clResults').innerHTML.match(/data-cl-id=/g) || []).length, 125);
+  assert.match(page.element('clResults').innerHTML, /<mark>\[&lt;<\/mark>script&gt;/);
+  assert.doesNotMatch(page.element('clResults').innerHTML, /<script>/);
+  await page.ringAction('clResults', { clId: '0' });
+  assert.match(page.element('competitorLookupDetails').innerHTML, /Not provided/);
+  assert.match(page.element('competitorLookupDetails').innerHTML, /Ring B1 - queued/);
+  rings[1].queuedGroupDivisionNumbers = [];
+  await page.click('clRefreshBtn');
+  assert.match(page.element('competitorLookupDetails').innerHTML, /Ring A1 - completed/);
+  rings[1].groupDivisionNumber = '20';
+  rings[0].groupDivisionNumber = '20';
+  await page.click('clRefreshBtn');
+  assert.match(page.element('competitorLookupDetails').innerHTML, /Ambiguous:/);
+});
+
+test('lookup refreshes active event, clears departed personal data and makes ring failures explicit', async () => {
+  const page = await loadPage({
+    activeEvent: winter, rostersByEvent: { [winter]: [lookupPerson], [spring]: [{ ...lookupPerson, id: 2, firstName: 'SpringOnly' }] },
+    rings: [{ ...ringA1, groupDivisionNumber: '20' }]
+  });
+  await page.openDayOf(5);
+  await searchLookup(page, 'an');
+  await page.ringAction('clResults', { clId: '1' });
+  page.failRings();
+  await page.click('clRefreshBtn');
+  assert.match(page.element('clNotice').textContent, /Ring assignments unavailable/);
+  assert.match(page.element('competitorLookupDetails').innerHTML, /Unavailable - ring data/);
+  assert.doesNotMatch(page.element('competitorLookupDetails').innerHTML, /Ring A1/);
+  page.failRings(false);
+  page.setActiveEvent(spring);
+  await page.refreshTimer();
+  assert.doesNotMatch(page.element('clResults').innerHTML, />Anna/);
+  assert.equal(page.element('competitorLookupDetails').innerHTML, '');
+  assert.equal(page.element('detailsPanel').hidden, true);
+  await searchLookup(page, 'spring');
+  assert.match(page.element('clResults').innerHTML, /<mark>Spring<\/mark>Only/);
+  await page.openImport();
+  assert.equal(page.element('clResults').innerHTML, '');
+  assert.equal(page.element('competitorLookupDetails').innerHTML, '');
+});
+
+test('lookup roster failure clears details and late responses cannot reopen a departed view', async () => {
+  const page = await loadPage({ activeEvent: winter, competitors: [lookupPerson] });
+  await page.openDayOf(5);
+  await searchLookup(page, 'an');
+  await page.ringAction('clResults', { clId: '1' });
+  page.failSnapshot();
+  await page.click('clRefreshBtn');
+  assert.match(page.element('clNotice').textContent, /Database unavailable/);
+  assert.equal(page.element('competitorLookupDetails').innerHTML, '');
+  assert.equal(page.element('clResults').innerHTML, '');
+  let release;
+  const waitForRoster = new Promise((resolve) => { release = resolve; });
+  const late = await loadPage({ activeEvent: winter, competitors: [lookupPerson], waitForRoster });
+  await late.openDayOf(5);
+  await late.openGroups();
+  release();
+  await settle();
+  await settle();
+  assert.equal(late.element('competitorLookupView').hidden, true);
+  assert.equal(late.element('competitorLookupDetails').innerHTML, '');
+});
+
+test('lookup rejects a mid-load event switch and clears results when no event or active-event verification is available', async () => {
+  let release;
+  const waitForRoster = new Promise((resolve) => { release = resolve; });
+  const page = await loadPage({ activeEvent: winter, competitors: [lookupPerson], waitForRoster });
+  await page.openDayOf(5);
+  await searchLookup(page, 'an');
+  page.setActiveEvent(spring);
+  release();
+  await settle();
+  await settle();
+  assert.match(page.element('clNotice').textContent, /active event changed/);
+  assert.equal(page.element('clResults').innerHTML, '');
+  const missing = await loadPage({ activeEvent: winter, competitors: [lookupPerson] });
+  await missing.openDayOf(5);
+  await searchLookup(missing, 'an');
+  await missing.ringAction('clResults', { clId: '1' });
+  missing.setActiveEvent('');
+  await missing.click('clRefreshBtn');
+  assert.match(missing.element('clNotice').textContent, /No active event/);
+  assert.equal(missing.element('competitorLookupDetails').innerHTML, '');
+  missing.failActiveEvent();
+  await missing.click('clRefreshBtn');
+  assert.match(missing.element('clNotice').textContent, /Active event unavailable/);
+  assert.equal(missing.element('clResults').innerHTML, '');
+});
+
+test('comma-separated lookup uses OR matching with trimmed distinct terms and highlights overlapping literal matches', async () => {
+  const page = await loadPage({
+    activeEvent: winter,
+    competitors: [
+      lookupPerson,
+      { ...lookupPerson, id: 2, firstName: 'Bob', lastName: 'Smith', rank: 'D2' },
+      { ...lookupPerson, id: 3, firstName: 'Cara', lastName: 'Jones', rank: 'G3' },
+      { ...lookupPerson, id: 4, firstName: 'A[<script>', lastName: 'Other', rank: 'D1' }
+    ]
+  });
+  await page.openDayOf(5);
+  await searchLookup(page, ' AN , d2, an, ,x ');
+  const markup = page.element('clResults').innerHTML;
+  assert.match(page.element('clStatus').textContent, /2 matches.*matching any term.*single-character terms ignored/);
+  assert.equal((markup.match(/data-cl-id=/g) || []).length, 2);
+  assert.match(markup, /<mark>An<\/mark>na/);
+  assert.match(markup, /<mark>D2<\/mark>/);
+  assert.doesNotMatch(markup, /Cara|A\[/);
+  await searchLookup(page, 'an, ann, nna');
+  assert.match(page.element('clResults').innerHTML, /<mark>Anna<\/mark>/);
+  assert.doesNotMatch(page.element('clResults').innerHTML, /<mark>[^<]*<mark>/);
+  await searchLookup(page, '[<, script');
+  assert.match(page.element('clResults').innerHTML, /A<mark>\[&lt;script<\/mark>&gt;/);
+  assert.doesNotMatch(page.element('clResults').innerHTML, /<script>/);
+  await searchLookup(page, ',a, ,g,');
+  assert.equal(page.element('clResults').innerHTML, '');
+  assert.match(page.element('clStatus').textContent, /at least 2 characters per search term/);
+  assert.match(html, /\.cl-table td \{ height: 42px;/);
+  assert.match(html, /max-width: 1380px/);
+});
+
+test('lookup filters share table column widths when the results area has room and wrap otherwise', () => {
+  assert.match(html, /#competitorLookupView \{ container-type: inline-size;/);
+  assert.match(html, /<colgroup><col><col><col><col><col><\/colgroup>/);
+  const columns = ['name', 'rank', 'studio', 'division', 'ring'];
+  for (const [index, column] of columns.entries()) {
+    assert.ok(html.includes(`.cl-table col:nth-child(${index + 1}) { width: var(--cl-${column}-width); }`));
+  }
+  assert.ok(html.includes(`grid-template-columns: ${columns.map((column) => `var(--cl-${column}-width)`).join(' ')}; gap: 0; padding: 0;`));
+  assert.match(html, /@container \(min-width: 760px\)/);
+  assert.match(html, /\.cl-filter-grid \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(130px, 1fr\)\)/);
+  assert.match(html, /\.cl-filters\[hidden\] \{ display: none; \}/);
+});
+
+test('polished lookup renders aligned table with exact totals, name sorting and complete sectioned details', async () => {
+  const page = await loadPage({ activeEvent: winter, competitors: [
+    { ...lookupPerson, email: 'guardian@example.test', ageRange: '12-14', notes: '<Keep safe>' },
+    { ...lookupPerson, id: 2, firstName: 'Beth', lastName: 'Zulu' }
+  ] });
+  await page.openDayOf(5);
+  await searchLookup(page, 'g1');
+  const results = page.element('clResults').innerHTML;
+  assert.equal((results.match(/<tr /g) || []).length, 2);
+  assert.equal((results.match(/<td[ >]/g) || []).length, 10);
+  assert.doesNotMatch(results, /Rank:/);
+  assert.match(results, /class="cl-rank"/);
+  assert.equal(page.element('clResultCount').textContent, '2 results');
+  assert.equal(page.element('clResultsFooter').textContent, 'Showing 1-2 of 2 results');
+  await page.click('clSortName');
+  assert.equal(page.element('clNameHeading').getAttribute('aria-sort'), 'descending');
+  assert.ok(page.element('clResults').innerHTML.indexOf('Beth') < page.element('clResults').innerHTML.indexOf('Anna'));
+  await page.click('clSearchBtn');
+  await page.ringAction('clResults', { clId: '1' });
+  const details = page.element('competitorLookupDetails').innerHTML;
+  for (const value of ['Personal Information', 'Parent/Guardian', 'Competition Information / Assignments', 'guardian@example.test', '12-14', 'Notes', '&lt;Keep safe&gt;', 'has not been assigned to a ring yet']) assert.ok(details.includes(value), value);
+  assert.equal(page.element('pageContent').classList.contains('competitor-lookup'), true);
+  await searchLookup(page, 'nomatch');
+  assert.equal(page.element('clResultsFooter').textContent, 'Showing 0-0 of 0 results');
+});
+
+test('advanced lookup filters apply together, collapse without clearing, clear independently and reset on event changes', async () => {
+  const people = [
+    lookupPerson,
+    { ...lookupPerson, id: 2, firstName: 'Bob', rank: 'D2', studio: 'South Studio', groupDivisionNumber: 22 },
+    { ...lookupPerson, id: 3, firstName: 'Cara', groupDivisionNumber: null }
+  ];
+  const page = await loadPage({ activeEvent: winter, competitors: people, rings: [{ ...ringA1, queuedGroupDivisionNumbers: ['20'] }] });
+  await page.openDayOf(5);
+  page.element('clFilters').hidden = true;
+  await page.click('clFiltersBtn');
+  assert.equal(page.element('clFiltersBtn').getAttribute('aria-expanded'), 'true');
+  assert.match(page.element('clFilterRank').innerHTML, /D2/);
+  assert.match(page.element('clFilterStudio').innerHTML, /South Studio/);
+  assert.match(page.element('clFilterDivision').innerHTML, /22/);
+  assert.match(page.element('clFilterRing').innerHTML, /Ring A1/);
+  page.element('clFilterName').value = 'anna';
+  page.element('clFilterRank').value = 'G1';
+  page.element('clFilterStudio').value = 'North Studio';
+  page.element('clFilterDivision').value = '20';
+  page.element('clFilterRing').value = 'ring-a-1';
+  await page.click('clApplyFiltersBtn');
+  assert.match(page.element('clStatus').textContent, /1 match.*filters applied/);
+  assert.match(page.element('clResults').innerHTML, /Anna/);
+  await page.click('clFiltersBtn');
+  assert.equal(page.element('clFilters').hidden, true);
+  assert.match(page.element('clResults').innerHTML, /Anna/);
+  await searchLookup(page, 'bob');
+  assert.equal(page.element('clResults').innerHTML, '');
+  await page.click('clClearFiltersBtn');
+  assert.match(page.element('clResults').innerHTML, /Bob/);
+  await searchLookup(page, '');
+  page.element('clFilterUnassigned').checked = true;
+  await page.click('clApplyFiltersBtn');
+  assert.match(page.element('clStatus').textContent, /2 matches/);
+  assert.doesNotMatch(page.element('clResults').innerHTML, /Anna/);
+  page.failRings();
+  await page.click('clRefreshBtn');
+  assert.equal(page.element('clResults').innerHTML, '', 'Unknown assignments must not count as unassigned');
+  page.setActiveEvent(spring);
+  page.failRings(false);
+  await page.click('clRefreshBtn');
+  assert.equal(page.element('clFilterUnassigned').checked, false);
+  assert.equal(page.element('clFilterRank').value, '');
+});
+
+test('ring filter follows current assignment precedence over completed ring history', async () => {
+  const page = await loadPage({ activeEvent: winter, competitors: [lookupPerson], rings: [
+    { ...ringA1, completedGroupDivisionNumbers: ['20'] },
+    { ...ringA1, ringId: 'ring-b-1', ringLabel: 'B1', groupDivisionNumber: '20' }
+  ] });
+  await page.openDayOf(5);
+  page.element('clFilterRing').value = 'ring-a-1';
+  await page.click('clApplyFiltersBtn');
+  assert.equal(page.element('clResults').innerHTML, '');
+  page.element('clFilterRing').value = 'ring-b-1';
+  await page.click('clApplyFiltersBtn');
+  assert.match(page.element('clResults').innerHTML, /Ring B1 - current/);
+});
+
+test('lookup formats ten-digit phone display without changing stored values or nonstandard numbers', async () => {
+  for (const [phone, expected] of [
+    ['6353676158', '635-367-6158'],
+    ['(635) 367-6158', '635-367-6158'],
+    ['635.367.6158', '635-367-6158'],
+    ['+1 635 367 6158', '+1 635 367 6158'],
+    ['6353676158 ext 12', '6353676158 ext 12'],
+    ['555-0100', '555-0100'],
+    ['', 'Not provided']
+  ]) {
+    const person = { ...lookupPerson, phone };
+    const page = await loadPage({ activeEvent: winter, competitors: [person] });
+    await page.openDayOf(5);
+    await searchLookup(page, 'anna');
+    await page.ringAction('clResults', { clId: '1' });
+    assert.ok(page.element('competitorLookupDetails').innerHTML.includes(`<dt>Phone</dt><dd>${expected}</dd>`), phone);
+    assert.equal(person.phone, phone);
+  }
+  assert.match(html, /--cl-details-width: clamp\(420px, calc\(65vw - 477px\), 460px\)/);
+  assert.match(html, /min\(var\(--cl-details-width\), calc\(100vw - 32px\)\)/);
 });

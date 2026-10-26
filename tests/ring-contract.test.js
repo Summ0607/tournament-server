@@ -456,6 +456,21 @@ async function main() {
     assert.strictEqual(Object.prototype.hasOwnProperty.call(completeResponse.body.ringAssignment, legacyQueueAliasKey()), false);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(completeResponse.body.ringAssignment, 'queuedGroupIds'), false);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(completeResponse.body.ringAssignment, 'completedGroupIds'), false);
+
+    assert.strictEqual(state.eventStartedAt, '', 'completion without a named tablet does not start the event');
+    state.rings['ring-a-1'] = makeRingState({ queuedGroupDivisionNumbers: ['24'], queuedGroupIds: ['24'] });
+    const bareHeartbeat = await requestJson(server, 'POST', '/api/rings/ring-a-1/heartbeat', { phase: 'check-in' });
+    assert.strictEqual(bareHeartbeat.status, 200);
+    assert.strictEqual(state.eventStartedAt, '', 'heartbeat without a tablet name does not start the event');
+    const tabletHeartbeat = await requestJson(server, 'POST', '/api/rings/ring-a-1/heartbeat', { tabletLabel: 'Tablet-1' });
+    assert.strictEqual(tabletHeartbeat.status, 200);
+    assert.ok(Number.isFinite(Date.parse(state.eventStartedAt)), 'a named tablet starts the event');
+    const started = state.eventStartedAt;
+    await requestJson(server, 'POST', '/api/rings/ring-a-1/heartbeat', { tabletLabel: 'Tablet-1' });
+    assert.strictEqual(state.eventStartedAt, started, 'later activity never moves the start');
+
+    const groupServer = fs.readFileSync(path.join(__dirname, '..', 'group-server.js'), 'utf8');
+    assert.doesNotMatch(groupServer, /inferredStart/, 'start is never inferred from stale heartbeat or phase timestamps');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

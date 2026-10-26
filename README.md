@@ -1,6 +1,152 @@
 # tournament-server
 Tournament Management Server Source
 
+Feature overview for Audience Monitor, Competitor Lookup, and Day-of clocks:
+[docs/audience-monitor-lookup.md](docs/audience-monitor-lookup.md).
+
+## Integrated Competitor Lookup
+
+Open **Competitors** in Tournament Management, or use
+`/tournament-management/?view=competitors`. This staff-facing lookup uses the
+**active event's saved roster**, independently of the selected preparation
+event or unsaved group-builder drafts.
+
+- Enter **at least two characters per term** of first name, last name, or rank.
+  Separate multiple terms with commas for **OR matching**: `Anna, G1` finds
+  anyone matching Anna or G1. Terms are trimmed and deduplicated; empty and
+  single-character terms are ignored. Each competitor appears only once.
+  Case-insensitive literal substring matching displays **all matches**, sorted
+  by last name then first name. Matching characters are highlighted; studio,
+  parent name, and phone are not search fields.
+- A styled search toolbar provides Search, collapsible Filters, Refresh, and
+  the actual result count. Live search still runs while typing; Search and
+  Enter explicitly run the same search without new API calls.
+- Advanced filters provide full-name substring, exact rank/studio/division/ring,
+  and **Show only unassigned** controls. Apply combines the advanced conditions
+  with AND within the existing comma-separated OR search. A blank search with
+  applied filters can search the roster through filters alone. Unassigned means
+  no identifiable current/queued/completed ring; unavailable ring data is not
+  treated as unassigned. Closing Filters only hides it; Clear filters removes
+  applied conditions without changing search text. Event changes reset filters.
+- An aligned table shows Competitor, Rank, Studio, Division, and Ring.
+  When the results area is at least 760px wide, advanced filters align with
+  those same columns using shared widths, with more room for Name and Studio.
+  In narrower results areas, filters wrap into a compact grid instead.
+  Base rows are 42px high with 14px text, restrained rank chips, highlighted
+  matches, subtle alternating backgrounds, and a blue selected-row accent.
+  The Competitor heading reverses last-name/first-name sorting. All results
+  remain displayed (no result cap or pagination); the footer reports the
+  actual range and total, including `Showing 0-0 of 0 results` when empty.
+  Main-panel results show name, rank, studio, saved group division,
+  and identifiable ring. Select a result with mouse or keyboard to open the
+  details panel containing **first name, last name, parent name, phone, rank,
+  studio, group division, and ring assignment**. Contact fields are not repeated
+  in the results. Missing contact/registration fields say **Not provided**.
+- The selected detail panel has a prominent name, studio, rank badge, and close
+  control, followed by Personal Information, Competition Information /
+  Assignments, and Notes sections. Email, an explicit age-range value, and
+  notes are shown only from existing data; no age range or notes are inferred.
+  Missing notes are explicitly indicated. A subtle notice identifies an
+  unassigned ring. Close or Escape from the details returns focus to search.
+  Standard ten-digit phone numbers display as `xxx-yyy-zzzz` without changing
+  saved values; other formats/extensions remain intact. The side panel grows
+  from 420px to a 460px maximum, taking 65% of added viewport width above
+  the 1380px side-by-side breakpoint until capped. Additional width then goes
+  to the results panel. A fixed label column helps
+  leave more room for email. The drawer also scales with viewport width and
+  remains bounded by the window; unusually long addresses can still wrap.
+- At viewport widths **above 1380px**, details sit alongside the results.
+  At **1380px and below**, the nonmodal details drawer overlays the right side
+  without shrinking the table. At **960px and below**, lookup content uses
+  one main column (existing navigation remains); at **600px and below**, table
+  cell spacing/type is reduced. Filter controls wrap automatically and long
+  values wrap within cells instead of forcing page-wide horizontal scrolling.
+- Ring labels distinguish **current**, **queued**, and **completed** history.
+  Live assignments take precedence over historical completed assignments;
+  multiple conflicting matches say **Ambiguous**, rather than guessing a ring.
+  No division or ring assignment is explicitly reported as **Not assigned**.
+- Data refreshes every ten seconds or using **Refresh**, retaining a selection
+  only while that competitor still matches. Event context is checked again
+  after loading; a changed/unverifiable event or failed roster refresh clears
+  old results and personal details. Ring-only failures leave registration
+  searchable but explicitly mark ring assignments unavailable.
+- Changing pages clears the loaded lookup results/details. A nonempty search
+  without a two-character term clears matches and closes the details panel.
+  An empty search can still show matches when advanced filters are applied.
+  The page-level **?** explains search, privacy, and assignment states.
+
+This is a read-only **staff** feature, not a public competitor-contact screen
+or part of Audience Monitor. It uses existing roster/ring APIs and introduces
+no editing actions or data migrations. Refresh the browser to load this UI.
+Volunteer Lookup remains future work. Validate with `npm test` and
+`git diff --check`.
+
+## Audience Monitor
+
+On `feature/audience-monitor-lookup`, the standalone audience display is available
+at **`http://localhost:3000/audience-monitor/`** (or the same path on the
+monitoring server at port 3002). Head Table includes an **Audience Monitor**
+link that opens a separate tab. Restart the server and refresh to load the
+new routes and API. Existing Event Progress routes and surface entry points
+remain unchanged.
+
+- A stable **over/under** layout gives approximately 55% of content height to
+  **Rings now**, with **Coming up** below. There is no continuous scrolling.
+- The top section shows configured rings in natural ring order, current
+  division descriptions, and applicable phase progression in compact 64px
+  horizontal rows with audience-sized text. Every row reserves a segmented
+  pill area: running divisions show progress, the first queued division previews
+  unfilled applicable phases (including Weapons), and empty rings show a neutral
+  **No current division** pill. Paused/unavailable rings keep a neutral status
+  pill in the same space, without presenting untrusted progress. Idle rings say
+  Waiting; this does not promise operational readiness. Paused or disconnected
+  work uses audience-friendly messages and does not show old phase progress.
+- The lower section contains **assigned queued divisions only**, with their
+  ring in a prominent high-contrast badge beside the division number.
+  Upcoming cards are 160px high; queue position is a separate secondary line.
+  Ring names in the upper rows use larger bold text without increasing row height.
+  Cards also show a description and approximate start window. Unassigned
+  hypothetical suggestions are deliberately excluded. Missing predictions say
+  **Start TBD**. Dates are included for future-day windows.
+- Each section calculates its capacity from the available area. It advances
+  complete pages every **12 seconds** only when more than one page is needed,
+  wraps independently, and shows a page indicator. Live refreshes do not reset
+  rotation or reorder existing rows while being read; upcoming rows are
+  re-sorted by projected start at a rotation boundary. Removed rows disappear.
+- **Pause pages** stops both rotations without stopping updates. **Fullscreen**
+  and the page-level **?** support unattended display setup and review. The
+  layout targets landscape TVs, with a 720px minimum document height; smaller
+  windows can scroll the document rather than compressing cards into unreadable
+  rows. Browser zoom changes the number of cards that fit.
+- Data refreshes every **10 seconds**, with an eight-second request timeout.
+  Staleness is checked every second. Refresh failures or expired snapshots hide
+  predictions and progression, show an explicit warning, and retry
+  automatically. Event changes clear the previous event's rows and reset pages.
+  Status space is reserved so ordinary status changes do not shift the panels.
+
+### Public display data
+
+`GET /api/rings/monitor` returns a version-1 active-event-only snapshot built
+from the same saved groups, authoritative phase definitions, and estimates as
+the day-of pages. It uses `Cache-Control: no-store`, rejects an optional
+incorrect `eventName` with HTTP 409, checks event switches during loading,
+and reports saved-data loading failures with HTTP 500.
+
+The allowlisted response contains event identity/freshness, ring labels,
+division numbers/descriptions, audience status, applicable phase progression,
+current completion windows where available, and assigned queue start windows.
+It omits competitor rosters, individual names, birth dates, tablet identities,
+assistance categories, and unassigned projections. A missing active event returns
+an explicit unavailable snapshot with empty ring/queue arrays. No event
+preparation selection or unsaved draft is used.
+
+The audience page performs GET requests only and has no assignment, reset,
+assistance-clear, or other operational actions. **This does not isolate the
+server's other APIs or make a separate port an access-control boundary.** Use
+appropriate network/access controls before exposing the server publicly.
+Competitor Lookup is implemented in the integrated staff panel described above;
+Volunteer Lookup remains deferred. Validate with `npm test` and `git diff --check`.
+
 ## Prediction/estimation checkpoint: 2026-10-25
 
 Branch `feature/prediction-estimation` builds on the tooltip/UI cleanup
@@ -50,6 +196,26 @@ automatic assignments, ring resets, or saved-data migrations are required.
 - Estimated starts and ring hover help expire without a successful refresh, even
   when a drag/interaction temporarily pauses normal polling.
   A tile's expired start becomes `Start TBD (stale)` without removing its duration.
+
+### Day-of clocks and event timing
+
+- All Day-of pages show a running **Time** clock in the shared header banner;
+  the Audience Monitor shows a large clock at the top right of its header.
+- Ring Assignment and Head Table show **Event started** and **Est. completion**
+  chips below their headings. Both read **TBD** until the event starts, which is
+  recorded when the first ring with a **named tablet** connects, sends a heartbeat,
+  or starts/completes a division (`eventStartedAt`). Requests without a tablet
+  name, such as tests or simulated heartbeats, never start the event, and the
+  start is never inferred from old saved heartbeat or phase timestamps.
+  The start time is cleared by Reset assignments and when a ring layout is
+  applied (Ring Assignment **Apply layout**), and by event create/reset.
+- Completion (`estimates.eventCompletion`) covers current, queued **and
+  unassigned** divisions: unassigned divisions, in division order, are placed
+  on whichever ring frees up first. It shows `~time (window)`, **All divisions
+  complete**, or **Unavailable** with the reason in its help (for example a
+  disconnected ring with work or a missing roster). The displayed value refreshes
+  every **60 seconds** (or immediately on event/start/status change) so it does
+  not jitter on each 10-second board refresh. Restart the server after updating.
 
 ### Initial model and confidence
 
@@ -191,6 +357,10 @@ outcomes, including Import CSV, Clear, Next: Build Groups, maintenance actions,
 and dynamically rendered details controls. Existing data hover summaries use
 the same tooltip styling. Tooltips are viewport-positioned to avoid panel
 clipping; Escape dismisses them and they remain readable when hovered.
+Pointer hover waits 650ms before showing help and dismisses it within 100ms
+of leaving, even if the control retains focus. Pointer press and drag start
+immediately dismiss help and suppress it throughout the drag, including over
+drop targets. Keyboard focus still shows help immediately.
 Neither hovering nor focusing an action activates it. Data summaries can also
 be read in the selected item's details.
 
@@ -271,12 +441,13 @@ remain valid event metadata but cannot be applied as an operational layout.
 
 ### Integrated Head Table
 
-Head Table monitors the active event only. Primary status indicators appear in
-this order: Available divisions, Active divisions, Disconnected rings, and
-Assistance requests. Disconnected and Assistance are highlighted only when
-nonzero. Queued and Completed division counts and overall completion out of total
-divisions appear in a quieter secondary row. There is no Connected count;
-individual rings retain their connection badges. These indicators are not
+Head Table monitors the active event only. Counters are split into two labeled
+groups. **Divisions** shows Unassigned, Queued, Active, and Completed in workflow
+order, followed by a thin progress bar with completed out of total divisions.
+**Rings (N)** shows Connected, No tablet, Disconnected, and Assistance; only
+Disconnected and Assistance are highlighted, and only when nonzero. The groups sit
+side-by-side with a divider and stack when space runs out (no divider on a new row). Individual rings
+retain their connection badges. These indicators are not
 buttons and do not change ring ordering. A disconnected ring retains its division.
 The compact overview shows ring identity, connection, an assistance indicator,
 and one segmented progression pill per ring. Equal-width segments represent only

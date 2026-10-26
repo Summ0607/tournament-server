@@ -34,10 +34,14 @@
   let contentSignature = '';
   let active = null;
   let hideTimer;
+  let showTimer;
+  let pointerHeld = false;
+  let dragging = false;
   let dismissed = null;
 
   function hide() {
     clearTimeout(hideTimer);
+    clearTimeout(showTimer);
     if (active) {
       const ids = (active.getAttribute('aria-describedby') || '').split(/\s+/).filter((id) => id && id !== tooltip.id);
       if (ids.length) active.setAttribute('aria-describedby', ids.join(' '));
@@ -58,7 +62,8 @@
 
   function show(target) {
     clearTimeout(hideTimer);
-    if (!target || target === dismissed || !target.dataset.help) return;
+    if (pointerHeld || dragging || !target || target === dismissed || !target.dataset.help
+      || !target.isConnected || target.closest('[hidden]')) return;
     if (active !== target) hide();
     active = target;
     const host = pageHelp.open && pageHelp.contains(target) ? pageHelp : document.body;
@@ -133,20 +138,31 @@
   });
   const targetOf = (event) => event.target.closest && event.target.closest('[data-help]');
   document.addEventListener('pointerover', (event) => {
+    if (pointerHeld || dragging || event.buttons) return;
     if (tooltip.contains(event.target)) { clearTimeout(hideTimer); return; }
     const target = targetOf(event);
     if (target !== dismissed) dismissed = null;
-    show(target);
+    if (target === active || target && target.contains(event.relatedTarget)) return;
+    hide();
+    if (target) showTimer = setTimeout(() => show(target), 650);
   });
   document.addEventListener('pointerout', (event) => {
     const target = targetOf(event);
     if (target && target.contains(event.relatedTarget) || tooltip.contains(event.relatedTarget)) return;
-    hideTimer = setTimeout(() => {
-      if (active !== document.activeElement) hide();
-    }, 150);
+    clearTimeout(showTimer);
+    hideTimer = setTimeout(hide, 100);
   });
   document.addEventListener('focusin', (event) => { dismissed = null; show(targetOf(event)); });
   document.addEventListener('focusout', hide);
+  document.addEventListener('pointerdown', () => { pointerHeld = true; hide(); }, true);
+  ['pointerup', 'pointercancel'].forEach((type) => {
+    document.addEventListener(type, () => { pointerHeld = false; hide(); }, true);
+  });
+  document.addEventListener('dragstart', () => { dragging = true; hide(); }, true);
+  ['dragend', 'drop'].forEach((type) => {
+    document.addEventListener(type, () => { dragging = false; pointerHeld = false; hide(); }, true);
+  });
+  window.addEventListener('blur', () => { dragging = false; pointerHeld = false; hide(); });
   document.addEventListener('click', (event) => {
     const target = targetOf(event);
     if (target === helpButton) {

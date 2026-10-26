@@ -5,6 +5,7 @@ const { appendDivisionTrace, summarizeGroupDivisionNumbers } = require('./groupD
 const { buildAvailableGroupDivisionNumbers } = require('./ringAvailability');
 const { sanitizePhaseHistory } = require('./resultPacket');
 const { buildEstimates } = require('./ringEstimates');
+const { buildAudienceMonitor } = require('./audienceMonitor');
 
 function resolveGroupAnchorValue(value) {
   const parsed = Number.parseInt(value, 10);
@@ -241,8 +242,9 @@ function createRingRouter(deps) {
     next();
   });
 
-  function touchEventStart(state) {
-    if (!state.eventStartedAt) {
+  // The event starts only when a ring with a named tablet is active; bare heartbeats or tests without a tablet never start it.
+  function touchEventStart(state, ringState) {
+    if (!state.eventStartedAt && ringState && String(ringState.tabletLabel || '').trim()) {
       state.eventStartedAt = new Date().toISOString();
       return true;
     }
@@ -283,7 +285,7 @@ function createRingRouter(deps) {
     touchAssignmentStart(ringState);
     setRingPhase(ringState, 'check-in');
     touchHeartbeat(ringState);
-    touchEventStart(state);
+    touchEventStart(state, ringState);
     appendDivisionTrace('ring-activate', {
       ringId,
       ringLabel: ringState.ringLabel,
@@ -458,7 +460,7 @@ function createRingRouter(deps) {
     if (tabletLabel) {
       ringState.tabletLabel = tabletLabel;
       touchHeartbeat(ringState);
-      touchEventStart(state);
+      touchEventStart(state, ringState);
       if (!ringState.phase || ringState.phase === 'idle') {
         setRingPhase(ringState, 'check-in');
       }
@@ -540,6 +542,10 @@ function createRingRouter(deps) {
       heartbeatSeconds: DISCONNECT_AFTER_MS / 1000
     });
     res.set('Cache-Control', 'no-store');
+    if (req.path.endsWith('/monitor')) return res.json(buildAudienceMonitor({
+      eventName: readActiveEvent(), rings,
+      groups: typeof loadGroups === 'function' ? loadGroups() : [], estimates
+    }));
     if (req.path.endsWith('/estimates')) return res.json(estimates);
     return res.json({
       serverBaseUrl: serverBaseUrlForRequest(req),
@@ -571,6 +577,7 @@ function createRingRouter(deps) {
   }
   router.get('/rings', loadRingBoard);
   router.get('/rings/estimates', loadRingBoard);
+  router.get('/rings/monitor', loadRingBoard);
 
   router.get('/rings/:ringId/bootstrap', handleRequestGroup);
   router.post('/rings/:ringId/request-group', handleRequestGroup);
@@ -811,7 +818,7 @@ function createRingRouter(deps) {
         ringState.assignmentStartedAt = '';
       }
       touchHeartbeat(ringState);
-      touchEventStart(state);
+      touchEventStart(state, ringState);
       const ringAssignment = attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState);
       const receipt = {
         receivedAt: new Date().toISOString(),
@@ -1074,7 +1081,7 @@ function createRingRouter(deps) {
         phaseProgress
       }
     });
-    touchEventStart(state);
+    touchEventStart(state, ringState);
     writeAssignmentsState(state);
     return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
   });

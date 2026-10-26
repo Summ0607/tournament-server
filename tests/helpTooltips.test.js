@@ -8,7 +8,9 @@ const script = fs.readFileSync(path.join(__dirname, '..', 'assets', 'help-toolti
 
 function loadTooltips() {
   const handlers = {};
-  const timers = [];
+  const timers = new Map();
+  let timerId = 0;
+  let time = 0;
   let mutations;
   class Element {
     constructor() {
@@ -87,8 +89,8 @@ function loadTooltips() {
   vm.runInNewContext(script, {
     document, window: { addEventListener: (event, handler) => { handlers[event] = handler; } },
     innerWidth: 1000, innerHeight: 500,
-    setTimeout: (callback) => { timers.push(callback); return timers.length; },
-    clearTimeout: (id) => { if (id) timers[id - 1] = null; },
+    setTimeout: (callback, delay) => { timers.set(++timerId, { callback, at: time + delay }); return timerId; },
+    clearTimeout: (id) => timers.delete(id),
     MutationObserver: class {
       constructor(callback) { mutations = callback; }
       observe() {}
@@ -101,7 +103,12 @@ function loadTooltips() {
     trigger: () => title.children[0],
     event: (type, target, extra = {}) => handlers[type]({ target, preventDefault() {}, stopPropagation() {}, ...extra }),
     mutate: (target = source, type = 'attributes') => mutations([{ type, target, addedNodes: [] }]),
-    flush: () => timers.splice(0).forEach((callback) => { if (callback) callback(); })
+    flush: (ms = 1000) => {
+      time += ms;
+      for (const [id, timer] of timers) {
+        if (timer.at <= time) { timers.delete(id); timer.callback(); }
+      }
+    }
   };
 }
 
@@ -146,6 +153,8 @@ test('hover, touch click, escape and focus dismissal share one tooltip', () => {
   const page = loadTooltips();
   assert.equal(page.button.hasAttribute('title'), false);
   page.event('pointerover', page.button);
+  assert.equal(page.tooltip.hidden, true);
+  page.flush(650);
   assert.equal(page.tooltip.textContent, 'Action help');
   page.event('pointerout', page.button);
   page.flush();
@@ -158,8 +167,56 @@ test('hover, touch click, escape and focus dismissal share one tooltip', () => {
   assert.equal(page.tooltip.hidden, true, 'Escape remains dismissed until leaving the trigger');
   page.event('pointerover', page.body);
   page.event('pointerover', trigger);
+  page.flush(650);
   assert.equal(page.tooltip.hidden, false);
   page.event('focusout', trigger);
+  assert.equal(page.tooltip.hidden, true);
+});
+
+test('hover help waits for deliberate hovering and promptly leaves even a focused control', () => {
+  const page = loadTooltips();
+  page.event('pointerover', page.button);
+  page.flush(649);
+  assert.equal(page.tooltip.hidden, true);
+  page.event('pointerout', page.button);
+  page.flush();
+  assert.equal(page.tooltip.hidden, true, 'passing over a control never shows a delayed tooltip');
+  page.event('pointerover', page.button);
+  page.flush(650);
+  assert.equal(page.tooltip.hidden, false);
+  page.document.activeElement = page.button;
+  page.event('pointerout', page.button);
+  page.flush(100);
+  assert.equal(page.tooltip.hidden, true, 'focus does not pin hover help after the pointer leaves');
+});
+
+test('pointer and native drags suppress pending, visible, focus and target hover help', () => {
+  const page = loadTooltips();
+  page.event('pointerover', page.button);
+  page.event('pointerdown', page.button);
+  page.event('focusin', page.button);
+  page.event('pointerover', page.trigger(), { buttons: 1 });
+  page.flush();
+  assert.equal(page.tooltip.hidden, true);
+  page.event('pointerup', page.button);
+  page.flush();
+  assert.equal(page.tooltip.hidden, true, 'release does not reopen a tooltip over the drop target');
+  page.event('focusin', page.button);
+  assert.equal(page.tooltip.hidden, false, 'keyboard focus still provides immediate help');
+  page.event('dragstart', page.button);
+  assert.equal(page.tooltip.hidden, true);
+  page.event('pointerover', page.trigger());
+  page.flush();
+  assert.equal(page.tooltip.hidden, true);
+  page.event('drop', page.body);
+  page.event('pointerover', page.button);
+  page.flush(650);
+  assert.equal(page.tooltip.hidden, false);
+  page.event('pointerdown', page.button);
+  page.event('pointercancel', page.button);
+  page.event('focusin', page.button);
+  assert.equal(page.tooltip.hidden, false);
+  page.event('blur', page.body);
   assert.equal(page.tooltip.hidden, true);
 });
 
@@ -216,12 +273,13 @@ test('completed integrated pages explain each primary, next-step and maintenance
     'createEventBtn', 'modifyEventBtn', 'activateEventBtn', 'goToImportBtn', 'deleteEventBtn',
     'resetEventBtn', 'saveMetadataBtn', 'importBtn', 'clearImportBtn', 'importNextBtn',
     'gbBuildBtn', 'gbAddBtn', 'gbSaveBtn', 'gbDoneBtn', 'raRefreshBtn', 'raLayoutBtn',
-    'htRefreshBtn', 'htAssignmentBtn'
+    'htRefreshBtn', 'htAssignmentBtn', 'clRefreshBtn', 'clSearchBtn', 'clFiltersBtn',
+    'clApplyFiltersBtn', 'clClearFiltersBtn', 'clSortName'
   ]) {
     const tag = html.match(new RegExp(`<button\\b[^>]*\\bid="${id}"[^>]*>`));
     assert.ok(tag, id);
     assert.match(tag[0], /(?:data-help|title)="[^"]+"/, id);
   }
   assert.equal((html.match(/\bdata-help-root\b/g) || []).length, 1);
-  assert.equal((html.match(/\bdata-help-page=/g) || []).length, 5);
+  assert.equal((html.match(/\bdata-help-page=/g) || []).length, 6);
 });

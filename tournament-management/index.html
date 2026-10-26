@@ -229,7 +229,80 @@
     .estimate-text { font-size: 11px; color: #475569; font-weight: 400; }
     .ra-division-estimate { white-space: nowrap; font-size: 11px; color: #475569; }
     .estimate-summary { font-size: 12px; color: #475569; }
+    .event-timing { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+    .event-timing:empty { display: none; }
+    .event-timing > span { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 10px; border: 1px solid #d8e1ed; border-radius: 7px; background: #f6f8fc; color: #526580; font-size: 13px; }
+    .event-timing strong { color: #20334e; font-size: 15px; }
+    .event-timing small { color: #64748b; font-size: 12px; }
+    .banner-clock { font-variant-numeric: tabular-nums; }
     .estimate-details p { margin: 5px 0; font-size: 12px; }
+    #competitorLookupView { container-type: inline-size; --cl-name-width: 25%; --cl-rank-width: 14%; --cl-studio-width: 25%; --cl-division-width: 16%; --cl-ring-width: 20%; }
+    .cl-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .cl-search-field { display: flex; align-items: center; gap: 8px; flex: 1 1 240px; max-width: 420px; height: 38px; padding: 0 10px; border: 1px solid #bac7d8; border-radius: 7px; background: #fff; color: #526580; }
+    .cl-search-field:focus-within { outline: 2px solid #9dbff0; border-color: #2f66c8; }
+    .cl-search-field input { border: 0; outline: none; width: 100%; min-width: 0; font: inherit; font-size: 14px; background: transparent; color: #20334e; }
+    #competitorLookupView button, #competitorLookupDetails button { border: 1px solid #bac7d8; border-radius: 7px; background: #fff; color: #29415f; padding: 8px 12px; min-height: 38px; cursor: pointer; font-family: inherit; font-size: 14px; line-height: 20px; font-weight: 600; }
+    #competitorLookupView button:hover, #competitorLookupDetails button:hover { background: #edf3fc; }
+    #competitorLookupView button:focus-visible, #competitorLookupDetails button:focus-visible { outline: 2px solid #2f66c8; outline-offset: 2px; }
+    #competitorLookupView .cl-primary { background: #2b61b3; color: #fff; border-color: #2b61b3; }
+    #competitorLookupView .cl-primary:hover { background: #204e94; }
+    #clResultCount { margin-left: auto; color: #526580; font-size: 13px; white-space: nowrap; }
+    #clStatus { color: #526580; font-size: 13px; margin: 8px 0 12px; }
+    .cl-filters { padding: 14px 0; margin-bottom: 14px; border: 1px solid #d8e1ed; background: #f6f8fc; border-radius: 8px; }
+    .cl-filters[hidden] { display: none; }
+    .cl-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; padding: 0 12px; }
+    .cl-filter-grid label { display: grid; min-width: 0; gap: 5px; color: #344a67; font-size: 13px; font-weight: 600; }
+    .cl-filter-grid input, .cl-filter-grid select { width: 100%; min-width: 0; height: 38px; border: 1px solid #bac7d8; border-radius: 6px; padding: 6px 8px; background: #fff; color: #20334e; font: inherit; }
+    .cl-filter-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding: 0 12px; font-size: 13px; color: #344a67; }
+    .cl-filter-actions label { margin-right: auto; }
+    .cl-table-wrap { border: 1px solid #d8e1ed; border-radius: 8px; overflow: auto; }
+    .cl-table { width: 100%; border-collapse: collapse; table-layout: fixed; color: #253b57; }
+    .cl-table th { padding: 10px 12px; background: #f3f6fb; color: #526580; text-align: left; font-size: 12px; font-weight: 700; border-bottom: 1px solid #d8e1ed; }
+    .cl-table td { height: 42px; padding: 8px 12px; border-bottom: 1px solid #e8edf4; font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
+    .cl-table tbody tr:nth-child(even) { background: #fafbfd; }
+    .cl-table tbody tr:hover { background: #f0f5fc; }
+    .cl-table tbody tr { cursor: pointer; }
+    .cl-table tbody tr[aria-selected="true"] { background: #eaf2ff; box-shadow: inset 3px 0 #2f66c8; }
+    .cl-table col:nth-child(1) { width: var(--cl-name-width); }
+    .cl-table col:nth-child(2) { width: var(--cl-rank-width); }
+    .cl-table col:nth-child(3) { width: var(--cl-studio-width); }
+    .cl-table col:nth-child(4) { width: var(--cl-division-width); }
+    .cl-table col:nth-child(5) { width: var(--cl-ring-width); }
+    @container (min-width: 760px) {
+      .cl-filter-grid { grid-template-columns: var(--cl-name-width) var(--cl-rank-width) var(--cl-studio-width) var(--cl-division-width) var(--cl-ring-width); gap: 0; padding: 0; }
+      .cl-filter-grid label { padding: 0 12px; }
+    }
+    #competitorLookupView .cl-result { border: 0; background: transparent; padding: 0; min-height: 24px; color: #20334e; font: inherit; font-weight: 700; text-align: left; }
+    #competitorLookupView .cl-sort { border: 0; background: transparent; padding: 0; min-height: 20px; font: inherit; color: inherit; }
+    .cl-rank { display: inline-block; border: 1px solid #cddbee; background: #eef3fa; color: #31547d; border-radius: 5px; padding: 0 6px; font-size: 12px; font-weight: 700; }
+    .cl-muted { color: #64748b; }
+    #competitorLookupView mark { background: #fff0b5; color: inherit; border-radius: 2px; }
+    .cl-footer { padding: 12px 2px; font-size: 13px; color: #526580; }
+    .content.competitor-lookup { --cl-details-width: clamp(420px, calc(65vw - 477px), 460px); }
+    .content.competitor-lookup:not(.details-hidden) { grid-template-columns: 220px minmax(0, 1fr) var(--cl-details-width); }
+    .content.competitor-lookup > .details { border: 1px solid #d8e1ed; border-radius: 10px; box-shadow: 0 4px 16px #20334e0a; }
+    .cl-detail-heading { position: relative; padding-right: 42px; margin-bottom: 18px; }
+    .cl-detail-heading h3 { font-size: 21px; line-height: 28px; color: #20334e; margin: 0 0 4px; overflow-wrap: anywhere; }
+    .cl-detail-heading p { font-size: 14px; color: #526580; margin: 0 0 8px; }
+    #competitorLookupDetails .cl-close { position: absolute; right: 0; top: 0; min-height: 32px; width: 32px; padding: 3px; font-size: 22px; }
+    .cl-detail-section { border-top: 1px solid #e1e8f1; padding: 16px 0; }
+    .cl-detail-section h4 { font-size: 14px; color: #29415f; margin: 0 0 12px; }
+    #competitorLookupDetails dl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px 12px; font-size: 14px; line-height: 21px; margin: 0; }
+    #competitorLookupDetails dt { color: #526580; }
+    #competitorLookupDetails dd { color: #20334e; margin: 0; overflow-wrap: anywhere; }
+    .cl-info { padding: 10px 12px; background: #eff5fd; border: 1px solid #d6e5f8; border-radius: 7px; font-size: 13px; line-height: 20px; color: #42618a; margin: 12px 0 0; }
+    @media (max-width: 1380px) {
+      .content.competitor-lookup, .content.competitor-lookup:not(.details-hidden) { grid-template-columns: 220px minmax(0, 1fr); }
+      .content.competitor-lookup > .details:not([hidden]) { position: fixed; z-index: 50; right: 16px; top: 90px; bottom: 16px; width: min(var(--cl-details-width), calc(100vw - 32px)); overflow: auto; box-shadow: -12px 8px 40px #20334e33; }
+    }
+    @media (max-width: 960px) {
+      .content.competitor-lookup, .content.competitor-lookup:not(.details-hidden) { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .cl-table th, .cl-table td { padding: 8px 6px; font-size: 12px; }
+      #competitorLookupView { --cl-name-width: 24%; --cl-rank-width: 11%; --cl-studio-width: 22%; --cl-division-width: 14%; --cl-ring-width: 29%; }
+      #clResultCount { margin-left: 0; }
+    }
     .ra-ring.connected { --ra-connection-color: #15803d; }
     .ra-ring.disconnected { --ra-connection-color: #b91c1c; }
     .ra-connection {
@@ -273,15 +346,20 @@
     #ringAssignmentDetails[hidden] { display: none; }
     #headTableDetails[hidden] { display: none; }
     .ht-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .ht-toolbar a { color: #2457a7; font-size: 13px; }
     .ht-toolbar label, .ht-freshness { font-size: 12px; color: var(--text-soft); }
-    .ht-summary { display: grid; gap: 10px; }
-    .ht-primary-counts { display: flex; flex-wrap: wrap; gap: 8px; }
-    .ht-primary-counts .chip { padding: 10px 14px; font-size: 14px; }
-    .ht-primary-counts .chip.warning,
-    .ht-primary-counts .chip.warning strong { color: #991b1b; }
-    .ht-primary-counts .chip.warning { background: #fee2e2; border-color: #fca5a5; }
-    .ht-secondary-counts { display: flex; flex-wrap: wrap; gap: 6px 20px; color: var(--text-soft); font-size: 12px; }
-    .ht-secondary-counts strong { font-weight: 600; }
+    /* Each group's divider sits 1px outside its line start, so the clip hides it when a group begins a row. */
+    .ht-summary { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px 0; margin-left: -16px; overflow: hidden; }
+    .ht-count-group { display: flex; align-items: center; gap: 6px; margin-left: -1px; padding: 4px 16px; border-left: 1px solid var(--line); }
+    .ht-count-items { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .ht-count-title { flex: 0 0 76px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-soft); }
+    .ht-count { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 11px; border: 1px solid #d8e0ec; border-radius: 8px; background: #f8fafc; font-size: 13px; color: var(--text-soft); white-space: nowrap; }
+    .ht-count strong { font-size: 15px; color: var(--text); font-variant-numeric: tabular-nums; }
+    .ht-count.warning { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+    .ht-count.warning strong { color: #991b1b; }
+    .ht-progress { display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; font-size: 12px; color: var(--text-soft); white-space: nowrap; }
+    .ht-progress-track { width: 96px; height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+    .ht-progress-track > span { display: block; height: 100%; background: #16a34a; }
     .ht-rings { display: grid; gap: 7px; }
     .ht-ring {
       display: grid;
@@ -1137,6 +1215,7 @@
           <span><span id="bannerEventLabel">Selected Event:</span> <strong id="bannerEventName">None selected</strong></span>
           <span>Event Date: <strong id="bannerEventDate">Not set</strong></span>
           <span>Status: <strong class="banner-status" id="bannerEventStatus">No event selected</strong></span>
+          <span id="bannerClock" hidden>Time: <strong id="bannerClockTime" class="banner-clock">--</strong></span>
         </div>
       </header>
 
@@ -1309,6 +1388,7 @@
               <p data-help-source="Ring details and maintenance">Show or hide a division's competitor list in Ring Details. Lists scroll after ten rows. Remove takes a division out of the queue without deleting it. Reset ring and applying a saved layout require confirmation because they clear operational state.</p>
               <p data-help-source="Planning estimates">Available division tiles show an approximate start and total ring time on one extra line; no hover is needed. Each start assumes assigning that division next to the earliest projected available ring, independently of other available divisions. It is not a reservation or automatic assignment. Start TBD means no usable prediction; ring time can still be shown. Ring time assumes everyone competes in all applicable disciplines, including Weapons only where applicable. Seven minutes per saved competitor is a rough total baseline, not a learned average or a separate calculation for each discipline. Empty configured rings may contribute planning starts even without a connected tablet; this does not mean they are operationally ready. Rings with current or queued work still need a connected tablet. Assistance and missing saved data can block predictions. Select a ring for queue windows and completion estimates. Two-minute transitions assume prompt starts without unreported breaks. Times are low confidence, not call times, and starts expire after 30 seconds without refresh.</p>
               <div class="notice" id="raNotice" role="status" aria-live="polite"></div>
+              <div id="raEventTiming" class="event-timing" aria-label="Event timing"></div>
               <div id="raEstimateSummary" class="estimate-summary" role="status"></div>
               <div class="ra-board">
                 <section class="ra-section" aria-labelledby="raDivisionsTitle">
@@ -1329,10 +1409,12 @@
                 <label for="htOrder">Display order</label>
                 <select id="htOrder"><option value="priority">Priority</option><option value="ring">Ring order</option></select>
                 <button type="button" id="htAssignmentBtn" data-help="Open Ring Assignment to manage queues and ring assignments.">Open Ring Assignment</button>
+                <a href="/audience-monitor/" target="_blank" rel="noopener" data-help="Open the standalone read-only audience display in a new tab.">Audience Monitor</a>
               </div>
               <div id="htFreshness" class="ht-freshness" role="status" aria-live="polite">Waiting for first refresh.</div>
               <div id="htNotice" class="notice" role="status" aria-live="polite"></div>
               <div id="htSummary" class="ht-summary" aria-label="Active event summary"></div>
+              <div id="htEventTiming" class="event-timing" aria-label="Event timing"></div>
               <div id="htEstimateSummary" class="estimate-summary" role="status"></div>
               <p data-help-source="Ring progression and status">Select a ring for details. Green phases are complete, blue fills the active phase, and neutral phases are upcoming. Queued previews are unfilled. Weapons appears only when applicable. Connection badges use green for connected, red for disconnected, and gray for no tablet. A red exclamation mark indicates assistance. Missing timing does not imply a delay. Counts are status indicators, not filters.</p>
               <p data-help-source="Ring details and assistance">Ring Details shows timing, the queue, competitors, and expandable phase history. Competitor lists scroll after ten rows. Clear assistance only after the request has been addressed; confirmation is required. Clearing is not a separate acknowledgement and is disabled when data is stale. Use Ring Assignment for queue editing or ring reset.</p>
@@ -1341,6 +1423,47 @@
               <div id="htRings" class="ht-rings" aria-label="Ring operations overview"></div>
             </div>
 
+            <div class="view" id="competitorLookupView" data-help-page="competitors" data-help-title="Competitor Lookup" hidden>
+              <div class="cl-toolbar">
+                <label class="cl-search-field"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"></circle><path d="m15 15 5 5"></path></svg>
+                  <input id="clSearch" type="search" autocomplete="off" aria-label="Search competitors by name or rank" placeholder="Name or rank; commas for multiple" aria-describedby="clStatus">
+                </label>
+                <button id="clSearchBtn" class="cl-primary" type="button" data-help="Run the current name/rank search. Comma-separated terms match with OR.">Search</button>
+                <button id="clFiltersBtn" type="button" aria-expanded="false" aria-controls="clFilters" data-help="Show or hide advanced filters without changing the current results.">Filters</button>
+                <button id="clRefreshBtn" type="button" data-help="Reload saved competitors and ring assignments for the active event.">Refresh</button>
+                <span id="clResultCount"></span>
+              </div>
+              <div id="clFilters" class="cl-filters" hidden>
+                <div class="cl-filter-grid">
+                  <label>Name<input id="clFilterName" type="text" autocomplete="off"></label>
+                  <label>Rank<select id="clFilterRank"><option value="">All ranks</option></select></label>
+                  <label>Studio<select id="clFilterStudio"><option value="">All studios</option></select></label>
+                  <label>Division<select id="clFilterDivision"><option value="">All divisions</option></select></label>
+                  <label>Ring<select id="clFilterRing"><option value="">All rings</option></select></label>
+                </div>
+                <div class="cl-filter-actions">
+                  <label><input id="clFilterUnassigned" type="checkbox"> Show only unassigned</label>
+                  <button id="clClearFiltersBtn" type="button" data-help="Clear advanced filters without clearing the search text.">Clear filters</button>
+                  <button id="clApplyFiltersBtn" class="cl-primary" type="button" data-help="Apply all advanced filters to the current search results.">Apply filters</button>
+                </div>
+              </div>
+              <p id="clStatus" role="status" aria-live="polite"></p>
+              <div id="clNotice" class="notice" role="status" aria-live="polite"></div>
+              <p data-help-source="Finding a competitor">Enter at least two characters of a first name, last name, or rank. Separate multiple terms with commas: Anna, G1 finds anyone matching Anna OR G1, not only people matching both. Spaces around terms and duplicate terms are ignored; terms shorter than two characters are ignored. Matching is case-insensitive and literal; all matching saved competitors for the active event appear once with matching text highlighted. Search updates as you type; Search or Enter also runs it. Studio, parent, and phone are not search fields. Use advanced filters for studio, division, or ring rather than typing Crescent D2 or Division 76 into the name/rank search. Select a competitor name to open complete details. Click the Competitor heading to reverse name order.</p>
+              <p data-help-source="Advanced filters">Filters opens a compact optional panel. Apply filters combines name, rank, studio, division, ring, and unassigned conditions with AND, within the comma-separated OR search results. A blank search with applied filters searches the saved roster using those filters alone; a nonempty search still needs a two-character term. Name matches the full name as a literal substring. Show only unassigned means no identifiable current, queued, or completed ring assignment; unknown ring data is not treated as unassigned. Clear filters restores the existing name/rank search. Closing Filters hides the controls but preserves applied filters. Options come from the active event. All matches are displayed without pagination; the footer reports actual counts.</p>
+              <p data-help-source="Details and assignments">Details show first name, last name, parent name, phone, rank, studio, saved group division, and identifiable ring. Current and queued assignments are distinguished from completed ring history; conflicting assignments are marked ambiguous rather than guessed. Missing registration fields say Not provided. Refreshes occur every ten seconds. Failed refreshes clear old personal details; if only ring data fails, registration remains searchable with ring assignments explicitly unavailable. This staff lookup is not part of the public Audience Monitor and provides no editing actions.</p>
+              <div class="cl-table-wrap">
+                <table class="cl-table" aria-label="Matching competitors">
+                  <colgroup><col><col><col><col><col></colgroup>
+                  <thead><tr>
+                    <th scope="col" id="clNameHeading" aria-sort="ascending"><button id="clSortName" class="cl-sort" type="button" data-help="Reverse the last-name, first-name result order.">Competitor <span id="clSortIndicator" aria-hidden="true">&#8593;</span></button></th>
+                    <th scope="col">Rank</th><th scope="col">Studio</th><th scope="col">Division</th><th scope="col">Ring</th>
+                  </tr></thead>
+                  <tbody id="clResults"></tbody>
+                </table>
+              </div>
+              <div id="clResultsFooter" class="cl-footer" role="status"></div>
+            </div>
             <div class="view" id="placeholderView" hidden>
               <div class="under-dev">
                 <h2 id="placeholderTitle">Under Development</h2>
@@ -1357,6 +1480,7 @@
           <div class="panel-body">
             <div id="ringAssignmentDetails" hidden></div>
             <div id="headTableDetails" hidden></div>
+            <div id="competitorLookupDetails" hidden></div>
             <div id="groupDetails" hidden>
               <div class="summary-label" id="gdName"></div>
               <div class="import-meta" id="gdMeta"></div>
@@ -1464,6 +1588,15 @@
       const bannerEventLabelEl = document.getElementById('bannerEventLabel');
       const bannerEventDateEl = document.getElementById('bannerEventDate');
       const bannerEventStatusEl = document.getElementById('bannerEventStatus');
+      const bannerClockEl = document.getElementById('bannerClock');
+      const bannerClockTimeEl = document.getElementById('bannerClockTime');
+      let bannerClockTimer = null;
+      function tickBannerClock() {
+        clearTimeout(bannerClockTimer);
+        bannerClockTimeEl.textContent = new Date(Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+        bannerClockTimer = setTimeout(tickBannerClock, 1000);
+      }
+      tickBannerClock();
       const workspaceTitle = document.getElementById('workspaceTitle');
       const sidebar = document.querySelector('.sidebar');
       const navItems = Array.from(document.querySelectorAll('.sidebar-item'));
@@ -1675,7 +1808,8 @@
       }
 
       function renderBanner() {
-        const dayOf = ['placeholder', 'ring-assignment', 'head-table'].includes(currentView);
+        const dayOf = ['placeholder', 'ring-assignment', 'head-table', 'competitors'].includes(currentView);
+        bannerClockEl.hidden = !dayOf;
         bannerEventLabelEl.textContent = dayOf ? 'Active Event:' : 'Selected Event:';
         bannerMetadataEl.setAttribute('aria-label', dayOf ? 'Active event metadata' : 'Selected event metadata');
         if (dayOf) {
@@ -1719,26 +1853,30 @@
         const onGroups = currentView === 'groups';
         const onRings = currentView === 'ring-assignment';
         const onHeadTable = currentView === 'head-table';
+        const onCompetitors = currentView === 'competitors';
         const detailsVisible = onImport
           ? Boolean(state.selectedEventName) && eventExists(state.selectedEventName)
           : onGroups
             ? gbHasSelection()
             : onRings ? Boolean(ra.selectedRingId) && ra.ready
             : onHeadTable ? Boolean(ht.selectedRingId) && ht.ready
+            : onCompetitors ? cl.ready && cl.selectedId !== ''
             : state.metadataOpen && currentView === 'event-setup';
         if (detailsPanel) {
           detailsPanel.hidden = !detailsVisible;
         }
         if (pageContent) {
           pageContent.classList.toggle('details-hidden', !detailsVisible);
-          pageContent.classList.toggle('import-wide', onImport || onGroups || onRings || onHeadTable);
+          pageContent.classList.toggle('import-wide', onImport || onGroups || onRings || onHeadTable || onCompetitors);
+          pageContent.classList.toggle('competitor-lookup', onCompetitors);
         }
         importDetailsEl.hidden = !onImport;
         groupDetailsEl.hidden = !onGroups;
         ringAssignmentDetailsEl.hidden = !onRings;
         headTableDetailsEl.hidden = !onHeadTable;
-        metadataPanelEl.hidden = onImport || onGroups || onRings || onHeadTable || !state.metadataOpen;
-        detailsTitleEl.textContent = onImport ? 'Import Details' : onGroups ? 'Division Details' : onRings || onHeadTable ? 'Ring Details' : 'Event Details';
+        document.getElementById('competitorLookupDetails').hidden = !onCompetitors;
+        metadataPanelEl.hidden = onImport || onGroups || onRings || onHeadTable || onCompetitors || !state.metadataOpen;
+        detailsTitleEl.textContent = onCompetitors ? 'Competitor Details' : onImport ? 'Import Details' : onGroups ? 'Division Details' : onRings || onHeadTable ? 'Ring Details' : 'Event Details';
         renderImportView();
         if (onGroups) {
           gbSyncControls();
@@ -2072,6 +2210,13 @@
           return;
         }
         currentView = view;
+        cl.requestToken += 1;
+        clearTimeout(cl.timer);
+        if (view !== 'competitors') {
+          cl.roster = []; cl.rings = []; cl.selectedId = ''; cl.ready = false;
+          document.getElementById('clResults').innerHTML = '';
+          document.getElementById('competitorLookupDetails').innerHTML = '';
+        }
         clearTimeout(estimateTimer);
         ht.requestToken += 1;
         clearTimeout(ht.timer);
@@ -2094,6 +2239,7 @@
         groupsView.hidden = view !== 'groups';
         ringAssignmentView.hidden = view !== 'ring-assignment';
         headTableView.hidden = view !== 'head-table';
+        document.getElementById('competitorLookupView').hidden = view !== 'competitors';
         placeholderView.hidden = view !== 'placeholder';
         const title = navLabel(item);
         workspaceTitle.textContent = title;
@@ -2104,6 +2250,10 @@
           setMetadataPanelVisible(false);
         }
         syncButtons();
+        if (view === 'competitors') {
+          clLoad();
+          return;
+        }
         if (view === 'ring-assignment') {
           raLoad();
           return;
@@ -2962,7 +3112,7 @@
 
       const ra = {
         eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
-        ready: false, busy: false, requestToken: 0, timer: null, estimates: null,
+        ready: false, busy: false, requestToken: 0, timer: null, estimates: null, startedAt: '', completion: null,
         heartbeatSeconds: 90, config: {}, pointerDrag: null, nativeDragging: false, suppressClickUntil: 0
       };
       const raDivisionsEl = document.getElementById('raDivisions');
@@ -2982,6 +3132,52 @@
       }
 
       let estimateTimer = null;
+      const COMPLETION_REFRESH_MS = 60000;
+
+      function eventClockText(value) {
+        const date = new Date(value);
+        const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return date.toDateString() === new Date(Date.now()).toDateString() ? time
+          : `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+      }
+
+      function eventTiming(context, id) {
+        const element = document.getElementById(id);
+        if (!context.eventName) { element.innerHTML = ''; context.completion = null; return; }
+        const started = Date.parse(context.startedAt);
+        const startText = Number.isFinite(started) ? eventClockText(started) : 'TBD';
+        let completion = '<strong>TBD</strong>';
+        let help = 'Event timing starts when the first ring tablet connects.';
+        if (!Number.isFinite(started)) context.completion = null;
+        else {
+          const reason = estimateContext(context);
+          const forecast = reason ? null : context.estimates.eventCompletion;
+          const status = forecast && ['estimated', 'complete'].includes(forecast.status)
+            && (forecast.status === 'complete' || validEstimateWindow(forecast.window)) ? forecast.status : 'unavailable';
+          const held = context.completion;
+          // Hold the displayed forecast for a minute so it does not jitter on every 10-second refresh.
+          if (!held || held.eventName !== context.eventName || held.startedAt !== context.startedAt
+            || held.status !== status || Date.now() - held.at >= COMPLETION_REFRESH_MS) {
+            context.completion = { eventName: context.eventName, startedAt: context.startedAt, status, forecast,
+              reason: reason || (forecast && forecast.reason) || 'No completion estimate reported.', at: Date.now() };
+          }
+          const shown = context.completion;
+          const updated = `Updated ${eventClockText(shown.at)}; refreshes every minute.`;
+          if (shown.status === 'estimated') {
+            const window = shown.forecast.window;
+            completion = `<strong>~${gbEsc(eventClockText(Date.parse(window.expectedAt)))}</strong><small>(${gbEsc(estimateWindow(window))})</small>`;
+            help = `Approximate completion of all divisions, including unassigned divisions placed on whichever ring frees up first. ${shown.forecast.planningOnly ? 'Includes empty unconnected rings for planning only. ' : ''}Low confidence; subject to change. ${updated}`;
+          } else if (shown.status === 'complete') {
+            completion = '<strong>All divisions complete</strong>';
+            help = `No current, queued, or unassigned divisions remain. ${updated}`;
+          } else {
+            completion = '<strong>Unavailable</strong>';
+            help = `Completion estimate unavailable: ${shown.reason}`;
+          }
+        }
+        element.innerHTML = `<span data-help="${gbEsc(Number.isFinite(started) ? `Recorded when the first ring tablet connected for ${context.eventName}.` : help)}">Event started <strong>${gbEsc(startText)}</strong></span>
+          <span data-help="${gbEsc(help)}">Est. completion ${completion}</span>`;
+      }
 
       function estimateContext(context) {
         const snapshot = context.estimates;
@@ -3213,6 +3409,7 @@
         raRefreshBtn.disabled = ra.busy;
         raRenderDetails();
         estimateSummary(ra, 'raEstimateSummary');
+        eventTiming(ra, 'raEventTiming');
         renderState();
       }
 
@@ -3227,6 +3424,8 @@
           if (!eventName) throw new Error('No active event. Activate an event on Event Setup first.');
           if (ra.eventName !== eventName) {
             ra.estimates = null;
+            ra.startedAt = '';
+            ra.completion = null;
             ra.groups = [];
             ra.rings = [];
             ra.selectedRingId = '';
@@ -3246,6 +3445,7 @@
           ra.rings = board.rings.slice().sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
           ra.available = board.availableGroupDivisionNumbers;
           ra.estimates = board.estimates || null;
+          ra.startedAt = board.eventStartedAt || '';
           ra.config = board.ringConfig || {};
           ra.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
           if (!ra.rings.some((ring) => ring.ringId === ra.selectedRingId)) ra.selectedRingId = '';
@@ -3257,6 +3457,7 @@
           if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
           ra.ready = false;
           ra.estimates = null;
+          ra.startedAt = '';
           ra.groups = [];
           ra.rings = [];
           ra.available = [];
@@ -3432,7 +3633,7 @@
 
       const ht = {
         eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
-        ready: false, busy: false, error: '', lastLoadedAt: null, heartbeatSeconds: 90, estimates: null,
+        ready: false, busy: false, error: '', lastLoadedAt: null, heartbeatSeconds: 90, estimates: null, startedAt: '', completion: null,
         requestToken: 0, timer: null, freshnessTimer: null, historyOpen: false, order: [], hovering: false
       };
       const htRingsEl = document.getElementById('htRings');
@@ -3641,20 +3842,33 @@
         const running = new Set(ht.rings.map((ring) => String(ring.groupDivisionNumber || '')).filter((id) => known.has(id)));
         const queued = new Set(ht.rings.flatMap((ring) => ring.queuedGroupDivisionNumbers || []).map(String).filter((id) => known.has(id) && !running.has(id)));
         const completed = new Set(ht.rings.flatMap((ring) => ring.completedGroupDivisionNumbers || []).map(String).filter((id) => known.has(id) && !running.has(id) && !queued.has(id)));
-        const primaryCounts = [
-          ['Available', ht.available.filter((id) => known.has(String(id))).length],
+        const tones = ht.rings.map((ring) => raConnection(ring, ht.heartbeatSeconds).tone);
+        const divisionCounts = [
+          ['Unassigned', ht.available.filter((id) => known.has(String(id))).length],
+          ['Queued', queued.size],
           ['Active', running.size],
-          ['Disconnected', ht.rings.filter((ring) => raConnection(ring, ht.heartbeatSeconds).tone === 'disconnected').length],
-          ['Assistance', ht.rings.filter((ring) => ring.assistanceType).length]
+          ['Completed', completed.size]
         ];
+        const ringCounts = [
+          ['Connected', tones.filter((tone) => tone === 'connected').length],
+          ['No tablet', tones.filter((tone) => tone === 'no-tablet').length],
+          ['Disconnected', tones.filter((tone) => tone === 'disconnected').length, true],
+          ['Assistance', ht.rings.filter((ring) => ring.assistanceType).length, true]
+        ];
+        const percent = known.size ? Math.round(completed.size / known.size * 100) : 0;
+        const count = ([label, value, alert]) => `<span class="ht-count${alert && value > 0 ? ' warning' : ''}">${label} <strong>${value}</strong></span>`;
         htSummaryEl.innerHTML = ht.ready ? `
-          <div class="ht-primary-counts" role="group" aria-label="Primary counts: available and active divisions, disconnected rings, assistance requests">
-            ${primaryCounts.map(([label, count]) => `<span class="chip${count > 0 && ['Disconnected', 'Assistance'].includes(label) ? ' warning' : ''}">${label}: <strong>${count}</strong></span>`).join('')}
+          <div class="ht-count-group" role="group" aria-label="Division counts">
+            <span class="ht-count-title">Divisions</span>
+            <span class="ht-count-items">${divisionCounts.map(count).join('')}
+            <span class="ht-progress" role="img" aria-label="${completed.size} of ${known.size} divisions completed">
+              <span class="ht-progress-track"><span style="width: ${percent}%"></span></span>
+              <span><strong>${completed.size} of ${known.size}</strong> completed</span>
+            </span></span>
           </div>
-          <div class="ht-secondary-counts" role="group" aria-label="Supporting division counts">
-            <span>Queued: <strong>${queued.size}</strong></span>
-            <span>Completed: <strong>${completed.size}</strong></span>
-            <span>Overall progress: <strong>${completed.size} of ${known.size}</strong> divisions completed</span>
+          <div class="ht-count-group" role="group" aria-label="Ring counts">
+            <span class="ht-count-title">Rings (${ht.rings.length})</span>
+            <span class="ht-count-items">${ringCounts.map(count).join('')}</span>
           </div>` : '<span class="ra-meta">Event totals unavailable.</span>';
         let rings = ht.rings.slice().sort((a, b) =>
           (htOrderEl.value === 'ring' ? 0 : htAttention(a).rank - htAttention(b).rank) || a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
@@ -3680,6 +3894,7 @@
         renderState();
         htTickFreshness();
         estimateSummary(ht, 'htEstimateSummary');
+        eventTiming(ht, 'htEventTiming');
       }
 
       async function htLoad() {
@@ -3693,7 +3908,7 @@
           verifiedEvent = state.activeEventName;
           if (!verifiedEvent) throw new Error('No active event. Activate an event on Event Setup first.');
           if (verifiedEvent !== ht.eventName) {
-            ht.estimates = null;
+            ht.estimates = null; ht.startedAt = ''; ht.completion = null;
             ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
             ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = []; ht.lastLoadedAt = null;
             htRender();
@@ -3707,6 +3922,7 @@
           ht.rings = board.rings;
           ht.available = board.availableGroupDivisionNumbers;
           ht.estimates = board.estimates || null;
+          ht.startedAt = board.eventStartedAt || '';
           ht.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
           if (!ht.rings.some((ring) => ring.ringId === ht.selectedRingId)) ht.selectedRingId = '';
           if (!ht.groups.some((group) => raAnchor(group) === ht.selectedGroupId)) ht.selectedGroupId = '';
@@ -3717,7 +3933,7 @@
           if (token !== ht.requestToken || currentView !== 'head-table') return;
           ht.error = error.message;
           if (!verifiedEvent || ht.eventName !== verifiedEvent) {
-            ht.estimates = null;
+            ht.estimates = null; ht.startedAt = ''; ht.completion = null;
             ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
             ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = [];
           }
@@ -3779,6 +3995,236 @@
         }
       });
 
+      const cl = { eventName: '', roster: [], rings: [], ready: false, selectedId: '', ringError: '', requestToken: 0, timer: null,
+        filters: { name: '', rank: '', studio: '', division: '', ring: '', unassigned: false }, descending: false };
+      const clSearch = document.getElementById('clSearch');
+      const clResults = document.getElementById('clResults');
+      const clDetails = document.getElementById('competitorLookupDetails');
+      function clTerms() {
+        return [...new Set(clSearch.value.toLowerCase().split(',').map((term) => term.trim()).filter((term) => term.length >= 2))];
+      }
+      function clMatches(person) {
+        return clTerms().some((term) => ['firstName', 'lastName', 'rank'].some((field) =>
+          String(person[field] || '').toLowerCase().includes(term)));
+      }
+      function clHighlight(value) {
+        const text = String(value || '');
+        const lower = text.toLowerCase();
+        const ranges = [];
+        clTerms().forEach((term) => {
+          let start = 0, match;
+          while ((match = lower.indexOf(term, start)) !== -1) {
+            ranges.push([match, match + term.length]);
+            start = match + 1;
+          }
+        });
+        ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+        const merged = [];
+        ranges.forEach(([start, end]) => {
+          const last = merged[merged.length - 1];
+          if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+          else merged.push([start, end]);
+        });
+        let result = '', start = 0;
+        for (const [from, to] of merged) {
+          result += gbEsc(text.slice(start, from)) + `<mark>${gbEsc(text.slice(from, to))}</mark>`;
+          start = to;
+        }
+        return result + gbEsc(text.slice(start));
+      }
+      function clDivision(person) {
+        const value = person.groupDivisionNumber;
+        return value != null && String(value).trim() && String(value).toLowerCase() !== 'unassigned'
+          ? String(value) : '';
+      }
+      function clPhone(value) {
+        const text = String(value || '').trim();
+        const digits = text.replace(/\D/g, '');
+        if (/^[\d\s()+.-]+$/.test(text) && digits.length === 10) {
+          return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+        }
+        return text;
+      }
+      function clRing(person) {
+        if (cl.ringError) return 'Unavailable - ring data could not be refreshed';
+        const division = clDivision(person);
+        if (!division) return 'Not assigned';
+        const assignments = [];
+        const completed = [];
+        cl.rings.forEach((ring) => {
+          if (String(ring.groupDivisionNumber || '') === division) assignments.push(`Ring ${ring.ringLabel} - current`);
+          if ((ring.queuedGroupDivisionNumbers || []).map(String).includes(division)) assignments.push(`Ring ${ring.ringLabel} - queued`);
+          if ((ring.completedGroupDivisionNumbers || []).map(String).includes(division)) completed.push(`Ring ${ring.ringLabel} - completed`);
+        });
+        const matches = assignments.length ? assignments : completed;
+        return matches.length > 1 ? `Ambiguous: ${matches.join('; ')}` : matches[0] || 'Not assigned';
+      }
+      function clHasFilters() {
+        return Object.values(cl.filters).some(Boolean);
+      }
+      function clFilterMatches(person) {
+        const filter = cl.filters;
+        const division = clDivision(person);
+        const ring = clRing(person);
+        const hasLiveAssignment = division && cl.rings.some((entry) => String(entry.groupDivisionNumber || '') === division
+          || (entry.queuedGroupDivisionNumbers || []).map(String).includes(division));
+        return (!filter.name || [person.firstName, person.lastName].filter(Boolean).join(' ').toLowerCase().includes(filter.name))
+          && (!filter.rank || String(person.rank || '') === filter.rank)
+          && (!filter.studio || String(person.studio || '') === filter.studio)
+          && (!filter.division || division === filter.division)
+          && (!filter.ring || !cl.ringError && cl.rings.some((entry) => entry.ringId === filter.ring
+            && division && [entry.groupDivisionNumber, ...(entry.queuedGroupDivisionNumbers || []),
+              ...(!hasLiveAssignment ? entry.completedGroupDivisionNumbers || [] : [])].map(String).includes(division)))
+          && (!filter.unassigned || !cl.ringError && ring === 'Not assigned');
+      }
+      function clFilterOptions() {
+        const populate = (id, label, entries) => {
+          const select = document.getElementById(id);
+          const value = select.value;
+          select.innerHTML = `<option value="">${label}</option>` + entries.map(([key, text]) =>
+            `<option value="${gbEsc(key)}">${gbEsc(text)}</option>`).join('');
+          select.value = entries.some(([key]) => key === value) ? value : '';
+        };
+        for (const [field, id, label] of [['rank', 'clFilterRank', 'All ranks'], ['studio', 'clFilterStudio', 'All studios'], ['division', 'clFilterDivision', 'All divisions']]) {
+          const values = [...new Set(cl.roster.map((person) => field === 'division' ? clDivision(person) : String(person[field] || '')).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+          populate(id, label, values.map((value) => [value, value]));
+        }
+        populate('clFilterRing', 'All rings', cl.rings.slice().sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }))
+          .map((ring) => [ring.ringId, `Ring ${ring.ringLabel}`]));
+      }
+      function clClearFilters() {
+        cl.filters = { name: '', rank: '', studio: '', division: '', ring: '', unassigned: false };
+        for (const id of ['clFilterName', 'clFilterRank', 'clFilterStudio', 'clFilterDivision', 'clFilterRing']) document.getElementById(id).value = '';
+        document.getElementById('clFilterUnassigned').checked = false;
+      }
+      function clRender() {
+        const terms = clTerms();
+        const filterOnly = !clSearch.value.trim() && clHasFilters();
+        const matches = cl.ready ? cl.roster.filter((person) => (filterOnly || clMatches(person)) && clFilterMatches(person)).sort((a, b) =>
+          (cl.descending ? -1 : 1) * (String(a.lastName || '').localeCompare(String(b.lastName || ''))
+          || String(a.firstName || '').localeCompare(String(b.firstName || ''))
+          || String(a.id).localeCompare(String(b.id), undefined, { numeric: true }))) : [];
+        if (!matches.some((person) => String(person.id) === cl.selectedId)) cl.selectedId = '';
+        document.getElementById('clStatus').textContent = !cl.ready ? 'Competitor lookup unavailable or loading.'
+          : !terms.length && !filterOnly ? 'Enter at least 2 characters per search term; separate terms with commas.'
+          : `${matches.length} match${matches.length === 1 ? '' : 'es'} - ${cl.eventName}${terms.length > 1 ? ' - matching any term' : ''}${clHasFilters() ? ' - filters applied' : ''}${clSearch.value.split(',').some((term) => term.trim().length === 1) ? ' - single-character terms ignored' : ''}`;
+        document.getElementById('clResultCount').textContent = `${matches.length} result${matches.length === 1 ? '' : 's'}`;
+        document.getElementById('clResultsFooter').textContent = `Showing ${matches.length ? '1' : '0'}-${matches.length} of ${matches.length} results`;
+        document.getElementById('clNameHeading').setAttribute('aria-sort', cl.descending ? 'descending' : 'ascending');
+        document.getElementById('clSortIndicator').textContent = cl.descending ? '\u2193' : '\u2191';
+        clResults.innerHTML = matches.map((person) => `<tr data-cl-row="${gbEsc(person.id)}" aria-selected="${String(person.id) === cl.selectedId}">
+          <td><button type="button" class="cl-result" data-cl-id="${gbEsc(person.id)}" aria-pressed="${String(person.id) === cl.selectedId}"><strong>${clHighlight(person.firstName)} ${clHighlight(person.lastName)}</strong></button></td>
+          <td><span class="cl-rank">${clHighlight(person.rank) || 'Not provided'}</span></td>
+          <td>${gbEsc(person.studio || 'Not provided')}</td>
+          <td>${clDivision(person) ? `<span aria-label="Group Division ${gbEsc(clDivision(person))}">${gbEsc(clDivision(person))}</span>` : '<span class="cl-muted">Not assigned</span>'}</td>
+          <td${clRing(person) === 'Not assigned' ? ' class="cl-muted"' : ''}>${gbEsc(clRing(person))}</td>
+        </tr>`).join('');
+        const person = matches.find((entry) => String(entry.id) === cl.selectedId);
+        const section = (title, fields) => `<section class="cl-detail-section"><h4>${title}</h4><dl>${fields.map(([label, value]) =>
+          `<dt>${gbEsc(label)}</dt><dd>${gbEsc(value || 'Not provided')}</dd>`).join('')}</dl></section>`;
+        clDetails.innerHTML = person ? `<div class="cl-detail-heading">
+          <h3>${gbEsc([person.firstName, person.lastName].filter(Boolean).join(' '))}</h3>
+          <p>${gbEsc(person.studio || 'Studio not provided')}</p><span class="cl-rank">${gbEsc(person.rank || 'Rank not provided')}</span>
+          <button type="button" id="clCloseDetails" class="cl-close" data-cl-close aria-label="Close competitor details" data-help="Close the selected competitor's details.">&times;</button>
+        </div>` + section('Personal Information', [
+          ['First name', person.firstName], ['Last name', person.lastName],
+          ['Parent/Guardian', [person.parentFirstName, person.parentLastName].filter(Boolean).join(' ')],
+          ['Phone', clPhone(person.phone)], ...(person.email ? [['Email', person.email]] : [])
+        ]) + section('Competition Information / Assignments', [
+          ['Rank', person.rank], ['Studio', person.studio],
+          ['Group division', clDivision(person) ? `Division ${clDivision(person)}${person.groupDivisionName ? ` - ${person.groupDivisionName}` : ''}` : 'Not assigned'],
+          ...(person.ageRange ? [['Age range', person.ageRange]] : []), ['Ring assignment', clRing(person)]
+        ]) + (clRing(person) === 'Not assigned' ? '<p class="cl-info">This competitor has not been assigned to a ring yet.</p>' : '')
+          + `<section class="cl-detail-section"><h4>Notes</h4><p class="cl-muted">${gbEsc(person.notes || 'No notes provided.')}</p></section>` : '';
+        renderState();
+      }
+      async function clLoad() {
+        if (currentView !== 'competitors') return;
+        const token = ++cl.requestToken;
+        clearTimeout(cl.timer);
+        const notice = document.getElementById('clNotice');
+        try {
+          await refreshActiveEvent();
+          if (token !== cl.requestToken || currentView !== 'competitors') return;
+          const eventName = state.activeEventName;
+          if (!eventName || state.activeEventError) throw new Error(state.activeEventError || 'No active event. Activate an event first.');
+          if (cl.eventName !== eventName) {
+            clClearFilters();
+            cl.roster = []; cl.rings = []; cl.selectedId = ''; cl.ready = false;
+            cl.eventName = eventName;
+            clRender();
+          }
+          const roster = await fetchJson(`/api/competitors?eventName=${encodeURIComponent(eventName)}`);
+          if (!Array.isArray(roster) || roster.some((person) => !person || person.id == null)) throw new Error('Invalid competitor roster returned by server.');
+          let rings = [], ringError = '';
+          try {
+            const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(eventName)}`);
+            if (!Array.isArray(board.rings)) throw new Error('Invalid ring data returned by server.');
+            rings = board.rings;
+          } catch (error) {
+            ringError = error.message;
+            console.error('Competitor lookup ring refresh failed:', error);
+          }
+          const active = await fetchJson('/api/events/active');
+          if (token !== cl.requestToken || currentView !== 'competitors') return;
+          if (active.activeEvent !== eventName) throw new Error('The active event changed. Refresh Competitor Lookup.');
+          cl.roster = roster; cl.rings = rings; cl.ringError = ringError; cl.ready = true;
+          clFilterOptions();
+          notice.textContent = ringError ? `Ring assignments unavailable: ${ringError}` : '';
+          notice.className = ringError ? 'notice visible warn' : 'notice';
+          clRender();
+        } catch (error) {
+          if (token !== cl.requestToken || currentView !== 'competitors') return;
+          console.error('Competitor lookup refresh failed:', error);
+          cl.roster = []; cl.rings = []; cl.ready = false; cl.selectedId = '';
+          notice.textContent = `Unable to load Competitor Lookup: ${error.message}`;
+          notice.className = 'notice visible error';
+          clRender();
+        } finally {
+          if (token === cl.requestToken && currentView === 'competitors') cl.timer = setTimeout(clLoad, 10000);
+        }
+      }
+      clSearch.addEventListener('input', clRender);
+      clSearch.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); clRender(); } });
+      document.getElementById('clSearchBtn').addEventListener('click', clRender);
+      document.getElementById('clFiltersBtn').addEventListener('click', () => {
+        const panel = document.getElementById('clFilters');
+        panel.hidden = !panel.hidden;
+        document.getElementById('clFiltersBtn').setAttribute('aria-expanded', String(!panel.hidden));
+      });
+      document.getElementById('clApplyFiltersBtn').addEventListener('click', () => {
+        cl.filters = {
+          name: document.getElementById('clFilterName').value.trim().toLowerCase(),
+          rank: document.getElementById('clFilterRank').value, studio: document.getElementById('clFilterStudio').value,
+          division: document.getElementById('clFilterDivision').value, ring: document.getElementById('clFilterRing').value,
+          unassigned: document.getElementById('clFilterUnassigned').checked
+        };
+        clRender();
+      });
+      document.getElementById('clClearFiltersBtn').addEventListener('click', () => { clClearFilters(); clRender(); });
+      document.getElementById('clSortName').addEventListener('click', () => { cl.descending = !cl.descending; clRender(); });
+      document.getElementById('clRefreshBtn').addEventListener('click', clLoad);
+      clResults.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-cl-id], [data-cl-row]');
+        if (!button || !cl.ready) return;
+        cl.selectedId = button.dataset.clId ?? button.dataset.clRow;
+        clRender();
+        document.getElementById('clCloseDetails').focus();
+      });
+      clDetails.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        cl.selectedId = '';
+        clRender();
+        clSearch.focus();
+      });
+      clDetails.addEventListener('click', (event) => {
+        if (!event.target.closest('[data-cl-close]')) return;
+        cl.selectedId = '';
+        clRender();
+        clSearch.focus();
+      });
+
       const dayOfLabels = ['Ring Assignment', 'Head Table', 'Competitors', 'Judges & Volunteers', 'Reports & Results'];
       function syncDayOfNav() {
         const unlocked = Boolean(state.activeEventName) && !state.activeEventError;
@@ -3800,7 +4246,7 @@
           item.addEventListener('click', () => {
             const label = navLabel(item);
             if (item.getAttribute('aria-disabled') === 'true') return;
-            showView(label === 'Event Setup' ? 'event-setup' : label === 'Import' ? 'import' : label === 'Group Builder' ? 'groups' : label === 'Ring Assignment' ? 'ring-assignment' : label === 'Head Table' ? 'head-table' : 'placeholder', item);
+            showView(label === 'Event Setup' ? 'event-setup' : label === 'Import' ? 'import' : label === 'Group Builder' ? 'groups' : label === 'Ring Assignment' ? 'ring-assignment' : label === 'Head Table' ? 'head-table' : label === 'Competitors' ? 'competitors' : 'placeholder', item);
           });
         });
       }
@@ -3812,6 +4258,7 @@
           if (view === 'groups') showView('groups', groupNavItem);
           if (view === 'ring-assignment') showView('ring-assignment', navItems.find((item) => navLabel(item) === 'Ring Assignment'));
           if (view === 'head-table') showView('head-table', navItems.find((item) => navLabel(item) === 'Head Table'));
+          if (view === 'competitors') showView('competitors', navItems.find((item) => navLabel(item) === 'Competitors'));
         })
         .catch((error) => showNotice(error.message, 'error'));
     }());

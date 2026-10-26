@@ -146,6 +146,9 @@ function buildEstimates({ eventName, rings, groups, now = Date.now(), heartbeatS
       }
     };
   });
+  const eventCompletion = buildEventCompletion({
+    eventName, rings: estimates, availableIds, groupMap, now, transitionMs, fraction
+  });
   return {
     version: 1, eventName: eventName || null,
     generatedAt: new Date(now).toISOString(),
@@ -162,9 +165,56 @@ function buildEstimates({ eventName, rings, groups, now = Date.now(), heartbeatS
       'Two minutes between divisions; queue order is unchanged and staff start queued work promptly.',
       'Windows allow 25 percent uncertainty, accumulating through the queue; confidence is low.',
       'Unassigned suggestions are independent what-if scenarios, not simultaneous reservations or automatic assignments.',
+      'Event completion places every unassigned division, in division order, on whichever ring is projected to free up first.',
       'Unknown breaks, future assistance, staffing and schedule changes cannot be predicted.'
     ],
-    rings: estimates, unassigned
+    rings: estimates, unassigned, eventCompletion
+  };
+}
+
+function buildEventCompletion({ eventName, rings, availableIds, groupMap, now, transitionMs, fraction }) {
+  if (!eventName) return unavailable('No active event.');
+  const hasWork = (ring) => Boolean(ring.current) || ring.queue.length > 0;
+  const blocked = rings.find((ring) => hasWork(ring) && ring.availability.status !== 'estimated');
+  if (blocked) return unavailable(`Ring ${blocked.ringLabel}: ${blocked.availability.reason}`);
+  const pending = availableIds.slice().sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  const missing = pending.find((id) => !divisionDurationMs(groupMap.get(String(id))));
+  if (missing) return unavailable(`Division ${missing} has no saved competitor roster.`);
+  const slots = rings.filter((ring) => ring.availability.status === 'estimated')
+    .sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }))
+    .map((ring) => {
+      const window = ring.availability.window;
+      const expected = Date.parse(window.expectedAt);
+      return {
+        working: hasWork(ring), planningOnly: ring.availability.planningOnly,
+        delayMs: expected - now, uncertaintyMs: Date.parse(window.latestAt) - expected
+      };
+    });
+  if (pending.length && !slots.length) return unavailable('No ring has a reliable availability estimate.');
+  let planningOnly = false;
+  for (const id of pending) {
+    const slot = slots.reduce((best, item) => (item.delayMs < best.delayMs ? item : best));
+    const workMs = transitionMs + divisionDurationMs(groupMap.get(String(id)));
+    slot.delayMs += workMs;
+    slot.uncertaintyMs += workMs * fraction;
+    slot.working = true;
+    planningOnly = planningOnly || slot.planningOnly;
+  }
+  const working = slots.filter((slot) => slot.working);
+  if (!working.length) {
+    return groupMap.size
+      ? { status: 'complete', reason: null, window: null }
+      : unavailable('No saved divisions for the active event.');
+  }
+  const expectedMs = Math.max(...working.map((slot) => slot.delayMs));
+  return {
+    status: 'estimated', reason: null, confidence: 'low', planningOnly,
+    remainingDivisions: pending.length,
+    window: {
+      earliestAt: new Date(now + Math.max(0, ...working.map((slot) => slot.delayMs - slot.uncertaintyMs))).toISOString(),
+      expectedAt: new Date(now + expectedMs).toISOString(),
+      latestAt: new Date(now + Math.max(...working.map((slot) => slot.delayMs + slot.uncertaintyMs))).toISOString()
+    }
   };
 }
 
