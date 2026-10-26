@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const { assignDivisionNumbers, rebalanceGroupsToSoftMax } = require('./groupDivisionAssignments');
+const { validateSpecialNeedsGroups } = require('../assets/division-rules');
 
 function openDatabase(dbFilePath, mode) {
   const resolvedMode = mode == null ? sqlite3.OPEN_READWRITE : mode;
@@ -204,8 +205,16 @@ function createCompetitorStore(dbFilePath) {
     try {
       await ensureDivisionColumns(db);
       await ensureDivisionIndexes(db);
-      const rosterRows = await all(db, 'SELECT id, firstName, lastName, dob, associationNumber, email FROM competitors');
+      const rosterRows = await all(db, 'SELECT * FROM competitors');
       const rosterLookup = buildRosterLookup(rosterRows);
+      const rosterById = new Map(rosterRows.map((row) => [row.id, row]));
+      validateSpecialNeedsGroups(assignedGroups.map((group) => ({
+        ...group,
+        competitors: group.competitors.map((competitor) => {
+          const row = rosterById.get(resolveCompetitorId(competitor, rosterLookup));
+          return row ? { ...competitor, ...row, age: undefined } : competitor;
+        })
+      })));
       await run(db, 'BEGIN TRANSACTION');
       transactionStarted = true;
       await run(

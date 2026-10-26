@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { ageOf: competitorAge, isSpecialNeeds, specialNeedsGroupError, validateSpecialNeedsGroups } = require('../assets/division-rules');
 
 const TRACE_PATH = path.join(__dirname, 'group-division-trace.log');
 
@@ -18,6 +19,64 @@ function isWeaponsEligible(competitor) {
   }
   const rank = rankUpper(competitor);
   return rank === 'G2' || rank === 'G1' || rank === 'CDB' || rank === 'D1' || rank === 'D2' || rank === 'D3';
+}
+
+// Mirrors the division builder's rank tiers and macro age brackets.
+function competitorRankTier(competitor) {
+  const rank = rankUpper(competitor);
+  if (rank === 'TTLD') return 'TTLD';
+  if (/^G(10|[5-9])$/.test(rank)) return 'G10-G5';
+  if (/^G[1-4]$/.test(rank) || rank === 'CDB') return 'G4-CDB';
+  if (/^D\d+$/.test(rank)) return 'DAN';
+  return 'unknown';
+}
+
+function competitorMacroAgeBracket(competitor) {
+  const age = competitorAge(competitor);
+  if (!Number.isFinite(age)) return 'unknown';
+  if (age <= 9) return '6-9';
+  if (age <= 13) return '10-13';
+  if (age <= 17) return '14-17';
+  if (age <= 35) return '18-35';
+  return '36+';
+}
+
+function competitorGender(competitor) {
+  const value = String(competitor && competitor.gender ? competitor.gender : '').trim().toLowerCase();
+  if (value.startsWith('m')) return 'Male';
+  if (value.startsWith('f')) return 'Female';
+  return 'Unknown';
+}
+
+// Firm division rules: one gender, one rank tier, one macro age bracket.
+function competitorsShareDivisionRules(competitors) {
+  const list = Array.isArray(competitors) ? competitors : [];
+  if (list.some(isSpecialNeeds)) return !specialNeedsGroupError(list, { automatic: true });
+  if (list.length < 2) return true;
+  const first = list[0];
+  const gender = competitorGender(first);
+  const tier = competitorRankTier(first);
+  const bracket = competitorMacroAgeBracket(first);
+  return list.every((competitor) =>
+    competitorGender(competitor) === gender &&
+    competitorRankTier(competitor) === tier &&
+    competitorMacroAgeBracket(competitor) === bracket
+  );
+}
+
+function groupsCanMerge(left, right) {
+  if (!left || !right) return false;
+  const leftCompetitors = Array.isArray(left.competitors) ? left.competitors : [];
+  const rightCompetitors = Array.isArray(right.competitors) ? right.competitors : [];
+  return competitorsShareDivisionRules([...leftCompetitors, ...rightCompetitors]);
+}
+
+function sortByAge(competitors) {
+  return [...competitors].sort((a, b) => {
+    const ageA = competitorAge(a);
+    const ageB = competitorAge(b);
+    return (Number.isFinite(ageA) ? ageA : Infinity) - (Number.isFinite(ageB) ? ageB : Infinity);
+  });
 }
 
 function splitIntoGroups(list, maxGroupSize) {
@@ -60,6 +119,7 @@ function splitEvenlyIntoGroups(list, minGroupSize, maxGroupSize) {
 
 function rebalanceGroupsToSoftMax(groups, options = {}) {
   const sourceGroups = Array.isArray(groups) ? groups : [];
+  validateSpecialNeedsGroups(sourceGroups);
   const maxGroupSize = Number.parseInt(options.maxGroupSize ?? options.maxSize ?? 11, 10) || 11;
   const minGroupSize = Number.parseInt(options.minGroupSize ?? options.minSize ?? 4, 10) || 4;
   const overflowTolerance = Number.parseInt(options.overflowTolerance ?? 2, 10) || 2;
@@ -91,40 +151,55 @@ function rebalanceGroupsToSoftMax(groups, options = {}) {
     });
   });
 
-  // Pass 2: Absorb or re-slice undersized tail groups (< minGroupSize, e.g., 1-3)
+  // Pass 2: Absorb undersized groups (< minGroupSize) into a neighbour that shares the firm
+  // division rules (gender, rank tier, macro age bracket). Groups with no compatible neighbour
+  // stay undersized and are flagged for manual review instead of being forced together.
+  const mergeWithin = (base, extraCompetitors, extraFirst) => {
+    const combinedCompetitors = sortByAge(extraFirst
+      ? [...extraCompetitors, ...base.competitors]
+      : [...base.competitors, ...extraCompetitors]);
+    if (combinedCompetitors.length <= maxGroupSize) {
+      return [{ ...base, competitors: combinedCompetitors, headcount: combinedCompetitors.length }];
+    }
+    return splitEvenlyIntoGroups(combinedCompetitors, minGroupSize, maxGroupSize).map((chunk, c) => ({
+      ...base,
+      groupId: c === 0 ? base.groupId : `${base.groupId}-sub-${c}`,
+      competitors: chunk,
+      headcount: chunk.length
+    }));
+  };
+
   const rebalanced = [];
   for (let i = 0; i < processedGroups.length; i++) {
     const current = processedGroups[i];
-
-    // If we have an undersized group and a previous group exists, check if we can merge or must re-slice
-    if (current.competitors.length < minGroupSize && rebalanced.length > 0) {
-      const prev = rebalanced[rebalanced.length - 1];
-      const combinedCompetitors = [...prev.competitors, ...current.competitors];
-
-      if (combinedCompetitors.length <= maxGroupSize) {
-        // Simple merge into previous group
-        prev.competitors = combinedCompetitors;
-        prev.headcount = prev.competitors.length;
-      } else {
-        // Combined exceeds maxGroupSize (e.g., 11 + 3 = 14). Re-slice the whole pool evenly!
-        const reslicedChunks = splitEvenlyIntoGroups(combinedCompetitors, minGroupSize, maxGroupSize);
-        // Replace the previous group's competitors with the first re-sliced chunk
-        prev.competitors = reslicedChunks[0];
-        prev.headcount = prev.competitors.length;
-
-        // Push any additional re-sliced chunks as new groups
-        for (let c = 1; c < reslicedChunks.length; c++) {
-          rebalanced.push({
-            ...prev,
-            groupId: `${prev.groupId}-sub-${c}`,
-            competitors: reslicedChunks[c],
-            headcount: reslicedChunks[c].length
-          });
-        }
-      }
-    } else {
+    if (current.competitors.length >= minGroupSize) {
       rebalanced.push(current);
+      continue;
     }
+
+    const prev = rebalanced[rebalanced.length - 1];
+    if (prev && groupsCanMerge(prev, current)) {
+      rebalanced.pop();
+      rebalanced.push(...mergeWithin(prev, current.competitors, false));
+      continue;
+    }
+
+    const next = processedGroups[i + 1];
+    if (current.competitors.length && next && groupsCanMerge(current, next)) {
+      const merged = mergeWithin(next, current.competitors, true);
+      processedGroups.splice(i + 1, 1, ...merged);
+      continue;
+    }
+
+    if (!current.competitors.length) {
+      if (!prev) rebalanced.push(current);
+      continue;
+    }
+
+    rebalanced.push({
+      ...current,
+      warning: `Below minimum of ${minGroupSize}: no division with the same gender, rank tier and age bracket to merge with`
+    });
   }
 
   return rebalanced;
@@ -132,7 +207,8 @@ function rebalanceGroupsToSoftMax(groups, options = {}) {
 
 function absorbLoneCdbIntoBlackBelts(groups, maxGroupSize = 11) {
   return groups.reduce((acc, currentGroup, index, arr) => {
-    const isCdbGroup = currentGroup.rankCategory === 'CDB' && currentGroup.competitors.length <= 3;
+    const isCdbGroup = currentGroup.rankCategory === 'CDB' && currentGroup.competitors.length <= 3 &&
+      !currentGroup.competitors.some(isSpecialNeeds);
 
     if (isCdbGroup && acc.length > 0) {
       const prevGroup = acc[acc.length - 1];
@@ -140,7 +216,7 @@ function absorbLoneCdbIntoBlackBelts(groups, maxGroupSize = 11) {
       const isAgeCompatible = Math.abs(prevGroup.averageAge - currentGroup.averageAge) <= 3;
       const hasCapacity = (prevGroup.competitors.length + currentGroup.competitors.length) <= maxGroupSize;
 
-      if (isBlackBelt && isAgeCompatible && hasCapacity) {
+      if (isBlackBelt && isAgeCompatible && hasCapacity && !prevGroup.competitors.some(isSpecialNeeds)) {
         prevGroup.competitors.push(...currentGroup.competitors);
         prevGroup.headcount = prevGroup.competitors.length;
         return acc;

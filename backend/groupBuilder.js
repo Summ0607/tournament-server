@@ -1,4 +1,5 @@
 const { assignDivisionNumbers, rebalanceGroupsToSoftMax, absorbLoneCdbIntoBlackBelts } = require('./groupDivisionAssignments');
+const { isSpecialNeeds, specialNeedsCategory, validateSpecialNeedsGroups } = require('../assets/division-rules');
 
 function normalizeAge(competitor) {
   if (Number.isFinite(Number(competitor.age))) {
@@ -46,7 +47,12 @@ function isNonCompetingDanRank(rank) {
 function reviewReasonFor(competitor) {
   const rank = String(competitor && competitor.rank != null ? competitor.rank : '').trim();
   if (!rank) return 'missing rank';
-  if (isTtldRank(rank) || rankBandKey(rank) !== 'unknown') return '';
+  if (isTtldRank(rank) || rankBandKey(rank) !== 'unknown') {
+    if (isSpecialNeeds(competitor) && Object.values(specialNeedsCategory(competitor)).includes('Unknown')) {
+      return 'Special Needs requires a known gender, eligible rank and valid age';
+    }
+    return '';
+  }
   if (isNonCompetingDanRank(rank)) return 'rank not eligible to compete';
   return 'unrecognized rank';
 }
@@ -724,12 +730,47 @@ function buildRankBandGroups(competitors, maxGroupSize, minGroupSize) {
   return groups;
 }
 
+function buildSpecialNeedsGroups(competitors, minGroupSize, maxGroupSize) {
+  const buckets = new Map();
+  for (const competitor of competitors) {
+    if (!isSpecialNeeds(competitor) || reviewReasonFor(competitor)) continue;
+    const category = specialNeedsCategory(competitor);
+    const key = JSON.stringify(category);
+    if (!buckets.has(key)) buckets.set(key, { ...category, competitors: [] });
+    buckets.get(key).competitors.push(competitor);
+  }
+  const groups = [];
+  const rankOrder = ['TTLD', 'Gup', 'Black Belt'];
+  const ageOrder = ['Under 13', '13-17', '18 and up'];
+  const ordered = [...buckets.values()].sort((a, b) =>
+    DEMOGRAPHIC_GENDER_ORDER.indexOf(a.gender) - DEMOGRAPHIC_GENDER_ORDER.indexOf(b.gender) ||
+    rankOrder.indexOf(a.rankCategory) - rankOrder.indexOf(b.rankCategory) ||
+    ageOrder.indexOf(a.ageBracket) - ageOrder.indexOf(b.ageBracket));
+  for (const bucket of ordered) {
+    for (const chunk of splitEvenlyIntoGroups(sortCompetitorsByAgeAndName(bucket.competitors), minGroupSize, maxGroupSize)) {
+      groups.push({
+        groupId: `special-needs-${groups.length + 1}`,
+        name: `Special Needs ${bucket.gender} ${bucket.rankCategory} ${bucket.ageBracket}`,
+        specialNeeds: true,
+        gender: bucket.gender,
+        rankCategory: bucket.rankCategory,
+        ageBracket: bucket.ageBracket,
+        competitors: chunk,
+        headcount: chunk.length,
+        ...(chunk.length < minGroupSize ? { warning: `Group size below minimum of ${minGroupSize}` } : {})
+      });
+    }
+  }
+  return groups;
+}
+
 function buildDivisionsLegacy(competitors, params = {}) {
   const maxGroupSize = Number(params.maxGroupSize ?? params.maxSize ?? 6);
   const minGroupSize = Number(params.minGroupSize ?? params.minSize ?? 4);
 
   // If explicit groups were passed in, trust them as-is
   if (Array.isArray(params.groups) && params.groups.length) {
+    validateSpecialNeedsGroups(params.groups);
     return {
       groups: assignDivisionNumbers(
         rebalanceGroupsToSoftMax(params.groups, {
@@ -763,6 +804,7 @@ function buildDivisionsLegacy(competitors, params = {}) {
       reviewCompetitors.push({ ...competitor, reviewReason });
       continue;
     }
+    if (isSpecialNeeds(competitor)) continue;
     if (isTtldRank(competitor.rank)) {
       ttldCompetitors.push(competitor);
       continue;
@@ -818,7 +860,10 @@ function buildDivisionsLegacy(competitors, params = {}) {
   }
 
   return {
-    groups: assignDivisionNumbers(groups, params.startingDivisionNumber ?? 20),
+    groups: assignDivisionNumbers([
+      ...buildSpecialNeedsGroups(normalized, minGroupSize, maxGroupSize),
+      ...groups
+    ], params.startingDivisionNumber ?? 20),
     reviewCompetitors
   };
 }
@@ -834,11 +879,15 @@ function buildDivisions(competitors, options = {}) {
   }
 
   try {
-    const demographicBuckets = buildDemographicBuckets(competitors);
+    const source = Array.isArray(competitors) ? competitors : [];
+    const demographicBuckets = buildDemographicBuckets(source.filter((competitor) => competitor && !isSpecialNeeds(competitor)));
     const clusteredGroups = clusterBucketsToGroups(demographicBuckets);
 
     // Pass through the rebalancer to absorb undersized tail groups (like that group of 3)
-    const balancedGroups = rebalanceGroupsToSoftMax(clusteredGroups, {
+    const balancedGroups = rebalanceGroupsToSoftMax([
+      ...buildSpecialNeedsGroups(source.filter(Boolean), minGroupSize, maxGroupSize),
+      ...clusteredGroups
+    ], {
       maxGroupSize,
       minGroupSize
     });
