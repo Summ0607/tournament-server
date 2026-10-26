@@ -4,6 +4,48 @@ Tournament Management Server Source
 Feature overview for Audience Monitor, Competitor Lookup, and Day-of clocks:
 [docs/audience-monitor-lookup.md](docs/audience-monitor-lookup.md).
 
+## Build Groups: firm division rules
+
+Every ordinary generated division contains a **single gender, a single rank tier**
+(TTLD, G10–G5, G4–CDB, Dan) and **a single age bracket** (6–9, 10–13, 14–17,
+18–35, 36+). Divisions below the minimum size of 4 merge only into a
+neighbouring division that satisfies all three rules (previous first, then
+next; merges above the maximum are re-sliced evenly). When no compatible
+neighbour exists, the division stays small, carries a warning, and appears in
+the **Undersized** count for manual review; it is never forced into an
+unrelated division.
+
+Special Needs competitors are separated before ordinary grouping. Within
+Special Needs, divisions are divided by **gender**, then **Black Belt versus
+Gup** (CDB is Gup), then **Under 13**, **13-17**, or **18 and up**. TTLD remains
+a separate Special Needs rank category. Oversized divisions split within the
+same category; undersized divisions stay separate for review. Special Needs
+competitors never merge with ordinary groups. Manual moves may cross age and
+rank categories within Special Needs, but must retain gender separation and
+isolation from standard divisions. Saving preserves those manual combinations,
+with server-side checks against the saved roster. Automatic rebalancing still
+does not combine different age or rank categories. Manually combined cards
+show mixed ranks or mixed age bands rather than the first member's category.
+Group Builder shows the Special Needs count, division labels, and member badges.
+Missing gender, invalid age, or ineligible rank requires review before grouping.
+
+CSV imports accept both `Special Needs` and `Special Needs (Y|N)` column
+headings. Use explicit `Y` or `N` on each row; existing blank fields continue
+to import as No for compatibility. The revised 400-person test roster contains
+8 Special Needs competitors (2%), aged 13-30. Existing event databases and
+browser drafts are not automatically repaired: re-import the corrected CSV,
+then rebuild and review groups before saving.
+
+Group Builder scrolls the division list and the selected division's competitor
+list independently. On desktop, both panels fit the viewport, keeping headings
+and builder controls visible. On narrow screens, the lists have capped heights
+and scroll within the page. Scrolling one list does not move the other.
+Empty cards are also distinguished: a new division awaiting competitors uses
+a neutral dashed card; a previously populated division that becomes empty uses
+a red-tinted **Emptied** card. Adding competitors clears the empty styling.
+This history is retained in browser drafts; older empty drafts without history
+are treated as awaiting competitors.
+
 ## Integrated Competitor Lookup
 
 Open **Competitors** in Tournament Management, or use

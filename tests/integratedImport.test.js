@@ -85,6 +85,7 @@ async function loadPage(options = {}) {
   const timers = new Map();
   let timerId = 0;
   const context = vm.createContext({
+    DivisionRules: require('../assets/division-rules'),
     Date: class extends Date {
       static now() { return Date.now() + clockOffset; }
     },
@@ -299,12 +300,14 @@ test('integrated Import resumes saved competitors and feeds saved groups without
     groups: [{ id: '20', groupDivisionNumber: 20, competitors: [savedCompetitor] }]
   });
   await page.openImport();
+  assert.equal(page.element('pageContent').classList.contains('group-builder'), false);
   assertNextDefault(page);
   assert.equal(page.element('importedCount').textContent, 1);
   assert.equal(page.element('warningCount').textContent, 'Not available');
   assert.equal(page.element('importDetailTime').textContent, 'Loaded from saved database');
   await page.click('importNextBtn');
   assert.equal(page.element('groupsView').hidden, false);
+  assert.equal(page.element('pageContent').classList.contains('group-builder'), true);
   assert.match(page.element('gbStats').innerHTML, /Competitors: <strong>1/);
   assert.match(page.element('gbStats').innerHTML, /Groups: <strong>1/);
   assert.equal(page.requests.some((request) => request.init), false);
@@ -477,6 +480,118 @@ test('a missing database can be initialized, imported and used to persist group 
   assert.equal(restored[0].groupDivisionNumber, 20);
 });
 
+for (const header of ['Special Needs', 'Special Needs (Y|N)']) {
+  test(`Special Needs import, grouping and save/reload preserve ${header} flags`, async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'special-needs-import-'));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const dbPath = path.join(directory, 'tournament.db');
+    const csvPath = path.join(directory, 'registration.csv');
+    const year = new Date().getFullYear();
+    fs.writeFileSync(csvPath, `First Name,Last Name,DOB,Gender,Current Rank,${header}\n` + [
+      `One,Test,01/01/${year - 14},Male,G10,Y`,
+      `Two,Test,01/01/${year - 17},Male,CDB,Y`,
+      `Three,Test,01/01/${year - 16},Female,G1,Y`,
+      `Four,Test,01/01/${year - 18},Male,D1,Y`,
+      `Five,Test,01/01/${year - 18},Male,G1,Y`,
+      `Six,Test,01/01/${year - 14},Male,G10,N`
+    ].join('\n'));
+    await initializeDatabase(dbPath);
+    const imported = await importCSV(csvPath, dbPath, { clearExisting: true });
+    assert.equal(imported.normalizedCompetitors.filter((c) => c.specialNeeds === 1).length, 5);
+    const store = createCompetitorStore(dbPath);
+    const competitors = await store.loadCompetitors();
+    const { buildGroups } = require('../backend/groupBuilder');
+    const groups = buildGroups(competitors);
+    assert.equal(groups.length, 5);
+    assert.equal(groups.filter((g) => g.specialNeeds).length, 4);
+    await store.saveDivisionAssignments(groups);
+    const maleSpecial = competitors.filter((c) => c.gender === 'Male' && c.specialNeeds === 1);
+    const manualGroups = groups.filter((g) => !g.competitors.some((c) => maleSpecial.some((member) => member.id === c.id)));
+    manualGroups.push({ groupId: 'manual-special', name: 'Special Needs manual combination', competitors: maleSpecial });
+    await store.saveDivisionAssignments(manualGroups);
+    const saved = await store.loadCompetitors();
+    assert.equal(saved.filter((c) => c.specialNeeds === 1).length, 5);
+    assert.ok(saved.filter((c) => c.specialNeeds === 1).every((c) => c.groupDivisionName.startsWith('Special Needs')));
+    assert.equal(new Set(saved.filter((c) => c.gender === 'Male' && c.specialNeeds === 1).map((c) => c.groupDivisionNumber)).size, 1);
+    const spoofed = saved.filter((c) => ['One', 'Six'].includes(c.firstName)).map((c) => ({ ...c, specialNeeds: 0 }));
+    await assert.rejects(store.saveDivisionAssignments([{ competitors: spoofed }]), { code: 'INVALID_DIVISION_GROUP' });
+    assert.deepEqual((await store.loadCompetitors()).map((c) => c.groupDivisionNumber), saved.map((c) => c.groupDivisionNumber));
+  });
+}
+
+test('Special Needs move restrictions and labels apply in Group Builder', async () => {
+  const special = { ...savedCompetitor, specialNeeds: 1, dob: '01/01/2010' };
+  const ordinary = { ...newCompetitor, specialNeeds: 0 };
+  const page = await loadPage({
+    competitors: [special, ordinary],
+    groups: [
+      { id: 'special', competitors: [special] },
+      { id: 'ordinary', competitors: [ordinary] }
+    ]
+  });
+
+  test('manual Special Needs drag accepts different ages and ranks but rejects other genders', async () => {
+    const special = { ...savedCompetitor, specialNeeds: 1, dob: '01/01/2010' };
+    const adult = { ...newCompetitor, specialNeeds: 1, rank: 'D1', dob: '01/01/2000' };
+    const female = { ...adult, id: 3, gender: 'Female' };
+    const page = await loadPage({
+      competitors: [special, adult, female],
+      groups: [
+        { id: 'source', competitors: [special] },
+        { id: 'adult', competitors: [adult] },
+        { id: 'female', competitors: [female] }
+      ]
+    });
+    await page.openGroups();
+    const banners = page.element('gbBanners');
+    banners.handlers.click({
+      target: { closest: (selector) => selector === '.gb-banner' ? { dataset: { id: 'source' } } : null }
+    });
+    const id = /data-comp="([^"]+)"/.exec(page.element('gdMembers').innerHTML)[1];
+    page.element('gdMembers').handlers.dragstart({
+      target: { closest: () => ({ dataset: { comp: id } }) },
+      dataTransfer: { setData() {} }
+    });
+    for (const [target, expected] of [['female', false], ['adult', true]]) {
+      let accepted = false;
+      banners.handlers.dragover({
+        target: { closest: () => ({ dataset: { id: target }, classList: { add() {} } }) },
+        preventDefault() { accepted = true; },
+        dataTransfer: {}
+      });
+      assert.equal(accepted, expected);
+    }
+    banners.handlers.drop({
+      target: { closest: () => ({ dataset: { id: 'adult' } }) },
+      preventDefault() {}
+    });
+    assert.match(banners.innerHTML, /Mixed ranks - Mixed age bands/);
+    await page.click('gbSaveBtn');
+    assert.equal(page.element('gbSaveBtn').classList.contains('primary'), false);
+    assert.deepEqual(page.errors, []);
+  });
+  await page.openGroups();
+  assert.match(page.element('gbBanners').innerHTML, /Special Needs - Gup - 13-17/);
+  assert.match(page.element('gbStats').innerHTML, /Special Needs: <strong>1/);
+  page.element('gbBanners').handlers.click({
+    target: { closest: (selector) => selector === '.gb-banner' ? { dataset: { id: 'special' } } : null }
+  });
+  assert.match(page.element('gdMembers').innerHTML, /Special Needs/);
+  const id = /data-comp="([^"]+)"/.exec(page.element('gdMembers').innerHTML)[1];
+  page.element('gdMembers').handlers.dragstart({
+    target: { closest: () => ({ dataset: { comp: id } }) },
+    dataTransfer: { setData() {} }
+  });
+  let accepted = false;
+  page.element('gbBanners').handlers.dragover({
+    target: { closest: () => ({ dataset: { id: 'ordinary' } }) },
+    preventDefault() { accepted = true; },
+    dataTransfer: {}
+  });
+  assert.equal(accepted, false);
+  assert.deepEqual(page.errors, []);
+});
+
 test('saved groups emphasize activation; drag reorder emphasizes save until successfully saved again', async () => {
   const page = await loadPage({
     competitors: [savedCompetitor, newCompetitor],
@@ -510,6 +625,40 @@ test('saved groups emphasize activation; drag reorder emphasizes save until succ
   await page.input('gbMaxSize', 'change');
   assert.equal(page.element('gbSaveBtn').classList.contains('primary'), true);
   assert.equal(page.element('gbDoneBtn').hidden, true);
+});
+
+test('empty divisions distinguish new cards from previously populated draft cards', async () => {
+  const page = await loadPage({
+    competitors: [savedCompetitor],
+    draft: { eventName: winter, groups: [
+      { id: 'new', competitors: [] },
+      { id: 'used', hasHadCompetitors: true, competitors: [] }
+    ] }
+  });
+  await page.openGroups();
+  const html = page.element('gbBanners').innerHTML;
+  assert.match(html, /gb-banner new-empty[^"]*" data-id="new"/);
+  assert.match(html, /New - awaiting competitors/);
+  assert.match(html, /gb-banner emptied[^"]*" data-id="used"/);
+  assert.match(html, /Emptied/);
+});
+
+test('removing the last competitor marks a division emptied rather than new', async () => {
+  const page = await loadPage({
+    competitors: [savedCompetitor],
+    groups: [{ id: '20', competitors: [savedCompetitor] }]
+  });
+  await page.openGroups();
+  page.element('gbBanners').handlers.click({
+    target: { closest: (selector) => selector === '.gb-banner' ? { dataset: { id: '20' } } : null }
+  });
+  const id = /data-comp="([^"]+)"/.exec(page.element('gdMembers').innerHTML)[1];
+  page.element('gdMembers').handlers.click({
+    target: { closest: (selector) => selector === '.gd-row'
+      ? { dataset: { comp: id } } : selector === '[data-unassign]' ? {} : null }
+  });
+  assert.match(page.element('gbBanners').innerHTML, /gb-banner emptied selected/);
+  assert.match(page.element('gdMembers').innerHTML, /This division is now empty/);
 });
 
 test('unsaved browser drafts and failed saves do not offer activation', async () => {

@@ -67,6 +67,7 @@ function createDivisionRouter(deps) {
       return res.json({ groups, reviewCompetitors });
     } catch (err) {
       console.error('BUILD ERROR:', err);
+      if (err.code === 'INVALID_DIVISION_GROUP') return res.status(400).json({ error: err.message });
       return res.status(500).json({ error: 'Failed to build divisions' });
     }
   });
@@ -102,6 +103,7 @@ function createDivisionRouter(deps) {
       return res.json({ success: true, saved: savedGroups.length, updatedCompetitors: persisted.updatedCompetitors, groups: savedGroups });
     } catch (err) {
       console.error('SAVE ERROR:', err);
+      if (err.code === 'INVALID_DIVISION_GROUP') return res.status(400).json({ error: err.message });
       return res.status(500).json({ error: 'Failed to save divisions' });
     }
   });

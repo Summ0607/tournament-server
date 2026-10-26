@@ -213,7 +213,7 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
               gender: row['Gender'],
               rank: row['Current Rank'],
               studio: row['Studio'],
-              specialNeeds: row['Special Needs'],
+              specialNeeds: row['Special Needs'] ?? row['Special Needs (Y|N)'],
               height: row['Height'],
               id: row['ID'] ?? row['Competitor ID'] ?? row['CompetitorId'] ?? row['Competitor_ID'] ?? row.id ?? row.competitorId
             };

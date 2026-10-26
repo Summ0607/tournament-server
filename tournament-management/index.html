@@ -480,6 +480,7 @@
     }
 
     .gb-chip.weapons { background: #fff3d6; color: #8d5b00; }
+    .gb-chip.special-needs { background: #e0f2fe; color: #075985; }
     .gb-meta { margin-top: 2px; font-size: 11px; }
 
     .workflow-body .gb-del {
@@ -496,6 +497,12 @@
     .gb-banner.pseudo { background: #f1f3f8; border-left-color: #8b97a8; }
     .gb-banner.warn { border-left-color: #d9a441; }
     .gb-banner.selected { background: #e8f0ff; border-color: #2f66c8; box-shadow: 0 0 0 2px rgba(47, 102, 200, 0.25); }
+    .gb-banner.new-empty { background: #f5f7fa; border-style: dashed; border-left-color: #64748b; }
+    .gb-banner.emptied { background: #fff1f2; border-left-color: #be123c; }
+    .gb-banner.new-empty .gb-chip { background: #e2e8f0; color: #334155; }
+    .gb-banner.emptied .gb-chip { background: #ffe4e6; color: #9f1239; }
+    .gb-banner.new-empty.selected,
+    .gb-banner.emptied.selected { outline: 2px solid #2f66c8; outline-offset: 1px; }
     .gb-banner.drop { background: #eaf2ff; border: 1px dashed #2f66c8; }
 
     .gb-grip {
@@ -1170,7 +1177,63 @@
       font-weight: 700;
     }
 
+    .content.group-builder #gbBanners,
+    .content.group-builder #gdMembers {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      scrollbar-gutter: stable;
+      align-content: start;
+    }
+
+    @media (min-width: 961px) {
+      .shell:has(.content.group-builder) {
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+      }
+      .frame:has(.content.group-builder) {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .content.group-builder {
+        flex: 1;
+        min-height: 0;
+        align-items: stretch;
+      }
+      .content.group-builder > .sidebar { overflow-y: auto; }
+      .content.group-builder > .workspace,
+      .content.group-builder > .details {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .content.group-builder > .workspace > .workspace-body,
+      .content.group-builder > .details > .panel-body,
+      .content.group-builder #groupsView,
+      .content.group-builder #groupsView > .workflow-panel,
+      .content.group-builder #groupsView .workflow-body,
+      .content.group-builder #groupDetails {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .content.group-builder #gbBanners,
+      .content.group-builder #gdMembers { flex: 1; }
+      .content.group-builder .workspace-head,
+      .content.group-builder .panel-head,
+      .content.group-builder .workflow-head,
+      .content.group-builder #groupsView .workflow-body > :not(#gbBanners),
+      .content.group-builder #groupDetails > :not(#gdMembers) { flex-shrink: 0; }
+      .content.group-builder > .details[hidden] { display: none; }
+    }
+
     @media (max-width: 960px) {
+      .content.group-builder #gbBanners,
+      .content.group-builder #gdMembers { max-height: 65dvh; }
       .shell { padding: 12px; }
       .content {
         grid-template-columns: 1fr;
@@ -1198,6 +1261,7 @@
   </style>
   <link rel="stylesheet" href="/assets/help-tooltips.css">
   <script src="/assets/help-tooltips.js" defer></script>
+  <script src="/assets/division-rules.js"></script>
 </head>
 <body>
   <main class="shell">
@@ -1869,6 +1933,7 @@
           pageContent.classList.toggle('details-hidden', !detailsVisible);
           pageContent.classList.toggle('import-wide', onImport || onGroups || onRings || onHeadTable || onCompetitors);
           pageContent.classList.toggle('competitor-lookup', onCompetitors);
+          pageContent.classList.toggle('group-builder', onGroups);
         }
         importDetailsEl.hidden = !onImport;
         groupDetailsEl.hidden = !onGroups;
@@ -2603,10 +2668,12 @@
           group.name = group.name || 'Empty Group';
           return;
         }
+        group.hasHadCompetitors = true;
+        group.specialNeeds = comps.every(DivisionRules.isSpecialNeeds);
         const genders = [...new Set(comps.map((c) => c.gender || 'Unknown'))];
         const gender = genders.length === 1 ? genders[0] : 'Mixed';
         group.gender = gender;
-        group.name = `${gender} ${gbRankRange(comps)} · ${gbAgeRange(comps)}`;
+        group.name = `${group.specialNeeds ? 'Special Needs ' : ''}${gender} ${gbRankRange(comps)} · ${gbAgeRange(comps)}`;
       }
 
       function gbGroup(group, index) {
@@ -2615,6 +2682,8 @@
           groupId: String(group.groupId || group.id || `group-${index + 1}`),
           name: String(group.name || group.groupId || group.id || `Group ${index + 1}`),
           groupDivisionNumber: group.groupDivisionNumber,
+          hasHadCompetitors: group.hasHadCompetitors === true,
+          specialNeeds: group.specialNeeds === true,
           competitors: Array.isArray(group.competitors) ? group.competitors.map(gbComp) : []
         };
         gbSyncGroup(normalized);
@@ -2629,6 +2698,8 @@
 
       function gbCanAccept(group, competitor) {
         if (!group || !competitor) return false;
+        if (DivisionRules.specialNeedsGroupError([...group.competitors, competitor])) return false;
+        if (DivisionRules.isSpecialNeeds(competitor)) return true;
         const isTtld = competitor.rank === 'TTLD';
         if (isTtld) return !group.competitors.length || group.competitors.every((c) => c.rank === 'TTLD');
         return !group.competitors.length || !group.competitors.every((c) => c.rank === 'TTLD');
@@ -2708,6 +2779,7 @@
         const chips = [
           ['Event', gbReady() ? getSelectedEventName() : 'None selected'],
           ['Competitors', gb.competitors.length],
+          ['Special Needs', gb.competitors.filter(DivisionRules.isSpecialNeeds).length],
           ['Groups', gb.groups.length],
           ['Assigned', assigned]
         ];
@@ -2743,7 +2815,7 @@
       function gbBannerHtml(opts) {
         const chips = opts.chips ? `<div class="gb-chips">${opts.chips.map((m) => `<span class="gb-chip${m.cls ? ` ${m.cls}` : ''}">${gbEsc(m.text)}</span>`).join('')}</div>` : '';
         return `
-          <div class="gb-banner${opts.pseudo ? ' pseudo' : ''}${opts.warn ? ' warn' : ''}${gb.selectedId === opts.id ? ' selected' : ''}" data-id="${gbEsc(opts.id)}">
+          <div class="gb-banner${opts.pseudo ? ' pseudo' : ''}${opts.warn ? ' warn' : ''}${opts.emptyState ? ` ${opts.emptyState}` : ''}${gb.selectedId === opts.id ? ' selected' : ''}" data-id="${gbEsc(opts.id)}">
             ${opts.pseudo ? '' : '<span class="gb-grip" draggable="true" title="Drag to reorder">⋮⋮</span>'}
             <div class="gb-main">
               <div class="gb-title">${gbEsc(opts.title)}</div>
@@ -2769,13 +2841,20 @@
           const entry = gb.plan[group.id];
           const chips = count
             ? [{ text: (group.gender || 'Mixed').charAt(0).toUpperCase() }, { text: gbAgeRange(comps) }, { text: gbRankRange(comps).replace(/ - /g, '–') }]
-            : [{ text: 'Empty' }];
+            : [{ text: group.hasHadCompetitors ? 'Emptied' : 'New - awaiting competitors' }];
+          if (count && group.specialNeeds) {
+            const categories = comps.map(DivisionRules.specialNeedsCategory);
+            const ranks = [...new Set(categories.map((category) => category.rankCategory))];
+            const ages = [...new Set(categories.map((category) => category.ageBracket))];
+            chips.unshift({ text: `Special Needs - ${ranks.length === 1 ? ranks[0] : 'Mixed ranks'} - ${ages.length === 1 ? ages[0] : 'Mixed age bands'}`, cls: 'special-needs' });
+          }
           if (entry.weapons != null) chips.push({ text: `Weapons ${entry.eligible}`, cls: 'weapons' });
           html.push(gbBannerHtml({
             id: group.id,
             title: gbDivLabel(group),
             chips,
             count,
+            emptyState: count ? '' : group.hasHadCompetitors ? 'emptied' : 'new-empty',
             warn: count > 0 && count < GB_MIN,
             removable: true
           }));
@@ -2796,13 +2875,15 @@
         gdNameEl.textContent = id === GB_UNASSIGNED ? 'Unassigned' : id === GB_FLAGGED ? 'Flagged for review' : gbDivLabel(group);
         const plan = group && gb.plan[group.id];
         const subs = plan ? `<span>${plan.weapons != null ? `Weapons ${plan.weapons} · ` : ''}Hyungs ${plan.hyungs} · Sparring ${plan.sparring}</span>` : '';
-        gdMetaEl.innerHTML = `<span>${list.length} competitor${list.length === 1 ? '' : 's'}</span>${group && list.length ? `<span>${gbEsc(gbRankRange(list))}</span><span>${gbEsc(gbAgeRange(list))}</span>` : ''}${subs}`;
+        gdMetaEl.innerHTML = `<span>${list.length} competitor${list.length === 1 ? '' : 's'}</span>${group && group.specialNeeds && list.length ? '<span>Special Needs</span>' : ''}${group && list.length ? `<span>${gbEsc(gbRankRange(list))}</span><span>${gbEsc(gbAgeRange(list))}</span>` : ''}${subs}`;
         if (!list.length) {
-          gdMembersEl.innerHTML = '<div class="gd-sub">No competitors.</div>';
+          gdMembersEl.innerHTML = `<div class="gd-sub">${group && group.hasHadCompetitors
+            ? 'This division is now empty. Add competitors again or delete it if no longer needed.'
+            : 'New division awaiting competitors. Drag competitors here by moving them onto its division card.'}</div>`;
           return;
         }
         gdMembersEl.innerHTML = list.map((c) => {
-          const sub = `<div class="gd-sub"><span class="gd-badge">${gbEsc(c.gender.charAt(0))}</span><span class="gd-badge">${gbEsc(c.rank || '?')}</span><span>Age ${c.age}</span></div>`;
+          const sub = `<div class="gd-sub"><span class="gd-badge">${gbEsc(c.gender.charAt(0))}</span><span class="gd-badge">${gbEsc(c.rank || '?')}</span><span>Age ${c.age}</span>${DivisionRules.isSpecialNeeds(c) ? '<span class="gd-badge">Special Needs</span>' : ''}</div>`;
           if (id === GB_FLAGGED) {
             const options = ['<option value="">Corrected rank…</option>'].concat(GB_RANKS.map((r) => `<option value="${r}">${r}</option>`)).join('');
             return `<div class="gd-row static" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}<div class="gd-sub">${gbEsc(c.reviewReason || 'review required')}</div></div><div class="gd-fix"><select>${options}</select><button class="gd-apply" type="button" data-apply data-help="Apply the corrected rank and move this competitor to Unassigned for grouping.">Apply</button></div></div>`;
@@ -2923,6 +3004,12 @@
 
       async function gbSave() {
         if (!gb.groups.length) return;
+        try {
+          DivisionRules.validateSpecialNeedsGroups(gb.groups);
+        } catch (error) {
+          gbNotice(error.message, 'error');
+          return;
+        }
         gb.busy = true;
         gbSyncControls();
         gbNotice('Saving…', 'info');
@@ -2954,7 +3041,14 @@
         if (!from || !to || fromId === toId) return false;
         const index = from.findIndex((c) => c.id === compId);
         if (index === -1) return false;
+        const destination = gb.groups.find((g) => g.id === toId);
+        if (destination && !gbCanAccept(destination, from[index])) {
+          gbNotice(DivisionRules.specialNeedsGroupError([...to, from[index]]) || 'TTLD competitors must remain separate from other ranks.', 'warn');
+          return false;
+        }
         to.push(from.splice(index, 1)[0]);
+        const targetGroup = gb.groups.find((g) => g.id === toId);
+        if (targetGroup) targetGroup.hasHadCompetitors = true;
         gbPersist();
         gbRender();
         return true;
