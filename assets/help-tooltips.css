@@ -1,0 +1,70 @@
+.help-trigger.help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  margin: 0 0 0 7px;
+  vertical-align: middle;
+  border: 1px solid #94a3b8;
+  border-radius: 50%;
+  background: #f8fafc;
+  color: #334155;
+  font: 700 13px/1 system-ui, sans-serif;
+  box-shadow: none;
+  cursor: help;
+}
+.help-trigger.help-trigger:hover { background: #dbeafe; border-color: #2563eb; }
+.help-trigger.help-trigger:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.help-trigger.help-trigger[hidden] { display: none; }
+.help-source-ready { display: none !important; }
+[data-help-root] { position: relative; }
+[data-help-root] > .help-trigger { position: absolute; top: 16px; right: 16px; margin: 0; }
+[data-help-root] { padding-right: 52px; }
+.page-help {
+  box-sizing: border-box;
+  width: min(580px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  padding: 22px;
+  border: 1px solid #94a3b8;
+  border-radius: 12px;
+  background: #fff;
+  color: #1e293b;
+  overflow: auto;
+  font: 14px/1.5 system-ui, sans-serif;
+  text-align: left;
+}
+.page-help::backdrop { background: #0f172a66; }
+.page-help h2 { margin: 0 0 16px; font-size: 20px; }
+.page-help h3 { margin: 16px 0 5px; font-size: 14px; }
+.page-help p { margin: 0 0 12px; }
+.page-help .page-help-close {
+  padding: 8px 14px;
+  margin-top: 12px;
+  border: 1px solid #64748b;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #1e293b;
+  font: 600 14px system-ui, sans-serif;
+  cursor: pointer;
+}
+.page-help-close:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.help-tooltip {
+  position: fixed;
+  z-index: 10000;
+  box-sizing: border-box;
+  max-width: min(340px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  background: #1e293b;
+  color: #fff;
+  box-shadow: 0 4px 14px #0f172a33;
+  font: 13px/1.45 system-ui, sans-serif;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.help-tooltip[hidden] { display: none; }

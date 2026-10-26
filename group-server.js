@@ -12,6 +12,7 @@ const { createCompetitorStore } = require('./backend/competitorStore');
 const { createGroupStore } = require('./backend/groupStore');
 const { createDivisionRouter } = require('./backend/divisionRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
+const { divisionDurationMs } = require('./backend/ringEstimates');
 const { createResultPacketStore } = require('./backend/resultPacket');
 const { resolveSurfaceName, resolveSurfacePort } = require('./backend/surfacePorts');
 const { registerPageRoutes } = require('./backend/pages');
@@ -360,20 +361,10 @@ function ensureStateStructure(rawState) {
   const state = rawState && typeof rawState === 'object' ? rawState : {};
   const config = normalizeConfig(state.config);
   const rings = generateRings(config, state.rings || {});
-  const inferredStart = (() => {
-    const timestamps = [];
-    for (const ringState of Object.values(rings)) {
-      const candidate = ringState.phaseStartedAt || ringState.lastHeartbeatAt;
-      if (!candidate) continue;
-      const parsed = Date.parse(candidate);
-      if (Number.isFinite(parsed)) timestamps.push(parsed);
-    }
-    if (!timestamps.length) return '';
-    return new Date(Math.min.apply(null, timestamps)).toISOString();
-  })();
+  // Start time is recorded explicitly when a named tablet connects; it is never inferred from stale ring timestamps.
   return {
     config,
-    eventStartedAt: String(state.eventStartedAt || inferredStart || '').trim(),
+    eventStartedAt: String(state.eventStartedAt || '').trim(),
     rings
   };
 }
@@ -494,9 +485,7 @@ function buildPhaseEstimateMs(phaseName, ringState, currentGroup) {
 }
 
 function buildRingEstimateMs(currentGroup) {
-  const competitorCount = currentGroup && Array.isArray(currentGroup.competitors) ? currentGroup.competitors.length : 0;
-  if (competitorCount <= 0) return 0;
-  return competitorCount * 7 * 60 * 1000;
+  return divisionDurationMs(currentGroup) || 0;
 }
 
 function buildSparkringMetrics(ringState, currentGroup) {
@@ -734,6 +723,7 @@ function resetAssignments(state) {
 function setRingConfig(state, letterCount, numberCount) {
   state.config = normalizeConfig({ letterCount, numberCount });
   state.rings = generateRings(state.config);
+  state.eventStartedAt = '';
 }
 
 function findGroupUsageAcrossRings(state, targetGroupId, excludedRingId = '') {
@@ -1298,6 +1288,7 @@ app.use('/api', createRingRouter({
   findGroupUsageAcrossRings,
   loadGroup: groupStore.loadGroup,
   loadGroups: groupStore.loadGroups,
+  loadSavedGroups: primeGroupCacheFromDatabase,
   serverBaseUrlForRequest,
   DISCONNECT_AFTER_MS,
   saveUploadedDivisionPacket,

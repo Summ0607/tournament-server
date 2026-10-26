@@ -164,7 +164,7 @@
     button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
     .notice {
-      display: none !important;
+      display: none;
       margin-bottom: 14px;
       padding: 12px 14px;
       border-radius: 14px;
@@ -181,7 +181,7 @@
 
     .board {
       display: grid;
-      grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+      grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(280px, 340px);
       gap: 14px;
       margin-bottom: 14px;
       align-items: start;
@@ -196,6 +196,49 @@
       box-shadow: var(--shadow);
       overflow: hidden;
     }
+
+    .ring-details {
+      min-width: 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .ring-details[hidden] { display: none; }
+
+    .ring-details-body {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .detail-card {
+      display: grid;
+      gap: 6px;
+      border: 1px solid #e5eaf2;
+      border-radius: 12px;
+      background: var(--surface-soft);
+      padding: 10px 12px;
+    }
+
+    .detail-card > span {
+      color: var(--text-faint);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .detail-card strong {
+      font-size: 13px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail-card .ring-queue-list { grid-template-columns: 1fr; }
+    .ring-details .ring-reset-button { justify-self: start; padding: 8px 12px; }
 
     .section-head {
       display: flex;
@@ -325,7 +368,7 @@
 
     .ring-list {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 10px;
       padding: 14px 16px 16px;
       align-items: stretch;
@@ -334,16 +377,26 @@
     .ring-row {
       position: relative;
       display: grid;
-      grid-template-columns: minmax(86px, 110px) minmax(0, 1fr);
-      gap: 10px;
-      align-items: start;
-      padding: 12px 12px 12px 14px;
+      gap: 8px;
+      align-content: start;
+      padding: 14px 14px 14px 18px;
       background: #fff;
       border: 1px solid var(--line);
       border-radius: 14px;
       box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
       overflow: hidden;
-      height: 100%;
+      min-height: 126px;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      color: inherit;
+      font: inherit;
+    }
+
+    .ring-row:hover,
+    .ring-row[aria-pressed="true"] {
+      border-color: #64748b;
+      box-shadow: 0 0 0 2px rgba(51, 65, 85, 0.14), 0 10px 24px rgba(15, 23, 42, 0.10);
     }
 
     .ring-row::before {
@@ -366,11 +419,11 @@
 
     .ring-meta {
       display: flex;
-      flex-direction: column;
-      gap: 6px;
-      justify-content: center;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
       min-width: 0;
-      padding-left: 4px;
+      flex-wrap: wrap;
     }
 
     .ring-meta-actions {
@@ -458,9 +511,23 @@
 
     .ring-main {
       display: grid;
-      gap: 6px;
+      gap: 5px;
       min-width: 0;
       width: 100%;
+    }
+
+    .ring-main .ring-card {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    .ring-main .ring-card span {
+      font-size: 10px;
+    }
+
+    .ring-main .ring-card strong {
+      font-size: 13px;
     }
 
     .ring-card.queue {
@@ -698,8 +765,7 @@
     @media (max-width: 1240px) {
       .board { grid-template-columns: 1fr; }
       .ring-list { grid-template-columns: 1fr; }
-      .ring-row { grid-template-columns: minmax(86px, 110px) minmax(0, 1fr) minmax(0, 1fr); }
-      .ring-card.queue { grid-column: 1 / -1; }
+      .ring-list { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
     }
 
     @media (max-width: 780px) {
@@ -708,16 +774,16 @@
       .title-block { padding-right: 20px; padding-bottom: 56px; min-height: 0; }
       .title-logo { position: static; width: 88px; height: 88px; margin-top: 12px; }
       .banner-timer { left: 20px; bottom: 12px; }
-      .ring-row { grid-template-columns: 1fr; }
-      .ring-card.queue { grid-column: auto; }
       .modal-head { align-items: flex-start; flex-direction: column; }
     }
   </style>
+  <link rel="stylesheet" href="/assets/help-tooltips.css">
+  <script src="/assets/help-tooltips.js" defer></script>
 </head>
-<body>
+<body data-help-page="ring-assignment" data-help-title="Ring Assignment">
   <div class="shell">
     <div class="hero">
-      <div class="title-block">
+      <div class="title-block" data-help-root>
         <h1 class="tournament-name" id="tournamentName">Tournament</h1>
         <div class="title-row">
           <div class="title-secondary">Ring Assignment</div>
@@ -727,9 +793,9 @@
         <img class="title-logo" src="/assets/vaughns-dojang-logo.png" alt="Tournament logo">
       </div>
       <div class="toolbar panel">
-        <a class="btn" href="/tournament-management/?view=event-setup">Event Setup</a>
-        <a class="btn" href="/head-table/">Head Table</a>
-        <button id="refreshBtn">Refresh</button>
+        <a class="btn" href="/tournament-management/?view=event-setup" data-help="Open the integrated event setup page.">Event Setup</a>
+        <a class="btn" href="/head-table/" data-help="Open the standalone Head Table dashboard.">Head Table</a>
+        <button id="refreshBtn" data-help="Reload the active event's divisions and ring assignments.">Refresh</button>
       </div>
     </div>
 
@@ -758,12 +824,19 @@
           <div class="meta" id="ringAssignmentMeta">0 rings</div>
         </div>
         <div class="ring-actions">
-          <div class="tip">Tip: click a division, or drag it into a ring.</div>
+          <div class="tip" data-help-source="Assigning divisions">Select a ring to view its details. Click a division to queue it there, or drag it to a ring.</div>
         </div>
         <div class="ring-list" id="ringList"></div>
       </section>
+      <aside class="ring-details" id="ringDetails" aria-labelledby="ringDetailsTitle" hidden>
+        <div class="section-head">
+          <h2 id="ringDetailsTitle">Ring details</h2>
+          <div class="meta" id="ringDetailsStatus"></div>
+        </div>
+        <div class="ring-details-body" id="ringDetailsBody"></div>
+      </aside>
     </div>
-    <div class="foot">Click a group id for details. Use x to remove a group from a queue.</div>
+    <div class="foot" data-help-source="Queue and competitor details">Select a division to see its competitors. Queue removal does not delete the division or its registration. Reset ring clears operational state after confirmation.</div>
   </div>
 
   <div class="modal" id="groupModal" aria-hidden="true">
@@ -773,7 +846,7 @@
           <h3 id="groupModalTitle">Group details</h3>
           <div class="sub" id="groupModalSubtitle">Select a group</div>
         </div>
-        <button class="modal-close" id="groupModalClose" aria-label="Close group details">×</button>
+        <button class="modal-close" id="groupModalClose" aria-label="Close group details" data-help="Close competitor details and return to ring assignments.">×</button>
       </div>
       <div class="modal-body" id="groupModalBody"></div>
     </div>
@@ -788,6 +861,7 @@
       lastLoadedAt: null,
       heartbeatPolicy: { disconnectAfterSeconds: 90, resetMode: 'manual' },
       activeGroupId: '',
+      selectedRingId: '',
       searchQuery: '',
       draggedGroupId: ''
     };
@@ -797,6 +871,10 @@
     const divisionPoolListEl = document.getElementById('divisionPoolList');
     const divisionPoolCountEl = document.getElementById('divisionPoolCount');
     const ringListEl = document.getElementById('ringList');
+    const ringDetailsEl = document.getElementById('ringDetails');
+    const ringDetailsTitleEl = document.getElementById('ringDetailsTitle');
+    const ringDetailsStatusEl = document.getElementById('ringDetailsStatus');
+    const ringDetailsBodyEl = document.getElementById('ringDetailsBody');
     const ringAssignmentMetaEl = document.getElementById('ringAssignmentMeta');
     const divisionSearchInputEl = document.getElementById('divisionSearchInput');
     const refreshBtn = document.getElementById('refreshBtn');
@@ -1053,37 +1131,66 @@
 
     function renderRingRow(ring) {
       var view = buildRingView(ring);
-      var currentGroup = view.currentGroup;
       var queue = ringQueuedDivisionNumbers(ring);
-      var queuedHtml = queue.length
-        ? queue.map(function (groupId) {
-            var label = groupLabel(groupId);
-            return '<span class="ring-queue-chip"><button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(groupId) + '">' + escapeHtml(label) + '</button><button class="queue-remove" data-action="remove-queue" data-ring-id="' + escapeHtml(ring.ringId) + '" data-group-id="' + escapeHtml(groupId) + '" aria-label="Remove ' + escapeHtml(label) + ' from queue">×</button></span>';
-          }).join('')
-        : '<span class="ring-queue-empty">No queued groups</span>';
+      var selected = ring.ringId === state.selectedRingId;
 
       return [
-        '<section class="ring-row ' + view.status.tone + '" data-ring-id="' + escapeHtml(ring.ringId) + '" tabindex="0" aria-label="Ring ' + escapeHtml(ring.ringLabel) + '">',
+        '<section class="ring-row ' + view.status.tone + '" data-ring-id="' + escapeHtml(ring.ringId) + '" role="button" tabindex="0" aria-label="View details for Ring ' + escapeHtml(ring.ringLabel) + '" aria-pressed="' + selected + '">',
           '<div class="ring-meta">',
             '<div class="ring-number"><span class="label">Ring</span> ' + escapeHtml(ring.ringLabel) + '</div>',
-            '<div class="ring-meta-actions">',
-              '<span class="status-chip ' + view.status.chip + '">' + escapeHtml(view.status.label) + '</span>',
-              '<button type="button" class="ring-reset-button" data-action="reset-ring" data-ring-id="' + escapeHtml(ring.ringId) + '">Reset ring</button>',
-            '</div>',
+            '<span class="status-chip ' + view.status.chip + '">' + escapeHtml(view.status.label) + '</span>',
           '</div>',
           '<div class="ring-main">',
             '<div class="ring-card active">',
-              '<div class="ring-card-inline">',
-                '<span>Active group</span>',
-                '<strong>' + (currentGroup ? '<button class="group-link" data-action="group-details" data-group-id="' + escapeHtml(groupAnchor(currentGroup)) + '">' + escapeHtml('Division ' + groupAnchor(currentGroup)) + '</button>' : 'Unassigned') + '</strong>',
-              '</div>',
+              '<span>Current division</span>',
+              '<strong>' + escapeHtml(view.currentGroup ? 'Division ' + groupAnchor(view.currentGroup) : (ringCurrentDivisionNumber(ring) ? 'Division ' + ringCurrentDivisionNumber(ring) : 'None')) + '</strong>',
             '</div>',
-            '<div class="ring-card queue">',
-              '<span>Queued groups</span>',
-              '<div class="ring-queue-list">' + queuedHtml + '</div>',
-            '</div>',
+            '<div class="ring-card"><span>Queued</span><strong>' + queue.length + (queue.length === 1 ? ' division' : ' divisions') + '</strong></div>',
           '</div>',
         '</section>'
+      ].join('');
+    }
+
+    function renderRingDetails(ring) {
+      if (!ring) {
+        ringDetailsEl.hidden = true;
+        ringDetailsBodyEl.innerHTML = '';
+        return;
+      }
+
+      var view = buildRingView(ring);
+      var currentDivisionNumber = ringCurrentDivisionNumber(ring);
+      var queuedDivisionNumbers = ringQueuedDivisionNumbers(ring);
+      var phase = String(ring.currentPhaseName || ring.currentPhase || ring.phase || 'Idle')
+        .replace(/-/g, ' ');
+      var progress = Number.isFinite(Number(ring.phaseProgress)) ? Math.max(0, Math.min(100, Number(ring.phaseProgress))) : 0;
+      var queuedHtml = queuedDivisionNumbers.length
+        ? queuedDivisionNumbers.map(function (groupId) {
+            var label = groupLabel(groupId);
+            return '<span class="ring-queue-chip"><button class="group-link" data-help="Show this division and its competitors." data-action="group-details" data-group-id="' + escapeHtml(groupId) + '">' + escapeHtml(label) + '</button><button class="queue-remove" data-help="Remove this division from the queue without deleting it." data-action="remove-queue" data-ring-id="' + escapeHtml(ring.ringId) + '" data-group-id="' + escapeHtml(groupId) + '" aria-label="Remove ' + escapeHtml(label) + ' from queue">×</button></span>';
+          }).join('')
+        : '<span class="ring-queue-empty">No queued divisions</span>';
+      var assistance = ring.assistanceType
+        ? String(ring.assistanceType) + (ring.assistanceRequestedAt ? ' · ' + new Date(ring.assistanceRequestedAt).toLocaleTimeString() : '')
+        : 'None requested';
+
+      ringDetailsEl.hidden = false;
+      ringDetailsTitleEl.textContent = 'Ring ' + ring.ringLabel;
+      ringDetailsStatusEl.innerHTML = '<span class="status-chip ' + view.status.chip + '">' + escapeHtml(view.status.label) + '</span>';
+      ringDetailsBodyEl.innerHTML = [
+        '<div class="detail-card"><span>Current division</span><strong>' +
+          (currentDivisionNumber
+            ? '<button class="group-link" data-help="Show this division and its competitors." data-action="group-details" data-group-id="' + escapeHtml(currentDivisionNumber) + '">' + escapeHtml(groupLabel(currentDivisionNumber)) + '</button>'
+            : 'None assigned') +
+          '</strong></div>',
+        '<div class="detail-card"><span>Queue · ' + queuedDivisionNumbers.length + '</span><div class="ring-queue-list">' + queuedHtml + '</div></div>',
+        '<div class="detail-card"><span>Tablet</span><strong>' + escapeHtml(ring.tabletLabel || 'Not connected') + '</strong></div>',
+        '<div class="detail-card"><span>Current phase</span><strong>' + escapeHtml(phase) + '</strong>' +
+          '<strong>' + progress.toFixed(0) + '% complete</strong></div>',
+        '<div class="detail-card"><span>Assistance</span><strong>' + escapeHtml(assistance) + '</strong></div>',
+        '<div class="detail-card"><span>Assignment started</span><strong>' + escapeHtml(ring.assignmentStartedAt ? new Date(ring.assignmentStartedAt).toLocaleString() : 'Not started') + '</strong></div>',
+        '<div class="detail-card"><span>Last heartbeat</span><strong>' + escapeHtml(ring.lastHeartbeatAt ? new Date(ring.lastHeartbeatAt).toLocaleString() : 'Not received') + '</strong></div>',
+        '<button type="button" class="ring-reset-button" data-help="Reset this ring and clear its operational state after confirmation." data-action="reset-ring" data-ring-id="' + escapeHtml(ring.ringId) + '">Reset ring</button>'
       ].join('');
     }
 
@@ -1094,7 +1201,7 @@
         ? groups.map(function (group) {
             var display = divisionDisplayData(group);
             return [
-              '<button type="button" class="division-card" draggable="true" data-group-id="' + escapeHtml(display.anchor) + '" aria-label="Assign ' + escapeHtml(display.title) + ' to a ring">',
+              '<button type="button" class="division-card" draggable="true" data-help="Queue this division to the selected ring, or drag it onto a ring." data-group-id="' + escapeHtml(display.anchor) + '" aria-label="Assign ' + escapeHtml(display.title) + ' to a ring">',
                 '<div class="division-card-title">',
                   '<span class="division-name">' + escapeHtml(display.title) + '</span>',
                 '</div>',
@@ -1103,13 +1210,27 @@
               '</button>'
             ].join('');
           }).join('')
-        : '<div class="empty">No available divisions match this search.</div>';
+        : '<div class="empty">' + (state.activeEvent
+          ? 'No available divisions match this search.'
+          : 'Select an active event to view its divisions.') + '</div>';
     }
 
     function renderRingArea() {
       var rings = state.rings.slice().sort(function (a, b) { return a.ringLabel.localeCompare(b.ringLabel); });
       ringAssignmentMetaEl.textContent = rings.length + (rings.length === 1 ? ' ring' : ' rings');
       ringListEl.innerHTML = rings.map(renderRingRow).join('');
+      var selectedRing = rings.find(function (ring) { return ring.ringId === state.selectedRingId; });
+      if (!selectedRing) state.selectedRingId = '';
+      renderRingDetails(selectedRing);
+    }
+
+    function selectRing(ringId) {
+      state.selectedRingId = ringId;
+      boardEl.querySelectorAll('.ring-row').forEach(function (element) {
+        element.setAttribute('aria-pressed', String(element.getAttribute('data-ring-id') === ringId));
+      });
+      var selectedRing = state.rings.find(function (ring) { return ring.ringId === ringId; });
+      renderRingDetails(selectedRing);
     }
 
     function renderBoard() {
@@ -1148,18 +1269,24 @@
     }
 
     async function loadBoard() {
-      var results = await Promise.all([
-        fetchJson('/api/events/active'),
-        fetchJson('/api/groups'),
-        fetchJson('/api/rings')
-      ]);
+      var activeEventResponse = await fetchJson('/api/events/active');
+      state.activeEvent = activeEventResponse && activeEventResponse.activeEvent
+        ? String(activeEventResponse.activeEvent)
+        : '';
+      var eventData = state.activeEvent
+        ? await Promise.all([
+            fetchJson('/api/groups?eventName=' + encodeURIComponent(state.activeEvent)),
+            fetchJson('/api/rings')
+          ])
+        : [null, await fetchJson('/api/rings')];
 
-      state.activeEvent = results[0] && results[0].activeEvent ? String(results[0].activeEvent) : '';
-      state.groups = results[1].groups || [];
-      state.rings = results[2].rings || [];
-      state.availableGroupDivisionNumbers = results[2].availableGroupDivisionNumbers || [];
-      state.eventStartedAt = results[2].eventStartedAt || state.eventStartedAt || '';
-      state.heartbeatPolicy = results[2].heartbeatPolicy || state.heartbeatPolicy;
+      state.groups = eventData[0] && Array.isArray(eventData[0].groups) ? eventData[0].groups : [];
+      state.rings = Array.isArray(eventData[1].rings) ? eventData[1].rings : [];
+      state.availableGroupDivisionNumbers = state.activeEvent && Array.isArray(eventData[1].availableGroupDivisionNumbers)
+        ? eventData[1].availableGroupDivisionNumbers
+        : [];
+      state.eventStartedAt = eventData[1].eventStartedAt || '';
+      state.heartbeatPolicy = eventData[1].heartbeatPolicy || state.heartbeatPolicy;
       state.lastLoadedAt = new Date().toISOString();
       renderBoard();
       renderNotice('', '');
@@ -1196,7 +1323,30 @@
 
     boardEl.addEventListener('click', async function (event) {
       var button = event.target instanceof Element ? event.target.closest('button[data-action]') : null;
-      if (!button) return;
+      if (!button) {
+        var ringRow = event.target instanceof Element ? event.target.closest('.ring-row') : null;
+        if (ringRow) {
+          selectRing(ringRow.getAttribute('data-ring-id') || '');
+          return;
+        }
+
+        var divisionCard = event.target instanceof Element ? event.target.closest('.division-card') : null;
+        if (divisionCard) {
+          var selectedDivision = divisionCard.getAttribute('data-group-id') || '';
+          if (!state.selectedRingId) {
+            renderNotice('Select a ring before assigning a division.', 'warn');
+            return;
+          }
+          try {
+            await queueGroup(state.selectedRingId, selectedDivision);
+            await refreshAll();
+            renderNotice('Division queued to ' + state.selectedRingId + '.', 'ok');
+          } catch (error) {
+            renderNotice('Update failed: ' + error.message, 'error');
+          }
+        }
+        return;
+      }
       var action = button.getAttribute('data-action');
       var ringId = button.getAttribute('data-ring-id');
       var groupId = button.getAttribute('data-group-id');
@@ -1221,6 +1371,14 @@
       } catch (error) {
         renderNotice('Update failed: ' + error.message, 'error');
       }
+    });
+
+    boardEl.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      var ringRow = event.target instanceof Element ? event.target.closest('.ring-row') : null;
+      if (!ringRow) return;
+      event.preventDefault();
+      selectRing(ringRow.getAttribute('data-ring-id') || '');
     });
 
     boardEl.addEventListener('dragstart', function (event) {

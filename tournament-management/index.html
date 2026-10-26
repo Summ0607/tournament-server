@@ -160,6 +160,251 @@
       display: none;
     }
 
+    .ra-board {
+      display: grid;
+      grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .ra-section {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f5f8fc;
+      overflow: hidden;
+    }
+
+    .ra-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .ra-heading h2 { margin: 0; font-size: 14px; }
+    .ra-heading span, .ra-meta { font-size: 12px; color: var(--text-soft); }
+    .ra-search { padding: 10px 12px 0; }
+    .ra-search input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+    .ra-list { display: grid; gap: 8px; padding: 12px; max-height: 65vh; overflow: auto; }
+    .ra-rings { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); align-content: start; }
+    .ra-card {
+      display: grid;
+      gap: 7px;
+      width: 100%;
+      text-align: left;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+    }
+    .ra-card:hover, .ra-card[aria-pressed="true"], .ra-card.drop {
+      border-color: #2f66c8;
+      background: #e8f0ff;
+    }
+    .ra-card:focus-visible { outline: 3px solid #2f66c8; outline-offset: 2px; }
+    #raDivisions { gap: 5px; }
+    .ra-card.ra-division {
+      gap: 3px;
+      padding: 7px 9px;
+      border-radius: 8px;
+      min-width: 0;
+    }
+    .ra-division-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .ra-division-head strong { font-size: 13px; }
+    .ra-division-head .ra-meta { white-space: nowrap; font-size: 11px; }
+    .ra-division-description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ra-division.dragging { opacity: 0.5; cursor: grabbing; }
+    .ra-card.ra-ring { border-left: 5px solid var(--ra-connection-color, #64748b); padding: 9px 10px; gap: 6px; min-width: 0; }
+    .ra-ring-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+    .ra-ring-line strong { font-size: 13px; white-space: nowrap; }
+    .ra-ring-line .ra-connection { font-size: 11px; white-space: nowrap; gap: 4px; padding: 2px 6px; }
+    .ra-ring-line .ra-assignment { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ra-ring-line .ra-meta { flex-shrink: 0; font-size: 11px; white-space: nowrap; }
+    .estimate-text { font-size: 11px; color: #475569; font-weight: 400; }
+    .ra-division-estimate { white-space: nowrap; font-size: 11px; color: #475569; }
+    .estimate-summary { font-size: 12px; color: #475569; }
+    .event-timing { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+    .event-timing:empty { display: none; }
+    .event-timing > span { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 10px; border: 1px solid #d8e1ed; border-radius: 7px; background: #f6f8fc; color: #526580; font-size: 13px; }
+    .event-timing strong { color: #20334e; font-size: 15px; }
+    .event-timing small { color: #64748b; font-size: 12px; }
+    .banner-clock { font-variant-numeric: tabular-nums; }
+    .estimate-details p { margin: 5px 0; font-size: 12px; }
+    #competitorLookupView { container-type: inline-size; --cl-name-width: 25%; --cl-rank-width: 14%; --cl-studio-width: 25%; --cl-division-width: 16%; --cl-ring-width: 20%; }
+    .cl-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .cl-search-field { display: flex; align-items: center; gap: 8px; flex: 1 1 240px; max-width: 420px; height: 38px; padding: 0 10px; border: 1px solid #bac7d8; border-radius: 7px; background: #fff; color: #526580; }
+    .cl-search-field:focus-within { outline: 2px solid #9dbff0; border-color: #2f66c8; }
+    .cl-search-field input { border: 0; outline: none; width: 100%; min-width: 0; font: inherit; font-size: 14px; background: transparent; color: #20334e; }
+    #competitorLookupView button, #competitorLookupDetails button { border: 1px solid #bac7d8; border-radius: 7px; background: #fff; color: #29415f; padding: 8px 12px; min-height: 38px; cursor: pointer; font-family: inherit; font-size: 14px; line-height: 20px; font-weight: 600; }
+    #competitorLookupView button:hover, #competitorLookupDetails button:hover { background: #edf3fc; }
+    #competitorLookupView button:focus-visible, #competitorLookupDetails button:focus-visible { outline: 2px solid #2f66c8; outline-offset: 2px; }
+    #competitorLookupView .cl-primary { background: #2b61b3; color: #fff; border-color: #2b61b3; }
+    #competitorLookupView .cl-primary:hover { background: #204e94; }
+    #clResultCount { margin-left: auto; color: #526580; font-size: 13px; white-space: nowrap; }
+    #clStatus { color: #526580; font-size: 13px; margin: 8px 0 12px; }
+    .cl-filters { padding: 14px 0; margin-bottom: 14px; border: 1px solid #d8e1ed; background: #f6f8fc; border-radius: 8px; }
+    .cl-filters[hidden] { display: none; }
+    .cl-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; padding: 0 12px; }
+    .cl-filter-grid label { display: grid; min-width: 0; gap: 5px; color: #344a67; font-size: 13px; font-weight: 600; }
+    .cl-filter-grid input, .cl-filter-grid select { width: 100%; min-width: 0; height: 38px; border: 1px solid #bac7d8; border-radius: 6px; padding: 6px 8px; background: #fff; color: #20334e; font: inherit; }
+    .cl-filter-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding: 0 12px; font-size: 13px; color: #344a67; }
+    .cl-filter-actions label { margin-right: auto; }
+    .cl-table-wrap { border: 1px solid #d8e1ed; border-radius: 8px; overflow: auto; }
+    .cl-table { width: 100%; border-collapse: collapse; table-layout: fixed; color: #253b57; }
+    .cl-table th { padding: 10px 12px; background: #f3f6fb; color: #526580; text-align: left; font-size: 12px; font-weight: 700; border-bottom: 1px solid #d8e1ed; }
+    .cl-table td { height: 42px; padding: 8px 12px; border-bottom: 1px solid #e8edf4; font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
+    .cl-table tbody tr:nth-child(even) { background: #fafbfd; }
+    .cl-table tbody tr:hover { background: #f0f5fc; }
+    .cl-table tbody tr { cursor: pointer; }
+    .cl-table tbody tr[aria-selected="true"] { background: #eaf2ff; box-shadow: inset 3px 0 #2f66c8; }
+    .cl-table col:nth-child(1) { width: var(--cl-name-width); }
+    .cl-table col:nth-child(2) { width: var(--cl-rank-width); }
+    .cl-table col:nth-child(3) { width: var(--cl-studio-width); }
+    .cl-table col:nth-child(4) { width: var(--cl-division-width); }
+    .cl-table col:nth-child(5) { width: var(--cl-ring-width); }
+    @container (min-width: 760px) {
+      .cl-filter-grid { grid-template-columns: var(--cl-name-width) var(--cl-rank-width) var(--cl-studio-width) var(--cl-division-width) var(--cl-ring-width); gap: 0; padding: 0; }
+      .cl-filter-grid label { padding: 0 12px; }
+    }
+    #competitorLookupView .cl-result { border: 0; background: transparent; padding: 0; min-height: 24px; color: #20334e; font: inherit; font-weight: 700; text-align: left; }
+    #competitorLookupView .cl-sort { border: 0; background: transparent; padding: 0; min-height: 20px; font: inherit; color: inherit; }
+    .cl-rank { display: inline-block; border: 1px solid #cddbee; background: #eef3fa; color: #31547d; border-radius: 5px; padding: 0 6px; font-size: 12px; font-weight: 700; }
+    .cl-muted { color: #64748b; }
+    #competitorLookupView mark { background: #fff0b5; color: inherit; border-radius: 2px; }
+    .cl-footer { padding: 12px 2px; font-size: 13px; color: #526580; }
+    .content.competitor-lookup { --cl-details-width: clamp(420px, calc(65vw - 477px), 460px); }
+    .content.competitor-lookup:not(.details-hidden) { grid-template-columns: 220px minmax(0, 1fr) var(--cl-details-width); }
+    .content.competitor-lookup > .details { border: 1px solid #d8e1ed; border-radius: 10px; box-shadow: 0 4px 16px #20334e0a; }
+    .cl-detail-heading { position: relative; padding-right: 42px; margin-bottom: 18px; }
+    .cl-detail-heading h3 { font-size: 21px; line-height: 28px; color: #20334e; margin: 0 0 4px; overflow-wrap: anywhere; }
+    .cl-detail-heading p { font-size: 14px; color: #526580; margin: 0 0 8px; }
+    #competitorLookupDetails .cl-close { position: absolute; right: 0; top: 0; min-height: 32px; width: 32px; padding: 3px; font-size: 22px; }
+    .cl-detail-section { border-top: 1px solid #e1e8f1; padding: 16px 0; }
+    .cl-detail-section h4 { font-size: 14px; color: #29415f; margin: 0 0 12px; }
+    #competitorLookupDetails dl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px 12px; font-size: 14px; line-height: 21px; margin: 0; }
+    #competitorLookupDetails dt { color: #526580; }
+    #competitorLookupDetails dd { color: #20334e; margin: 0; overflow-wrap: anywhere; }
+    .cl-info { padding: 10px 12px; background: #eff5fd; border: 1px solid #d6e5f8; border-radius: 7px; font-size: 13px; line-height: 20px; color: #42618a; margin: 12px 0 0; }
+    @media (max-width: 1380px) {
+      .content.competitor-lookup, .content.competitor-lookup:not(.details-hidden) { grid-template-columns: 220px minmax(0, 1fr); }
+      .content.competitor-lookup > .details:not([hidden]) { position: fixed; z-index: 50; right: 16px; top: 90px; bottom: 16px; width: min(var(--cl-details-width), calc(100vw - 32px)); overflow: auto; box-shadow: -12px 8px 40px #20334e33; }
+    }
+    @media (max-width: 960px) {
+      .content.competitor-lookup, .content.competitor-lookup:not(.details-hidden) { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .cl-table th, .cl-table td { padding: 8px 6px; font-size: 12px; }
+      #competitorLookupView { --cl-name-width: 24%; --cl-rank-width: 11%; --cl-studio-width: 22%; --cl-division-width: 14%; --cl-ring-width: 29%; }
+      #clResultCount { margin-left: 0; }
+    }
+    .ra-ring.connected { --ra-connection-color: #15803d; }
+    .ra-ring.disconnected { --ra-connection-color: #b91c1c; }
+    .ra-connection {
+      display: inline-flex;
+      align-items: center;
+      justify-self: start;
+      gap: 6px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #e2e8f0;
+      color: #334155;
+    }
+    .ra-connection::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ra-connection-color); }
+    .ra-ring.connected .ra-connection { background: #dcfce7; color: #166534; }
+    .ra-ring.disconnected .ra-connection { background: #fee2e2; color: #991b1b; }
+    .ra-assignment { font-size: 13px; font-weight: 700; }
+    .ra-ring:hover, .ra-ring[aria-pressed="true"], .ra-ring.drop { border-left-color: var(--ra-connection-color); }
+    .ra-detail { margin-bottom: 14px; }
+    .ra-detail h3 { font-size: 13px; margin: 0 0 8px; }
+    .ra-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 12px; }
+    .ra-detail dt { color: var(--text-soft); }
+    .ra-detail dd { margin: 0; overflow-wrap: anywhere; }
+    .ra-queue { display: grid; gap: 8px; padding: 0; list-style: none; }
+    .ra-queue li { display: grid; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+    .ra-division-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .ra-division-label { font-size: 13px; overflow-wrap: anywhere; }
+    .ra-members {
+      padding-left: 28px;
+      padding-right: 8px;
+      font-size: 12px;
+      line-height: 20px;
+      display: grid;
+      grid-auto-rows: 20px;
+      gap: 6px;
+      max-height: 254px;
+      overflow-y: auto;
+    }
+    .ra-members li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #ringAssignmentDetails[hidden] { display: none; }
+    #headTableDetails[hidden] { display: none; }
+    .ht-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .ht-toolbar a { color: #2457a7; font-size: 13px; }
+    .ht-toolbar label, .ht-freshness { font-size: 12px; color: var(--text-soft); }
+    /* Each group's divider sits 1px outside its line start, so the clip hides it when a group begins a row. */
+    .ht-summary { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px 0; margin-left: -16px; overflow: hidden; }
+    .ht-count-group { display: flex; align-items: center; gap: 6px; margin-left: -1px; padding: 4px 16px; border-left: 1px solid var(--line); }
+    .ht-count-items { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .ht-count-title { flex: 0 0 76px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-soft); }
+    .ht-count { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 11px; border: 1px solid #d8e0ec; border-radius: 8px; background: #f8fafc; font-size: 13px; color: var(--text-soft); white-space: nowrap; }
+    .ht-count strong { font-size: 15px; color: var(--text); font-variant-numeric: tabular-nums; }
+    .ht-count.warning { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+    .ht-count.warning strong { color: #991b1b; }
+    .ht-progress { display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; font-size: 12px; color: var(--text-soft); white-space: nowrap; }
+    .ht-progress-track { width: 96px; height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+    .ht-progress-track > span { display: block; height: 100%; background: #16a34a; }
+    .ht-rings { display: grid; gap: 7px; }
+    .ht-ring {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      text-align: left;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-left: 5px solid #64748b;
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+    }
+    .ht-ring.connected { --ra-connection-color: #15803d; border-left-color: #15803d; }
+    .ht-ring.disconnected { --ra-connection-color: #b91c1c; border-left-color: #b91c1c; }
+    .ht-ring.no-tablet { --ra-connection-color: #64748b; }
+    .ht-ring.connected .ra-connection { color: #166534; background: #dcfce7; }
+    .ht-ring.disconnected .ra-connection { color: #991b1b; background: #fee2e2; }
+    .ht-ring:hover, .ht-ring[aria-pressed="true"] { background: #eff6ff; outline: 2px solid #2f66c8; outline-offset: -2px; }
+    .ht-ring:focus-visible { outline: 3px solid #2f66c8; }
+    .ht-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-width: 0; font-size: 13px; }
+    .ht-identity .ra-connection { font-size: 10px; }
+    .ht-assistance { color: #991b1b; background: #fee2e2; border-radius: 50%; padding: 1px 6px; font-weight: 700; }
+    .ht-alert { display: block; padding: 5px 8px; border-radius: 6px; font-size: 12px; color: #78350f; background: #fef3c7; }
+    .ht-alert.urgent { color: #991b1b; background: #fee2e2; }
+    .ht-phase-pill { display: flex; min-width: 0; overflow: hidden; border: 1px solid #94a3b8; border-radius: 999px; background: #f1f5f9; }
+    .ht-segment { position: relative; flex: 1 1 0; min-width: 0; padding: 4px 3px; text-align: center; font-size: 11px; color: #334155; }
+    .ht-segment + .ht-segment { border-left: 1px solid #64748b; }
+    .ht-segment::before { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--ht-fill, 0%); background: #bfdbfe; }
+    .ht-segment.complete::before { background: #bbf7d0; }
+    .ht-segment.active { font-weight: 700; color: #1e3a8a; }
+    .ht-segment.active::after { content: ''; position: absolute; inset: auto 0 0; height: 2px; background: #2563eb; }
+    .ht-segment-label { position: relative; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ht-phase-list { margin: 0; padding-left: 18px; font-size: 12px; }
+    .ht-phase-list li { margin: 5px 0; }
+    .ht-history { max-height: 260px; overflow: auto; margin-top: 8px; }
+    .ht-history p { padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 12px; }
+    #headTableDetails summary { cursor: pointer; font-size: 13px; }
+    @media (max-width: 580px) { .ht-ring { grid-template-columns: 1fr; } }
+    @media (max-width: 1100px) { .ra-board { grid-template-columns: 1fr; } }
+
     .gb-toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -671,7 +916,10 @@
     .workflow-body button.primary,
     .workflow-body button.danger,
     .workflow-body button,
-    .workflow-body .next-action {
+    .workflow-body .next-action,
+    #ringAssignmentView .overview button,
+    .ht-toolbar button,
+    .ht-toolbar select {
       min-height: 44px;
       padding: 0 16px;
       border-radius: 14px;
@@ -698,7 +946,59 @@
       box-shadow: 0 10px 18px rgba(176, 0, 32, 0.14);
     }
 
-    .workflow-body button:disabled {
+    #ringAssignmentDetails button,
+    #headTableDetails button {
+      min-height: 28px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-soft);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: none;
+    }
+    #ringAssignmentDetails button:hover:not(:disabled) { background: #eef3f9; border-color: var(--line-strong); }
+    #ringAssignmentDetails button:focus-visible { outline: 2px solid #2f66c8; outline-offset: 2px; }
+    #headTableDetails button:focus-visible { outline: 2px solid #2f66c8; outline-offset: 2px; }
+    #headTableDetails button:disabled { opacity: 0.55; cursor: not-allowed; }
+    #headTableDetails [data-ht-clear] { color: #78500e; background: #fff8e8; border-color: #b88b3c; }
+    #ringAssignmentDetails [data-ra-group],
+    #headTableDetails [data-ht-group] {
+      border-color: #7d9fc8;
+      color: #1e4f86;
+      background: #eff6ff;
+    }
+    #ringAssignmentDetails [data-ra-group]:hover:not(:disabled),
+    #headTableDetails [data-ht-group]:hover:not(:disabled) {
+      border-color: #1e4f86;
+      background: #dbeafe;
+    }
+    #ringAssignmentDetails [data-ra-remove] {
+      border-color: #b88b3c;
+      color: #78500e;
+      background: #fff8e8;
+    }
+    #ringAssignmentDetails [data-ra-remove]:hover:not(:disabled) {
+      border-color: #78500e;
+      background: #ffedbf;
+    }
+    #ringAssignmentDetails [data-ra-reset] {
+      border-color: #c76b75;
+      color: #9f2032;
+      background: #fde8ec;
+    }
+    #ringAssignmentDetails [data-ra-reset]:hover:not(:disabled) {
+      border-color: #9f2032;
+      background: #fbd0d8;
+    }
+    .ra-ring-maintenance { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+    .workflow-body button:disabled,
+    #ringAssignmentView button:disabled,
+    #ringAssignmentDetails button:disabled {
       opacity: 0.55;
       cursor: not-allowed;
     }
@@ -896,6 +1196,8 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="/assets/help-tooltips.css">
+  <script src="/assets/help-tooltips.js" defer></script>
 </head>
 <body>
   <main class="shell">
@@ -913,6 +1215,7 @@
           <span><span id="bannerEventLabel">Selected Event:</span> <strong id="bannerEventName">None selected</strong></span>
           <span>Event Date: <strong id="bannerEventDate">Not set</strong></span>
           <span>Status: <strong class="banner-status" id="bannerEventStatus">No event selected</strong></span>
+          <span id="bannerClock" hidden>Time: <strong id="bannerClockTime" class="banner-clock">--</strong></span>
         </div>
       </header>
 
@@ -971,12 +1274,12 @@
         </aside>
 
         <section class="workspace" aria-label="Event setup workspace">
-          <div class="workspace-head">
+          <div class="workspace-head" data-help-root>
             <h1 id="workspaceTitle" aria-live="polite">Event Setup</h1>
-            <p id="workspaceSubtitle">Manage the event that downstream tournament pages will use.</p>
+            <p id="workspaceSubtitle" data-help-source="Overview" data-help-for="*">Manage the event that downstream tournament pages will use.</p>
           </div>
           <div class="workspace-body">
-            <div class="view" id="eventSetupView">
+            <div class="view" id="eventSetupView" data-help-page="event-setup" data-help-title="Event Setup">
             <div class="overview">
               <span class="chip">Active Event: <strong id="activeEventChip">No event selected</strong></span>
               <span class="chip">Selected Event: <strong id="selectedEventChip">None selected</strong></span>
@@ -984,8 +1287,8 @@
 
             <section class="workflow-panel" aria-label="Event setup workflow">
               <div class="workflow-head">
-                <h2>Create, Select, Modify, Delete</h2>
-                <p>Choose an existing event or enter a new name. Creating or modifying an event does not activate it. Use ‘Activate Event’ to set the event used by workflow pages.</p>
+                <h2 id="eventWorkflowTitle">Create, Select, Modify, Delete</h2>
+                <p data-help-source="Event setup">Choose an existing event or enter a new name. Create or Modify saves event details without activating the event. Activate Event explicitly selects the event used by day-of pages. Preparation selection and active event are separate.</p>
               </div>
               <div class="workflow-body">
                 <div class="field-stack">
@@ -997,24 +1300,24 @@
                 <div class="button-cluster">
                   <div class="button-cluster-label">Primary Actions</div>
                   <div class="button-row">
-                    <button class="primary" id="createEventBtn" type="button">Create Event</button>
-                    <button id="modifyEventBtn" type="button">Modify Event</button>
-                    <button id="activateEventBtn" type="button">Activate Event</button>
+                    <button class="primary" id="createEventBtn" type="button" data-help="Open details for a new event. Save the details to create it.">Create Event</button>
+                    <button id="modifyEventBtn" type="button" data-help="Open the selected event's saved details for editing.">Modify Event</button>
+                    <button id="activateEventBtn" type="button" title="Make this the active event for all day-of pages. Selecting or editing an event alone does not activate it.">Activate Event</button>
                   </div>
                 </div>
 
                 <div class="button-cluster">
                   <div class="button-cluster-label">Next Step</div>
                   <div class="button-row">
-                    <button class="next-action" id="goToImportBtn" type="button">Next: Import Registration</button>
+                    <button class="next-action" id="goToImportBtn" type="button" data-help="Open registration import for the selected saved event.">Next: Import Registration</button>
                   </div>
                 </div>
 
                 <div class="button-cluster">
                   <div class="button-cluster-label">Secondary Actions</div>
                   <div class="button-row">
-                    <button class="danger" id="deleteEventBtn" type="button">Delete Event</button>
-                    <button id="resetEventBtn" type="button">Reset</button>
+                    <button class="danger" id="deleteEventBtn" type="button" data-help="Delete the selected event after confirmation.">Delete Event</button>
+                    <button id="resetEventBtn" type="button" title="Discard unsaved form edits and reload the selected event. Does not reset ring assignments.">Reset</button>
                   </div>
                 </div>
 
@@ -1023,10 +1326,11 @@
             </section>
             </div>
 
-            <div class="view" id="importView" hidden>
+            <div class="view" id="importView" data-help-page="import" data-help-title="Import" hidden>
               <section class="workflow-panel" aria-label="Import registration">
                 <div class="workflow-head">
-                  <h2>Upload CSV</h2>
+                  <h2 id="importWorkflowTitle">Upload CSV</h2>
+                  <p data-help-source="Import or continue">Continue with Next: Build Groups when saved competitors are loaded. Selecting a file or entering CSV text switches to Import CSV. Clear removes pending input, not saved registration. Replacing registration requires confirmation.</p>
                   <p id="importSummary">Saved registrations can continue directly to Build Groups. Choosing a file or entering CSV text makes Import CSV the next action.</p>
                 </div>
                 <div class="workflow-body">
@@ -1042,29 +1346,31 @@
                     <textarea id="csvTextInput" placeholder="Paste CSV data here, or choose a file above."></textarea>
                   </div>
                   <div class="button-row">
-                    <button id="importBtn" type="button" disabled>Import CSV</button>
-                    <button id="clearImportBtn" type="button">Clear</button>
-                    <button id="importNextBtn" type="button" disabled>Next: Build Groups</button>
+                    <button id="importBtn" type="button" data-help="Import the chosen CSV file or pasted CSV into the selected event. Replacing a saved roster requires confirmation." disabled>Import CSV</button>
+                    <button id="clearImportBtn" type="button" title="Clear pending CSV input and return to the saved roster. Saved competitors are not deleted.">Clear</button>
+                    <button id="importNextBtn" type="button" data-help="Continue to Group Builder using the saved competitor roster. Import or clear any pending CSV input first." disabled>Next: Build Groups</button>
                   </div>
                   <div class="notice" id="importNotice" aria-live="polite"></div>
                 </div>
               </section>
             </div>
 
-            <div class="view" id="groupsView" hidden>
+            <div class="view" id="groupsView" data-help-page="groups" data-help-title="Group Builder" hidden>
               <section class="workflow-panel" aria-label="Group builder">
                 <div class="workflow-head">
-                  <h2>Groups</h2>
+                  <h2 id="groupsWorkflowTitle">Groups</h2>
+                  <p data-help-source="Building and saving groups">Build Groups uses the selected event's roster. Select a group for competitor details. Drag group handles to reorder groups, or drag competitors between groups. Building and editing do not save automatically; use Save &amp; Finish Setup. Unsaved drafts do not affect day-of pages.</p>
                 </div>
                 <div class="workflow-body">
                   <div class="overview" id="gbStats"></div>
                   <div class="gb-toolbar">
                     <label for="gbMaxSize">Max size</label>
+                    <span data-help-source="Maximum group size help">Choose a maximum group size from 6 to 13 before building groups.</span>
                     <input id="gbMaxSize" type="number" min="6" max="13" value="6">
-                    <button class="primary" id="gbBuildBtn" type="button">Build Groups</button>
-                    <button id="gbAddBtn" type="button">+ Add Group</button>
-                    <button id="gbSaveBtn" type="button">Save &amp; Finish Setup</button>
-                    <button class="primary" id="gbDoneBtn" type="button" hidden>Go to Event Setup to Activate</button>
+                    <button class="primary" id="gbBuildBtn" type="button" title="Build groups from the selected event's roster using the chosen maximum size. Review and save separately.">Build Groups</button>
+                    <button id="gbAddBtn" type="button" data-help="Add an empty group to arrange competitors manually. Save your changes separately.">+ Add Group</button>
+                    <button id="gbSaveBtn" type="button" data-help="Save the reviewed groups for this event. Day-of pages use saved groups, not unsaved drafts.">Save &amp; Finish Setup</button>
+                    <button class="primary" id="gbDoneBtn" type="button" data-help="Return to Event Setup to activate this event. This button does not activate it automatically." hidden>Go to Event Setup to Activate</button>
                   </div>
                   <div class="notice" id="gbNotice" aria-live="polite"></div>
                   <div class="gb-banners" id="gbBanners"></div>
@@ -1072,6 +1378,92 @@
               </section>
             </div>
 
+            <div class="view" id="ringAssignmentView" data-help-page="ring-assignment" data-help-title="Ring Assignment" hidden>
+              <div class="overview">
+                <span class="chip">Active Event: <strong id="raEvent">No active event</strong></span>
+                <button id="raRefreshBtn" type="button" data-help="Reload the active event's saved divisions and current ring assignments.">Refresh</button>
+                <button id="raLayoutBtn" type="button" title="Apply the event's saved ring dimensions. Confirmation is required because this clears operational ring state and assignments." hidden>Apply saved event ring layout</button>
+              </div>
+              <p class="ra-meta" data-help-source="Assigning divisions">Select a ring to view its details. Click a division to queue it to the selected ring, or drag a division onto any ring. Rings remain in label order. Green means connected, red disconnected, and gray no tablet; blue indicates selection or a drop target.</p>
+              <p data-help-source="Ring details and maintenance">Show or hide a division's competitor list in Ring Details. Lists scroll after ten rows. Remove takes a division out of the queue without deleting it. Reset ring and applying a saved layout require confirmation because they clear operational state.</p>
+              <p data-help-source="Planning estimates">Available division tiles show an approximate start and total ring time on one extra line; no hover is needed. Each start assumes assigning that division next to the earliest projected available ring, independently of other available divisions. It is not a reservation or automatic assignment. Start TBD means no usable prediction; ring time can still be shown. Ring time assumes everyone competes in all applicable disciplines, including Weapons only where applicable. Seven minutes per saved competitor is a rough total baseline, not a learned average or a separate calculation for each discipline. Empty configured rings may contribute planning starts even without a connected tablet; this does not mean they are operationally ready. Rings with current or queued work still need a connected tablet. Assistance and missing saved data can block predictions. Select a ring for queue windows and completion estimates. Two-minute transitions assume prompt starts without unreported breaks. Times are low confidence, not call times, and starts expire after 30 seconds without refresh.</p>
+              <div class="notice" id="raNotice" role="status" aria-live="polite"></div>
+              <div id="raEventTiming" class="event-timing" aria-label="Event timing"></div>
+              <div id="raEstimateSummary" class="estimate-summary" role="status"></div>
+              <div class="ra-board">
+                <section class="ra-section" aria-labelledby="raDivisionsTitle">
+                  <div class="ra-heading"><h2 id="raDivisionsTitle">Available Divisions</h2><span id="raDivisionCount"></span></div>
+                  <div class="ra-search"><input id="raSearch" type="search" aria-label="Search available divisions" placeholder="Search divisions"></div>
+                  <div class="ra-list" id="raDivisions"></div>
+                </section>
+                <section class="ra-section" aria-labelledby="raRingsTitle">
+                  <div class="ra-heading"><h2 id="raRingsTitle">Configured Rings</h2><span id="raRingCount"></span></div>
+                  <div class="ra-list ra-rings" id="raRings"></div>
+                </section>
+              </div>
+            </div>
+
+            <div class="view" id="headTableView" data-help-page="head-table" data-help-title="Head Table" hidden>
+              <div class="ht-toolbar">
+                <button type="button" id="htRefreshBtn" data-help="Reload ring progress and summary counts for the active event.">Refresh</button>
+                <label for="htOrder">Display order</label>
+                <select id="htOrder"><option value="priority">Priority</option><option value="ring">Ring order</option></select>
+                <button type="button" id="htAssignmentBtn" data-help="Open Ring Assignment to manage queues and ring assignments.">Open Ring Assignment</button>
+                <a href="/audience-monitor/" target="_blank" rel="noopener" data-help="Open the standalone read-only audience display in a new tab.">Audience Monitor</a>
+              </div>
+              <div id="htFreshness" class="ht-freshness" role="status" aria-live="polite">Waiting for first refresh.</div>
+              <div id="htNotice" class="notice" role="status" aria-live="polite"></div>
+              <div id="htSummary" class="ht-summary" aria-label="Active event summary"></div>
+              <div id="htEventTiming" class="event-timing" aria-label="Event timing"></div>
+              <div id="htEstimateSummary" class="estimate-summary" role="status"></div>
+              <p data-help-source="Ring progression and status">Select a ring for details. Green phases are complete, blue fills the active phase, and neutral phases are upcoming. Queued previews are unfilled. Weapons appears only when applicable. Connection badges use green for connected, red for disconnected, and gray for no tablet. A red exclamation mark indicates assistance. Missing timing does not imply a delay. Counts are status indicators, not filters.</p>
+              <p data-help-source="Ring details and assistance">Ring Details shows timing, the queue, competitors, and expandable phase history. Competitor lists scroll after ten rows. Clear assistance only after the request has been addressed; confirmation is required. Clearing is not a separate acknowledgement and is disabled when data is stale. Use Ring Assignment for queue editing or ring reset.</p>
+              <p data-help-source="Planning estimates">Select a ring for approximate current completion, queued starts, and availability after the queue. These are not call times. Seven minutes per saved competitor is a total planning baseline assuming everyone competes in all applicable disciplines, not a learned average or per-discipline calculation; equal applicable-phase shares and slower observed pace adjust remaining work. Empty configured rings without connected tablets contribute planning-only availability, not operational readiness. Rings with current or queued work still require a connected tablet. Two-minute transitions assume staff start queued work promptly without unreported breaks. Windows widen through the queue, are low confidence, and expire after 30 seconds. Assistance, missing rosters, or unknown phase progress block affected predictions.</p>
+              <p class="ra-meta" id="htOrderHint" data-help-source="Display order">Priority highlights assistance, connection problems, and rings needing work. Select a ring for details.</p>
+              <div id="htRings" class="ht-rings" aria-label="Ring operations overview"></div>
+            </div>
+
+            <div class="view" id="competitorLookupView" data-help-page="competitors" data-help-title="Competitor Lookup" hidden>
+              <div class="cl-toolbar">
+                <label class="cl-search-field"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"></circle><path d="m15 15 5 5"></path></svg>
+                  <input id="clSearch" type="search" autocomplete="off" aria-label="Search competitors by name or rank" placeholder="Name or rank; commas for multiple" aria-describedby="clStatus">
+                </label>
+                <button id="clSearchBtn" class="cl-primary" type="button" data-help="Run the current name/rank search. Comma-separated terms match with OR.">Search</button>
+                <button id="clFiltersBtn" type="button" aria-expanded="false" aria-controls="clFilters" data-help="Show or hide advanced filters without changing the current results.">Filters</button>
+                <button id="clRefreshBtn" type="button" data-help="Reload saved competitors and ring assignments for the active event.">Refresh</button>
+                <span id="clResultCount"></span>
+              </div>
+              <div id="clFilters" class="cl-filters" hidden>
+                <div class="cl-filter-grid">
+                  <label>Name<input id="clFilterName" type="text" autocomplete="off"></label>
+                  <label>Rank<select id="clFilterRank"><option value="">All ranks</option></select></label>
+                  <label>Studio<select id="clFilterStudio"><option value="">All studios</option></select></label>
+                  <label>Division<select id="clFilterDivision"><option value="">All divisions</option></select></label>
+                  <label>Ring<select id="clFilterRing"><option value="">All rings</option></select></label>
+                </div>
+                <div class="cl-filter-actions">
+                  <label><input id="clFilterUnassigned" type="checkbox"> Show only unassigned</label>
+                  <button id="clClearFiltersBtn" type="button" data-help="Clear advanced filters without clearing the search text.">Clear filters</button>
+                  <button id="clApplyFiltersBtn" class="cl-primary" type="button" data-help="Apply all advanced filters to the current search results.">Apply filters</button>
+                </div>
+              </div>
+              <p id="clStatus" role="status" aria-live="polite"></p>
+              <div id="clNotice" class="notice" role="status" aria-live="polite"></div>
+              <p data-help-source="Finding a competitor">Enter at least two characters of a first name, last name, or rank. Separate multiple terms with commas: Anna, G1 finds anyone matching Anna OR G1, not only people matching both. Spaces around terms and duplicate terms are ignored; terms shorter than two characters are ignored. Matching is case-insensitive and literal; all matching saved competitors for the active event appear once with matching text highlighted. Search updates as you type; Search or Enter also runs it. Studio, parent, and phone are not search fields. Use advanced filters for studio, division, or ring rather than typing Crescent D2 or Division 76 into the name/rank search. Select a competitor name to open complete details. Click the Competitor heading to reverse name order.</p>
+              <p data-help-source="Advanced filters">Filters opens a compact optional panel. Apply filters combines name, rank, studio, division, ring, and unassigned conditions with AND, within the comma-separated OR search results. A blank search with applied filters searches the saved roster using those filters alone; a nonempty search still needs a two-character term. Name matches the full name as a literal substring. Show only unassigned means no identifiable current, queued, or completed ring assignment; unknown ring data is not treated as unassigned. Clear filters restores the existing name/rank search. Closing Filters hides the controls but preserves applied filters. Options come from the active event. All matches are displayed without pagination; the footer reports actual counts.</p>
+              <p data-help-source="Details and assignments">Details show first name, last name, parent name, phone, rank, studio, saved group division, and identifiable ring. Current and queued assignments are distinguished from completed ring history; conflicting assignments are marked ambiguous rather than guessed. Missing registration fields say Not provided. Refreshes occur every ten seconds. Failed refreshes clear old personal details; if only ring data fails, registration remains searchable with ring assignments explicitly unavailable. This staff lookup is not part of the public Audience Monitor and provides no editing actions.</p>
+              <div class="cl-table-wrap">
+                <table class="cl-table" aria-label="Matching competitors">
+                  <colgroup><col><col><col><col><col></colgroup>
+                  <thead><tr>
+                    <th scope="col" id="clNameHeading" aria-sort="ascending"><button id="clSortName" class="cl-sort" type="button" data-help="Reverse the last-name, first-name result order.">Competitor <span id="clSortIndicator" aria-hidden="true">&#8593;</span></button></th>
+                    <th scope="col">Rank</th><th scope="col">Studio</th><th scope="col">Division</th><th scope="col">Ring</th>
+                  </tr></thead>
+                  <tbody id="clResults"></tbody>
+                </table>
+              </div>
+              <div id="clResultsFooter" class="cl-footer" role="status"></div>
+            </div>
             <div class="view" id="placeholderView" hidden>
               <div class="under-dev">
                 <h2 id="placeholderTitle">Under Development</h2>
@@ -1086,13 +1478,18 @@
             <h2 class="panel-title" id="detailsTitle">Event Details</h2>
           </div>
           <div class="panel-body">
+            <div id="ringAssignmentDetails" hidden></div>
+            <div id="headTableDetails" hidden></div>
+            <div id="competitorLookupDetails" hidden></div>
             <div id="groupDetails" hidden>
               <div class="summary-label" id="gdName"></div>
               <div class="import-meta" id="gdMeta"></div>
+              <p data-help-source="Competitor details" data-help-for="groups">Drag a competitor to another group or to Unassigned. The remove control moves the competitor to Unassigned; it does not delete registration. Correct flagged ranks before saving.</p>
               <div class="gd-members" id="gdMembers"></div>
             </div>
             <div id="importDetails" hidden>
-              <div class="summary-label">Registration Snapshot</div>
+              <div class="summary-label" id="importSnapshotTitle">Registration Snapshot</div>
+              <p data-help-source="Registration snapshot" data-help-for="import">This is the saved roster for the selected event. Historical import warnings are not retained and display Not available after reloading.</p>
               <div class="import-meta">
                 <span id="importDetailFile">—</span>
                 <span id="importDetailTime">Select an event</span>
@@ -1112,7 +1509,8 @@
               <div class="warning-list" id="importWarningList"></div>
             </div>
             <div class="metadata-panel" id="metadataPanel" hidden>
-              <div class="summary-label">Edit Event</div>
+              <div class="summary-label" id="metadataTitle">Edit Event</div>
+              <p data-help-source="Event details" data-help-for="event-setup">Save Changes stores event metadata. Ring columns use letters and rows use numbers. Saved dimensions do not automatically change operational rings; applying a layout is a separate confirmed action in Ring Assignment.</p>
               <div class="field-stack">
                 <label for="locationInput">Location</label>
                 <input id="locationInput" type="text" placeholder="Tournament location">
@@ -1130,7 +1528,7 @@
                 <input id="ringConfigYInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
               </div>
               <div class="button-row">
-                <button class="metadata-action" id="saveMetadataBtn" type="button">Save Changes</button>
+                <button class="metadata-action" id="saveMetadataBtn" type="button" data-help="Save the event details shown here without activating the event or applying its ring layout.">Save Changes</button>
               </div>
             </div>
           </div>
@@ -1190,13 +1588,27 @@
       const bannerEventLabelEl = document.getElementById('bannerEventLabel');
       const bannerEventDateEl = document.getElementById('bannerEventDate');
       const bannerEventStatusEl = document.getElementById('bannerEventStatus');
+      const bannerClockEl = document.getElementById('bannerClock');
+      const bannerClockTimeEl = document.getElementById('bannerClockTime');
+      let bannerClockTimer = null;
+      function tickBannerClock() {
+        clearTimeout(bannerClockTimer);
+        bannerClockTimeEl.textContent = new Date(Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+        bannerClockTimer = setTimeout(tickBannerClock, 1000);
+      }
+      tickBannerClock();
       const workspaceTitle = document.getElementById('workspaceTitle');
       const sidebar = document.querySelector('.sidebar');
       const navItems = Array.from(document.querySelectorAll('.sidebar-item'));
+      navItems.forEach((item) => item.setAttribute('data-help', `Open ${item.textContent.trim()}.`));
       const detailsPanel = document.getElementById('detailsPanel');
       const importDetailsEl = document.getElementById('importDetails');
       const groupDetailsEl = document.getElementById('groupDetails');
       const groupsView = document.getElementById('groupsView');
+      const ringAssignmentView = document.getElementById('ringAssignmentView');
+      const ringAssignmentDetailsEl = document.getElementById('ringAssignmentDetails');
+      const headTableView = document.getElementById('headTableView');
+      const headTableDetailsEl = document.getElementById('headTableDetails');
       const detailsTitleEl = document.getElementById('detailsTitle');
       const importDetailFileEl = document.getElementById('importDetailFile');
       const importDetailTimeEl = document.getElementById('importDetailTime');
@@ -1229,6 +1641,8 @@
         'event-setup': 'Manage the event that downstream tournament pages will use.',
         import: 'Load competitor registrations into the selected event.',
         groups: 'Build and adjust the competitor groups for the selected event.',
+        'ring-assignment': 'Assign the active event\'s saved divisions to rings.',
+        'head-table': 'Monitor the active event, respond to assistance, and identify rings needing attention.',
         placeholder: ''
       };
       const importResults = new Map();
@@ -1394,7 +1808,8 @@
       }
 
       function renderBanner() {
-        const dayOf = currentView === 'placeholder';
+        const dayOf = ['placeholder', 'ring-assignment', 'head-table', 'competitors'].includes(currentView);
+        bannerClockEl.hidden = !dayOf;
         bannerEventLabelEl.textContent = dayOf ? 'Active Event:' : 'Selected Event:';
         bannerMetadataEl.setAttribute('aria-label', dayOf ? 'Active event metadata' : 'Selected event metadata');
         if (dayOf) {
@@ -1436,22 +1851,32 @@
         selectedEventChipEl.textContent = selectedName;
         const onImport = currentView === 'import';
         const onGroups = currentView === 'groups';
+        const onRings = currentView === 'ring-assignment';
+        const onHeadTable = currentView === 'head-table';
+        const onCompetitors = currentView === 'competitors';
         const detailsVisible = onImport
           ? Boolean(state.selectedEventName) && eventExists(state.selectedEventName)
           : onGroups
             ? gbHasSelection()
+            : onRings ? Boolean(ra.selectedRingId) && ra.ready
+            : onHeadTable ? Boolean(ht.selectedRingId) && ht.ready
+            : onCompetitors ? cl.ready && cl.selectedId !== ''
             : state.metadataOpen && currentView === 'event-setup';
         if (detailsPanel) {
           detailsPanel.hidden = !detailsVisible;
         }
         if (pageContent) {
           pageContent.classList.toggle('details-hidden', !detailsVisible);
-          pageContent.classList.toggle('import-wide', onImport || onGroups);
+          pageContent.classList.toggle('import-wide', onImport || onGroups || onRings || onHeadTable || onCompetitors);
+          pageContent.classList.toggle('competitor-lookup', onCompetitors);
         }
         importDetailsEl.hidden = !onImport;
         groupDetailsEl.hidden = !onGroups;
-        metadataPanelEl.hidden = onImport || onGroups || !state.metadataOpen;
-        detailsTitleEl.textContent = onImport ? 'Import Details' : onGroups ? 'Division Details' : 'Event Details';
+        ringAssignmentDetailsEl.hidden = !onRings;
+        headTableDetailsEl.hidden = !onHeadTable;
+        document.getElementById('competitorLookupDetails').hidden = !onCompetitors;
+        metadataPanelEl.hidden = onImport || onGroups || onRings || onHeadTable || onCompetitors || !state.metadataOpen;
+        detailsTitleEl.textContent = onCompetitors ? 'Competitor Details' : onImport ? 'Import Details' : onGroups ? 'Division Details' : onRings || onHeadTable ? 'Ring Details' : 'Event Details';
         renderImportView();
         if (onGroups) {
           gbSyncControls();
@@ -1785,6 +2210,20 @@
           return;
         }
         currentView = view;
+        cl.requestToken += 1;
+        clearTimeout(cl.timer);
+        if (view !== 'competitors') {
+          cl.roster = []; cl.rings = []; cl.selectedId = ''; cl.ready = false;
+          document.getElementById('clResults').innerHTML = '';
+          document.getElementById('competitorLookupDetails').innerHTML = '';
+        }
+        clearTimeout(estimateTimer);
+        ht.requestToken += 1;
+        clearTimeout(ht.timer);
+        clearTimeout(ht.freshnessTimer);
+        ht.hovering = false;
+        ra.requestToken += 1;
+        if (ra.timer) clearTimeout(ra.timer);
         if (view !== 'placeholder') {
           const url = new URL(window.location.href);
           url.searchParams.set('view', view);
@@ -1798,6 +2237,9 @@
         eventSetupView.hidden = view !== 'event-setup';
         importView.hidden = view !== 'import';
         groupsView.hidden = view !== 'groups';
+        ringAssignmentView.hidden = view !== 'ring-assignment';
+        headTableView.hidden = view !== 'head-table';
+        document.getElementById('competitorLookupView').hidden = view !== 'competitors';
         placeholderView.hidden = view !== 'placeholder';
         const title = navLabel(item);
         workspaceTitle.textContent = title;
@@ -1808,6 +2250,19 @@
           setMetadataPanelVisible(false);
         }
         syncButtons();
+        if (view === 'competitors') {
+          clLoad();
+          return;
+        }
+        if (view === 'ring-assignment') {
+          raLoad();
+          return;
+        }
+        if (view === 'head-table') {
+          htLoad();
+          htTickFreshness();
+          return;
+        }
         {
           const refresh = view === 'placeholder' ? refreshActiveEvent : refreshAll;
           refresh()
@@ -1934,10 +2389,10 @@
         importNextBtn.classList.toggle('next-action', canContinue);
         importSummaryEl.textContent = !ready ? 'Select an existing event on Event Setup.'
           : !loaded ? (importSnapshot.status === 'error' ? 'Saved registration is unavailable. Reopen Import to retry.' : 'Loading saved registration...')
-          : pendingCsv ? 'CSV selected or entered. Import it before continuing, or Clear to resume the saved roster.'
-          : canContinue ? `Loaded ${importSnapshot.competitors.length} saved competitors. Next: Build Groups; no import is required.`
-          : importSnapshot.dbExists ? 'The database exists but has no competitors. Import a CSV to begin.'
-          : 'No saved database exists. Import a CSV to begin.';
+          : pendingCsv ? 'CSV input pending.'
+          : canContinue ? `${importSnapshot.competitors.length} saved competitors loaded.`
+          : importSnapshot.dbExists ? 'The database exists but has no competitors.'
+          : 'No saved database exists.';
         if (!ready && currentView === 'import') {
           setImportNotice('Select an existing event on Event Setup before importing.', 'warn');
         }
@@ -2239,7 +2694,7 @@
         const pending = gb.unassigned.length + gb.flagged.length;
         const canFinish = !gb.busy && ready && gb.groups.length > 0 && pending === 0;
         gbSaveBtn.disabled = !canFinish;
-        gbSaveBtn.title = canFinish || !gb.groups.length ? '' : `${pending} competitor${pending === 1 ? '' : 's'} still unassigned or flagged`;
+        gbSaveBtn.title = canFinish || !gb.groups.length ? 'Save the reviewed groups for this event. Building and editing do not save automatically.' : `${pending} competitor${pending === 1 ? '' : 's'} still unassigned or flagged`;
         gbSaveBtn.classList.toggle('primary', gb.groups.length > 0 && !gb.saved);
         gbBuildBtn.classList.toggle('primary', gb.groups.length === 0);
         const isActive = normalizeEventName(state.activeEventName).toLowerCase() === normalizeEventName(gb.eventName).toLowerCase();
@@ -2350,7 +2805,7 @@
           const sub = `<div class="gd-sub"><span class="gd-badge">${gbEsc(c.gender.charAt(0))}</span><span class="gd-badge">${gbEsc(c.rank || '?')}</span><span>Age ${c.age}</span></div>`;
           if (id === GB_FLAGGED) {
             const options = ['<option value="">Corrected rank…</option>'].concat(GB_RANKS.map((r) => `<option value="${r}">${r}</option>`)).join('');
-            return `<div class="gd-row static" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}<div class="gd-sub">${gbEsc(c.reviewReason || 'review required')}</div></div><div class="gd-fix"><select>${options}</select><button class="gd-apply" type="button" data-apply>Apply</button></div></div>`;
+            return `<div class="gd-row static" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}<div class="gd-sub">${gbEsc(c.reviewReason || 'review required')}</div></div><div class="gd-fix"><select>${options}</select><button class="gd-apply" type="button" data-apply data-help="Apply the corrected rank and move this competitor to Unassigned for grouping.">Apply</button></div></div>`;
           }
           return `<div class="gd-row" draggable="true" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}</div>${id === GB_UNASSIGNED ? '' : '<button class="gd-x" type="button" data-unassign title="Move to Unassigned">✕</button>'}</div>`;
         }).join('');
@@ -2655,6 +3110,1121 @@
         if (eventSetupNavItem) showView('event-setup', eventSetupNavItem);
       });
 
+      const ra = {
+        eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
+        ready: false, busy: false, requestToken: 0, timer: null, estimates: null, startedAt: '', completion: null,
+        heartbeatSeconds: 90, config: {}, pointerDrag: null, nativeDragging: false, suppressClickUntil: 0
+      };
+      const raDivisionsEl = document.getElementById('raDivisions');
+      const raRingsEl = document.getElementById('raRings');
+      const raSearchEl = document.getElementById('raSearch');
+      const raNoticeEl = document.getElementById('raNotice');
+      const raRefreshBtn = document.getElementById('raRefreshBtn');
+      const raLayoutBtn = document.getElementById('raLayoutBtn');
+
+      function raNotice(message, kind = 'info') {
+        raNoticeEl.className = message ? `notice visible ${kind}` : 'notice';
+        raNoticeEl.textContent = message;
+      }
+
+      function raAnchor(group) {
+        return String(group.groupDivisionNumber ?? group.groupId ?? group.id ?? '');
+      }
+
+      let estimateTimer = null;
+      const COMPLETION_REFRESH_MS = 60000;
+
+      function eventClockText(value) {
+        const date = new Date(value);
+        const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return date.toDateString() === new Date(Date.now()).toDateString() ? time
+          : `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+      }
+
+      function eventTiming(context, id) {
+        const element = document.getElementById(id);
+        if (!context.eventName) { element.innerHTML = ''; context.completion = null; return; }
+        const started = Date.parse(context.startedAt);
+        const startText = Number.isFinite(started) ? eventClockText(started) : 'TBD';
+        let completion = '<strong>TBD</strong>';
+        let help = 'Event timing starts when the first ring tablet connects.';
+        if (!Number.isFinite(started)) context.completion = null;
+        else {
+          const reason = estimateContext(context);
+          const forecast = reason ? null : context.estimates.eventCompletion;
+          const status = forecast && ['estimated', 'complete'].includes(forecast.status)
+            && (forecast.status === 'complete' || validEstimateWindow(forecast.window)) ? forecast.status : 'unavailable';
+          const held = context.completion;
+          // Hold the displayed forecast for a minute so it does not jitter on every 10-second refresh.
+          if (!held || held.eventName !== context.eventName || held.startedAt !== context.startedAt
+            || held.status !== status || Date.now() - held.at >= COMPLETION_REFRESH_MS) {
+            context.completion = { eventName: context.eventName, startedAt: context.startedAt, status, forecast,
+              reason: reason || (forecast && forecast.reason) || 'No completion estimate reported.', at: Date.now() };
+          }
+          const shown = context.completion;
+          const updated = `Updated ${eventClockText(shown.at)}; refreshes every minute.`;
+          if (shown.status === 'estimated') {
+            const window = shown.forecast.window;
+            completion = `<strong>~${gbEsc(eventClockText(Date.parse(window.expectedAt)))}</strong><small>(${gbEsc(estimateWindow(window))})</small>`;
+            help = `Approximate completion of all divisions, including unassigned divisions placed on whichever ring frees up first. ${shown.forecast.planningOnly ? 'Includes empty unconnected rings for planning only. ' : ''}Low confidence; subject to change. ${updated}`;
+          } else if (shown.status === 'complete') {
+            completion = '<strong>All divisions complete</strong>';
+            help = `No current, queued, or unassigned divisions remain. ${updated}`;
+          } else {
+            completion = '<strong>Unavailable</strong>';
+            help = `Completion estimate unavailable: ${shown.reason}`;
+          }
+        }
+        element.innerHTML = `<span data-help="${gbEsc(Number.isFinite(started) ? `Recorded when the first ring tablet connected for ${context.eventName}.` : help)}">Event started <strong>${gbEsc(startText)}</strong></span>
+          <span data-help="${gbEsc(help)}">Est. completion ${completion}</span>`;
+      }
+
+      function estimateContext(context) {
+        const snapshot = context.estimates;
+        if (context.error) return 'Ring data could not be refreshed.';
+        if (!snapshot || snapshot.version !== 1) return 'Server estimation support is unavailable; restart the server if recently updated.';
+        if (snapshot.eventName !== context.eventName) return 'Estimate event context does not match.';
+        if (snapshot.status !== 'ready') return snapshot.reason || 'Estimates unavailable.';
+        if (!Array.isArray(snapshot.rings) || !Array.isArray(snapshot.unassigned)
+          || snapshot.rings.some((ring) => !ring || !Array.isArray(ring.queue) || !ring.availability)) return 'Invalid estimation snapshot; refresh required.';
+        const generated = Date.parse(snapshot.generatedAt);
+        const expiry = Date.parse(snapshot.validUntil);
+        if (!Number.isFinite(generated) || !Number.isFinite(expiry) || generated > Date.now() + 5000
+          || Date.now() - generated > 30000 || expiry <= Date.now()) return 'Estimate data is stale; refresh required.';
+        return '';
+      }
+
+      function estimateWindow(window) {
+        if (!validEstimateWindow(window)) return '';
+        const earliest = Date.parse(window.earliestAt);
+        const latest = Date.parse(window.latestAt);
+        const format = (value) => new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const day = (value) => new Date(value).toLocaleDateString([], { month: 'short', day: 'numeric' });
+        return new Date(earliest).toDateString() === new Date(latest).toDateString()
+          && new Date(earliest).toDateString() === new Date().toDateString()
+          ? `${format(earliest)} - ${format(latest)}`
+          : `${day(earliest)} ${format(earliest)} - ${day(latest)} ${format(latest)}`;
+      }
+
+      function validEstimateWindow(window) {
+        if (!window) return false;
+        const times = [window.earliestAt, window.expectedAt, window.latestAt].map(Date.parse);
+        return times.every(Number.isFinite) && times[0] <= times[1] && times[1] <= times[2];
+      }
+
+      function estimateText(context, estimate, label) {
+        const reason = estimateContext(context) || (!estimate || estimate.status !== 'estimated' ? estimate && estimate.reason || 'No estimate reported.' : '');
+        if (reason) return `${label} unavailable: ${reason}`;
+        if (!validEstimateWindow(estimate.window)) return `${label} unavailable: No valid estimate window reported.`;
+        if (estimate.window && Date.parse(estimate.window.latestAt) <= Date.now()) return `${label}: Now (approx.)`;
+        return `${label}: ${estimateWindow(estimate.window)} (approx.)`;
+      }
+
+      function estimateSpan(context, estimate, label) {
+        const valid = !estimateContext(context) && estimate && estimate.status === 'estimated' && validEstimateWindow(estimate.window);
+        return `<span class="estimate-text"${valid ? ` data-estimate-expiry="${estimateExpiry(context)}"` : ''}>${gbEsc(estimateText(context, estimate, label))}</span>`;
+      }
+
+      function estimateRing(context, ringId) {
+        return !estimateContext(context)
+          ? context.estimates.rings.find((item) => item && item.ringId === ringId) : null;
+      }
+
+      function estimateExpiry(context) {
+        return new Date(Math.min(Date.parse(context.estimates.validUntil), Date.parse(context.estimates.generatedAt) + 30000)).toISOString();
+      }
+
+      function estimateHelpExpiry(context) {
+        return !estimateContext(context) ? ` data-estimate-help-expiry="${estimateExpiry(context)}"` : '';
+      }
+
+      function estimateDetails(context, ring) {
+        const estimate = estimateRing(context, ring.ringId);
+        const current = estimate && estimate.current;
+        const completion = current && { ...current, window: current.completionWindow };
+        return `<section class="ra-detail estimate-details"><h3>Planning estimates</h3>
+          ${ring.groupDivisionNumber ? `<p>${estimateSpan(context, completion, 'Current completion')}</p>` : ''}
+          <p>${estimateSpan(context, estimate && estimate.availability, 'Ring free after queue')}</p>
+          ${estimate?.availability?.planningOnly ? '<p class="ra-meta">Planning only: assumes this empty ring can be staffed and connected before starting.</p>' : ''}
+          <p class="ra-meta">Low-confidence planning windows, not call times. Subject to change.</p>
+        </section>`;
+      }
+
+      function estimateSummary(context, id) {
+        const reason = estimateContext(context);
+        const candidates = !reason && context.estimates.rings.filter((item) => item?.availability?.status === 'estimated' && validEstimateWindow(item.availability.window))
+          .sort((a, b) => Date.parse(a.availability.window.expectedAt) - Date.parse(b.availability.window.expectedAt));
+        const next = candidates && candidates[0];
+        document.getElementById(id).innerHTML = next
+          ? `${estimateSpan(context, next.availability, `Next ring free after queue: ${next.ringLabel}`)} <span class="estimate-text">Subject to change.${context.estimates.rings.some((ring) => ring.availability.planningOnly) ? ' Includes empty unconnected rings for planning only.' : ''}</span>`
+          : `<span class="estimate-text">Planning estimates unavailable: ${gbEsc(reason || 'No ring has reliable availability data.')}</span>`;
+        estimateTick();
+      }
+
+      function estimateTick() {
+        clearTimeout(estimateTimer);
+        if (!['ring-assignment', 'head-table'].includes(currentView)) return;
+        document.querySelectorAll('[data-estimate-expiry]').forEach((element) => {
+          if (Date.parse(element.getAttribute('data-estimate-expiry')) <= Date.now()) {
+            element.textContent = element.getAttribute('data-estimate-stale-text') || 'Estimate unavailable: data is stale; refresh required.';
+            element.removeAttribute('data-estimate-expiry');
+          }
+        });
+        document.querySelectorAll('[data-estimate-help-expiry]').forEach((element) => {
+          if (Date.parse(element.getAttribute('data-estimate-help-expiry')) <= Date.now()) {
+            element.setAttribute('data-help', 'Planning estimate unavailable: data is stale; refresh required. Select a ring for details.');
+            element.removeAttribute('title');
+            element.removeAttribute('data-estimate-help-expiry');
+          }
+        });
+        estimateTimer = setTimeout(estimateTick, 1000);
+      }
+
+      function raDivisionEstimate(group) {
+        const suggestion = !estimateContext(ra)
+          && ra.estimates.unassigned.find((item) => item && item.groupDivisionNumber === raAnchor(group));
+        const validStart = suggestion && suggestion.status === 'estimated' && validEstimateWindow(suggestion.window);
+        const time = validStart ? new Date(suggestion.window.expectedAt) : null;
+        const clock = time && time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const start = time ? `Start ~${time.toDateString() === new Date().toDateString() ? '' : `${time.toLocaleDateString([], { month: 'short', day: 'numeric' })} `}${clock}` : 'Start TBD';
+        const duration = suggestion && Number.isFinite(suggestion.durationMs) && suggestion.durationMs > 0
+          ? `Ring ~${Math.ceil(suggestion.durationMs / 60000)} min` : 'Ring time TBD';
+        return `<span class="ra-division-estimate"><span${validStart ? ` data-estimate-expiry="${estimateExpiry(ra)}" data-estimate-stale-text="Start TBD (stale)"` : ''}>${gbEsc(start)}</span> &middot; ${gbEsc(duration)}</span>`;
+      }
+
+      function raGroup(id) {
+        return ra.groups.find((group) => raAnchor(group) === String(id));
+      }
+
+      function raGroupLabel(id) {
+        const group = raGroup(id);
+        return `Division ${id}${group && group.name ? ` - ${group.name}` : ''}`;
+      }
+
+      function raConnection(ring, heartbeatSeconds = ra.heartbeatSeconds) {
+        if (!ring.tabletLabel) return { label: 'No tablet', tone: 'no-tablet' };
+        const age = Date.now() - Date.parse(ring.lastHeartbeatAt);
+        if (!Number.isFinite(age) || age >= heartbeatSeconds * 1000) return { label: 'Disconnected', tone: 'disconnected' };
+        return { label: 'Connected', tone: 'connected' };
+      }
+
+      function raStatus(ring) {
+        const assigned = Boolean(ring.groupDivisionNumber) || (ring.queuedGroupDivisionNumbers || []).length > 0;
+        const connection = raConnection(ring);
+        if (connection.tone === 'no-tablet') return assigned ? 'Waiting' : 'Unassigned';
+        return connection.tone === 'connected' && assigned ? 'Active' : connection.label;
+      }
+
+      function raMembers(group) {
+        if (!group) return '';
+        return `<ol class="ra-members" tabindex="0" aria-label="Division competitors">${group.competitors.map((member) => {
+          const description = `${member.fullName} - ${member.rank || 'Unknown rank'} - Age ${member.age}${member.studio ? ` - ${member.studio}` : ''}`;
+          return `<li title="${gbEsc(description)}">${gbEsc(description)}</li>`;
+        }).join('')}</ol>`;
+      }
+
+      function raRenderDetails() {
+        const ring = ra.rings.find((item) => item.ringId === ra.selectedRingId);
+        if (!ra.ready || !ring) {
+          ringAssignmentDetailsEl.innerHTML = '';
+          return;
+        }
+        const queue = ring.queuedGroupDivisionNumbers || [];
+        const current = String(ring.groupDivisionNumber || '');
+        const dateLabel = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : 'Not received';
+        const detailGroup = raGroup(ra.selectedGroupId);
+        const competitorButton = (id) => {
+          const showing = detailGroup && raAnchor(detailGroup) === String(id);
+          return `<button type="button" data-ra-group="${gbEsc(id)}" data-help="${showing ? 'Hide' : 'Show'} this division's competitor list in Ring Details." aria-expanded="${Boolean(showing)}" aria-label="${showing ? 'Hide' : 'Show'} competitors for Division ${gbEsc(id)}"${ra.busy || !raGroup(id) ? ' disabled' : ''}>${showing ? 'Hide competitors' : 'Show competitors'}</button>`;
+        };
+        ringAssignmentDetailsEl.innerHTML = `
+          <section class="ra-detail">
+            <h3>Ring ${gbEsc(ring.ringLabel)}</h3>
+            <dl>
+              <dt>State</dt><dd>${gbEsc(raStatus(ring))}</dd>
+              <dt>Tablet</dt><dd>${gbEsc(ring.tabletLabel || 'Not connected')}</dd>
+              <dt>Phase</dt><dd>${gbEsc(ring.currentPhaseName || ring.currentPhase || ring.phase || 'idle')}</dd>
+              <dt>Progress</dt><dd>${gbEsc(ring.phaseCompletedCount || 0)} / ${gbEsc(ring.phaseTotalCount || 0)} (${gbEsc(ring.phaseProgress || 0)}%)</dd>
+              <dt>Check-in</dt><dd>${gbEsc(ring.checkInCount || 0)} / ${gbEsc(ring.checkInTotal || 0)}</dd>
+              <dt>Assistance</dt><dd>${gbEsc(ring.assistanceType || 'None requested')}</dd>
+              <dt>Started</dt><dd>${ring.assignmentStartedAt ? gbEsc(dateLabel(ring.assignmentStartedAt)) : 'Not started'}</dd>
+              <dt>Last heartbeat</dt><dd>${gbEsc(dateLabel(ring.lastHeartbeatAt))}</dd>
+            </dl>
+          </section>
+          ${estimateDetails(ra, ring)}
+          <section class="ra-detail"><h3>Current division</h3>
+            ${current ? `<div class="ra-division-label">${gbEsc(raGroupLabel(current))}</div><div class="ra-division-actions">${competitorButton(current)}</div>` : '<p class="ra-meta">None assigned</p>'}
+          </section>
+          <section class="ra-detail"><h3>Queued divisions (${queue.length})</h3>
+            ${queue.length ? `<ol class="ra-queue">${queue.map((id) => `<li>
+              <div class="ra-division-label">${gbEsc(raGroupLabel(id))}<br>${estimateSpan(ra, (estimateRing(ra, ring.ringId) || { queue: [] }).queue.find((item) => item.groupDivisionNumber === String(id)), 'Estimated start')}</div>
+              <div class="ra-division-actions">${competitorButton(id)}
+              <button type="button" data-ra-remove="${gbEsc(id)}" data-help="Remove this division from the ring queue without deleting the division."${ra.busy ? ' disabled' : ''} aria-label="Remove Division ${gbEsc(id)} from queue">Remove</button>
+              </div>
+            </li>`).join('')}</ol>` : '<p class="ra-meta">No queued divisions</p>'}
+          </section>
+          ${detailGroup ? `<section class="ra-detail"><h3>${gbEsc(raGroupLabel(raAnchor(detailGroup)))}</h3>${raMembers(detailGroup)}</section>` : ''}
+          <div class="ra-ring-maintenance"><button type="button" data-ra-reset data-help="Clear this ring's assignments and operational state after confirmation."${ra.busy ? ' disabled' : ''}>Reset ring</button></div>`;
+      }
+
+      function raRender() {
+        if (ra.pointerDrag || ra.nativeDragging) return;
+        document.getElementById('raEvent').textContent = ra.eventName || 'No active event';
+        const available = new Set(ra.available.map(String));
+        const query = raSearchEl.value.trim().toLowerCase();
+        const groups = ra.groups.filter((group) => available.has(raAnchor(group)))
+          .filter((group) => [raGroupLabel(raAnchor(group)), gbRankRange(group.competitors), gbAgeRange(group.competitors)]
+            .join(' ').toLowerCase().includes(query))
+          .sort((a, b) => raAnchor(a).localeCompare(raAnchor(b), undefined, { numeric: true }));
+        document.getElementById('raDivisionCount').textContent = `${groups.length} divisions`;
+        raDivisionsEl.innerHTML = groups.length ? groups.map((group) => {
+          const title = `Division ${raAnchor(group)}`;
+          const count = group.competitors.length;
+          const countLabel = `${count} ${count === 1 ? 'competitor' : 'competitors'}`;
+          const description = group.name && group.name !== title ? group.name
+            : [gbRankRange(group.competitors), gbAgeRange(group.competitors)].filter(Boolean).join(' - ');
+          return `<button type="button" class="ra-card ra-division" draggable="${!ra.busy}" data-ra-division="${gbEsc(raAnchor(group))}"${ra.busy ? ' disabled' : ''}>
+            <span class="ra-division-head"><strong>${gbEsc(title)}</strong><span class="ra-meta">${countLabel}</span></span>
+            ${description ? `<span class="ra-meta ra-division-description">${gbEsc(description)}</span>` : ''}
+            ${raDivisionEstimate(group)}
+          </button>`;
+        }).join('') : `<p class="ra-meta">${!ra.ready ? 'Divisions unavailable.' : !ra.groups.length
+            ? 'No saved divisions for the active event. Build and save groups first.'
+            : 'No available divisions match this search.'}</p>`;
+        document.getElementById('raRingCount').textContent = `${ra.rings.length} rings`;
+        raRingsEl.innerHTML = ra.rings.map((ring) => {
+          const connection = raConnection(ring);
+          const queued = (ring.queuedGroupDivisionNumbers || []).length;
+          const assignment = ring.groupDivisionNumber ? `Running division ${ring.groupDivisionNumber}` : queued ? 'Queued' : 'Available';
+          return `<button type="button" class="ra-card ra-ring ${connection.tone}" data-ra-ring="${gbEsc(ring.ringId)}"${estimateHelpExpiry(ra)} title="${gbEsc(`Select this ring for queue start estimates and details. ${estimateText(ra, estimateRing(ra, ring.ringId)?.availability, 'Ring free after queue')}`)}" aria-pressed="${ra.selectedRingId === ring.ringId}">
+            <span class="ra-ring-line"><strong>Ring ${gbEsc(ring.ringLabel)}</strong><span class="ra-connection">${connection.label}</span></span>
+            <span class="ra-ring-line"><span class="ra-assignment" title="${gbEsc(assignment)}">${gbEsc(assignment)}</span><span class="ra-meta">${queued} queued</span></span>
+          </button>`;
+        }).join('') || '<p class="ra-meta">No configured rings available.</p>';
+        const x = Number(state.activeEventMeta.ringConfigX);
+        const y = Number(state.activeEventMeta.ringConfigY);
+        raLayoutBtn.hidden = !ra.ready || x === Number(ra.config.letterCount) && y === Number(ra.config.numberCount);
+        raLayoutBtn.disabled = ra.busy || !Number.isInteger(x) || !Number.isInteger(y) || x < 1 || x > 26 || y < 1 || y > 50;
+        raLayoutBtn.textContent = `Apply saved event ring layout (${x} x ${y})`;
+        raRefreshBtn.disabled = ra.busy;
+        raRenderDetails();
+        estimateSummary(ra, 'raEstimateSummary');
+        eventTiming(ra, 'raEventTiming');
+        renderState();
+      }
+
+      async function raLoad() {
+        if (ra.pointerDrag || ra.nativeDragging || currentView !== 'ring-assignment') return;
+        const token = ++ra.requestToken;
+        if (ra.timer) clearTimeout(ra.timer);
+        try {
+          await refreshActiveEvent();
+          if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
+          const eventName = state.activeEventName;
+          if (!eventName) throw new Error('No active event. Activate an event on Event Setup first.');
+          if (ra.eventName !== eventName) {
+            ra.estimates = null;
+            ra.startedAt = '';
+            ra.completion = null;
+            ra.groups = [];
+            ra.rings = [];
+            ra.selectedRingId = '';
+            ra.selectedGroupId = '';
+            ra.ready = false;
+          }
+          ra.eventName = eventName;
+          // Loading saved groups first also primes the server's active-event division cache.
+          const divisions = await fetchJson(`/api/groups?eventName=${encodeURIComponent(eventName)}`);
+          const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(eventName)}`);
+          if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
+          if (ra.pointerDrag || ra.nativeDragging) return;
+          if (!Array.isArray(divisions.groups) || !Array.isArray(board.rings) || !Array.isArray(board.availableGroupDivisionNumbers)) {
+            throw new Error('The server returned invalid ring-assignment data.');
+          }
+          ra.groups = divisions.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
+          ra.rings = board.rings.slice().sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
+          ra.available = board.availableGroupDivisionNumbers;
+          ra.estimates = board.estimates || null;
+          ra.startedAt = board.eventStartedAt || '';
+          ra.config = board.ringConfig || {};
+          ra.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
+          if (!ra.rings.some((ring) => ring.ringId === ra.selectedRingId)) ra.selectedRingId = '';
+          if (!raGroup(ra.selectedGroupId)) ra.selectedGroupId = '';
+          ra.ready = true;
+          raNotice('');
+          raRender();
+        } catch (error) {
+          if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
+          ra.ready = false;
+          ra.estimates = null;
+          ra.startedAt = '';
+          ra.groups = [];
+          ra.rings = [];
+          ra.available = [];
+          ra.selectedRingId = '';
+          ra.selectedGroupId = '';
+          ra.eventName = state.activeEventError ? '' : state.activeEventName;
+          raRender();
+          raNotice(`Unable to load Ring Assignment: ${error.message}`, 'error');
+        } finally {
+          if (token === ra.requestToken && currentView === 'ring-assignment' && !ra.pointerDrag && !ra.nativeDragging) {
+            ra.timer = setTimeout(raLoad, 10000);
+          }
+        }
+      }
+
+      async function raUpdate(path, options) {
+        if (ra.busy || !ra.ready) return;
+        ra.busy = true;
+        ra.requestToken += 1;
+        if (ra.timer) clearTimeout(ra.timer);
+        raRender();
+        try {
+          await fetchJson(`${path}?eventName=${encodeURIComponent(ra.eventName)}`, options);
+          await raLoad();
+        } catch (error) {
+          await raLoad();
+          if (currentView === 'ring-assignment') raNotice(`Update failed: ${error.message}`, 'error');
+        } finally {
+          ra.busy = false;
+          if (currentView === 'ring-assignment') raRender();
+        }
+      }
+
+      async function raQueue(ringId, divisionId) {
+        if (!ra.ready || ra.busy) return;
+        if (!ra.rings.some((ring) => ring.ringId === ringId)) {
+          raNotice('Select a ring before assigning a division.', 'warn');
+          return;
+        }
+        if (!ra.available.map(String).includes(divisionId) || !raGroup(divisionId)) {
+          raNotice('That division is no longer available. Refresh Ring Assignment.', 'warn');
+          return;
+        }
+        ra.selectedRingId = ringId;
+        ra.selectedGroupId = divisionId;
+        await raUpdate(`/api/rings/${encodeURIComponent(ringId)}/queue`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupDivisionNumber: divisionId })
+        });
+      }
+
+      raRefreshBtn.addEventListener('click', raLoad);
+      raSearchEl.addEventListener('input', raRender);
+      raRingsEl.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-ra-ring]');
+        if (!button) return;
+        ra.selectedRingId = button.dataset.raRing;
+        ra.selectedGroupId = '';
+        raRingsEl.querySelectorAll('[data-ra-ring]').forEach((ring) => {
+          ring.setAttribute('aria-pressed', String(ring.dataset.raRing === ra.selectedRingId));
+        });
+        raRenderDetails();
+        renderState();
+      });
+      raDivisionsEl.addEventListener('click', async (event) => {
+        if (Date.now() < ra.suppressClickUntil) return;
+        const button = event.target.closest('[data-ra-division]');
+        if (button) await raQueue(ra.selectedRingId, button.dataset.raDivision);
+      });
+      ringAssignmentDetailsEl.addEventListener('click', async (event) => {
+        const button = event.target.closest('button');
+        if (!button || ra.busy || !ra.ready) return;
+        if (button.dataset.raGroup) {
+          ra.selectedGroupId = ra.selectedGroupId === button.dataset.raGroup ? '' : button.dataset.raGroup;
+          raRenderDetails();
+        } else if (button.dataset.raRemove) {
+          await raUpdate(`/api/rings/${encodeURIComponent(ra.selectedRingId)}/queue/${encodeURIComponent(button.dataset.raRemove)}`,
+            { method: 'DELETE' });
+        } else if (button.hasAttribute('data-ra-reset')) {
+          if (!window.confirm('Reset this ring? This clears its current division, queue, completed-division history, tablet, progress, and assistance state.')) return;
+          ra.selectedGroupId = '';
+          await raUpdate(`/api/rings/${encodeURIComponent(ra.selectedRingId)}/reset`, { method: 'POST' });
+        }
+      });
+      raLayoutBtn.addEventListener('click', async () => {
+        if (raLayoutBtn.disabled || !ra.ready || ra.busy) return;
+        if (!window.confirm('Apply the saved event ring layout? This resets ALL ring assignments, queues, completed-division history, tablet connections, and progress for the active event.')) return;
+        await raUpdate('/api/rings/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ letterCount: Number(state.activeEventMeta.ringConfigX), numberCount: Number(state.activeEventMeta.ringConfigY) })
+        });
+      });
+      function raEndDrag() {
+        raRingsEl.querySelectorAll('.drop').forEach((card) => card.classList.remove('drop'));
+        raDivisionsEl.querySelectorAll('.dragging').forEach((card) => card.classList.remove('dragging'));
+        ra.pointerDrag = null;
+        ra.nativeDragging = false;
+        if (ra.timer) clearTimeout(ra.timer);
+        if (currentView === 'ring-assignment') ra.timer = setTimeout(raLoad, 10000);
+      }
+
+      raDivisionsEl.addEventListener('pointerdown', (event) => {
+        const card = event.target.closest('[data-ra-division]');
+        if (!card || event.pointerType !== 'mouse' || event.button !== 0 || !ra.ready || ra.busy) return;
+        event.preventDefault();
+        card.focus({ preventScroll: true });
+        card.setPointerCapture(event.pointerId);
+        ra.pointerDrag = { pointerId: event.pointerId, divisionId: card.dataset.raDivision, x: event.clientX, y: event.clientY, moved: false };
+        if (ra.timer) clearTimeout(ra.timer);
+      });
+      raDivisionsEl.addEventListener('pointermove', (event) => {
+        const drag = ra.pointerDrag;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) return;
+        drag.moved = true;
+        event.target.closest('[data-ra-division]').classList.add('dragging');
+        const target = document.elementFromPoint(event.clientX, event.clientY);
+        const ring = target && target.closest('[data-ra-ring]');
+        raRingsEl.querySelectorAll('[data-ra-ring]').forEach((card) => card.classList.toggle('drop', card === ring));
+      });
+      raDivisionsEl.addEventListener('pointerup', async (event) => {
+        const drag = ra.pointerDrag;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const target = document.elementFromPoint(event.clientX, event.clientY);
+        const ring = target && target.closest('[data-ra-ring]');
+        const ringId = ring && ring.dataset.raRing;
+        const card = event.target.closest('[data-ra-division]');
+        ra.suppressClickUntil = Date.now() + 500;
+        raEndDrag();
+        if (card && card.hasPointerCapture(event.pointerId)) card.releasePointerCapture(event.pointerId);
+        if (drag.moved) {
+          if (ringId) await raQueue(ringId, drag.divisionId);
+        } else {
+          await raQueue(ra.selectedRingId, drag.divisionId);
+        }
+      });
+      ['pointercancel', 'lostpointercapture'].forEach((type) => {
+        raDivisionsEl.addEventListener(type, () => {
+          if (!ra.pointerDrag) return;
+          ra.suppressClickUntil = Date.now() + 500;
+          raEndDrag();
+        });
+      });
+      raDivisionsEl.addEventListener('dragstart', (event) => {
+        if (ra.pointerDrag) { event.preventDefault(); return; }
+        const card = event.target.closest('[data-ra-division]');
+        if (!card || !ra.ready || ra.busy) { event.preventDefault(); return; }
+        ra.nativeDragging = true;
+        if (ra.timer) clearTimeout(ra.timer);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', card.dataset.raDivision);
+      });
+      raDivisionsEl.addEventListener('dragend', raEndDrag);
+      raRingsEl.addEventListener('dragover', (event) => {
+        const card = event.target.closest('[data-ra-ring]');
+        if (!card || !ra.ready || ra.busy) return;
+        event.preventDefault();
+        card.classList.add('drop');
+        event.dataTransfer.dropEffect = 'move';
+      });
+      raRingsEl.addEventListener('dragleave', (event) => {
+        const card = event.target.closest('[data-ra-ring]');
+        if (card && !card.contains(event.relatedTarget)) card.classList.remove('drop');
+      });
+      raRingsEl.addEventListener('drop', async (event) => {
+        const card = event.target.closest('[data-ra-ring]');
+        if (!card) return;
+        event.preventDefault();
+        card.classList.remove('drop');
+        raEndDrag();
+        await raQueue(card.dataset.raRing, event.dataTransfer.getData('text/plain'));
+      });
+
+      const ht = {
+        eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
+        ready: false, busy: false, error: '', lastLoadedAt: null, heartbeatSeconds: 90, estimates: null, startedAt: '', completion: null,
+        requestToken: 0, timer: null, freshnessTimer: null, historyOpen: false, order: [], hovering: false
+      };
+      const htRingsEl = document.getElementById('htRings');
+      const htSummaryEl = document.getElementById('htSummary');
+      const htNoticeEl = document.getElementById('htNotice');
+      const htFreshnessEl = document.getElementById('htFreshness');
+      const htOrderEl = document.getElementById('htOrder');
+      const htRefreshBtn = document.getElementById('htRefreshBtn');
+
+      function htNotice(message, kind = 'error') {
+        htNoticeEl.className = message ? `notice visible ${kind}` : 'notice';
+        htNoticeEl.textContent = message;
+      }
+
+      function htDuration(value) {
+        if (typeof value !== 'string' || !/^\d+:[0-5]\d(?::[0-5]\d)?$/.test(value)) return null;
+        return value.split(':').reduce((seconds, part) => seconds * 60 + Number(part), 0) * 1000;
+      }
+
+      function htElapsed(start) {
+        const time = Date.parse(start);
+        if (!Number.isFinite(time)) return 'Time unavailable';
+        const seconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
+        const minutes = Math.floor(seconds / 60);
+        return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+      }
+
+      function htDate(value) {
+        return value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : 'Unavailable';
+      }
+
+      function htGroupLabel(id) {
+        const group = ht.groups.find((item) => raAnchor(item) === String(id));
+        return `Division ${id}${group && group.name ? ` - ${group.name}` : ''}`;
+      }
+
+      function htPace(ring) {
+        if (!ring.groupDivisionNumber) return { label: 'No active division', late: false };
+        const estimate = htDuration(ring.ringEstimated);
+        const elapsed = htDuration(ring.ringElapsed);
+        if (!(estimate > 0)) return { label: 'Estimate unavailable', late: false };
+        const started = Date.parse(ring.assignmentStartedAt || ring.currentPhaseStartTime || ring.phaseStartedAt);
+        if (elapsed == null || !Number.isFinite(started)) return { label: 'Timing unavailable', late: false };
+        const percent = Number(ring.ringPacePercent);
+        if (ring.ringPacePercent == null || ring.ringPacePercent === '' || !Number.isFinite(percent)) {
+          return { label: 'Pace unavailable', late: false };
+        }
+        return {
+          label: percent <= -15 ? 'Ahead of estimate' : percent <= 14 ? 'Within estimate'
+            : percent <= 35 ? 'Running late' : 'Significantly over estimate',
+          late: percent > 14
+        };
+      }
+
+      function htAttention(ring) {
+        const connection = raConnection(ring, ht.heartbeatSeconds);
+        const current = Boolean(ring.groupDivisionNumber);
+        const queued = (ring.queuedGroupDivisionNumbers || []).length;
+        if (ring.assistanceType) return {
+          rank: ring.assistanceType === 'medical' ? 0 : 1,
+          label: `${ring.assistanceType} assistance - waiting ${htElapsed(ring.assistanceRequestedAt)}`, urgent: true
+        };
+        if (current && connection.tone !== 'connected') return {
+          rank: 2, label: 'Connection problem - active division preserved', urgent: true
+        };
+        if (connection.tone === 'connected' && !current && !queued) return { rank: 3, label: 'Needs a division', urgent: false };
+        if (current && htPace(ring).late) return { rank: 4, label: htPace(ring).label, urgent: false };
+        if (connection.tone !== 'connected' && queued) return { rank: 5, label: 'Queued divisions waiting for tablet', urgent: false };
+        if (current && !queued) return { rank: 6, label: 'Queue empty - plan next division', urgent: false };
+        if (connection.tone === 'connected' && !current && queued) return { rank: 6, label: 'Queued - waiting to start', urgent: false };
+        return { rank: current || connection.tone === 'connected' ? 7 : 8, label: '', urgent: false };
+      }
+
+      function htProgress(ring) {
+        const count = ring.currentPhaseCompletedCount ?? ring.phaseCompletedCount;
+        const total = ring.currentPhaseTotalCount ?? ring.phaseTotalCount;
+        const completed = Number(count);
+        const maximum = Number(total);
+        if (count != null && Number.isFinite(completed) && total != null && Number.isFinite(maximum) && maximum > 0) {
+          return { label: `${completed} / ${maximum}`, percent: Math.max(0, Math.min(100, completed / maximum * 100)) };
+        }
+        const phase = ring.phasePlan && (ring.phasePlan.phases || []).find((item) => item.state === 'active');
+        const value = phase ? phase.progress : ring.phaseProgress;
+        if (value == null || value === '' || !Number.isFinite(Number(value))) return { label: 'Progress unavailable', percent: null };
+        const percent = Math.max(0, Math.min(100, Number(value)));
+        return { label: `${Math.round(percent)}%`, percent };
+      }
+
+      function htIsStale() {
+        return Boolean(ht.error) || ht.lastLoadedAt == null || Date.now() - ht.lastLoadedAt > 30000;
+      }
+
+      function htPhases(ring) {
+        const preview = !ring.groupDivisionNumber;
+        const plan = preview ? ring.queuedPhasePlan : ring.phasePlan;
+        if (!plan || !Array.isArray(plan.phases)) return [];
+        if (preview && String(plan.groupDivisionNumber) !== String((ring.queuedGroupDivisionNumbers || [])[0])) return [];
+        return plan.phases.map((phase) => {
+          const state = !preview && ['complete', 'active'].includes(phase.state) ? phase.state : 'upcoming';
+          const progress = Number(phase.progress);
+          const percent = state === 'complete' ? 100 : state === 'upcoming' ? 0
+            : phase.progress == null || phase.progress === '' || !Number.isFinite(progress) ? null
+              : Math.max(0, Math.min(100, progress));
+          return { label: String(phase.label || phase.key), state, percent };
+        });
+      }
+
+      function htPhasePill(ring) {
+        const phases = htPhases(ring);
+        if (!phases.length) {
+          const label = ring.groupDivisionNumber ? 'Phase progress unavailable'
+            : (ring.queuedGroupDivisionNumbers || []).length ? 'Queued - waiting to start' : 'No current division';
+          return `<span class="ht-phase-pill"><span class="ht-segment"><span class="ht-segment-label">${label}</span></span></span>`;
+        }
+        const description = phases.map((phase) => `${phase.label}: ${phase.state}${phase.percent == null ? ', progress unavailable' : `, ${Math.round(phase.percent)}%`}`).join('; ');
+        const known = phases.every((phase) => phase.percent != null);
+        const overall = known ? phases.reduce((sum, phase) => sum + phase.percent, 0) / phases.length : null;
+        const division = ring.groupDivisionNumber || (ring.queuedGroupDivisionNumbers || [])[0];
+        const label = `${htGroupLabel(division)}${ring.groupDivisionNumber ? '' : ' - queued, not started'}`;
+        return `<span class="ht-phase-pill" role="progressbar" aria-label="${gbEsc(label)} phase progression" aria-valuemin="0" aria-valuemax="100"${known ? ` aria-valuenow="${Math.round(overall)}"` : ''} aria-valuetext="${gbEsc(description)}" title="${gbEsc(label)}: ${gbEsc(description)}">
+          ${phases.map((phase) => `<span class="ht-segment ${phase.state}" style="--ht-fill: ${phase.percent ?? 0}%"><span class="ht-segment-label">${gbEsc(phase.label)}</span></span>`).join('')}
+        </span>`;
+      }
+
+      function htOrderHint() {
+        document.getElementById('htOrderHint').textContent = ht.selectedRingId && htOrderEl.value !== 'ring'
+          ? 'Ring positions are held while details are open. Close ring details to resume automatic priority ordering.'
+          : 'Priority highlights assistance, connection problems, and rings needing work. Ring order keeps label positions fixed.';
+      }
+
+      function htTickFreshness() {
+        if (currentView !== 'head-table') return;
+        const stale = htIsStale();
+        htFreshnessEl.textContent = ht.lastLoadedAt
+          ? `${stale ? 'STALE DATA - ' : ''}Last successful refresh: ${new Date(ht.lastLoadedAt).toLocaleTimeString()}. ${ht.ready ? 'Refreshes every 10 seconds.' : 'Monitoring unavailable.'}`
+          : 'Monitoring unavailable until the first successful refresh.';
+        htFreshnessEl.className = stale ? 'ht-freshness ht-alert urgent' : 'ht-freshness';
+        const clearButton = headTableDetailsEl.querySelector('[data-ht-clear]');
+        if (clearButton) clearButton.disabled = ht.busy || stale;
+        clearTimeout(ht.freshnessTimer);
+        ht.freshnessTimer = setTimeout(htTickFreshness, 1000);
+      }
+
+      function htRenderDetails() {
+        const ring = ht.rings.find((item) => item.ringId === ht.selectedRingId);
+        if (!ht.ready || !ring) { headTableDetailsEl.innerHTML = ''; return; }
+        const memberList = headTableDetailsEl.querySelector('.ra-members');
+        const memberScroll = memberList ? memberList.scrollTop : 0;
+        const row = (label, value) => `<dt>${gbEsc(label)}</dt><dd>${gbEsc(value)}</dd>`;
+        const connection = raConnection(ring, ht.heartbeatSeconds);
+        const queue = ring.queuedGroupDivisionNumbers || [];
+        const history = Array.isArray(ring.phaseHistory) ? ring.phaseHistory : [];
+        const group = ht.groups.find((item) => raAnchor(item) === ht.selectedGroupId);
+        const memberControl = (id) => {
+          const available = ht.groups.some((item) => raAnchor(item) === String(id));
+          const action = ht.selectedGroupId === String(id) ? 'Hide' : 'Show';
+          return `<button type="button" data-ht-group="${gbEsc(id)}" data-help="${available ? `${action} this division's competitor list in Ring Details.` : 'The saved competitor list is unavailable for this division.'}" aria-expanded="${ht.selectedGroupId === String(id)}" aria-label="${action} competitors for Division ${gbEsc(id)}"${available ? '' : ' disabled'}>${available ? `${action} competitors` : 'Competitors unavailable'}</button>`;
+        };
+        const phase = String(ring.currentPhaseName || ring.currentPhase || ring.phase || 'idle');
+        const attention = htAttention(ring);
+        const phases = htPhases(ring);
+        headTableDetailsEl.innerHTML = `
+          <section class="ra-detail"><h3>Ring ${gbEsc(ring.ringLabel)}</h3><dl>
+            ${row('Connection', connection.label)}${row('Tablet', ring.tabletLabel || 'No tablet')}
+            ${row('Last heartbeat', htDate(ring.lastHeartbeatAt))}
+            ${row('Attention', attention.label || 'None')}
+            ${row('Phase', phase)}${row('Phase completion', htProgress(ring).label)}
+            ${row('Check-in', ring.checkInTotal > 0 ? `${ring.checkInCount || 0} / ${ring.checkInTotal}` : 'Unavailable')}
+            ${row('Division elapsed', ring.groupDivisionNumber && htDuration(ring.ringElapsed) != null ? ring.ringElapsed : 'Unavailable')}
+            ${row('Division estimate', ring.groupDivisionNumber && htDuration(ring.ringEstimated) > 0 ? ring.ringEstimated : 'Estimate unavailable')}
+            ${row('Pace', htPace(ring).label)}
+            ${row('Phase elapsed', htDuration(ring.currentPhaseElapsed) != null ? ring.currentPhaseElapsed : 'Unavailable')}
+            ${row('Phase estimate', htDuration(ring.currentPhaseEstimated) > 0 ? ring.currentPhaseEstimated : 'Estimate unavailable')}
+            ${row('Phase started', htDate(ring.currentPhaseStartTime))}
+            ${ring.currentPhaseEndTime ? row('Phase ended', htDate(ring.currentPhaseEndTime)) : ''}
+          </dl></section>
+          ${estimateDetails(ht, ring)}
+          ${phases.length ? `<section class="ra-detail"><h3>${ring.groupDivisionNumber ? 'Phase progression' : 'Next phase - not started'}</h3><ol class="ht-phase-list">${phases.map((item) => `<li>${gbEsc(item.label)} - ${item.state}${item.percent == null ? ' (progress unavailable)' : ` (${Math.round(item.percent)}%)`}</li>`).join('')}</ol></section>` : ''}
+          ${ring.assistanceType ? `<section class="ra-detail ht-alert urgent"><h3>${gbEsc(ring.assistanceType)} assistance</h3>
+            <p>Waiting ${gbEsc(htElapsed(ring.assistanceRequestedAt))}. Requested: ${gbEsc(htDate(ring.assistanceRequestedAt))}</p>
+            <button type="button" data-ht-clear data-help="Clear this request after confirming it has been addressed. Unavailable while ring data is stale."${ht.busy || htIsStale() ? ' disabled' : ''}>Clear assistance request</button></section>` : ''}
+          ${phase.toLowerCase().includes('sparring') ? `<section class="ra-detail"><h3>Sparring</h3><dl>
+            ${row('Bouts', ring.sparringActualBoutCount != null ? `${ring.sparringCompletedBoutCount || 0} / ${ring.sparringActualBoutCount}` : 'Unavailable')}
+            ${row('Byes', ring.sparringByeCount ?? 'Unavailable')}</dl></section>` : ''}
+          <section class="ra-detail"><h3>Current phase</h3>
+            ${ring.groupDivisionNumber ? `<p class="ra-division-label">${gbEsc(htGroupLabel(ring.groupDivisionNumber))}</p>${memberControl(ring.groupDivisionNumber)}` : '<p class="ra-meta">None assigned</p>'}
+          </section>
+          <section class="ra-detail"><h3>Queue (${queue.length})</h3>
+            ${queue.length ? `<ol class="ra-queue">${queue.map((id) => `<li><span class="ra-division-label">${gbEsc(htGroupLabel(id))}<br>${estimateSpan(ht, (estimateRing(ht, ring.ringId) || { queue: [] }).queue.find((item) => item.groupDivisionNumber === String(id)), 'Estimated start')}</span><span>${memberControl(id)}</span></li>`).join('')}</ol>` : '<p class="ra-meta">No queued divisions</p>'}
+          </section>
+          ${group ? `<section class="ra-detail"><h3>${gbEsc(htGroupLabel(ht.selectedGroupId))}</h3>${raMembers(group)}</section>` : ''}
+          <section class="ra-detail"><details id="htHistory"${ht.historyOpen ? ' open' : ''}><summary>Phase history (${history.length})</summary>
+            <div class="ht-history">${history.length ? history.map((entry) => `<p><strong>${gbEsc(entry.name)}</strong><br>
+              Started: ${gbEsc(htDate(entry.startTime))}<br>Ended: ${entry.endTime ? gbEsc(htDate(entry.endTime)) : 'In progress'}<br>
+              Elapsed: ${gbEsc(entry.elapsed || 'Unavailable')} / Estimate: ${gbEsc(entry.estimated || 'Unavailable')}</p>`).join('') : '<p>No phase history reported.</p>'}</div>
+          </details></section>
+          <button type="button" data-ht-close data-help="Close Ring Details and release its hold on priority ordering.">Close ring details</button>`;
+        const nextList = headTableDetailsEl.querySelector('.ra-members');
+        if (nextList) nextList.scrollTop = memberScroll;
+      }
+
+      function htRender() {
+        const focused = document.activeElement && document.activeElement.closest('[data-ht-ring]');
+        const focusedId = focused && focused.dataset.htRing;
+        const known = new Set(ht.groups.map(raAnchor));
+        const running = new Set(ht.rings.map((ring) => String(ring.groupDivisionNumber || '')).filter((id) => known.has(id)));
+        const queued = new Set(ht.rings.flatMap((ring) => ring.queuedGroupDivisionNumbers || []).map(String).filter((id) => known.has(id) && !running.has(id)));
+        const completed = new Set(ht.rings.flatMap((ring) => ring.completedGroupDivisionNumbers || []).map(String).filter((id) => known.has(id) && !running.has(id) && !queued.has(id)));
+        const tones = ht.rings.map((ring) => raConnection(ring, ht.heartbeatSeconds).tone);
+        const divisionCounts = [
+          ['Unassigned', ht.available.filter((id) => known.has(String(id))).length],
+          ['Queued', queued.size],
+          ['Active', running.size],
+          ['Completed', completed.size]
+        ];
+        const ringCounts = [
+          ['Connected', tones.filter((tone) => tone === 'connected').length],
+          ['No tablet', tones.filter((tone) => tone === 'no-tablet').length],
+          ['Disconnected', tones.filter((tone) => tone === 'disconnected').length, true],
+          ['Assistance', ht.rings.filter((ring) => ring.assistanceType).length, true]
+        ];
+        const percent = known.size ? Math.round(completed.size / known.size * 100) : 0;
+        const count = ([label, value, alert]) => `<span class="ht-count${alert && value > 0 ? ' warning' : ''}">${label} <strong>${value}</strong></span>`;
+        htSummaryEl.innerHTML = ht.ready ? `
+          <div class="ht-count-group" role="group" aria-label="Division counts">
+            <span class="ht-count-title">Divisions</span>
+            <span class="ht-count-items">${divisionCounts.map(count).join('')}
+            <span class="ht-progress" role="img" aria-label="${completed.size} of ${known.size} divisions completed">
+              <span class="ht-progress-track"><span style="width: ${percent}%"></span></span>
+              <span><strong>${completed.size} of ${known.size}</strong> completed</span>
+            </span></span>
+          </div>
+          <div class="ht-count-group" role="group" aria-label="Ring counts">
+            <span class="ht-count-title">Rings (${ht.rings.length})</span>
+            <span class="ht-count-items">${ringCounts.map(count).join('')}</span>
+          </div>` : '<span class="ra-meta">Event totals unavailable.</span>';
+        let rings = ht.rings.slice().sort((a, b) =>
+          (htOrderEl.value === 'ring' ? 0 : htAttention(a).rank - htAttention(b).rank) || a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
+        if (ht.order.length && (ht.selectedRingId || ht.hovering || focusedId)) {
+          const positions = new Map(ht.order.map((id, index) => [id, index]));
+          rings.sort((a, b) => (positions.get(a.ringId) ?? Infinity) - (positions.get(b.ringId) ?? Infinity));
+        }
+        ht.order = rings.map((ring) => ring.ringId);
+        htRingsEl.innerHTML = ht.ready ? rings.map((ring) => {
+          const connection = raConnection(ring, ht.heartbeatSeconds);
+          const attention = htAttention(ring);
+          return `<button type="button" class="ht-ring ${connection.tone}" data-ht-ring="${gbEsc(ring.ringId)}"${estimateHelpExpiry(ht)} aria-pressed="${ht.selectedRingId === ring.ringId}" title="${gbEsc([ring.groupDivisionNumber ? htGroupLabel(ring.groupDivisionNumber) : 'No current division', attention.label, estimateText(ht, estimateRing(ht, ring.ringId)?.availability, 'Ring free after queue')].filter(Boolean).join(' - '))}">
+            <span class="ht-identity"><strong>Ring ${gbEsc(ring.ringLabel)}</strong><span class="ra-connection">${connection.label}</span>${ring.assistanceType ? `<span class="ht-assistance" aria-label="${gbEsc(ring.assistanceType)} assistance requested" title="${gbEsc(attention.label)}">!</span>` : ''}</span>
+            ${htPhasePill(ring)}</button>`;
+        }).join('') || '<p class="ra-meta">No configured rings for this event.</p>' : '<p class="ra-meta">Ring monitoring unavailable.</p>';
+        if (focusedId) {
+          const button = Array.from(htRingsEl.querySelectorAll('[data-ht-ring]')).find((item) => item.dataset.htRing === focusedId);
+          if (button) button.focus({ preventScroll: true });
+        }
+        htOrderHint();
+        htRefreshBtn.disabled = ht.busy;
+        htRenderDetails();
+        renderState();
+        htTickFreshness();
+        estimateSummary(ht, 'htEstimateSummary');
+        eventTiming(ht, 'htEventTiming');
+      }
+
+      async function htLoad() {
+        if (currentView !== 'head-table') return;
+        const token = ++ht.requestToken;
+        clearTimeout(ht.timer);
+        let verifiedEvent = '';
+        try {
+          await refreshActiveEvent();
+          if (token !== ht.requestToken || currentView !== 'head-table') return;
+          verifiedEvent = state.activeEventName;
+          if (!verifiedEvent) throw new Error('No active event. Activate an event on Event Setup first.');
+          if (verifiedEvent !== ht.eventName) {
+            ht.estimates = null; ht.startedAt = ''; ht.completion = null;
+            ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
+            ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = []; ht.lastLoadedAt = null;
+            htRender();
+          }
+          ht.eventName = verifiedEvent;
+          const groups = await fetchJson(`/api/groups?eventName=${encodeURIComponent(verifiedEvent)}`);
+          const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(verifiedEvent)}`);
+          if (token !== ht.requestToken || currentView !== 'head-table') return;
+          if (!Array.isArray(groups.groups) || !Array.isArray(board.rings) || !Array.isArray(board.availableGroupDivisionNumbers)) throw new Error('Invalid Head Table data returned by server.');
+          ht.groups = groups.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
+          ht.rings = board.rings;
+          ht.available = board.availableGroupDivisionNumbers;
+          ht.estimates = board.estimates || null;
+          ht.startedAt = board.eventStartedAt || '';
+          ht.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
+          if (!ht.rings.some((ring) => ring.ringId === ht.selectedRingId)) ht.selectedRingId = '';
+          if (!ht.groups.some((group) => raAnchor(group) === ht.selectedGroupId)) ht.selectedGroupId = '';
+          ht.ready = true; ht.error = ''; ht.lastLoadedAt = Date.now();
+          htNotice('');
+          htRender();
+        } catch (error) {
+          if (token !== ht.requestToken || currentView !== 'head-table') return;
+          ht.error = error.message;
+          if (!verifiedEvent || ht.eventName !== verifiedEvent) {
+            ht.estimates = null; ht.startedAt = ''; ht.completion = null;
+            ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
+            ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = [];
+          }
+          htNotice(`Head Table refresh failed: ${error.message}`);
+          htRender();
+        } finally {
+          if (token === ht.requestToken && currentView === 'head-table') ht.timer = setTimeout(htLoad, 10000);
+        }
+      }
+
+      htRefreshBtn.addEventListener('click', htLoad);
+      htOrderEl.addEventListener('change', () => { ht.order = []; htRender(); });
+      document.getElementById('htAssignmentBtn').addEventListener('click', () => {
+        showView('ring-assignment', navItems.find((item) => navLabel(item) === 'Ring Assignment'));
+      });
+      htRingsEl.addEventListener('mouseenter', () => { ht.hovering = true; });
+      htRingsEl.addEventListener('mouseleave', () => { ht.hovering = false; });
+      htRingsEl.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-ht-ring]');
+        if (!button) return;
+        ht.selectedRingId = button.dataset.htRing;
+        ht.selectedGroupId = ''; ht.historyOpen = false;
+        htRingsEl.querySelectorAll('[data-ht-ring]').forEach((card) => card.setAttribute('aria-pressed', String(card.dataset.htRing === ht.selectedRingId)));
+        htOrderHint(); htRenderDetails(); renderState();
+      });
+      headTableDetailsEl.addEventListener('toggle', (event) => {
+        if (event.target.id === 'htHistory') ht.historyOpen = event.target.open;
+      }, true);
+      headTableDetailsEl.addEventListener('click', async (event) => {
+        const button = event.target.closest('button');
+        if (!button || !ht.ready || ht.busy) return;
+        if (button.dataset.htGroup) {
+          ht.selectedGroupId = ht.selectedGroupId === button.dataset.htGroup ? '' : button.dataset.htGroup;
+          htRenderDetails();
+        } else if (button.hasAttribute('data-ht-close')) {
+          ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.historyOpen = false;
+          htRender();
+        } else if (button.hasAttribute('data-ht-clear') && !htIsStale()) {
+          const ring = ht.rings.find((item) => item.ringId === ht.selectedRingId);
+          if (!ring || !ring.assistanceType || !window.confirm(`Clear the ${ring.assistanceType} assistance request for Ring ${ring.ringLabel}? Confirm the request has been addressed.`)) return;
+          ht.busy = true; clearTimeout(ht.timer); ht.requestToken += 1;
+          htRefreshBtn.disabled = true;
+          htRenderDetails();
+          try {
+            await fetchJson(`/api/rings/${encodeURIComponent(ring.ringId)}/assistance/clear?eventName=${encodeURIComponent(ht.eventName)}`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ expectedAssistanceRequestedAt: ring.assistanceRequestedAt || '' })
+            });
+            await htLoad();
+            if (currentView === 'head-table' && !ht.error) htNotice('Assistance request cleared.', 'ok');
+          } catch (error) {
+            await htLoad();
+            if (currentView === 'head-table') htNotice(`Unable to clear assistance: ${error.message}`);
+          } finally {
+            ht.busy = false;
+            htRefreshBtn.disabled = false;
+            if (currentView === 'head-table') htRenderDetails();
+          }
+        }
+      });
+
+      const cl = { eventName: '', roster: [], rings: [], ready: false, selectedId: '', ringError: '', requestToken: 0, timer: null,
+        filters: { name: '', rank: '', studio: '', division: '', ring: '', unassigned: false }, descending: false };
+      const clSearch = document.getElementById('clSearch');
+      const clResults = document.getElementById('clResults');
+      const clDetails = document.getElementById('competitorLookupDetails');
+      function clTerms() {
+        return [...new Set(clSearch.value.toLowerCase().split(',').map((term) => term.trim()).filter((term) => term.length >= 2))];
+      }
+      function clMatches(person) {
+        return clTerms().some((term) => ['firstName', 'lastName', 'rank'].some((field) =>
+          String(person[field] || '').toLowerCase().includes(term)));
+      }
+      function clHighlight(value) {
+        const text = String(value || '');
+        const lower = text.toLowerCase();
+        const ranges = [];
+        clTerms().forEach((term) => {
+          let start = 0, match;
+          while ((match = lower.indexOf(term, start)) !== -1) {
+            ranges.push([match, match + term.length]);
+            start = match + 1;
+          }
+        });
+        ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+        const merged = [];
+        ranges.forEach(([start, end]) => {
+          const last = merged[merged.length - 1];
+          if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+          else merged.push([start, end]);
+        });
+        let result = '', start = 0;
+        for (const [from, to] of merged) {
+          result += gbEsc(text.slice(start, from)) + `<mark>${gbEsc(text.slice(from, to))}</mark>`;
+          start = to;
+        }
+        return result + gbEsc(text.slice(start));
+      }
+      function clDivision(person) {
+        const value = person.groupDivisionNumber;
+        return value != null && String(value).trim() && String(value).toLowerCase() !== 'unassigned'
+          ? String(value) : '';
+      }
+      function clPhone(value) {
+        const text = String(value || '').trim();
+        const digits = text.replace(/\D/g, '');
+        if (/^[\d\s()+.-]+$/.test(text) && digits.length === 10) {
+          return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+        }
+        return text;
+      }
+      function clRing(person) {
+        if (cl.ringError) return 'Unavailable - ring data could not be refreshed';
+        const division = clDivision(person);
+        if (!division) return 'Not assigned';
+        const assignments = [];
+        const completed = [];
+        cl.rings.forEach((ring) => {
+          if (String(ring.groupDivisionNumber || '') === division) assignments.push(`Ring ${ring.ringLabel} - current`);
+          if ((ring.queuedGroupDivisionNumbers || []).map(String).includes(division)) assignments.push(`Ring ${ring.ringLabel} - queued`);
+          if ((ring.completedGroupDivisionNumbers || []).map(String).includes(division)) completed.push(`Ring ${ring.ringLabel} - completed`);
+        });
+        const matches = assignments.length ? assignments : completed;
+        return matches.length > 1 ? `Ambiguous: ${matches.join('; ')}` : matches[0] || 'Not assigned';
+      }
+      function clHasFilters() {
+        return Object.values(cl.filters).some(Boolean);
+      }
+      function clFilterMatches(person) {
+        const filter = cl.filters;
+        const division = clDivision(person);
+        const ring = clRing(person);
+        const hasLiveAssignment = division && cl.rings.some((entry) => String(entry.groupDivisionNumber || '') === division
+          || (entry.queuedGroupDivisionNumbers || []).map(String).includes(division));
+        return (!filter.name || [person.firstName, person.lastName].filter(Boolean).join(' ').toLowerCase().includes(filter.name))
+          && (!filter.rank || String(person.rank || '') === filter.rank)
+          && (!filter.studio || String(person.studio || '') === filter.studio)
+          && (!filter.division || division === filter.division)
+          && (!filter.ring || !cl.ringError && cl.rings.some((entry) => entry.ringId === filter.ring
+            && division && [entry.groupDivisionNumber, ...(entry.queuedGroupDivisionNumbers || []),
+              ...(!hasLiveAssignment ? entry.completedGroupDivisionNumbers || [] : [])].map(String).includes(division)))
+          && (!filter.unassigned || !cl.ringError && ring === 'Not assigned');
+      }
+      function clFilterOptions() {
+        const populate = (id, label, entries) => {
+          const select = document.getElementById(id);
+          const value = select.value;
+          select.innerHTML = `<option value="">${label}</option>` + entries.map(([key, text]) =>
+            `<option value="${gbEsc(key)}">${gbEsc(text)}</option>`).join('');
+          select.value = entries.some(([key]) => key === value) ? value : '';
+        };
+        for (const [field, id, label] of [['rank', 'clFilterRank', 'All ranks'], ['studio', 'clFilterStudio', 'All studios'], ['division', 'clFilterDivision', 'All divisions']]) {
+          const values = [...new Set(cl.roster.map((person) => field === 'division' ? clDivision(person) : String(person[field] || '')).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+          populate(id, label, values.map((value) => [value, value]));
+        }
+        populate('clFilterRing', 'All rings', cl.rings.slice().sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }))
+          .map((ring) => [ring.ringId, `Ring ${ring.ringLabel}`]));
+      }
+      function clClearFilters() {
+        cl.filters = { name: '', rank: '', studio: '', division: '', ring: '', unassigned: false };
+        for (const id of ['clFilterName', 'clFilterRank', 'clFilterStudio', 'clFilterDivision', 'clFilterRing']) document.getElementById(id).value = '';
+        document.getElementById('clFilterUnassigned').checked = false;
+      }
+      function clRender() {
+        const terms = clTerms();
+        const filterOnly = !clSearch.value.trim() && clHasFilters();
+        const matches = cl.ready ? cl.roster.filter((person) => (filterOnly || clMatches(person)) && clFilterMatches(person)).sort((a, b) =>
+          (cl.descending ? -1 : 1) * (String(a.lastName || '').localeCompare(String(b.lastName || ''))
+          || String(a.firstName || '').localeCompare(String(b.firstName || ''))
+          || String(a.id).localeCompare(String(b.id), undefined, { numeric: true }))) : [];
+        if (!matches.some((person) => String(person.id) === cl.selectedId)) cl.selectedId = '';
+        document.getElementById('clStatus').textContent = !cl.ready ? 'Competitor lookup unavailable or loading.'
+          : !terms.length && !filterOnly ? 'Enter at least 2 characters per search term; separate terms with commas.'
+          : `${matches.length} match${matches.length === 1 ? '' : 'es'} - ${cl.eventName}${terms.length > 1 ? ' - matching any term' : ''}${clHasFilters() ? ' - filters applied' : ''}${clSearch.value.split(',').some((term) => term.trim().length === 1) ? ' - single-character terms ignored' : ''}`;
+        document.getElementById('clResultCount').textContent = `${matches.length} result${matches.length === 1 ? '' : 's'}`;
+        document.getElementById('clResultsFooter').textContent = `Showing ${matches.length ? '1' : '0'}-${matches.length} of ${matches.length} results`;
+        document.getElementById('clNameHeading').setAttribute('aria-sort', cl.descending ? 'descending' : 'ascending');
+        document.getElementById('clSortIndicator').textContent = cl.descending ? '\u2193' : '\u2191';
+        clResults.innerHTML = matches.map((person) => `<tr data-cl-row="${gbEsc(person.id)}" aria-selected="${String(person.id) === cl.selectedId}">
+          <td><button type="button" class="cl-result" data-cl-id="${gbEsc(person.id)}" aria-pressed="${String(person.id) === cl.selectedId}"><strong>${clHighlight(person.firstName)} ${clHighlight(person.lastName)}</strong></button></td>
+          <td><span class="cl-rank">${clHighlight(person.rank) || 'Not provided'}</span></td>
+          <td>${gbEsc(person.studio || 'Not provided')}</td>
+          <td>${clDivision(person) ? `<span aria-label="Group Division ${gbEsc(clDivision(person))}">${gbEsc(clDivision(person))}</span>` : '<span class="cl-muted">Not assigned</span>'}</td>
+          <td${clRing(person) === 'Not assigned' ? ' class="cl-muted"' : ''}>${gbEsc(clRing(person))}</td>
+        </tr>`).join('');
+        const person = matches.find((entry) => String(entry.id) === cl.selectedId);
+        const section = (title, fields) => `<section class="cl-detail-section"><h4>${title}</h4><dl>${fields.map(([label, value]) =>
+          `<dt>${gbEsc(label)}</dt><dd>${gbEsc(value || 'Not provided')}</dd>`).join('')}</dl></section>`;
+        clDetails.innerHTML = person ? `<div class="cl-detail-heading">
+          <h3>${gbEsc([person.firstName, person.lastName].filter(Boolean).join(' '))}</h3>
+          <p>${gbEsc(person.studio || 'Studio not provided')}</p><span class="cl-rank">${gbEsc(person.rank || 'Rank not provided')}</span>
+          <button type="button" id="clCloseDetails" class="cl-close" data-cl-close aria-label="Close competitor details" data-help="Close the selected competitor's details.">&times;</button>
+        </div>` + section('Personal Information', [
+          ['First name', person.firstName], ['Last name', person.lastName],
+          ['Parent/Guardian', [person.parentFirstName, person.parentLastName].filter(Boolean).join(' ')],
+          ['Phone', clPhone(person.phone)], ...(person.email ? [['Email', person.email]] : [])
+        ]) + section('Competition Information / Assignments', [
+          ['Rank', person.rank], ['Studio', person.studio],
+          ['Group division', clDivision(person) ? `Division ${clDivision(person)}${person.groupDivisionName ? ` - ${person.groupDivisionName}` : ''}` : 'Not assigned'],
+          ...(person.ageRange ? [['Age range', person.ageRange]] : []), ['Ring assignment', clRing(person)]
+        ]) + (clRing(person) === 'Not assigned' ? '<p class="cl-info">This competitor has not been assigned to a ring yet.</p>' : '')
+          + `<section class="cl-detail-section"><h4>Notes</h4><p class="cl-muted">${gbEsc(person.notes || 'No notes provided.')}</p></section>` : '';
+        renderState();
+      }
+      async function clLoad() {
+        if (currentView !== 'competitors') return;
+        const token = ++cl.requestToken;
+        clearTimeout(cl.timer);
+        const notice = document.getElementById('clNotice');
+        try {
+          await refreshActiveEvent();
+          if (token !== cl.requestToken || currentView !== 'competitors') return;
+          const eventName = state.activeEventName;
+          if (!eventName || state.activeEventError) throw new Error(state.activeEventError || 'No active event. Activate an event first.');
+          if (cl.eventName !== eventName) {
+            clClearFilters();
+            cl.roster = []; cl.rings = []; cl.selectedId = ''; cl.ready = false;
+            cl.eventName = eventName;
+            clRender();
+          }
+          const roster = await fetchJson(`/api/competitors?eventName=${encodeURIComponent(eventName)}`);
+          if (!Array.isArray(roster) || roster.some((person) => !person || person.id == null)) throw new Error('Invalid competitor roster returned by server.');
+          let rings = [], ringError = '';
+          try {
+            const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(eventName)}`);
+            if (!Array.isArray(board.rings)) throw new Error('Invalid ring data returned by server.');
+            rings = board.rings;
+          } catch (error) {
+            ringError = error.message;
+            console.error('Competitor lookup ring refresh failed:', error);
+          }
+          const active = await fetchJson('/api/events/active');
+          if (token !== cl.requestToken || currentView !== 'competitors') return;
+          if (active.activeEvent !== eventName) throw new Error('The active event changed. Refresh Competitor Lookup.');
+          cl.roster = roster; cl.rings = rings; cl.ringError = ringError; cl.ready = true;
+          clFilterOptions();
+          notice.textContent = ringError ? `Ring assignments unavailable: ${ringError}` : '';
+          notice.className = ringError ? 'notice visible warn' : 'notice';
+          clRender();
+        } catch (error) {
+          if (token !== cl.requestToken || currentView !== 'competitors') return;
+          console.error('Competitor lookup refresh failed:', error);
+          cl.roster = []; cl.rings = []; cl.ready = false; cl.selectedId = '';
+          notice.textContent = `Unable to load Competitor Lookup: ${error.message}`;
+          notice.className = 'notice visible error';
+          clRender();
+        } finally {
+          if (token === cl.requestToken && currentView === 'competitors') cl.timer = setTimeout(clLoad, 10000);
+        }
+      }
+      clSearch.addEventListener('input', clRender);
+      clSearch.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); clRender(); } });
+      document.getElementById('clSearchBtn').addEventListener('click', clRender);
+      document.getElementById('clFiltersBtn').addEventListener('click', () => {
+        const panel = document.getElementById('clFilters');
+        panel.hidden = !panel.hidden;
+        document.getElementById('clFiltersBtn').setAttribute('aria-expanded', String(!panel.hidden));
+      });
+      document.getElementById('clApplyFiltersBtn').addEventListener('click', () => {
+        cl.filters = {
+          name: document.getElementById('clFilterName').value.trim().toLowerCase(),
+          rank: document.getElementById('clFilterRank').value, studio: document.getElementById('clFilterStudio').value,
+          division: document.getElementById('clFilterDivision').value, ring: document.getElementById('clFilterRing').value,
+          unassigned: document.getElementById('clFilterUnassigned').checked
+        };
+        clRender();
+      });
+      document.getElementById('clClearFiltersBtn').addEventListener('click', () => { clClearFilters(); clRender(); });
+      document.getElementById('clSortName').addEventListener('click', () => { cl.descending = !cl.descending; clRender(); });
+      document.getElementById('clRefreshBtn').addEventListener('click', clLoad);
+      clResults.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-cl-id], [data-cl-row]');
+        if (!button || !cl.ready) return;
+        cl.selectedId = button.dataset.clId ?? button.dataset.clRow;
+        clRender();
+        document.getElementById('clCloseDetails').focus();
+      });
+      clDetails.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        cl.selectedId = '';
+        clRender();
+        clSearch.focus();
+      });
+      clDetails.addEventListener('click', (event) => {
+        if (!event.target.closest('[data-cl-close]')) return;
+        cl.selectedId = '';
+        clRender();
+        clSearch.focus();
+      });
+
       const dayOfLabels = ['Ring Assignment', 'Head Table', 'Competitors', 'Judges & Volunteers', 'Reports & Results'];
       function syncDayOfNav() {
         const unlocked = Boolean(state.activeEventName) && !state.activeEventError;
@@ -2662,7 +4232,7 @@
           if (!dayOfLabels.includes(navLabel(item))) return;
           item.classList.toggle('locked', !unlocked);
           item.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
-          item.title = unlocked ? '' : 'Activate an event on Event Setup to unlock';
+          item.title = unlocked ? `Open ${navLabel(item)}.` : 'Activate an event on Event Setup to unlock';
         });
       }
 
@@ -2676,7 +4246,7 @@
           item.addEventListener('click', () => {
             const label = navLabel(item);
             if (item.getAttribute('aria-disabled') === 'true') return;
-            showView(label === 'Event Setup' ? 'event-setup' : label === 'Import' ? 'import' : label === 'Group Builder' ? 'groups' : 'placeholder', item);
+            showView(label === 'Event Setup' ? 'event-setup' : label === 'Import' ? 'import' : label === 'Group Builder' ? 'groups' : label === 'Ring Assignment' ? 'ring-assignment' : label === 'Head Table' ? 'head-table' : label === 'Competitors' ? 'competitors' : 'placeholder', item);
           });
         });
       }
@@ -2686,6 +4256,9 @@
           const view = new URLSearchParams(window.location.search).get('view');
           if (view === 'import') showView('import', importNavItem);
           if (view === 'groups') showView('groups', groupNavItem);
+          if (view === 'ring-assignment') showView('ring-assignment', navItems.find((item) => navLabel(item) === 'Ring Assignment'));
+          if (view === 'head-table') showView('head-table', navItems.find((item) => navLabel(item) === 'Head Table'));
+          if (view === 'competitors') showView('competitors', navItems.find((item) => navLabel(item) === 'Competitors'));
         })
         .catch((error) => showNotice(error.message, 'error'));
     }());

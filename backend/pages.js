@@ -27,6 +27,11 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
     return new RegExp(`^${pathname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
   }
 
+  app.get(exactRoute('/audience-monitor'), (_req, res) => res.redirect('/audience-monitor/'));
+  app.get([exactRoute('/audience-monitor/'), exactRoute('/audience-monitor.html')], (_req, res) => {
+    res.sendFile(path.join(rootDir, 'audience-monitor', 'index.html'));
+  });
+
   const legacyWorkflows = [
     { paths: ['/tournament-setup', '/tournament-mgmt', '/setup', '/event-administration', '/tournament-setup/event-definition'], view: 'event-setup' },
     { paths: ['/tournament-setup/import'], view: 'import' },

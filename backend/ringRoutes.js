@@ -4,6 +4,8 @@ const fs = require('fs');
 const { appendDivisionTrace, summarizeGroupDivisionNumbers } = require('./groupDivisionAssignments');
 const { buildAvailableGroupDivisionNumbers } = require('./ringAvailability');
 const { sanitizePhaseHistory } = require('./resultPacket');
+const { buildEstimates } = require('./ringEstimates');
+const { buildAudienceMonitor } = require('./audienceMonitor');
 
 function resolveGroupAnchorValue(value) {
   const parsed = Number.parseInt(value, 10);
@@ -232,8 +234,17 @@ function createRingRouter(deps) {
     readActiveEvent
   } = deps;
 
-  function touchEventStart(state) {
-    if (!state.eventStartedAt) {
+  router.use('/rings', (req, res, next) => {
+    const requestedEvent = String(req.query.eventName || '').trim();
+    if (requestedEvent && requestedEvent !== readActiveEvent()) {
+      return res.status(409).json({ error: 'The active event changed. Refresh the active-event view before continuing.' });
+    }
+    next();
+  });
+
+  // The event starts only when a ring with a named tablet is active; bare heartbeats or tests without a tablet never start it.
+  function touchEventStart(state, ringState) {
+    if (!state.eventStartedAt && ringState && String(ringState.tabletLabel || '').trim()) {
       state.eventStartedAt = new Date().toISOString();
       return true;
     }
@@ -274,7 +285,7 @@ function createRingRouter(deps) {
     touchAssignmentStart(ringState);
     setRingPhase(ringState, 'check-in');
     touchHeartbeat(ringState);
-    touchEventStart(state);
+    touchEventStart(state, ringState);
     appendDivisionTrace('ring-activate', {
       ringId,
       ringLabel: ringState.ringLabel,
@@ -449,7 +460,7 @@ function createRingRouter(deps) {
     if (tabletLabel) {
       ringState.tabletLabel = tabletLabel;
       touchHeartbeat(ringState);
-      touchEventStart(state);
+      touchEventStart(state, ringState);
       if (!ringState.phase || ringState.phase === 'idle') {
         setRingPhase(ringState, 'check-in');
       }
@@ -504,12 +515,18 @@ function createRingRouter(deps) {
     });
   });
 
-  router.get('/rings', (req, res) => {
+  function ringBoard(req, res) {
     const state = readAssignmentsState();
     if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
     const rings = Object.entries(state.rings).map(([ringId, ringState]) => {
       const response = buildRingResponse(req, ringId, ringState, state);
       response.phasePlan = buildPhasePlan(ringState, response.currentGroup);
+      const nextDivision = (ringState.queuedGroupDivisionNumbers || [])[0];
+      const nextGroup = nextDivision ? loadGroup(nextDivision) : null;
+      response.queuedPhasePlan = nextGroup ? {
+        groupDivisionNumber: String(nextDivision),
+        phases: phaseDefinitionsForGroup(nextGroup)
+      } : null;
       response.currentPhase = response.phasePlan.currentPhase;
       response.currentGroupName = (response.currentGroup || {}).name || '';
       return response;
@@ -519,6 +536,17 @@ function createRingRouter(deps) {
       state.rings
     );
 
+    const estimates = buildEstimates({
+      eventName: readActiveEvent(), rings,
+      groups: typeof loadGroups === 'function' ? loadGroups() : [],
+      heartbeatSeconds: DISCONNECT_AFTER_MS / 1000
+    });
+    res.set('Cache-Control', 'no-store');
+    if (req.path.endsWith('/monitor')) return res.json(buildAudienceMonitor({
+      eventName: readActiveEvent(), rings,
+      groups: typeof loadGroups === 'function' ? loadGroups() : [], estimates
+    }));
+    if (req.path.endsWith('/estimates')) return res.json(estimates);
     return res.json({
       serverBaseUrl: serverBaseUrlForRequest(req),
       ringConfig: state.config,
@@ -528,9 +556,28 @@ function createRingRouter(deps) {
         disconnectAfterSeconds: DISCONNECT_AFTER_MS / 1000,
         resetMode: 'manual'
       },
-      rings
+      rings,
+      estimates
     });
-  });
+  }
+
+  async function loadRingBoard(req, res) {
+    res.set('Cache-Control', 'no-store');
+    const eventName = readActiveEvent();
+    try {
+      if (eventName && typeof deps.loadSavedGroups === 'function') await deps.loadSavedGroups(eventName);
+      if (readActiveEvent() !== eventName) {
+        return res.status(409).json({ error: 'The active event changed. Refresh estimates before continuing.' });
+      }
+      return ringBoard(req, res);
+    } catch (error) {
+      console.error('Failed to load ring estimates:', error);
+      return res.status(500).json({ error: 'Unable to load saved divisions for estimation.' });
+    }
+  }
+  router.get('/rings', loadRingBoard);
+  router.get('/rings/estimates', loadRingBoard);
+  router.get('/rings/monitor', loadRingBoard);
 
   router.get('/rings/:ringId/bootstrap', handleRequestGroup);
   router.post('/rings/:ringId/request-group', handleRequestGroup);
@@ -771,7 +818,7 @@ function createRingRouter(deps) {
         ringState.assignmentStartedAt = '';
       }
       touchHeartbeat(ringState);
-      touchEventStart(state);
+      touchEventStart(state, ringState);
       const ringAssignment = attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState);
       const receipt = {
         receivedAt: new Date().toISOString(),
@@ -1034,7 +1081,7 @@ function createRingRouter(deps) {
         phaseProgress
       }
     });
-    touchEventStart(state);
+    touchEventStart(state, ringState);
     writeAssignmentsState(state);
     return res.json(attachProgressData(buildRingResponse(req, ringId, ringState, state), ringState));
   });
@@ -1075,6 +1122,10 @@ function createRingRouter(deps) {
     }
     normalizeRingAssignmentState(ringState);
 
+    const expectedRequestedAt = req.body && req.body.expectedAssistanceRequestedAt;
+    if (expectedRequestedAt !== undefined && expectedRequestedAt !== (ringState.assistanceRequestedAt || '')) {
+      return res.status(409).json({ error: 'The assistance request changed. Refresh Head Table before clearing it.' });
+    }
     ringState.assistanceType = '';
     ringState.assistanceRequestedAt = '';
     writeAssignmentsState(state);

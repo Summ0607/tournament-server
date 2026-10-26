@@ -66,6 +66,23 @@ test('pre-tournament root opens the integrated interface', async () => {
   assert.equal(rootPage.headers.location, '/tournament-management/');
 });
 
+test('audience monitor has standalone routes and assets without replacing legacy progress pages', async () => {
+  for (const surface of ['pre', 'monitoring']) {
+    const redirect = await requestPath(surface, '/audience-monitor');
+    assert.equal(redirect.headers.location, '/audience-monitor/');
+    for (const route of ['/audience-monitor/', '/audience-monitor.html', '/audience-monitor/index.html']) {
+      const response = await requestPath(surface, route);
+      assert.equal(response.statusCode, 200);
+      assert.match(response.body, /Rings now/);
+      assert.match(response.body, /Coming up/);
+      assert.doesNotMatch(response.body, /data-ra-reset|data-ht-clear/);
+    }
+    const script = await requestPath(surface, '/audience-monitor/monitor.js');
+    assert.equal(script.statusCode, 200);
+    assert.match(script.body, /\/api\/rings\/monitor/);
+  }
+});
+
 test('retired workflow pages and legacy aliases redirect to matching integrated views', async () => {
   const workflows = [
     { prefixes: ['/tournament-setup', '/tournament-mgmt', '/setup', '/event-administration', '/tournament-setup/event-definition'], view: 'event-setup' },
@@ -117,6 +134,9 @@ test('day-of pages still serve their existing interfaces and link to integrated 
   const ringAssignment = await requestPath('ringOps', '/ring-assignment/index.html');
   assert.equal(ringAssignment.statusCode, 200);
   assert.match(ringAssignment.body, /href="\/tournament-management\/\?view=event-setup"/);
+  assert.match(ringAssignment.body, /id="ringDetails"/);
+  assert.match(ringAssignment.body, /\/api\/groups\?eventName=' \+ encodeURIComponent\(state\.activeEvent\)/);
+  assert.match(ringAssignment.body, /Select a ring to view its details/);
   for (const pathname of ['/head-table/index.html', '/competitors/index.html']) {
     const response = await requestPath('pre', pathname);
     assert.equal(response.statusCode, 200);
