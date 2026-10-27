@@ -14,6 +14,9 @@ const { createDivisionRouter } = require('./backend/divisionRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
 const { divisionDurationMs } = require('./backend/ringEstimates');
 const { createResultPacketStore } = require('./backend/resultPacket');
+const { createSimulatorRunStore } = require('./backend/simulatorRunStore');
+const { createSimulatorRunRouter } = require('./backend/simulatorRunRoutes');
+const { createSimulatorRunClientFactory } = require('./backend/simulatorRunAdapter');
 const { resolveSurfaceName, resolveSurfacePort } = require('./backend/surfacePorts');
 const { registerPageRoutes } = require('./backend/pages');
 const { createEventConfigStore, normalizeEventRingConfig } = require('./backend/eventConfig');
@@ -42,6 +45,10 @@ const TOURNAMENT_DB_PATH = DEFAULT_TOURNAMENT_DB_PATH;
 const EVENTS_ROOT = path.join(ROOT_DIR, 'events');
 const ACTIVE_EVENT_FILE = path.join(EVENTS_ROOT, 'active.json');
 const { readEventConfig, writeEventConfig } = createEventConfigStore(EVENTS_ROOT);
+const simulatorRunStore = createSimulatorRunStore({
+  runsRoot: path.join(ROOT_DIR, 'simulator-runs')
+});
+const createSimulatorRunClient = createSimulatorRunClientFactory({ simulatorRunStore });
 
 function resolveEventDbPath(eventName = readActiveEvent(), options = {}) {
   const normalizedEventName = String(eventName || '').trim();
@@ -823,6 +830,13 @@ app.get('/api/events/active', (req, res) => {
     });
   }
 });
+
+app.use('/api', createSimulatorRunRouter({
+  eventsRoot: EVENTS_ROOT,
+  simulatorRunStore,
+  loadGroupsFromDatabase,
+  createRunClient: createSimulatorRunClient
+}));
 
 app.get('/api/results', (req, res) => {
   try {

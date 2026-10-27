@@ -4,6 +4,83 @@ Tournament Management Server Source
 Feature overview for Audience Monitor, Competitor Lookup, and Day-of clocks:
 [docs/audience-monitor-lookup.md](docs/audience-monitor-lookup.md).
 
+## Day-of simulator engine
+
+`POST /api/simulator/runs` with an explicit `{ "eventName": "..." }` creates a
+run workspace from that event's saved database groups and ring assignments.
+`GET /api/simulator/runs/:runId` inspects its manifest. Workspaces are stored
+under `simulator-runs/<runId>/`, with `groups.json`, fresh run-only
+`ring-assignments.json`, an empty `results/` directory, and `manifest.json`.
+Initial work is the source ring's current group followed by its queue; groups
+already marked completed are excluded. The active-event pointer, source event
+database, assignments, and results are not changed. Creation fails if the event
+database or assignments are missing, there are no saved groups, or assignments
+reference missing/duplicated groups.
+
+`POST /api/simulator/runs/:runId/step` with `{ "ringId": "ring-a-1" }`
+advances one operation for that ring while a run is created or paused.
+`POST /api/simulator/runs/:runId/start` starts asynchronous execution;
+`/pause`, `/resume`, and `/stop` control its lifecycle. Stop preserves the run
+workspace and progress. `POST /api/simulator/runs/:runId/speed` accepts
+`{ "speed": 10 }` for a 10x pace (valid range 0.1–100). The delay between
+simulated operations is 100 ms divided by the speed multiplier.
+`POST /api/simulator/runs/:runId/reset` restores the run's initial assignments,
+clears only that run's results, and returns it to `created`.
+`DELETE /api/simulator/runs/:runId` removes only the named run workspace.
+`POST /api/simulator/runs/:runId/run` remains available to synchronously wait
+for completion. The simulator's run-scoped client updates only that workspace's
+ring assignments and writes validated, simulation-tagged result packets to
+that workspace's `results/` folder. Progress, speed, lifecycle status, and
+failures are persisted in the manifest and available from the run inspection
+endpoint. Inspection includes per-ring current, queued, pending, and completed
+groups, progress, result summaries, virtual time, errors, and the ordered run
+log. `GET /api/simulator/runs/:runId/log` returns the event log and errors;
+`GET /api/simulator/runs/:runId/results` returns run-scoped result summaries.
+Reproducibility metadata includes the scenario ID and seed, virtual clock
+settings, and SHA-256 fingerprint of the saved group and initial-assignment
+snapshot. Errors leave the run visibly failed; an in-progress run discovered
+after a server restart is marked failed and must be reset before rerunning.
+These controls do not call active-event ring routes or the event's result store.
+
+`backend/dayOfSimulator.js` provides the orchestration engine for prebuilt groups
+and ring assignments. It queues each assigned group, bootstraps a simulated
+tablet, advances the ring through setup and applicable competition phases using
+heartbeat calls, and submits a completion packet before following the ring's
+next-group response. `step()` advances one operation; `runToCompletion()` drives
+all configured rings. Each run uses a virtual clock (`startAt`, defaulting to a
+fixed epoch, and `stepDurationMs`) and a seeded random source. Set the same
+`scenarioSeed`, `startAt`, assignments, and groups to replay the same scenario;
+the stable `scenarioId` is derived from those inputs unless supplied explicitly.
+Result packets include the run ID, scenario ID, seed, and simulated completion
+time.
+
+`getState()` returns run status, virtual time, operation count, an ordered event
+log, and errors. Each ring reports its active group and phase, queued and pending
+groups, completed groups, counts, and failure message. `runToCompletion()` keeps
+other rings moving after a ring fails and returns `status: "failed"` with the
+failure details; individual `step()` calls still throw on failure.
+
+The simulator exposes `selectEligibleSparringCompetitors()` and
+`simulateSparringDivision()` to packet builders. Entrants follow the app's
+operational rule (checked in and sparring registration `REGISTERED`). Bracket
+construction uses height ordering, roster-stable seeded byes, and the app's
+adjacent same-studio swap when the next bout is within four inches. Bout
+simulation uses standard-warning deductions of one point per two warnings,
+disqualification at three warnings, first-to-three/time-expired outcomes, and
+the app packet's sparring rounds and placement labels. Its randomness comes
+from the simulator run seed, so the generated sparring packet is repeatable.
+This ports the app behavior into server-side simulation; it does not execute
+the Android/Kotlin implementation, so a parity change in the app must be
+reflected and re-tested here.
+
+The engine requires a ring-client factory whose clients declare matching
+`simulationScope` metadata and implement `queue`, `bootstrap`, `heartbeat`, and
+`complete`. The server provides a run-scoped adapter and simulator run APIs;
+simulator operations update only the run workspace and its result store, not
+the active-event ring endpoints. The server-side engine and controls do not yet
+provide realistic elapsed tournament timing or a user-facing simulator and
+Audience View workflow.
+
 ## Build Groups: firm division rules
 
 Every ordinary generated division contains a **single gender, a single rank tier**
@@ -318,8 +395,9 @@ Times include dates when needed for queues extending into another day.
 
 The audience-safe projection endpoint is support for future monitor development,
 not a separate access-control boundary. Audience Monitor and competitor-facing
-UI, automatic scheduling, simulation, learned timings, and Android changes are
-deliberately deferred. Validate with `npm test` and `git diff --check`.
+UI, automatic scheduling, simulator run controls and isolated server adapter,
+learned timings, and Android changes are deliberately deferred. Validate with
+`npm test` and `git diff --check`.
 
 ## Tooltip and UI cleanup checkpoint: 2026-10-25
 

@@ -1,7 +1,10 @@
 const crypto = require('crypto');
 const express = require('express');
 const fs = require('fs');
-const { appendDivisionTrace, summarizeGroupDivisionNumbers } = require('./groupDivisionAssignments');
+const {
+  appendDivisionTrace: defaultAppendDivisionTrace,
+  summarizeGroupDivisionNumbers
+} = require('./groupDivisionAssignments');
 const { buildAvailableGroupDivisionNumbers } = require('./ringAvailability');
 const { sanitizePhaseHistory } = require('./resultPacket');
 const { buildEstimates } = require('./ringEstimates');
@@ -231,7 +234,8 @@ function createRingRouter(deps) {
     DISCONNECT_AFTER_MS,
     saveUploadedDivisionPacket,
     resultPacketStore,
-    readActiveEvent
+    readActiveEvent,
+    appendDivisionTrace = defaultAppendDivisionTrace
   } = deps;
 
   router.use('/rings', (req, res, next) => {

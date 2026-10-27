@@ -61,7 +61,8 @@ const PACKET_BLOCK_FIELDS = [
   'disciplines',
   'overallAwards',
   'signatures',
-  'source'
+  'source',
+  'simulation'
 ];
 
 function isIsoTimestamp(value) {
@@ -339,6 +340,11 @@ function validateResultPacket(packet, ringId, activeEventName) {
       !Number.isInteger(packet.source.appVersionCode) || typeof packet.source.tabletLabel !== 'string' ||
       !isIsoTimestamp(packet.source.createdAt)) {
     addError(errors, 'source', 'must contain valid client, version, tabletLabel, and createdAt fields');
+  }
+  if (packet.simulation != null &&
+      (!packet.simulation || typeof packet.simulation !== 'object' || Array.isArray(packet.simulation) ||
+       !nonEmpty(packet.simulation.runId))) {
+    addError(errors, 'simulation', 'must contain a nonempty runId when present');
   }
   if (JSON.stringify(packet).includes('"IN_PROGRESS"')) {
     addError(errors, 'payload', 'must not contain an unresolved IN_PROGRESS state');
