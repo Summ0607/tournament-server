@@ -15,23 +15,28 @@
       <div><h1 id="eventName">Audience Monitor</h1><p id="connection" role="status">Loading active event...</p></div>
       <time id="clock" class="clock" aria-label="Current time"></time>
       <div class="controls" data-help-root>
+        <label class="source-control" for="sourceRun">View
+          <select id="sourceRun" aria-label="Audience View data source">
+            <option value="">Active event</option>
+          </select>
+        </label>
         <button id="pause" type="button" aria-pressed="false" data-help="Pause automatic page rotation in both sections. Live data continues to refresh.">Pause pages</button>
         <button id="fullscreen" type="button" data-help="Enter or exit fullscreen for the audience display.">Fullscreen</button>
       </div>
     </header>
     <div class="display">
       <section class="panel" aria-labelledby="ringsTitle">
-        <div class="panel-heading"><h2 id="ringsTitle">Rings now</h2><span id="ringsPages" class="page-count"></span></div>
+        <div class="panel-heading"><h2 id="ringsTitle">Ring Status</h2><span id="ringsPages" class="page-count"></span></div>
         <div id="rings" class="cards ring-cards"></div>
       </section>
       <section class="panel" aria-labelledby="upcomingTitle">
-        <div class="panel-heading"><h2 id="upcomingTitle">Coming up</h2><span id="upcomingPages" class="page-count"></span></div>
+        <div class="panel-heading"><h2 id="upcomingTitle">On Deck</h2><span id="upcomingPages" class="page-count"></span></div>
         <div id="upcoming" class="cards upcoming-cards"></div>
       </section>
     </div>
     <footer>Approximate start windows, not call times. Subject to change. Please follow staff announcements.</footer>
-    <p data-help-source="Reading the display">Rings now shows compact, fixed-height rows in ring order, with slightly larger text than Head Table for audience viewing. Every ring has a pill: green phases are complete, blue fills current progress, and neutral phases have not started. The first queued division previews its applicable phases, including Weapons where appropriate, unfilled and labeled Queued - not started. Empty rings show a neutral No current division pill. Waiting does not mean operational readiness. Temporarily paused and Updates unavailable use neutral status pills in the same space rather than showing untrusted progression.</p>
-    <p data-help-source="Coming up">Only assigned queued divisions appear, ordered by expected start, then ring and queue order. Approximate windows use the shared low-confidence planning model, not guaranteed call times. Unassigned hypothetical suggestions are not displayed. Start TBD means the available data cannot support a prediction. Follow staff announcements.</p>
+    <p data-help-source="Reading the display">Ring, Division, and upcoming start times use matching 64px bold text for distance viewing, with smaller text on narrow screens. Fewer items appear per page so the key information stays prominent; descriptions and phase names are secondary. The progress pill sits alongside Ring and Division on wide screens, and below them on narrower screens. Green phases are complete, blue fills current progress, and neutral phases have not started; routine Waiting and In progress labels are omitted. Segments represent phases, not equal amounts of time. The first queued division previews its applicable phases, including Weapons where appropriate, unfilled with an accessible queued, not started description. A neutral preview does not imply operational readiness. Empty rings show a neutral No current division pill. Temporarily paused and Updates unavailable use neutral status pills in the same space rather than showing untrusted progression.</p>
+    <p data-help-source="On Deck">Only assigned queued divisions appear, ordered by expected start, then ring and queue order. Each compact tile shows Division and Ring at the top, a large centered estimated start time below, and division details at the bottom. Queue positions are not displayed. Approximate windows use the shared low-confidence planning model, not guaranteed call times. Unassigned hypothetical suggestions are not displayed. Start TBD means the available data cannot support a prediction. Follow staff announcements.</p>
     <p data-help-source="Pages and refresh">The upper and lower sections rotate complete pages independently every 12 seconds, wrapping to the beginning only when content exceeds the screen capacity. Nothing scrolls continuously. Refreshes occur every 10 seconds without resetting rotation or reordering existing rows while you read. Pause pages stops rotation, not refresh. Stale or failed data hides predictions and progress; the display recovers automatically. Fullscreen improves distant viewing. Browser zoom can increase text size and reduce items per page.</p>
   </main>
 </body>

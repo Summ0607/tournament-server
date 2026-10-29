@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { selectEligibleSparringCompetitors, simulateSparringDivision } = require('./dayOfSparring');
+const { TIMING_MODEL_VERSION, estimateDivisionTiming } = require('./simulatorTiming');
 
-const PHASES = ['setup', 'weapons', 'hyungs', 'sparring', 'awards'];
 const DEFAULT_START_AT = '2000-01-01T00:00:00.000Z';
 const DEFAULT_STEP_DURATION_MS = 60_000;
 
@@ -18,16 +18,8 @@ function activeGroupNumber(response) {
   );
 }
 
-function hasWeapons(group) {
-  return (Array.isArray(group.competitors) ? group.competitors : []).some((competitor) => {
-    if (competitor && competitor.weaponsEligible) return true;
-    const division = String(competitor && competitor.weaponsDivision || '').trim().toLowerCase();
-    return division !== '' && division !== 'unassigned';
-  });
-}
-
 function phasesFor(group) {
-  return PHASES.filter((phase) => phase !== 'weapons' || hasWeapons(group));
+  return estimateDivisionTiming(group).phases;
 }
 
 function responseForCurrentGroup(response) {
@@ -121,23 +113,27 @@ function createDayOfSimulator({
   const events = [];
   const errors = [];
 
-  function simulatedAt() {
-    return new Date(clockMs).toISOString();
+  function simulatedAt(actor) {
+    return new Date(actor ? actor.virtualTimeMs : clockMs).toISOString();
   }
 
-  function recordEvent(type, actor, details = {}) {
+  function recordEvent(type, actor, details = {}, durationMs = 1000) {
     const event = {
       sequence: events.length + 1,
       type,
       ringId: actor.ringId,
       ringLabel: actor.ringLabel,
-      simulatedAt: simulatedAt(),
+      simulatedAt: simulatedAt(actor),
+      occurredAt: new Date().toISOString(),
+      durationMs,
       groupDivisionNumber: actor.currentGroupNumber || null,
       ...details
     };
     events.push(event);
     operationCount += 1;
-    clockMs += stepDurationMs;
+    actor.lastOperationDurationMs = durationMs;
+    actor.virtualTimeMs += durationMs;
+    clockMs = Math.max(clockMs, actor.virtualTimeMs);
     return event;
   }
 
@@ -188,8 +184,12 @@ function createDayOfSimulator({
       completedGroupNumbers: [],
       currentGroupNumber: '',
       currentPhaseIndex: 0,
-      phaseProgressStep: 0,
+      operationPhase: '',
+      phaseProgressPercent: 0,
       phases: [],
+      timing: null,
+      virtualTimeMs: normalizedStartAt.getTime(),
+      lastOperationDurationMs: 1000,
       pendingGroupNumbers: assignedGroupNumbers.slice(),
       state: 'ready',
       error: null
@@ -204,13 +204,36 @@ function createDayOfSimulator({
     return group;
   }
 
+  async function registerDynamicAssignments(actor, response) {
+    const newNumbers = [
+      response && response.newlyAssignedGroupDivisionNumber,
+      response && response.newlyQueuedGroupDivisionNumber
+    ].map(groupNumber).filter(Boolean);
+    for (const number of newNumbers) {
+      if (actor.assignedGroupNumbers.includes(number)) {
+        throw new Error(`Ring ${actor.ringId} was assigned simulator group ${number} more than once`);
+      }
+      if (!groupByNumber.has(number)) {
+        throw new Error(`Rolling assignment selected missing group ${number}`);
+      }
+      await actor.client.queue(number, simulationContext(actor));
+      actor.assignedGroupNumbers.push(number);
+      actor.pendingGroupNumbers.push(number);
+      actor.pendingGroupNumbers = actor.pendingGroupNumbers.filter((pending, index, list) =>
+        list.indexOf(pending) === index);
+      recordEvent('group_queued', actor, { groupDivisionNumber: number }, 30_000);
+    }
+  }
+
   function setCurrentGroup(actor, response) {
     const nextGroupNumber = responseForCurrentGroup(response);
     if (!nextGroupNumber) {
       actor.currentGroupNumber = '';
       actor.phases = [];
       actor.currentPhaseIndex = 0;
-      actor.phaseProgressStep = 0;
+      actor.phaseProgressPercent = 0;
+      actor.timing = null;
+      actor.operationPhase = 'idle';
       return;
     }
     if (!actor.assignedGroupNumbers.includes(nextGroupNumber)) {
@@ -220,9 +243,15 @@ function createDayOfSimulator({
       throw new Error(`Ring ${actor.ringId} reactivated completed group ${nextGroupNumber}`);
     }
     actor.currentGroupNumber = nextGroupNumber;
+    actor.pendingGroupNumbers = actor.pendingGroupNumbers.filter((number) => number !== nextGroupNumber);
     actor.phases = phasesFor(groupFor(actor));
+    actor.timing = estimateDivisionTiming(groupFor(actor), {
+      scenarioSeed: normalizedSeed,
+      ringId: actor.ringId
+    });
     actor.currentPhaseIndex = 0;
-    actor.phaseProgressStep = 0;
+    actor.phaseProgressPercent = 0;
+    actor.operationPhase = '';
   }
 
   async function step(ringId) {
@@ -238,28 +267,39 @@ function createDayOfSimulator({
           await actor.client.queue(groupDivisionNumber, simulationContext(actor));
           actor.queuedGroupCount += 1;
           actor.pendingGroupNumbers = actor.pendingGroupNumbers.filter((number) => number !== groupDivisionNumber);
-          recordEvent('group_queued', actor, { groupDivisionNumber });
+          recordEvent('group_queued', actor, { groupDivisionNumber }, 30_000);
           return snapshotActor(actor);
         }
         const response = await actor.client.bootstrap({
           tabletLabel: actor.tabletLabel,
           simulation: simulationContext(actor)
         });
+        await registerDynamicAssignments(actor, response);
         setCurrentGroup(actor, response);
         if (!actor.currentGroupNumber && actor.assignedGroupNumbers.length) {
           throw new Error(`Ring ${actor.ringId} did not activate its assigned groups during bootstrap`);
         }
         actor.state = actor.currentGroupNumber ? 'running' : 'complete';
-        recordEvent('tablet_bootstrapped', actor, { state: actor.state });
+        recordEvent('tablet_bootstrapped', actor, { state: actor.state }, 60_000);
         return snapshotActor(actor);
       }
 
-      if (actor.currentPhaseIndex < actor.phases.length) {
-        const group = groupFor(actor);
+      if (actor.operationPhase === 'loading-division') {
+        actor.operationPhase = '';
+        recordEvent('division_loaded', actor, {}, 1000);
+        return snapshotActor(actor);
+      }
+
+        if (actor.currentPhaseIndex < actor.phases.length) {
+          const group = groupFor(actor);
         const phase = actor.phases[actor.currentPhaseIndex];
-        const competitorCount = group.competitors.length;
-        const isComplete = actor.phaseProgressStep === 1;
-        const completedCount = isComplete ? competitorCount : 0;
+        const competitorCount = phase === 'sparring' ? actor.timing.sparringBoutCount
+          : actor.timing.entrantCounts[phase] ?? group.competitors.length;
+        const progress = Math.min(100, actor.phaseProgressPercent + 25);
+        const isComplete = progress >= 100;
+        const completedCount = Math.round(competitorCount * progress / 100);
+        const phaseDurationMs = actor.timing.phaseDurationsMs[phase];
+        const operationDurationMs = Math.ceil(phaseDurationMs / 4);
         await actor.client.heartbeat({
           tabletLabel: actor.tabletLabel,
           phase,
@@ -273,23 +313,32 @@ function createDayOfSimulator({
           phase,
           completedCount,
           totalCount: competitorCount,
-          progress: isComplete ? 100 : 0
-        });
+          progress,
+          phaseDurationMs,
+          divisionEstimatedDurationMs: actor.timing.estimatedDurationMs
+        }, operationDurationMs);
         if (isComplete) {
           actor.currentPhaseIndex += 1;
-          actor.phaseProgressStep = 0;
+          actor.phaseProgressPercent = 0;
         } else {
-          actor.phaseProgressStep = 1;
+          actor.phaseProgressPercent = progress;
         }
         return snapshotActor(actor);
       }
 
+      if (actor.operationPhase !== 'uploading-report') {
+        actor.operationPhase = 'uploading-report';
+        recordEvent('report_upload_started', actor, {}, 30_000);
+        return snapshotActor(actor);
+      }
+
       const group = groupFor(actor);
-      const completedAt = simulatedAt();
+      const completedAt = simulatedAt(actor);
       const packet = await buildResultPacket({
         runId: normalizedRunId,
         scenarioId: normalizedScenarioId,
         scenarioSeed: normalizedSeed,
+        timingModelVersion: TIMING_MODEL_VERSION,
         eventName: normalizedEventName,
         ringId: actor.ringId,
         ringLabel: actor.ringLabel,
@@ -315,9 +364,12 @@ function createDayOfSimulator({
         simulatedAt: completedAt
       };
       const completedGroupNumber = actor.currentGroupNumber;
+      const completedTiming = actor.timing;
       const response = await actor.client.complete(packet);
       actor.completedGroupNumbers.push(completedGroupNumber);
+      await registerDynamicAssignments(actor, response);
       setCurrentGroup(actor, response);
+      if (actor.currentGroupNumber) actor.operationPhase = 'loading-division';
       if (!actor.currentGroupNumber) {
         const remaining = actor.assignedGroupNumbers.filter((number) =>
           !actor.completedGroupNumbers.includes(number));
@@ -328,8 +380,10 @@ function createDayOfSimulator({
       }
       recordEvent('division_completed', actor, {
         groupDivisionNumber: completedGroupNumber,
-        serverRecordId: response && response.serverRecordId || null
-      });
+        serverRecordId: response && response.serverRecordId || null,
+        durationMs: completedTiming.estimatedDurationMs,
+        estimatedDurationMinutes: completedTiming.estimatedDurationMinutes
+      }, 30_000);
       return snapshotActor(actor);
     } catch (error) {
       actor.state = 'failed';
@@ -338,7 +392,8 @@ function createDayOfSimulator({
         ringId: actor.ringId,
         ringLabel: actor.ringLabel,
         groupDivisionNumber: actor.currentGroupNumber || null,
-        simulatedAt: simulatedAt(),
+        simulatedAt: simulatedAt(actor),
+        occurredAt: new Date().toISOString(),
         message: actor.error
       };
       errors.push(failure);
@@ -348,7 +403,8 @@ function createDayOfSimulator({
         ...failure
       });
       operationCount += 1;
-      clockMs += stepDurationMs;
+      actor.virtualTimeMs += stepDurationMs;
+      clockMs = Math.max(clockMs, actor.virtualTimeMs);
       throw error;
     }
   }
@@ -365,7 +421,9 @@ function createDayOfSimulator({
 
   async function runToCompletion() {
     while (Array.from(actors.values()).some((actor) => !['complete', 'failed'].includes(actor.state))) {
-      for (const actor of actors.values()) {
+      const nextActors = Array.from(actors.values()).sort((left, right) =>
+        left.virtualTimeMs - right.virtualTimeMs || left.ringId.localeCompare(right.ringId));
+      for (const actor of nextActors) {
         if (['complete', 'failed'].includes(actor.state)) continue;
         try {
           await step(actor.ringId);
@@ -383,7 +441,7 @@ function createDayOfSimulator({
       runId: normalizedRunId,
       scenarioId: normalizedScenarioId,
       seed: normalizedSeed,
-      simulatedAt: simulatedAt(),
+      simulatedAt: simulatedAt(actor),
       ringId: actor.ringId
     };
   }
@@ -398,13 +456,19 @@ function createDayOfSimulator({
       ringLabel: actor.ringLabel,
       state: actor.state,
       currentGroupNumber: actor.currentGroupNumber,
-      currentPhase: actor.phases[actor.currentPhaseIndex] || '',
+      currentPhase: actor.operationPhase || actor.phases[actor.currentPhaseIndex] ||
+        (actor.currentGroupNumber ? 'awards' : 'idle'),
+      currentPhaseProgress: actor.operationPhase ? 0
+        : actor.currentPhaseIndex >= actor.phases.length && actor.currentGroupNumber ? 100 : actor.phaseProgressPercent,
       queuedGroupNumbers,
       pendingGroupNumbers: actor.pendingGroupNumbers.slice(),
       completedGroupNumbers: actor.completedGroupNumbers.slice(),
       completedCount: actor.completedGroupNumbers.length,
       totalGroupCount: actor.assignedGroupNumbers.length,
-      error: actor.error
+      error: actor.error,
+      estimatedDivisionDurationMs: actor.timing ? actor.timing.estimatedDurationMs : null,
+      phaseDurationsMs: actor.timing ? { ...actor.timing.phaseDurationsMs } : {},
+      recommendedDelayMs: actor.lastOperationDurationMs
     };
   }
 
@@ -419,6 +483,7 @@ function createDayOfSimulator({
       runId: normalizedRunId,
       scenarioId: normalizedScenarioId,
       scenarioSeed: normalizedSeed,
+      timingModelVersion: TIMING_MODEL_VERSION,
       eventName: normalizedEventName,
       status,
       startedAt: runStartedAt,

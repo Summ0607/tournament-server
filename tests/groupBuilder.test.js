@@ -3,6 +3,29 @@ const { test } = require('node:test');
 const { buildGroups, buildDivisions, buildGroupsWithReview } = require('../backend/groupBuilder');
 const { rebalanceGroupsToSoftMax } = require('../backend/groupDivisionAssignments');
 const { isSpecialNeeds, specialNeedsCategory, specialNeedsGroupError } = require('../assets/division-rules');
+const { divisionBadge, displayDivisionName } = require('../assets/division-rules');
+
+test('division badges distinguish TT, SD, Gup and BB without reclassifying CDB in BB', () => {
+  const badge = (ranks, extra = {}) => divisionBadge({ ...extra, competitors: ranks.map((rank) => ({ rank })) });
+  assert.equal(badge(['TTLD']).text, 'TT');
+  for (const rank of ['G10', 'G9', 'G8', 'G7', 'G6', 'G5', 'G4', 'G3', 'G2', 'G1', 'CDB']) {
+    assert.equal(badge([rank]).text, 'Gup');
+  }
+  for (const rank of ['D1', 'D2', 'D3']) assert.equal(badge([rank, 'CDB']).text, 'BB');
+  assert.equal(badge(['CDB'], { rankBand: 'd1-d3' }).text, 'BB');
+  assert.equal(badge(['D1'], { specialNeeds: true }).text, 'SD');
+  assert.equal(badge(['TTLD'], { name: 'Special Needs division' }).text, 'SD');
+  assert.equal(divisionBadge({ competitors: [{ rank: 'G1', specialNeeds: 'Y' }] }).text, 'SD');
+  assert.equal(badge(['D4']), null);
+});
+
+test('Special Dragons is a display mapping only and preserves stored names and flags', () => {
+  const group = { name: 'Special Needs Female Gup', specialNeeds: true, competitors: [{ rank: 'G1', specialNeeds: 1 }] };
+  const original = JSON.stringify(group);
+  assert.equal(displayDivisionName(group.name), 'Special Dragons Female Gup');
+  assert.equal(divisionBadge(group).label, 'Special Dragons');
+  assert.equal(JSON.stringify(group), original);
+});
 
 let nextId = 1;
 function person(gender, rank, age) {

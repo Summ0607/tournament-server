@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tournament Administration</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #172336;
+      background: #eaf0f7;
+      --panel: #fff;
+      --line: #d5deea;
+      --muted: #617187;
+      --red: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    header {
+      background: #243248;
+      color: #fff;
+      padding: 18px max(20px, calc((100vw - 1440px) / 2));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    main { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 24px; margin: 0; }
+    h2 { font-size: 17px; margin: 0 0 14px; }
+    .subtle { color: var(--muted); font-size: 13px; }
+    .header-nav { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .header-nav a {
+      display: inline-block;
+      border: 1px solid #9db5d4;
+      border-radius: 7px;
+      padding: 8px 11px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .header-nav a:hover, .header-nav a:focus-visible { background: #3a4d68; text-decoration: underline; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 5px 16px #1723360c;
+      margin-bottom: 16px;
+    }
+    label { display: grid; gap: 6px; color: #34445a; font-size: 12px; font-weight: 700; }
+    input {
+      min-height: 40px;
+      width: 100%;
+      border: 1px solid #bdc9d8;
+      border-radius: 7px;
+      background: white;
+      color: #172336;
+      padding: 8px 10px;
+      font: inherit;
+    }
+    button {
+      min-height: 38px;
+      border: 1px solid #aebccd;
+      border-radius: 7px;
+      background: #fff;
+      color: #23344b;
+      font: inherit;
+      font-weight: 700;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button.danger { color: var(--red); min-height: 44px; }
+    @media (pointer: coarse) { button { min-height: 44px; } }
+    button:disabled { opacity: .48; cursor: not-allowed; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .error { color: var(--red); }
+    .status-box {
+      margin: 18px 0 0;
+      padding: 16px 18px;
+      border: 2px solid var(--line);
+      border-left-width: 8px;
+      border-radius: 10px;
+      background: #f3f6fa;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+    .status-box[data-state="ok"] { border-color: #17804d; background: #e5f5ec; color: #0f5c37; }
+    .status-box[data-state="warn"] { border-color: #b7791f; background: #fff4db; color: #7a4a05; }
+    .status-box[data-state="error"] { border-color: var(--red); background: #fde9e7; color: var(--red); }
+    .status-box[data-state="checking"] { border-color: #1764c0; background: #eaf1fa; color: #14437f; }
+    .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .panel-heading h2 { margin: 0; }
+    dialog { max-width: 560px; border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+    dialog::backdrop { background: #17233699; }
+    @media (max-width: 740px) {
+      main { padding: 14px; }
+      header { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Tournament Administration</h1>
+      <div class="subtle" style="color:#d1dbea">Server maintenance for the local administrator</div>
+    </div>
+    <nav class="header-nav" aria-label="Tournament navigation">
+      <a href="/tournament-management/">Tournament Management</a>
+      <a href="/simulator/">Simulator</a>
+    </nav>
+  </header>
+  <main>
+    <section class="panel" aria-labelledby="server-control-title">
+      <h2 id="server-control-title">Server maintenance - local administrator</h2>
+      <div id="serverMaintenanceContent">
+      <p class="error">Warning: restarting interrupts production tablets, monitoring, and all simulations on this server process. Use only during a planned break. Other server processes are not restarted.</p>
+      <p class="subtle">Running or paused simulations will be stopped and saved, not automatically resumed. Reset them before running again. Saved tournament data and results are retained.</p>
+      <button id="restartServerButton" type="button" class="danger" disabled>Restart server...</button>
+      <button id="refreshServerStatusButton" type="button">Check server status</button>
+      <p id="serverControlStatus" role="status" aria-live="polite" class="status-box" data-state="checking">Checking restart availability...</p>
+      </div>
+    </section>
+    <dialog id="restartServerDialog" aria-labelledby="restart-dialog-title">
+      <h2 id="restart-dialog-title">Confirm server restart</h2>
+      <p class="error">Production connections will be interrupted. Tell ring operators before continuing. This affects the whole server, not just one page.</p>
+      <p>Pending requests and simulator operations will finish before shutdown. Active simulations will stop and require reset to run again. This page will reconnect when a new server instance is ready.</p>
+      <label>Type RESTART to confirm
+        <input id="restartConfirmation" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="actions">
+        <button id="confirmRestartButton" type="button" class="danger" disabled>Confirm restart</button>
+        <button id="cancelRestartButton" type="button">Cancel</button>
+      </div>
+    </dialog>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let serverControl = null;
+    let restartPending = false;
+
+    function setStatus(text, state) {
+      $('serverControlStatus').textContent = text;
+      $('serverControlStatus').setAttribute('data-state', state);
+    }
+    const checkedAt = () => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+
+    async function refreshServerControl() {
+      if (restartPending) return;
+      $('restartServerButton').disabled = true;
+      $('refreshServerStatusButton').disabled = true;
+      setStatus('Checking server status...', 'checking');
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      try {
+        const response = await fetch('/api/server-control/status', { method: 'GET', cache: 'no-store' });
+        if (response.status === 404) {
+          throw new Error('Restart unavailable on the currently running server. Stop it once with Ctrl+C, then start it using server-launcher.js.');
+        }
+        const status = await response.json();
+        if (!response.ok) throw new Error(status.error || `Server status request failed (${response.status}).`);
+        serverControl = status;
+        $('restartServerButton').disabled = !serverControl.restartAvailable || serverControl.restarting;
+        setStatus(`Checked ${checkedAt()} - Server is running. ${serverControl.message || 'Restart unavailable on this server.'}`,
+          serverControl.restartAvailable ? 'ok' : 'warn');
+      } catch (error) {
+        serverControl = null;
+        setStatus(`Checked ${checkedAt()} - ${error.message}`, 'error');
+      } finally {
+        $('refreshServerStatusButton').disabled = false;
+      }
+    }
+
+    $('refreshServerStatusButton').addEventListener('click', refreshServerControl);
+    $('restartServerButton').addEventListener('click', () => {
+      if (!serverControl?.restartAvailable || restartPending) return;
+      $('restartConfirmation').value = '';
+      $('confirmRestartButton').disabled = true;
+      $('restartServerDialog').showModal();
+      $('restartConfirmation').focus();
+    });
+    $('restartConfirmation').addEventListener('input', () => {
+      $('confirmRestartButton').disabled = $('restartConfirmation').value !== 'RESTART';
+    });
+    $('cancelRestartButton').addEventListener('click', () => $('restartServerDialog').close());
+    $('confirmRestartButton').addEventListener('click', async () => {
+      if (restartPending || !serverControl?.restartAvailable || $('restartConfirmation').value !== 'RESTART') return;
+      restartPending = true;
+      $('restartServerDialog').close();
+      $('restartServerButton').disabled = true;
+      $('refreshServerStatusButton').disabled = true;
+      setStatus('Requesting restart...', 'checking');
+      const previousInstance = serverControl.instanceId;
+      try {
+        const response = await fetch('/api/server-control/restart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Server-Control-Token': serverControl.token },
+          body: JSON.stringify({ confirmation: 'RESTART' }),
+          signal: AbortSignal.timeout(10000)
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || `Restart request failed (${response.status}).`);
+        for (let attempt = 0; attempt < 45; attempt += 1) {
+          setStatus('Restarting... waiting for a new server instance. Do not start another server.', 'checking');
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          try {
+            const ready = await fetch('/api/server-control/status', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
+            if (!ready.ok) throw new Error(`Server status ${ready.status}`);
+            const status = await ready.json();
+            if (status.instanceId && status.instanceId !== previousInstance && !status.restarting) {
+              location.reload();
+              return;
+            }
+          } catch (error) {
+            setStatus(`Waiting for server: ${error.message}`, 'warn');
+          }
+        }
+        throw new Error('Restart has not completed. Check the server command window for errors. Do not launch a duplicate server; use Check server status to retry.');
+      } catch (error) {
+        setStatus(`Restart not confirmed: ${error.message}`, 'error');
+      } finally {
+        restartPending = false;
+        $('refreshServerStatusButton').disabled = false;
+      }
+    });
+
+    refreshServerControl();
+  </script>
+</body>
+</html>

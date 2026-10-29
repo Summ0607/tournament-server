@@ -129,13 +129,24 @@ async function loadPage(options = {}) {
       requests.push({ path: request.pathname, name, init });
       let data;
       switch (request.pathname) {
+        case '/api/simulator/runs':
+          if (options.failSimulatorList) return { ok: false, json: async () => ({ error: 'Simulator list unavailable' }) };
+          data = { runs: options.simulatorRuns || [] };
+          break;
         case '/api/events/list': data = { events: Array.from(configs.keys()) }; break;
         case '/api/events/active':
           if (activeFailure) return { ok: false, json: async () => ({ error: 'Active event unavailable' }) };
           data = { activeEvent };
           break;
         case '/api/events/config':
-          data = { eventConfig: configs.get(name), dbExists: name === winter ? dbExists : false };
+          data = { eventConfig: configs.get(name), dbExists: name === winter ? dbExists : false,
+            configurationLocked: Boolean(options.configurationLocked),
+            configurationLockReason: options.configurationLocked ? 'Event configuration is locked. Reset the run to return to preparation.' : '' };
+          break;
+        case '/api/events/reset-run':
+          options.configurationLocked = false;
+          rings = [];
+          data = { ok: true, archive: 'run-archives/test-run' };
           break;
         case '/api/events/create':
         case '/api/events/modify': {
@@ -160,10 +171,15 @@ async function loadPage(options = {}) {
           const eventGroups = options.groupsByEvent ? options.groupsByEvent[name] || [] : groups;
           data = { rings: JSON.parse(JSON.stringify(rings)), ringConfig,
             eventStartedAt: typeof options.eventStartedAt === 'function' ? options.eventStartedAt() : options.eventStartedAt || '',
+            schedule: options.schedule,
             estimates: typeof options.estimates === 'function' ? options.estimates() : options.estimates,
             availableGroupDivisionNumbers: eventGroups.map((group) => String(group.groupDivisionNumber)).filter((id) => !assigned.has(id)) };
           break;
         }
+        case '/api/rings/schedule/day2':
+          if (options.schedule) options.schedule = { ...options.schedule, day2Started: true };
+          data = { ok: true };
+          break;
         case '/api/rings/config': {
           const config = JSON.parse(init.body);
           ringConfig = config;
@@ -189,6 +205,14 @@ async function loadPage(options = {}) {
           data = { normalizedCompetitors: [newCompetitor], rankWarnings: [], eventName: winter };
           break;
         default: {
+          if (/^\/api\/simulator\/runs\/[^/]+\/ring-assignment$/.test(request.pathname)) {
+            if (options.waitForSimulation) await options.waitForSimulation;
+            if (options.failSimulation) return { ok: false, json: async () => ({ error: 'Simulation unavailable' }) };
+            const board = typeof options.simulatorBoard === 'function' ? options.simulatorBoard() : options.simulatorBoard;
+            if (!board) throw new Error('Missing simulator board fixture');
+            data = board;
+            break;
+          }
           const clear = request.pathname.match(/^\/api\/rings\/([^/]+)\/assistance\/clear$/);
           if (clear) {
             if (name !== activeEvent || options.failClear) return { ok: false, json: async () => ({ error: options.failClear ? 'Clear failed' : 'The active event changed' }) };
@@ -571,12 +595,12 @@ test('Special Needs move restrictions and labels apply in Group Builder', async 
     assert.deepEqual(page.errors, []);
   });
   await page.openGroups();
-  assert.match(page.element('gbBanners').innerHTML, /Special Needs - Gup - 13-17/);
-  assert.match(page.element('gbStats').innerHTML, /Special Needs: <strong>1/);
+  assert.match(page.element('gbBanners').innerHTML, /Special Dragons - Gup - 13-17/);
+  assert.match(page.element('gbStats').innerHTML, /Special Dragons: <strong>1/);
   page.element('gbBanners').handlers.click({
     target: { closest: (selector) => selector === '.gb-banner' ? { dataset: { id: 'special' } } : null }
   });
-  assert.match(page.element('gdMembers').innerHTML, /Special Needs/);
+  assert.match(page.element('gdMembers').innerHTML, /Special Dragons/);
   const id = /data-comp="([^"]+)"/.exec(page.element('gdMembers').innerHTML)[1];
   page.element('gdMembers').handlers.dragstart({
     target: { closest: () => ({ dataset: { comp: id } }) },
@@ -807,6 +831,143 @@ test('integrated event metadata sends numeric dimensions, displays zero and bloc
   assert.match(page.element('notice').textContent, /whole numbers/);
 });
 
+test('event format is saved, loaded and counted as an unsaved change', async () => {
+  const page = await loadPage();
+  await page.click('modifyEventBtn');
+  assert.equal(page.element('tournamentDaysInput').value, '1');
+  page.element('tournamentDaysInput').value = '2';
+  await page.input('tournamentDaysInput', 'change');
+  assert.equal(page.element('bannerEventStatus').textContent, 'Unsaved changes');
+  await page.click('saveMetadataBtn');
+  const post = page.requests.filter((request) => request.init).at(-1);
+  assert.equal(post.path, '/api/events/modify');
+  assert.equal(JSON.parse(post.init.body).tournamentDays, 2);
+  await page.click('modifyEventBtn');
+  assert.equal(page.element('tournamentDaysInput').value, '2');
+  assert.notEqual(page.element('bannerEventStatus').textContent, 'Unsaved changes');
+});
+
+const dobFor = (age) => `01/01/${new Date().getFullYear() - age}`;
+const orderedGroups = [
+  { groupDivisionNumber: 51, name: 'Gup older', competitors: [{ ...savedCompetitor, rank: 'G1', dob: dobFor(9), gender: 'Female' }] },
+  { groupDivisionNumber: 42, name: 'TT older', competitors: [{ ...savedCompetitor, rank: 'TTLD', dob: dobFor(7) }] },
+  { groupDivisionNumber: 31, name: 'BB younger', competitors: [{ ...savedCompetitor, rank: 'D1', dob: dobFor(14) }] },
+  { groupDivisionNumber: 50, name: 'Gup younger', competitors: [{ ...savedCompetitor, rank: 'G1', dob: dobFor(8) }] },
+  { groupDivisionNumber: 41, name: 'Special Needs', specialNeeds: true, competitors: [{ ...savedCompetitor, specialNeeds: 1, dob: dobFor(6), gender: 'Female' }] },
+  { groupDivisionNumber: 40, name: 'TT younger', competitors: [{ ...savedCompetitor, rank: 'TTLD', dob: dobFor(5) }] },
+  { groupDivisionNumber: 30, name: 'BB older', competitors: [{ ...savedCompetitor, rank: 'D1', dob: dobFor(17) }, { ...savedCompetitor, rank: 'D1', dob: dobFor(12) }] }
+];
+const shownDivisions = (page) => [...page.element('raDivisions').innerHTML.matchAll(/data-ra-division="(\d+)"/g)].map((match) => match[1]);
+
+test('available division filters are multi-select, visibility-only and keep running order and mixed ages', async () => {
+  const page = await loadPage({ activeEvent: winter, groups: orderedGroups, rings: [{ ...ringA1 }] });
+  await page.openDayOf();
+  assert.deepEqual(shownDivisions(page), ['31', '30', '40', '41', '42', '50', '51']);
+  const filters = page.element('raFilters').innerHTML;
+  for (const label of ['All (7)', 'BB (2)', 'TT (2)', 'SD (1)', 'Gup (2)']) assert.match(filters, new RegExp(label.replace(/[()]/g, '\\$&')));
+  assert.match(page.element('raDivisions').innerHTML, /Mixed ages 12-17/);
+  assert.equal((page.element('raDivisions').innerHTML.match(/Mixed ages/g) || []).length, 1);
+  const writes = () => page.requests.filter((request) => request.init);
+  const before = writes().length;
+  await page.ringAction('raFilters', { raFilter: 'Gup' });
+  assert.deepEqual(shownDivisions(page), ['50', '51']);
+  await page.ringAction('raFilters', { raFilter: 'BB' });
+  assert.deepEqual(shownDivisions(page), ['31', '30', '50', '51']);
+  assert.match(page.element('raFilters').innerHTML, /data-ra-filter="All" aria-pressed="false"/);
+  await page.ringAction('raFilters', { raFilter: 'Gup' });
+  await page.ringAction('raFilters', { raFilter: 'BB' });
+  assert.match(page.element('raFilters').innerHTML, /data-ra-filter="All" aria-pressed="true"/);
+  assert.deepEqual(shownDivisions(page), ['31', '30', '40', '41', '42', '50', '51']);
+  await page.ringAction('raFilters', { raFilter: 'SD' });
+  await page.ringAction('raFilters', { raFilter: 'All' });
+  assert.equal(shownDivisions(page).length, 7);
+  assert.equal(writes().length, before);
+});
+
+test('two-day events mark locked Day 2 divisions, show the format in the banner and explain it in Event Setup', async () => {
+  const page = await loadPage({ activeEvent: winter, groups: orderedGroups, rings: [{ ...ringA1 }],
+    schedule: { tournamentDays: 2, currentDay: 1, day1Complete: false, day2Started: false } });
+  await page.openDayOf();
+  await page.ringAction('raFilters', { raFilter: 'All' });
+  const markup = page.element('raDivisions').innerHTML;
+  assert.match(markup, /ra-day2-locked/);
+  assert.match(markup, /draggable="false"[^>]*data-ra-division="40"/);
+  assert.match(markup, /Day 2 &middot; locked/);
+  assert.doesNotMatch(markup.match(/<button[^>]*data-ra-division="30"[^>]*>/)[0], /ra-day2-locked/);
+  assert.equal(page.element('tournamentDaysHint').textContent.includes('All divisions run in one continuous event'), true);
+  page.element('tournamentDaysInput').value = '2';
+  await page.input('tournamentDaysInput', 'change');
+  assert.match(page.element('tournamentDaysHint').textContent, /Day 2 \(TT\/SD\/Gup\) stays locked/);
+});
+
+test('schedule summary covers one-day and two-day Day 2 guards', async () => {
+  const oneDay = await loadPage({ activeEvent: winter, groups: orderedGroups, rings: [{ ...ringA1 }] });
+  await oneDay.openDayOf();
+  assert.equal(oneDay.element('raScheduleSummary').hidden, false);
+  assert.match(oneDay.element('raScheduleSummary').innerHTML, /One-day event/);
+  assert.match(oneDay.element('raScheduleSummary').innerHTML, /BB oldest first &middot; TT\/SD then Gup youngest first/);
+  assert.match(oneDay.element('raScheduleSummary').innerHTML, /data-ra-event-setup/);
+  assert.doesNotMatch(oneDay.element('raScheduleSummary').innerHTML, /Start Day 2/);
+
+  const options = { activeEvent: winter, groups: orderedGroups, rings: [{ ...ringA1 }],
+    schedule: { tournamentDays: 2, currentDay: 1, day1Complete: false, day2Started: false } };
+  const page = await loadPage(options);
+  await page.openDayOf();
+  assert.match(page.element('raScheduleSummary').innerHTML, /Two-day event &middot; Day 1 \(BB\)/);
+  assert.match(page.element('raScheduleSummary').innerHTML, /Day 2 is locked until every BB division is complete/);
+  assert.match(page.element('raScheduleSummary').innerHTML, /disabled>Start Day 2/);
+  assert.match(page.element('raFilters').innerHTML, /data-ra-filter="BB" aria-pressed="true"/);
+  assert.match(page.element('raFilters').innerHTML, /data-ra-filter="All" aria-pressed="false"/);
+  const writes = () => page.requests.filter((request) => request.init);
+  let before = writes().length;
+  await page.ringAction('raScheduleSummary', { raStartDay2: '' });
+  assert.equal(writes().length, before);
+  await page.ringAction('raRings', { raRing: 'ring-a-1' });
+  before = writes().length;
+  await page.ringAction('raDivisions', { raDivision: '40' });
+  assert.equal(writes().length, before);
+  assert.match(page.element('raNotice').textContent, /Day 2 divisions cannot be assigned/);
+  await page.ringAction('raDivisions', { raDivision: '30' });
+  assert.equal(writes().length, before + 1);
+
+  options.schedule = { ...options.schedule, day1Complete: true };
+  await page.click('raRefreshBtn');
+  assert.match(page.element('raScheduleSummary').innerHTML, /Day 2 is ready to start/);
+  assert.doesNotMatch(page.element('raScheduleSummary').innerHTML, /disabled>Start Day 2/);
+  before = writes().length;
+  await page.ringAction('raScheduleSummary', { raStartDay2: '' });
+  assert.match(page.confirmations.at(-1), /Start Day 2/);
+  assert.equal(writes().length, before);
+});
+
+test('Start Day 2 posts after confirmation and simulator view stays read-only', async () => {
+  const options = { activeEvent: winter, groups: orderedGroups, rings: [{ ...ringA1 }], confirm: true,
+    schedule: { tournamentDays: 2, currentDay: 1, day1Complete: true, day2Started: false } };
+  const page = await loadPage(options);
+  await page.openDayOf();
+  await page.ringAction('raScheduleSummary', { raStartDay2: '' });
+  const post =   page.requests.filter((request) => request.init).at(-1);
+  assert.equal(post.path, '/api/rings/schedule/day2');
+  assert.equal(post.init.method, 'POST');
+  assert.match(page.element('raScheduleSummary').innerHTML, /Day 2 in progress/);
+  assert.doesNotMatch(page.element('raScheduleSummary').innerHTML, /Start Day 2/);
+
+  const runId = 'day-break-run';
+  const sim = await loadPage({
+    activeEvent: winter, groups: orderedGroups, rings: [{ ...ringA1 }], confirm: true,
+    simulatorRuns: [{ runId, sourceEventName: 'Rehearsal', status: 'day-break' }],
+    simulatorBoard: { eventName: 'SIMULATION - rehearsal', simulatorStatus: 'day-break', groups: orderedGroups, rings: [{ ...ringA1 }],
+      availableGroupDivisionNumbers: orderedGroups.map((group) => String(group.groupDivisionNumber)),
+      ringConfig: { letterCount: 1, numberCount: 1 },
+      schedule: { tournamentDays: 2, currentDay: 1, day1Complete: true, day2Started: false } }
+  });
+  await sim.openDayOf();
+  sim.element('raSourceRun').value = runId;
+  await sim.input('raSourceRun', 'change');
+  assert.match(sim.element('raScheduleSummary').innerHTML, /Read-only/);
+  assert.doesNotMatch(sim.element('raScheduleSummary').innerHTML, /Start Day 2/);
+});
+
 const ringA1 = { ringId: 'ring-a-1', ringLabel: 'A1', queuedGroupDivisionNumbers: [] };
 const division20 = { groupDivisionNumber: 20, name: 'Active division', competitors: [savedCompetitor] };
 
@@ -998,11 +1159,11 @@ test('ring assignment direct link, search, empty state, errors and event switchi
   });
   await settle();
   assert.equal(page.element('ringAssignmentView').hidden, false);
-  page.element('raSearch').value = 'no-match';
-  await page.input('raSearch', 'input');
+  await page.ringAction('raFilters', { raFilter: 'TT' });
   assert.doesNotMatch(page.element('raDivisions').innerHTML, /data-ra-division/);
-  page.element('raSearch').value = '';
-  await page.input('raSearch', 'input');
+  assert.match(page.element('raFilters').innerHTML, /data-ra-filter="TT" aria-pressed="true"/);
+  await page.ringAction('raFilters', { raFilter: 'All' });
+  assert.match(page.element('raDivisions').innerHTML, /data-ra-division="20"/);
   await page.ringAction('raRings', { raRing: 'ring-a-1' });
   page.setActiveEvent(spring);
   await page.click('raRefreshBtn');
@@ -1034,20 +1195,44 @@ test('ring updates reject changed active context and display server errors witho
   assert.match(failed.element('raDivisions').innerHTML, /data-ra-division="20"/);
 });
 
-test('saved ring layout is explicit and confirmed instead of resetting assignments on load', async () => {
+test('opening Ring Assignment never applies a destructive layout and Event Setup uses a single save', async () => {
   const page = await loadPage({ activeEvent: spring, rings: [{ ...ringA1 }], confirm: true });
   await page.openDayOf();
-  assert.equal(page.element('raLayoutBtn').hidden, false);
   assert.equal(page.requests.some((request) => request.path === '/api/rings/config'), false);
-  await page.click('raLayoutBtn');
-  assert.match(page.confirmations.at(-1), /resets ALL ring assignments/);
-  const apply = page.requests.find((request) => request.path === '/api/rings/config');
-  assert.equal(apply.name, spring);
-  assert.deepEqual(JSON.parse(apply.init.body), { letterCount: 2, numberCount: 3 });
-  assert.equal(page.element('raRingCount').textContent, '6 rings');
-  assert.equal(page.element('raLayoutBtn').hidden, true);
-  assert.equal(page.element('raNotice').textContent, '');
-  assert.equal(page.element('raNotice').className, 'notice');
+  assert.doesNotMatch(html, /id="raLayoutBtn"|id="applyEventRingLayoutBtn"/);
+  await page.select(spring);
+  await page.click('modifyEventBtn');
+  page.element('ringConfigXInput').value = '4';
+  await page.click('saveMetadataBtn');
+  const save = page.requests.find((request) => request.path === '/api/events/modify');
+  assert.equal(JSON.parse(save.init.body).ringConfigX, 4);
+  assert.equal(page.requests.some((request) => request.path === '/api/rings/config'), false);
+});
+
+test('all event settings lock together and confirmed reset run unlocks them', async () => {
+  const page = await loadPage({ activeEvent: winter, selectedEvent: spring, configurationLocked: true, confirm: true });
+  await page.click('modifyEventBtn');
+  for (const id of ['locationInput', 'dateInput', 'tournamentDaysInput', 'ringConfigXInput', 'ringConfigYInput', 'saveMetadataBtn']) {
+    assert.equal(page.element(id).disabled, true, id);
+  }
+  assert.match(page.element('eventConfigurationHelp').textContent, /locked/);
+  await page.click('resetRunBtn');
+  assert.match(page.confirmations.at(-1), /Stop all tablet activity/);
+  assert.match(page.confirmations.at(-1), /Results and ring state will be archived/);
+  const reset = page.requests.find((request) => request.path === '/api/events/reset-run');
+  assert.deepEqual(JSON.parse(reset.init.body), { eventName: spring, confirm: true });
+  for (const id of ['locationInput', 'dateInput', 'tournamentDaysInput', 'ringConfigXInput', 'ringConfigYInput', 'saveMetadataBtn']) {
+    assert.equal(page.element(id).disabled, false, id);
+  }
+  assert.match(page.element('notice').textContent, /run-archives\/test-run/);
+});
+
+test('cancelled reset run makes no request and leaves configuration locked', async () => {
+  const page = await loadPage({ selectedEvent: spring, configurationLocked: true });
+  await page.click('modifyEventBtn');
+  await page.click('resetRunBtn');
+  assert.equal(page.requests.some((request) => request.path === '/api/events/reset-run'), false);
+  assert.equal(page.element('saveMetadataBtn').disabled, true);
 });
 
 test('Head Table integrates active-event totals, preserves disconnected divisions and has no assignment/reset controls', async () => {
@@ -1345,6 +1530,102 @@ function estimationFixture() {
     estimates: buildEstimates({ eventName: winter, groups, rings, now }) };
 }
 
+test('available division badges and Special Dragons descriptions preserve saved data', async () => {
+  const groups = [
+    { groupDivisionNumber: 20, name: 'Tiny Tiger', competitors: [{ ...savedCompetitor, rank: 'TTLD' }] },
+    { groupDivisionNumber: 22, name: 'Special Needs Male Gup', specialNeeds: true,
+      competitors: [{ ...savedCompetitor, specialNeeds: 1 }] },
+    { groupDivisionNumber: 24, name: 'Gup', competitors: [{ ...savedCompetitor, rank: 'CDB' }] },
+    { groupDivisionNumber: 26, name: 'Black Belt', competitors: [
+      { ...savedCompetitor, rank: 'D1' }, { ...savedCompetitor, rank: 'CDB' }
+    ] }
+  ];
+  const before = JSON.stringify(groups);
+  const page = await loadPage({ activeEvent: winter, groups, rings: [ringA1] });
+  await page.openDayOf();
+  const markup = page.element('raDivisions').innerHTML;
+  for (const badge of ['TT', 'SD', 'Gup', 'BB']) assert.match(markup, new RegExp(`>${badge}</span>`));
+  assert.match(markup, /Special Dragons Male Gup/);
+  assert.doesNotMatch(markup, /Special Needs/);
+  assert.equal(JSON.stringify(groups), before);
+});
+
+test('Ring Assignment simulation is isolated, read-only and follows source selection', async () => {
+  const runId = 'test-simulation';
+  const simulation = {
+    eventName: 'SIMULATION - rehearsal', simulatorStatus: 'running', groups: [division20],
+    rings: [{ ...ringA1, queuedGroupDivisionNumbers: ['20'] }],
+    availableGroupDivisionNumbers: ['20'], ringConfig: { letterCount: 1, numberCount: 1 },
+    estimates: { version: 1, eventName: 'SIMULATION - rehearsal', status: 'unavailable', reason: 'Paused',
+      generatedAt: new Date().toISOString(), validUntil: new Date(Date.now() + 30000).toISOString(),
+      rings: [], unassigned: [{ groupDivisionNumber: '20', durationMs: 300000, status: 'unavailable' }] }
+  };
+  const page = await loadPage({
+    activeEvent: winter, groups: [division20], rings: [ringA1], confirm: true,
+    simulatorRuns: [{ runId, sourceEventName: 'Rehearsal', status: 'running' }],
+    simulatorBoard: simulation
+  });
+  await page.openDayOf();
+  page.element('raSourceRun').value = runId;
+  await page.input('raSourceRun', 'change');
+  assert.match(page.element('raSimulationNotice').textContent, /SIMULATION - READ ONLY/);
+  assert.equal(page.element('raEvent').textContent, simulation.eventName);
+  assert.match(page.element('raDivisions').innerHTML, /draggable="false"/);
+  assert.match(page.element('raDivisions').innerHTML, /Ring ~5 real min/);
+  assert.match(page.element('raDivisions').innerHTML, /Start TBD/);
+  await page.ringAction('raRings', { raRing: 'ring-a-1' });
+  assert.doesNotMatch(page.element('ringAssignmentDetails').innerHTML, /data-ra-remove|data-ra-reset/);
+  const writes = () => page.requests.filter((request) => request.init && request.init.method !== 'GET');
+  const before = writes().length;
+  await page.ringAction('raDivisions', { raDivision: '20' });
+  await page.ringAction('ringAssignmentDetails', { raRemove: '20' });
+  await page.ringAction('ringAssignmentDetails', {}, { reset: true });
+  await page.ringAction('raRings', { raRing: 'ring-a-1' }, { event: 'drop', divisionId: '20' });
+  await page.pointerAction('pointerdown');
+  await page.pointerAction('pointerup', { ringId: 'ring-a-1' });
+  assert.equal(writes().length, before);
+  await page.ringAction('ringAssignmentDetails', { raGroup: '20' });
+  assert.match(page.element('ringAssignmentDetails').innerHTML, /ra-members/);
+  simulation.simulatorStatus = 'paused';
+  await page.click('raRefreshBtn');
+  assert.match(page.element('raSimulationNotice').textContent, /paused/);
+  page.element('raSourceRun').value = '';
+  await page.input('raSourceRun', 'change');
+  assert.equal(page.element('raEvent').textContent, winter);
+  assert.equal(page.element('raSimulationNotice').hidden, true);
+  assert.match(page.element('raDivisions').innerHTML, /draggable="true"/);
+});
+
+test('unavailable simulation clears the board without falling back to live data', async () => {
+  const page = await loadPage({ activeEvent: winter, groups: [division20], rings: [ringA1],
+    search: '?simulatorRunId=missing', failSimulation: true });
+  await page.openDayOf();
+  assert.match(page.element('raNotice').textContent, /Simulation unavailable/);
+  assert.doesNotMatch(page.element('raRings').innerHTML, /data-ra-ring/);
+  assert.equal(page.requests.some((request) => request.path === '/api/rings'), false);
+  assert.equal(page.element('raSimulationNotice').hidden, false);
+});
+
+test('switching back to live ignores a late simulator response', async () => {
+  let release;
+  const waiting = new Promise((resolve) => { release = resolve; });
+  const page = await loadPage({ activeEvent: winter, groups: [division20], rings: [ringA1],
+    waitForSimulation: waiting,
+    simulatorBoard: { eventName: 'SIMULATION - late', simulatorStatus: 'running', groups: [],
+      rings: [], availableGroupDivisionNumbers: [] } });
+  await page.openDayOf();
+  page.element('raSourceRun').value = 'late';
+  await page.input('raSourceRun', 'change');
+  page.element('raSourceRun').value = '';
+  await page.input('raSourceRun', 'change');
+  release();
+  await settle();
+  await settle();
+  assert.equal(page.element('raEvent').textContent, winter);
+  assert.equal(page.element('raSimulationNotice').hidden, true);
+  assert.match(page.element('raRings').innerHTML, /Ring A1/);
+});
+
 test('Ring Assignment and Head Table show the same queue start and completion windows for the active event', async () => {
   const fixture = estimationFixture();
   const page = await loadPage(fixture);
@@ -1355,7 +1636,7 @@ test('Ring Assignment and Head Table show the same queue start and completion wi
   assert.match(assignment, /Estimated start: .+ \(approx\.\)/);
   assert.match(assignment, /Ring free after queue: .+ \(approx\.\)/);
   assert.match(page.element('raDivisions').innerHTML, /Start ~[^<]+/);
-  assert.match(page.element('raDivisions').innerHTML, /Ring ~7 min/);
+  assert.match(page.element('raDivisions').innerHTML, /Ring ~25 min/);
   assert.doesNotMatch(page.element('raDivisions').innerHTML, /\btitle=|\bdata-help=|data-estimate-help-expiry/);
   assert.match(page.element('raEstimateSummary').innerHTML, /Next ring free after queue: A1/);
   await page.openDayOf(4);
@@ -1479,7 +1760,7 @@ test('available tile retains duration when start is unavailable and rejects malf
     await page.openDayOf();
     const markup = page.element('raDivisions').innerHTML;
     assert.match(markup, /Start TBD/, condition);
-    assert.match(markup, ['stale', 'event', 'missing-roster'].includes(condition) ? /Ring time TBD/ : /Ring ~7 min/, condition);
+    assert.match(markup, ['stale', 'event', 'missing-roster'].includes(condition) ? /Ring time TBD/ : /Ring ~25 min/, condition);
     assert.doesNotMatch(markup, /Start ~/);
   }
 });

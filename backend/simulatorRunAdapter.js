@@ -1,6 +1,7 @@
-const fs = require('fs');
 const path = require('path');
 const { createResultPacketStore } = require('./resultPacket');
+const { writeJsonAtomicSync } = require('./atomicJsonFile');
+const { scheduleState, isDayBlocked } = require('./tournamentSchedule');
 
 function createSimulatorRunClientFactory({ simulatorRunStore }) {
   if (!simulatorRunStore || typeof simulatorRunStore.getRunWorkspace !== 'function') {
@@ -33,14 +34,15 @@ function createSimulatorRunClientFactory({ simulatorRunStore }) {
     return workspace;
   }
 
-  function persistAssignments(workspace) {
-    const target = path.join(workspace.runDirectory, 'ring-assignments.json');
-    const temporary = `${target}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(temporary, JSON.stringify(workspace.assignments, null, 2), {
-      encoding: 'utf8',
-      flag: 'wx'
-    });
-    fs.renameSync(temporary, target);
+  function updateAssignments(workspace, ringId, update) {
+    const next = {
+      ...workspace,
+      assignments: JSON.parse(JSON.stringify(workspace.assignments))
+    };
+    const result = update(next, ringState(next, ringId));
+    writeJsonAtomicSync(path.join(workspace.runDirectory, 'ring-assignments.json'), next.assignments);
+    workspace.assignments = next.assignments;
+    return result;
   }
 
   function ringState(workspace, ringId) {
@@ -55,6 +57,23 @@ function createSimulatorRunClientFactory({ simulatorRunStore }) {
     ) || null;
   }
 
+  function takePendingGroup(workspace) {
+    const pending = workspace.assignments.pendingGroupDivisionNumbers || [];
+    if (!pending.length) return null;
+    const schedule = scheduleState(workspace.groups, workspace.assignments);
+    const index = pending.findIndex((entry) => !isDayBlocked(groupFor(workspace, entry.groupDivisionNumber), schedule));
+    if (index < 0) return null;
+    return pending.splice(index, 1)[0].groupDivisionNumber;
+  }
+
+  function queueNextGroup(workspace, assignments) {
+    if (assignments.queuedGroupDivisionNumbers.length) return null;
+    const next = takePendingGroup(workspace);
+    if (!next) return null;
+    assignments.queuedGroupDivisionNumbers.push(next);
+    return next;
+  }
+
   function createRunClient({ runId, eventName, ringId, ringLabel }) {
     const workspace = loadWorkspace(runId, eventName);
     const assignments = ringState(workspace, ringId);
@@ -66,6 +85,7 @@ function createSimulatorRunClientFactory({ simulatorRunStore }) {
       simulationScope: { kind: 'simulator-run', runId, eventName, ringId },
 
       async queue(groupDivisionNumber) {
+        const assignments = ringState(workspace, ringId);
         const groupNumber = String(groupDivisionNumber);
         const assigned = [
           assignments.groupDivisionNumber,
@@ -80,46 +100,57 @@ function createSimulatorRunClientFactory({ simulatorRunStore }) {
       },
 
       async bootstrap({ tabletLabel }) {
-        if (!assignments.groupDivisionNumber) {
-          assignments.groupDivisionNumber = assignments.queuedGroupDivisionNumbers.shift() || '';
-        }
-        assignments.currentGroupDivisionNumber = assignments.groupDivisionNumber;
-        assignments.tabletLabel = String(tabletLabel || '');
-        assignments.phase = assignments.groupDivisionNumber ? 'check-in' : 'idle';
-        assignments.lastHeartbeatAt = new Date().toISOString();
-        persistAssignments(workspace);
-        return {
-          ringId,
-          ringLabel,
-          currentGroupDivisionNumber: assignments.groupDivisionNumber,
-          currentGroup: groupFor(workspace, assignments.groupDivisionNumber)
-        };
+        return updateAssignments(workspace, ringId, (next, assignments) => {
+          if (!assignments.groupDivisionNumber) {
+            assignments.groupDivisionNumber = assignments.queuedGroupDivisionNumbers.shift() || '';
+          }
+          let newlyAssignedGroupDivisionNumber = null;
+          if (!assignments.groupDivisionNumber) {
+            newlyAssignedGroupDivisionNumber = takePendingGroup(next);
+            assignments.groupDivisionNumber = newlyAssignedGroupDivisionNumber || '';
+          }
+          const newlyQueuedGroupDivisionNumber = queueNextGroup(next, assignments);
+          assignments.currentGroupDivisionNumber = assignments.groupDivisionNumber;
+          assignments.tabletLabel = String(tabletLabel || '');
+          assignments.phase = assignments.groupDivisionNumber ? 'check-in' : 'idle';
+          assignments.lastHeartbeatAt = new Date().toISOString();
+          return {
+            ringId,
+            ringLabel,
+            currentGroupDivisionNumber: assignments.groupDivisionNumber,
+            currentGroup: groupFor(workspace, assignments.groupDivisionNumber),
+            newlyAssignedGroupDivisionNumber,
+            newlyQueuedGroupDivisionNumber
+          };
+        });
       },
 
       async heartbeat({ tabletLabel, phase, checkInCount, checkInTotal, phaseCompletedCount, phaseTotalCount }) {
-        if (!assignments.groupDivisionNumber) {
-          throw new Error(`Simulator ring ${ringId} has no active group`);
-        }
-        if (assignments.tabletLabel !== String(tabletLabel || '')) {
-          throw new Error(`Simulator tablet identity mismatch for ring ${ringId}`);
-        }
-        assignments.phase = phase === 'setup' ? 'check-in' : phase;
-        assignments.lastHeartbeatAt = new Date().toISOString();
-        assignments.checkInCount = Number.isFinite(checkInCount) ? checkInCount : assignments.checkInCount;
-        assignments.checkInTotal = Number.isFinite(checkInTotal) ? checkInTotal : assignments.checkInTotal;
-        assignments.phaseCompletedCount = Number.isFinite(phaseCompletedCount)
-          ? phaseCompletedCount
-          : assignments.phaseCompletedCount;
-        assignments.phaseTotalCount = Number.isFinite(phaseTotalCount)
-          ? phaseTotalCount
-          : assignments.phaseTotalCount;
-        assignments.phaseProgress = assignments.phaseTotalCount
-          ? Math.min(100, (assignments.phaseCompletedCount / assignments.phaseTotalCount) * 100)
-          : 0;
-        persistAssignments(workspace);
+        return updateAssignments(workspace, ringId, (_next, assignments) => {
+          if (!assignments.groupDivisionNumber) {
+            throw new Error(`Simulator ring ${ringId} has no active group`);
+          }
+          if (assignments.tabletLabel !== String(tabletLabel || '')) {
+            throw new Error(`Simulator tablet identity mismatch for ring ${ringId}`);
+          }
+          assignments.phase = phase === 'setup' ? 'check-in' : phase;
+          assignments.lastHeartbeatAt = new Date().toISOString();
+          assignments.checkInCount = Number.isFinite(checkInCount) ? checkInCount : assignments.checkInCount;
+          assignments.checkInTotal = Number.isFinite(checkInTotal) ? checkInTotal : assignments.checkInTotal;
+          assignments.phaseCompletedCount = Number.isFinite(phaseCompletedCount)
+            ? phaseCompletedCount
+            : assignments.phaseCompletedCount;
+          assignments.phaseTotalCount = Number.isFinite(phaseTotalCount)
+            ? phaseTotalCount
+            : assignments.phaseTotalCount;
+          assignments.phaseProgress = assignments.phaseTotalCount
+            ? Math.min(100, (assignments.phaseCompletedCount / assignments.phaseTotalCount) * 100)
+            : 0;
+        });
       },
 
       async complete(packet) {
+        const assignments = ringState(workspace, ringId);
         if (!assignments.groupDivisionNumber ||
             String(packet.groupDivisionNumber ?? packet.groupId) !== String(assignments.groupDivisionNumber)) {
           throw new Error(`Result packet does not match active simulator group on ring ${ringId}`);
@@ -137,24 +168,33 @@ function createSimulatorRunClientFactory({ simulatorRunStore }) {
           throw new Error(`Simulator submission ID was reused for a different group`);
         }
 
-        const completedGroup = String(assignments.groupDivisionNumber);
-        assignments.completedGroupDivisionNumbers.push(completedGroup);
-        assignments.completedGroupIds = assignments.completedGroupDivisionNumbers;
-        assignments.groupDivisionNumber = assignments.queuedGroupDivisionNumbers.shift() || '';
-        assignments.currentGroupDivisionNumber = assignments.groupDivisionNumber;
-        assignments.phase = assignments.groupDivisionNumber ? 'check-in' : 'idle';
-        assignments.checkInCount = 0;
-        assignments.checkInTotal = 0;
-        assignments.phaseCompletedCount = 0;
-        assignments.phaseTotalCount = 0;
-        assignments.phaseProgress = 0;
-        assignments.lastHeartbeatAt = new Date().toISOString();
-        persistAssignments(workspace);
-        return {
-          serverRecordId: existing ? existing.serverRecordId : workspace.results.findBySubmissionId(packet.submissionId).serverRecordId,
-          currentGroupDivisionNumber: assignments.groupDivisionNumber,
-          currentGroup: groupFor(workspace, assignments.groupDivisionNumber)
-        };
+        return updateAssignments(workspace, ringId, (next, assignments) => {
+          const completedGroup = String(assignments.groupDivisionNumber);
+          assignments.completedGroupDivisionNumbers.push(completedGroup);
+          assignments.completedGroupIds = assignments.completedGroupDivisionNumbers;
+          assignments.groupDivisionNumber = assignments.queuedGroupDivisionNumbers.shift() || '';
+          let newlyAssignedGroupDivisionNumber = null;
+          if (!assignments.groupDivisionNumber) {
+            newlyAssignedGroupDivisionNumber = takePendingGroup(next);
+            assignments.groupDivisionNumber = newlyAssignedGroupDivisionNumber || '';
+          }
+          const newlyQueuedGroupDivisionNumber = queueNextGroup(next, assignments);
+          assignments.currentGroupDivisionNumber = assignments.groupDivisionNumber;
+          assignments.phase = assignments.groupDivisionNumber ? 'check-in' : 'idle';
+          assignments.checkInCount = 0;
+          assignments.checkInTotal = 0;
+          assignments.phaseCompletedCount = 0;
+          assignments.phaseTotalCount = 0;
+          assignments.phaseProgress = 0;
+          assignments.lastHeartbeatAt = new Date().toISOString();
+          return {
+            serverRecordId: existing ? existing.serverRecordId : workspace.results.findBySubmissionId(packet.submissionId).serverRecordId,
+            currentGroupDivisionNumber: assignments.groupDivisionNumber,
+            currentGroup: groupFor(workspace, assignments.groupDivisionNumber),
+            newlyAssignedGroupDivisionNumber,
+            newlyQueuedGroupDivisionNumber
+          };
+        });
       }
     };
   }

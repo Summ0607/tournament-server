@@ -13,15 +13,21 @@ const { createGroupStore } = require('./backend/groupStore');
 const { createDivisionRouter } = require('./backend/divisionRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
 const { divisionDurationMs } = require('./backend/ringEstimates');
+const { estimateDivisionTiming } = require('./backend/simulatorTiming');
 const { createResultPacketStore } = require('./backend/resultPacket');
 const { createSimulatorRunStore } = require('./backend/simulatorRunStore');
 const { createSimulatorRunRouter } = require('./backend/simulatorRunRoutes');
 const { createSimulatorRunClientFactory } = require('./backend/simulatorRunAdapter');
 const { resolveSurfaceName, resolveSurfacePort } = require('./backend/surfacePorts');
 const { registerPageRoutes } = require('./backend/pages');
-const { createEventConfigStore, normalizeEventRingConfig } = require('./backend/eventConfig');
+const { createServerControl } = require('./backend/serverControl');
+const { createEventConfigStore, normalizeEventRingConfig, hasOperationalUse } = require('./backend/eventConfig');
+const { writeJsonAtomicSync } = require('./backend/atomicJsonFile');
+const { normalizeTournamentDays } = require('./backend/tournamentSchedule');
 
 const app = express();
+let httpServer;
+let shuttingDown = false;
 const ACTIVE_SURFACE = resolveSurfaceName(process.env.TOURNAMENT_SURFACE);
 const PORT = resolveSurfacePort(ACTIVE_SURFACE);
 const SURFACE_ENTRY_PATH = ACTIVE_SURFACE === 'adminProgress'
@@ -44,7 +50,7 @@ const DEFAULT_TOURNAMENT_DB_PATH = path.join(ROOT_DIR, 'db', 'tournament.db');
 const TOURNAMENT_DB_PATH = DEFAULT_TOURNAMENT_DB_PATH;
 const EVENTS_ROOT = path.join(ROOT_DIR, 'events');
 const ACTIVE_EVENT_FILE = path.join(EVENTS_ROOT, 'active.json');
-const { readEventConfig, writeEventConfig } = createEventConfigStore(EVENTS_ROOT);
+const { readEventConfig, writeEventConfig, readAssignmentState, configurationStatus, resetRun } = createEventConfigStore(EVENTS_ROOT);
 const simulatorRunStore = createSimulatorRunStore({
   runsRoot: path.join(ROOT_DIR, 'simulator-runs')
 });
@@ -180,6 +186,14 @@ const db = new sqlite3.Database(TOURNAMENT_DB_PATH);
 // GLOBAL MIDDLEWARE
 // ─────────────────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
+app.use((_req, res, next) => {
+  if (shuttingDown) return res.status(503).json({ error: 'Server is shutting down. Reconnect shortly.' });
+  next();
+});
+app.use('/api/server-control', createServerControl({
+  enabled: process.env.TOURNAMENT_MANAGED_SERVER === '1' && typeof process.send === 'function',
+  requestRestart: () => { shutdownServer(true); }
+}));
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
@@ -337,8 +351,8 @@ function normalizeConfig(rawConfig) {
   const defaults = { letterCount: 1, numberCount: 2 };
   if (!rawConfig || typeof rawConfig !== 'object') return defaults;
   return {
-    letterCount: clampInt(rawConfig.letterCount, defaults.letterCount, 1, MAX_LETTERS),
-    numberCount: clampInt(rawConfig.numberCount, defaults.numberCount, 1, MAX_NUMBERS)
+    letterCount: clampInt(rawConfig.letterCount, defaults.letterCount, 0, MAX_LETTERS),
+    numberCount: clampInt(rawConfig.numberCount, defaults.numberCount, 0, MAX_NUMBERS)
   };
 }
 
@@ -371,12 +385,20 @@ function ensureStateStructure(rawState) {
   // Start time is recorded explicitly when a named tablet connects; it is never inferred from stale ring timestamps.
   return {
     config,
+    configLockedAt: state.configLockedAt || (hasOperationalUse(state) ? new Date().toISOString() : ''),
     eventStartedAt: String(state.eventStartedAt || '').trim(),
+    day2StartedAt: String(state.day2StartedAt || '').trim(),
     rings
   };
 }
 
 function readAssignmentsState() {
+  const eventName = readActiveEvent();
+  if (eventName) {
+    const normalized = ensureStateStructure(readAssignmentState(eventName));
+    writeAssignmentsState(normalized);
+    return normalized;
+  }
   const ringAssignmentsFile = resolveRingAssignmentsFile();
   if (!fs.existsSync(ringAssignmentsFile)) {
     const defaults = createDefaultAssignments();
@@ -406,12 +428,13 @@ function readAssignmentsState() {
 function writeAssignmentsState(state) {
   const ringAssignmentsFile = resolveRingAssignmentsFile();
   ensureAssignmentsFile(ringAssignmentsFile);
-  fs.writeFileSync(ringAssignmentsFile, JSON.stringify({
+  if (hasOperationalUse(state) && !state.configLockedAt) state.configLockedAt = new Date().toISOString();
+  writeJsonAtomicSync(ringAssignmentsFile, {
     ...state,
     rings: Object.fromEntries(
       Object.entries(state.rings || {}).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])
     )
-  }, null, 2));
+  });
 }
 
 function getRingState(state, ringId) {
@@ -471,24 +494,7 @@ function getRingStartTime(ringState, state = {}) {
 
 function buildPhaseEstimateMs(phaseName, ringState, currentGroup) {
   const phase = normalizePhaseName(phaseName);
-  const competitorCount = currentGroup && Array.isArray(currentGroup.competitors) ? currentGroup.competitors.length : 0;
-  const setupTotal = Number.isFinite(Number(ringState.checkInTotal)) ? Number(ringState.checkInTotal) : competitorCount;
-  const phaseTotal = Number.isFinite(Number(ringState.phaseTotalCount)) ? Number(ringState.phaseTotalCount) : competitorCount;
-  const sparringByes = competitorCount % 2;
-  const sparringActualBoutCount = Math.max(0, Math.floor((competitorCount - sparringByes) / 2));
-  const unitByPhase = {
-    setup: 7 * 60 * 1000,
-    weapons: 5 * 60 * 1000,
-    hyungs: 5 * 60 * 1000,
-    sparring: 120 * 1000,
-    awards: 2 * 60 * 1000
-  };
-
-  if (phase === 'setup') return Math.max(1, setupTotal || competitorCount || 1) * unitByPhase.setup;
-  if (phase === 'weapons' || phase === 'hyungs' || phase === 'awards') {
-    return Math.max(1, phaseTotal || competitorCount || 1) * unitByPhase[phase];
-  }
-  return Math.max(1, competitorCount || 1) * unitByPhase.setup;
+  return estimateDivisionTiming(currentGroup).phaseDurationsMs[phase] || 0;
 }
 
 function buildRingEstimateMs(currentGroup) {
@@ -496,9 +502,9 @@ function buildRingEstimateMs(currentGroup) {
 }
 
 function buildSparkringMetrics(ringState, currentGroup) {
-  const competitorCount = currentGroup && Array.isArray(currentGroup.competitors) ? currentGroup.competitors.length : 0;
-  const sparringByeCount = competitorCount % 2;
-  const sparringActualBoutCount = Math.max(0, Math.floor((competitorCount - sparringByeCount) / 2));
+  const timing = estimateDivisionTiming(currentGroup);
+  const sparringByeCount = timing.sparringByeCount;
+  const sparringActualBoutCount = timing.sparringBoutCount;
   const sparringCompletedBoutCount = normalizePhaseName(ringState.phase) === 'sparring'
     ? Math.max(0, Number.parseInt(ringState.phaseCompletedCount, 10) || 0)
     : 0;
@@ -725,12 +731,14 @@ function applyHeartbeatPolicy() {
 function resetAssignments(state) {
   state.rings = generateRings(state.config);
   state.eventStartedAt = '';
+  state.day2StartedAt = '';
 }
 
 function setRingConfig(state, letterCount, numberCount) {
   state.config = normalizeConfig({ letterCount, numberCount });
   state.rings = generateRings(state.config);
   state.eventStartedAt = '';
+  state.day2StartedAt = '';
 }
 
 function findGroupUsageAcrossRings(state, targetGroupId, excludedRingId = '') {
@@ -831,12 +839,13 @@ app.get('/api/events/active', (req, res) => {
   }
 });
 
-app.use('/api', createSimulatorRunRouter({
+const simulatorRouter = createSimulatorRunRouter({
   eventsRoot: EVENTS_ROOT,
   simulatorRunStore,
   loadGroupsFromDatabase,
   createRunClient: createSimulatorRunClient
-}));
+});
+app.use('/api', simulatorRouter);
 
 app.get('/api/results', (req, res) => {
   try {
@@ -1001,6 +1010,7 @@ app.post('/api/events/activate', async (req, res) => {
   }
 
   try {
+    readAssignmentState(eventName);
     currentGroupStore(eventName).clearGroups();
     fs.writeFileSync(ACTIVE_EVENT_FILE, JSON.stringify({ activeEvent: eventName }, null, 2));
     await primeGroupCacheFromDatabase();
@@ -1095,6 +1105,7 @@ app.post('/api/events/create', (req, res) => {
     name: String(body.name || body.eventName || '').trim(),
     location: String(body.location || '').trim(),
     date: String(body.date || '').trim(),
+    tournamentDays: body.tournamentDays,
     ringConfigX: body.ringConfigX,
     ringConfigY: body.ringConfigY
   };
@@ -1103,7 +1114,7 @@ app.post('/api/events/create', (req, res) => {
     return res.status(400).json({ error: 'eventName is required' });
   }
 
-  const { eventDir, dbPath, resultsDir, ringAssignmentsFile } = getEventPaths(eventName);
+  const { eventDir, dbPath, resultsDir } = getEventPaths(eventName);
 
   try {
     if (fs.existsSync(eventDir)) {
@@ -1111,6 +1122,7 @@ app.post('/api/events/create', (req, res) => {
     }
 
     Object.assign(eventConfig, normalizeEventRingConfig(eventConfig));
+    eventConfig.tournamentDays = normalizeTournamentDays(eventConfig.tournamentDays);
     fs.mkdirSync(eventDir, { recursive: true });
     fs.mkdirSync(resultsDir, { recursive: true });
     currentGroupStore(eventName).clearGroups();
@@ -1122,12 +1134,7 @@ app.post('/api/events/create', (req, res) => {
     const initializeDatabase = require('./db/init');
     initializeDatabase(dbPath)
       .then(() => {
-        const defaultAssignments = {
-          config: { letterCount: 1, numberCount: 2 },
-          eventStartedAt: '',
-          rings: {},
-        };
-        fs.writeFileSync(ringAssignmentsFile, JSON.stringify(defaultAssignments, null, 2));
+        readAssignmentState(eventName);
         return res.json({
           ok: true,
           eventName,
@@ -1163,6 +1170,7 @@ app.get('/api/events/config', (req, res) => {
     return res.json({
       ok: true,
       eventConfig: readEventConfig(eventName),
+      ...configurationStatus(eventName),
       dbExists: fs.existsSync(dbPath)
     });
   } catch (err) {
@@ -1185,18 +1193,20 @@ app.post('/api/events/modify', (req, res) => {
   }
 
   try {
+    const currentConfig = readEventConfig(eventName);
     const updatedConfig = writeEventConfig(eventName, {
       name: String(body.name || eventName).trim() || eventName,
       location: String(body.location || '').trim(),
       date: String(body.date || '').trim(),
-      ringConfigX: body.ringConfigX,
-      ringConfigY: body.ringConfigY,
-      createdAt: readEventConfig(eventName).createdAt || ''
+      tournamentDays: body.tournamentDays ?? currentConfig.tournamentDays,
+      ringConfigX: body.ringConfigX ?? currentConfig.ringConfigX,
+      ringConfigY: body.ringConfigY ?? currentConfig.ringConfigY,
+      createdAt: currentConfig.createdAt || ''
     });
     return res.json({ ok: true, eventName, eventConfig: updatedConfig });
   } catch (err) {
     console.error('Failed to modify event:', err);
-    return res.status(err.statusCode || 500).json({ error: err.statusCode === 400 ? err.message : 'Failed to modify event' });
+    return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to modify event' });
   }
 });
 
@@ -1264,7 +1274,7 @@ async function resetEvent(eventName) {
   await initializeDatabase(dbPath);
 
   const defaultAssignments = {
-    config: { letterCount: 1, numberCount: 2 },
+    config: { letterCount: readEventConfig(normalizedName).ringConfigX, numberCount: readEventConfig(normalizedName).ringConfigY },
     eventStartedAt: '',
     rings: {},
   };
@@ -1283,6 +1293,22 @@ app.post('/api/events/reset', async (req, res) => {
     const statusCode = err.statusCode || 500;
     console.error('Failed to reset event:', err);
     return res.status(statusCode).json({ error: err.message || 'Failed to reset event' });
+  }
+});
+
+app.post('/api/events/reset-run', (req, res) => {
+  const eventName = String(req.body?.eventName || '').trim();
+  if (!eventName || req.body?.confirm !== true) {
+    return res.status(400).json({ error: 'eventName and confirm: true are required. Stop tablet activity before resetting a run.' });
+  }
+  if (!fs.existsSync(getEventPaths(eventName).eventDir)) {
+    return res.status(404).json({ error: `Event folder not found: ${eventName}` });
+  }
+  try {
+    return res.json({ ok: true, eventName, ...resetRun(eventName) });
+  } catch (error) {
+    console.error('Failed to reset event run:', error);
+    return res.status(500).json({ error: 'Failed to reset event run. Check the server log before retrying.' });
   }
 });
 
@@ -1307,7 +1333,8 @@ app.use('/api', createRingRouter({
   DISCONNECT_AFTER_MS,
   saveUploadedDivisionPacket,
   resultPacketStore,
-  readActiveEvent
+  readActiveEvent,
+  readEventConfig
 }));
 
 async function startServer() {
@@ -1317,13 +1344,49 @@ async function startServer() {
     console.error('Failed to prime group cache from database:', err);
   }
 
-  app.listen(PORT, () => {
+  httpServer = app.listen(PORT, () => {
     console.log(`Group server running on ${ACTIVE_SURFACE} at http://localhost:${PORT}${SURFACE_ENTRY_PATH}`);
     console.log(`Entry page: http://localhost:${PORT}${SURFACE_ENTRY_PATH}`);
     console.log(`Group example: http://localhost:${PORT}/api/groups/group-1`);
     console.log(`Ring request-group example: http://localhost:${PORT}/api/rings/ring-a-1/request-group`);
   });
 }
+
+async function shutdownServer(restart = false) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(restart ? 'Restart requested: draining requests and saving simulator state...' : 'Shutting down tournament server...');
+  try {
+    const drained = new Promise((resolve, reject) => {
+      if (!httpServer) return resolve();
+      httpServer.close((error) => error ? reject(error) : resolve());
+      httpServer.closeIdleConnections();
+    });
+    await Promise.all([drained, simulatorRouter.shutdown()]);
+    await simulatorRouter.shutdown();
+    await new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
+    if (restart && process.connected) {
+      process.send({ type: 'restart-ready' }, (error) => {
+        if (error) {
+          console.error('Unable to notify launcher of restart:', error);
+          process.exit(1);
+        }
+        process.exit(0);
+      });
+    } else {
+      process.exit(0);
+    }
+  } catch (error) {
+    console.error('Graceful shutdown failed; automatic restart cancelled:', error);
+    process.exitCode = 1;
+  }
+}
+
+process.on('SIGINT', () => { shutdownServer(); });
+process.on('SIGTERM', () => { shutdownServer(); });
+process.on('message', (message) => {
+  if (message && message.type === 'shutdown') shutdownServer();
+});
 
 startServer();
 

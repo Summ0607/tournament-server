@@ -92,8 +92,8 @@ test('simulates prebuilt ring assignments through phase heartbeats and division 
   assert.equal(calls.filter(([name]) => name === 'queue').length, 3);
   assert.equal(calls.filter(([name]) => name === 'bootstrap').length, 2);
   assert.equal(calls.filter(([name]) => name === 'complete').length, 3);
-  assert.equal(calls.filter(([name, , body]) => name === 'heartbeat' && body.phase === 'weapons').length, 2);
-  assert.equal(calls.filter(([name, , body]) => name === 'heartbeat' && body.phase === 'setup').length, 6);
+  assert.equal(calls.filter(([name, , body]) => name === 'heartbeat' && body.phase === 'weapons').length, 4);
+  assert.equal(calls.filter(([name, , body]) => name === 'heartbeat' && body.phase === 'setup').length, 12);
   assert.deepEqual(ringStates.get('ring-a-1').completed, [1, 2]);
   const simulatedPackets = calls.filter(([name]) => name === 'complete').map(([, , packet]) => packet);
   assert.ok(simulatedPackets.every((packet) => packet.simulation.runId === 'sim-test-1'));
@@ -107,12 +107,51 @@ test('simulates prebuilt ring assignments through phase heartbeats and division 
   assert.deepEqual(state.rings[0].completedGroupNumbers, ['1', '2']);
   assert.ok(state.events.every((event, index) =>
     event.sequence === index + 1 && Number.isFinite(Date.parse(event.simulatedAt))));
+  assert.ok(state.events.filter((event) => event.type === 'division_completed')
+    .every((event) => event.durationMs > 0 && event.estimatedDurationMinutes > 0));
+  const setupProgress = state.events.filter((event) => event.type === 'phase_progress' && event.phase === 'setup')
+    .filter((event) => event.groupDivisionNumber === '1')
+    .map((event) => event.progress);
+  assert.deepEqual(setupProgress.slice(0, 4), [25, 50, 75, 100]);
   const firstPacket = simulatedPackets[0];
   const firstCompletion = state.events.find((event) =>
     event.type === 'division_completed' &&
     event.ringId === firstPacket.ringId &&
     event.groupDivisionNumber === String(firstPacket.groupDivisionNumber));
   assert.equal(firstPacket.simulation.simulatedAt, firstCompletion.simulatedAt);
+});
+
+test('exposes report upload, division loading and final idle without production phase heartbeats', async () => {
+  const { simulator, calls } = makeHarness({
+    rings: [{ ringId: 'ring-a-1', ringLabel: 'A1', groupDivisionNumbers: [1, 2] }],
+    groups: {
+      1: { groupDivisionNumber: 1, competitors: [{ id: 'a' }] },
+      2: { groupDivisionNumber: 2, competitors: [{ id: 'b' }] }
+    }
+  });
+  const phases = [];
+  for (let index = 0; index < 100; index += 1) {
+    const ring = await simulator.step('ring-a-1');
+    phases.push(ring.currentPhase);
+    if (ring.currentPhase === 'uploading-report') {
+      assert.equal(calls.filter(([name]) => name === 'complete').length, ring.completedCount);
+      assert.equal(ring.currentGroupNumber, String(ring.completedCount + 1));
+    }
+    if (ring.currentPhase === 'loading-division') {
+      assert.equal(ring.currentGroupNumber, '2');
+      assert.equal(ring.completedCount, 1);
+      assert.equal(calls.filter(([name]) => name === 'complete').length, 1);
+    }
+    if (ring.state === 'complete') break;
+  }
+  assert.ok(phases.includes('uploading-report'));
+  const loadingIndex = phases.indexOf('loading-division');
+  assert.ok(loadingIndex > phases.indexOf('uploading-report'));
+  assert.equal(phases[loadingIndex + 1], 'setup');
+  assert.equal(phases.at(-1), 'idle');
+  assert.equal(simulator.getState().rings[0].state, 'complete');
+  assert.ok(calls.filter(([name]) => name === 'heartbeat')
+    .every(([, , body]) => !['uploading-report', 'loading-division', 'idle'].includes(body.phase)));
 });
 
 test('advances one simulated operation at a time', async () => {
@@ -150,7 +189,11 @@ test('replays the same scenario seed and virtual start time deterministically', 
   ]);
 
   assert.equal(firstState.scenarioId, secondState.scenarioId);
-  assert.deepEqual(firstState.events, secondState.events);
+  const withoutActualTimes = (events) => events.map(({ occurredAt, ...event }) => {
+    assert.ok(Number.isFinite(Date.parse(occurredAt)));
+    return event;
+  });
+  assert.deepEqual(withoutActualTimes(firstState.events), withoutActualTimes(secondState.events));
   assert.deepEqual(first.randomValues, second.randomValues);
   assert.equal(firstState.simulatedAt, secondState.simulatedAt);
 });
@@ -209,7 +252,7 @@ test('rejects result packets that do not match the active run assignment', async
   });
 
   await simulator.step('ring-a-1');
-  for (let index = 0; index < 10; index += 1) {
+  for (let index = 0; index < 30; index += 1) {
     if (simulator.getState().rings[0].state === 'failed') break;
     try {
       await simulator.step('ring-a-1');

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { writeJsonAtomicSync } = require('./atomicJsonFile');
 
 const FORM_STATUSES = new Set(['COMPLETED', 'NOT_HELD']);
 const ENTRY_STATUSES = new Set(['REGISTERED', 'SCRATCHED', 'COMPLETED']);
@@ -414,9 +415,7 @@ function createResultPacketStore({ getResultsDirectory }) {
     const record = resolveSubmissionRecord(packet, receipt);
     const directory = resultsDirectory();
     const filePath = path.join(directory, `${safeFileIdentifier(record.serverRecordId)}.json`);
-    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(record, null, 2), { encoding: 'utf8', flag: 'wx' });
-    fs.renameSync(tempPath, filePath);
+    writeJsonAtomicSync(filePath, record);
     return {
       ...record,
       filePath,

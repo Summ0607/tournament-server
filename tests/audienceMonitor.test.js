@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { buildAudienceMonitor } = require('../backend/audienceMonitor');
+const { buildAudienceMonitor, buildSimulatorAudienceMonitor } = require('../backend/audienceMonitor');
 const { buildEstimates } = require('../backend/ringEstimates');
 const ui = require('../audience-monitor/monitor');
 const now = Date.parse('2026-10-25T16:00:00Z');
@@ -37,13 +37,13 @@ test('public projection includes applicable progression and assigned queues, nev
     ringId: 'ring-a-1', ringLabel: 'A1', groupDivisionNumber: '20',
     queuedGroupDivisionNumbers: ['22'], tabletLabel: 'Secret device', lastHeartbeatAt: new Date(now).toISOString(),
     assignmentStartedAt: new Date(now - 60000).toISOString(),
-    phasePlan: { phases: [{ key: 'weapons', label: 'Weapons', state: 'active', progress: 20 }] }
+    phasePlan: { phases: [{ key: 'hyungs', label: 'Hyungs', state: 'active', progress: 20 }] }
   }];
   const before = JSON.stringify(rings);
   const estimates = buildEstimates({ eventName: 'Active', rings, groups, now });
   const snapshot = buildAudienceMonitor({ eventName: 'Active', rings, groups, estimates });
   assert.equal(snapshot.rings[0].status, 'active');
-  assert.equal(snapshot.rings[0].phases[0].label, 'Weapons');
+  assert.equal(snapshot.rings[0].phases[0].label, 'Hyungs');
   assert.equal(snapshot.upcoming[0].divisionNumber, '22');
   assert.equal(snapshot.upcoming[0].description, 'Division description 22');
   assert.ok(snapshot.upcoming[0].startWindow);
@@ -61,6 +61,68 @@ test('public projection includes applicable progression and assigned queues, nev
   }
 });
 
+test('audience descriptions display Special Dragons without rewriting saved names', () => {
+  const groups = [{ groupDivisionNumber: 20, name: 'Special Needs Male Gup', competitors: [] }];
+  const rings = [{ ringId: 'ring-a-1', ringLabel: 'A1', groupDivisionNumber: '20' }];
+  const result = buildAudienceMonitor({ eventName: 'Event', groups, rings,
+    estimates: { rings: [], generatedAt: new Date(now).toISOString(), validUntil: new Date(now + 30000).toISOString() } });
+  assert.equal(result.rings[0].description, 'Special Dragons Male Gup');
+  assert.equal(groups[0].name, 'Special Needs Male Gup');
+});
+
+test('simulator Audience View estimates queued start from remaining active phase time', () => {
+  const simulatedAt = '2000-01-01T00:00:00.000Z';
+  const workspace = {
+    manifest: {
+      runId: '12345678-run',
+      sourceEventName: 'Simulation event',
+      status: 'running',
+      speed: 20,
+      startAt: simulatedAt,
+      state: {
+        simulatedAt,
+        rings: [{
+          ringId: 'ring-a-1',
+          state: 'running',
+          currentGroupNumber: '10',
+          currentPhase: 'setup',
+          currentPhaseProgress: 50,
+          phaseDurationsMs: {
+            setup: 60_000,
+            hyungs: 120_000,
+            sparring: 180_000,
+            awards: 60_000
+          }
+        }]
+      }
+    },
+    groups: [
+      { groupDivisionNumber: '10', name: 'Active division', competitors: [] },
+      { groupDivisionNumber: '11', name: 'Queued division', competitors: [] }
+    ],
+    assignments: {
+      rings: {
+        'ring-a-1': {
+          ringLabel: 'A1',
+          groupDivisionNumber: '10',
+          queuedGroupDivisionNumbers: ['11']
+        }
+      }
+    }
+  };
+
+  const snapshot = buildSimulatorAudienceMonitor(workspace, now);
+  const expectedMs = now + 21_000;
+  const uncertaintyMs = 2_100;
+  assert.equal(snapshot.upcoming.length, 1);
+  assert.deepEqual(snapshot.upcoming[0].startWindow, {
+    earliestAt: new Date(expectedMs - uncertaintyMs).toISOString(),
+    expectedAt: new Date(expectedMs).toISOString(),
+    latestAt: new Date(expectedMs + uncertaintyMs).toISOString()
+  });
+  assert.equal(snapshot.upcoming[0].divisionNumber, '11');
+});
+
 test('pagination capacity, stable refresh order, queue ordering and date windows are deterministic', () => {
   assert.deepEqual(ui.capacity(660, 310, 146), { columns: 2, count: 4 });
   assert.deepEqual(ui.capacity(320, 146, 146), { columns: 1, count: 1 });
@@ -75,8 +137,10 @@ test('pagination capacity, stable refresh order, queue ordering and date windows
   assert.equal(ui.fresh(snapshot, now + 30000), false);
   assert.equal(ui.fresh(snapshot, now - 60000), false);
   assert.equal(ui.windowText(null), 'Start TBD');
+  assert.notEqual(ui.windowText(windowAt(3), true), ui.windowText(windowAt(3)));
   assert.equal(ui.validWindow({ ...windowAt(3), expectedAt: 'invalid' }), false);
-  assert.match(ui.windowText(windowAt(24 * 60), now), /Oct 26/);
+  assert.match(ui.windowText(windowAt(24 * 60)), /^~/);
+  assert.doesNotMatch(ui.windowText(windowAt(24 * 60)), /Oct 26|,/);
   assert.throws(() => ui.validate({ ...snapshot, version: 2 }), /Invalid/);
   assert.throws(() => ui.validate({ ...snapshot, upcoming: null }), /Invalid/);
   assert.throws(() => ui.validate({ ...snapshot, validUntil: snapshot.generatedAt }), /Invalid/);
@@ -87,14 +151,18 @@ async function harness(initial = fixture()) {
   const node = (id) => {
     if (!nodes.has(id)) nodes.set(id, {
       textContent: '', innerHTML: '', style: {}, clientWidth: 320, clientHeight: id === 'rings' ? 64 : 136,
-      handlers: {}, attributes: {},
+      handlers: {}, attributes: {}, value: '', options: [],
       addEventListener(name, callback) { this.handlers[name] = callback; },
-      setAttribute(name, value) { this.attributes[name] = value; }
+      setAttribute(name, value) { this.attributes[name] = value; },
+      replaceChildren(...children) { this.options = children; },
+      append(child) { this.options.push(child); }
     });
     return nodes.get(id);
   };
   let time = now;
   let payload = initial;
+  let simulatorPayload = initial;
+  let simulatorRuns = [];
   let fail = false;
   const intervals = [];
   const timeouts = new Map();
@@ -103,10 +171,13 @@ async function harness(initial = fixture()) {
   const errors = [];
   const context = vm.createContext({
     Date: class extends Date { static now() { return time; } },
+    URLSearchParams,
+    window: { location: { search: '' } },
     AbortController,
     console: { error: (...args) => errors.push(args) },
     document: {
       getElementById: node, querySelector: () => node('display'), hidden: false,
+      createElement: () => ({ value: '', textContent: '' }),
       documentElement: { requestFullscreen: async () => { throw new Error('Denied'); } }
     },
     ResizeObserver: class { observe() {} },
@@ -116,6 +187,8 @@ async function harness(initial = fixture()) {
     fetch: async (url, options) => {
       requests.push({ url, options });
       if (fail) return { ok: false, status: 503 };
+      if (url === '/api/simulator/runs') return { ok: true, json: async () => ({ runs: simulatorRuns }) };
+      if (url.includes('/audience')) return { ok: true, json: async () => simulatorPayload };
       return { ok: true, json: async () => payload };
     }
   });
@@ -125,6 +198,7 @@ async function harness(initial = fixture()) {
   return {
     node, requests, errors,
     payload: (value) => { payload = value; },
+    simulator: (runs, value) => { simulatorRuns = runs; simulatorPayload = value; },
     fail: (value) => { fail = value; },
     tick: async (delay) => { intervals.find((timer) => timer.delay === delay).callback(); await settle(); },
     advance: async (ms) => { time += ms; intervals.find((timer) => timer.delay === 1000).callback(); await settle(); },
@@ -134,16 +208,25 @@ async function harness(initial = fixture()) {
       await timer.callback();
       await settle();
     },
-    click: async (id) => { await node(id).handlers.click({ currentTarget: node(id) }); await settle(); }
+    click: async (id) => { await node(id).handlers.click({ currentTarget: node(id) }); await settle(); },
+    selectRun: async (runId) => {
+      node('sourceRun').value = runId;
+      await node('sourceRun').handlers.change();
+      await settle();
+    }
   };
 }
 
 test('display rotates independently, wraps, pauses, preserves pages on refresh, and resets on event switch', async () => {
   const page = await harness();
   assert.match(page.node('rings').innerHTML, /Ring A1/);
+  assert.match(page.node('rings').innerHTML, /<strong>Ring A1<\/strong><strong>Division 20<\/strong>/);
+  assert.match(page.node('rings').innerHTML, /class="ring-top"><div class="card-heading">[\s\S]*?<\/div><div class="phases"/);
+  assert.doesNotMatch(page.node('rings').innerHTML, /class="badge"|>Waiting<|>In progress</);
   assert.match(page.node('upcoming').innerHTML, /Division 40/);
   assert.match(page.node('upcoming').innerHTML, /<strong class="ring-badge">Ring A1<\/strong>/);
-  assert.match(page.node('upcoming').innerHTML, /<div class="queue-position">Queue 1<\/div>/);
+  assert.doesNotMatch(page.node('upcoming').innerHTML, /queue-position|Queue \d/);
+  assert.match(page.node('upcoming').innerHTML, /class="card-heading"[\s\S]*class="start"[\s\S]*class="description"/);
   assert.doesNotMatch(page.node('upcoming').innerHTML, /Ring A1 &middot; Queue/);
   assert.equal(page.node('ringsPages').textContent, 'Page 1 of 4');
   await page.tick(ui.ROTATE_MS);
@@ -168,7 +251,8 @@ test('display rotates independently, wraps, pauses, preserves pages on refresh, 
   await page.refresh();
   assert.equal(page.node('eventName').textContent, 'New active event');
   assert.equal(page.node('ringsPages').textContent, 'Page 1 of 4');
-  assert.ok(page.requests.every((request) => request.url === '/api/rings/monitor' && !request.options.method));
+  assert.ok(page.requests.some((request) => request.url === '/api/rings/monitor'));
+  assert.ok(page.requests.some((request) => request.url === '/api/simulator/runs'));
 });
 
 test('display suppresses stale and failed data, recovers, escapes descriptions and reports fullscreen errors', async () => {
@@ -217,7 +301,7 @@ test('one-page content does not rotate and no-active-event response has an expli
 
 test('upper and lower sections use different capacities and wrap independently', async () => {
   const page = await harness();
-  page.node('rings').clientHeight = 140;
+  page.node('rings').clientHeight = 396;
   await page.click('pause');
   assert.equal(page.node('ringsPages').textContent, 'Page 1 of 2 - paused');
   assert.equal(page.node('upcomingPages').textContent, 'Page 1 of 4 - paused');
@@ -273,7 +357,7 @@ test('empty, queued, active and unavailable rings keep a pill without fabricatin
   assert.ok(projected.rings[0].phases.every((phase) => phase.state === 'upcoming' && phase.progress === 0));
   page.payload(projected);
   await page.refresh();
-  assert.match(page.node('rings').innerHTML, /Queued - not started/);
+  assert.match(page.node('rings').innerHTML, /queued, not started/);
   assert.match(page.node('rings').innerHTML, /Weapons/);
   assert.equal((page.node('rings').innerHTML.match(/class="phase upcoming"/g) || []).length, 5);
   page.payload(fixture(1));
@@ -285,4 +369,30 @@ test('empty, queued, active and unavailable rings keep a pill without fabricatin
   await page.refresh();
   assert.match(page.node('rings').innerHTML, /class="phases neutral-pill">Updates unavailable/);
   assert.doesNotMatch(page.node('rings').innerHTML, /class="phase active"/);
+});
+
+test('audience monitor offers simulator selection without changing its default active-event source', async () => {
+  const page = await harness();
+  assert.equal(page.node('sourceRun').value, '');
+  assert.ok(page.requests.some((request) => request.url === '/api/rings/monitor'));
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'audience-monitor', 'index.html'), 'utf8'), /id="sourceRun"/);
+});
+
+test('selected simulator run loads its isolated snapshot and labels the display as simulation', async () => {
+  const simulated = fixture(1);
+  simulated.source = 'simulator';
+  simulated.eventName = 'SIMULATION · Saved tournament · abcdef12';
+  simulated.simulatorStatus = 'running';
+  simulated.simulatedAt = '2000-01-01T01:00:00.000Z';
+  const run = { runId: 'abcdef12-0000-4000-8000-000000000001', sourceEventName: 'Saved tournament', status: 'running' };
+  const page = await harness();
+  page.simulator([run], simulated);
+  await page.tick(30000);
+  assert.ok(page.node('sourceRun').options.some((option) => option.value === run.runId));
+  await page.refresh();
+  await page.selectRun(run.runId);
+  assert.ok(page.requests.some((request) => request.url === `/api/simulator/runs/${run.runId}/audience`));
+  assert.match(page.node('eventName').textContent, /SIMULATION/);
+  assert.match(page.node('connection').textContent, /SIMULATION - running/);
+  assert.match(page.node('rings').innerHTML, /Ring A1/);
 });

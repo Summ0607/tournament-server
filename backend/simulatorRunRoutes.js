@@ -4,7 +4,13 @@ const path = require('path');
 const { createDayOfSimulator } = require('./dayOfSimulator');
 const { createSimulatorResultPacket } = require('./simulatorResultPacket');
 const { createResultPacketStore } = require('./resultPacket');
+const { TIMING_MODEL_VERSION, estimateDivisionTiming } = require('./simulatorTiming');
+const { buildSimulatorAudienceMonitor } = require('./audienceMonitor');
 const { normalizeEventName } = require('./simulatorRunStore');
+const { buildSimulatorRunTiming, buildSimulatorAssignmentEstimates } = require('./simulatorRunTiming');
+const { createEventConfigStore } = require('./eventConfig');
+const { writeJsonAtomicSync } = require('./atomicJsonFile');
+const { scheduleState, sortDivisionIds } = require('./tournamentSchedule');
 
 const DEFAULT_START_AT = '2000-01-01T00:00:00.000Z';
 const DEFAULT_STEP_DURATION_MS = 60_000;
@@ -24,10 +30,11 @@ function createSimulatorRunRouter({
   if (!eventsRoot) throw new Error('eventsRoot is required');
   if (!simulatorRunStore || typeof simulatorRunStore.createRun !== 'function' ||
       typeof simulatorRunStore.getRun !== 'function' ||
+      typeof simulatorRunStore.listRuns !== 'function' ||
       typeof simulatorRunStore.getRunWorkspace !== 'function' ||
       typeof simulatorRunStore.resetRun !== 'function' ||
       typeof simulatorRunStore.deleteRun !== 'function') {
-    throw new Error('simulatorRunStore must implement createRun(), getRun(), getRunWorkspace(), resetRun(), and deleteRun()');
+    throw new Error('simulatorRunStore must implement createRun(), getRun(), listRuns(), getRunWorkspace(), resetRun(), and deleteRun()');
   }
   if (typeof loadGroupsFromDatabase !== 'function') {
     throw new Error('loadGroupsFromDatabase is required');
@@ -38,6 +45,22 @@ function createSimulatorRunRouter({
 
   const router = express.Router();
   const controllers = new Map();
+  const { readEventConfig } = createEventConfigStore(eventsRoot);
+
+  function completedLifecycle(runId) {
+    const workspace = simulatorRunStore.getRunWorkspace(runId);
+    const schedule = scheduleState(workspace.groups, workspace.assignments);
+    return schedule.tournamentDays === 2 && !schedule.day2Started ? 'day-break' : 'complete';
+  }
+
+  router.get('/simulator/runs', (_req, res) => {
+    try {
+      return res.json({ runs: simulatorRunStore.listRuns() });
+    } catch (error) {
+      console.error('Failed to list simulator runs:', error);
+      return res.status(500).json({ error: 'Failed to list simulator runs' });
+    }
+  });
 
   function getController(runId, options = {}) {
     if (controllers.has(runId)) return controllers.get(runId);
@@ -52,23 +75,27 @@ function createSimulatorRunRouter({
         manifest: failedManifest,
         simulator: null,
         status: 'failed',
-        speed: failedManifest.speed || 10,
+        speed: failedManifest.speed || 600,
         runnerPromise: null,
-        wakeRunner: null,
-        failure: failedManifest.failure
+        wakeRunners: new Set(),
+        failure: failedManifest.failure,
+        wallClockStartedAt: failedManifest.wallClockStartedAt || null,
+        wallClockCompletedAt: failedManifest.wallClockCompletedAt || null
       };
       controllers.set(runId, controller);
       return controller;
     }
-    if (['complete', 'failed', 'stopped'].includes(workspace.manifest.status)) {
+    if (['complete', 'failed', 'stopped', 'day-break'].includes(workspace.manifest.status)) {
       const controller = {
         manifest: workspace.manifest,
         simulator: null,
         status: workspace.manifest.status,
-        speed: workspace.manifest.speed || 10,
+        speed: workspace.manifest.speed || 600,
         runnerPromise: null,
-        wakeRunner: null,
-        failure: workspace.manifest.failure || null
+        wakeRunners: new Set(),
+        failure: workspace.manifest.failure || null,
+        wallClockStartedAt: workspace.manifest.wallClockStartedAt || null,
+        wallClockCompletedAt: workspace.manifest.wallClockCompletedAt || null
       };
       controllers.set(runId, controller);
       return controller;
@@ -82,8 +109,7 @@ function createSimulatorRunRouter({
           ring.groupDivisionNumber || ring.currentGroupDivisionNumber,
           ...(ring.queuedGroupDivisionNumbers || [])
         ].filter(Boolean)
-      }))
-      .filter((ring) => ring.groupDivisionNumbers.length > 0);
+      }));
     const groups = Object.fromEntries(workspace.groups.map((group) => [
       String(group.groupDivisionNumber ?? group.id ?? group.groupId),
       group
@@ -103,10 +129,14 @@ function createSimulatorRunRouter({
     const controller = {
       simulator,
       status: workspace.manifest.status || 'created',
-      speed: Number.isFinite(workspace.manifest.speed) ? workspace.manifest.speed : 10,
+      speed: Number.isFinite(workspace.manifest.speed) ? workspace.manifest.speed : 600,
       runnerPromise: null,
-      wakeRunner: null,
-      failure: workspace.manifest.failure || null
+      wakeRunners: new Set(),
+      pendingOperations: new Map(),
+      previousDayState: workspace.manifest.previousDayState || null,
+      failure: workspace.manifest.failure || null,
+      wallClockStartedAt: workspace.manifest.wallClockStartedAt || null,
+      wallClockCompletedAt: workspace.manifest.wallClockCompletedAt || null
     };
     controllers.set(runId, controller);
     return controller;
@@ -114,6 +144,28 @@ function createSimulatorRunRouter({
 
   function persistController(runId, controller) {
     const state = controller.simulator ? controller.simulator.getState() : null;
+    if (state && controller.previousDayState) {
+      const previous = controller.previousDayState;
+      state.events = [...previous.events, ...state.events].map((event, index) => ({ ...event, sequence: index + 1 }));
+      state.startedAt = previous.startedAt;
+      state.operationCount += previous.operationCount;
+    }
+    if (state) {
+      state.rings = state.rings.map((ring) => {
+        const pending = controller.pendingOperations.get(ring.ringId);
+        // The remainder is anchored to operationWaitStartedAt; a null timestamp freezes it.
+        return {
+          ...ring,
+          pendingOperationMs: pending ? pending.remainingMs : 0,
+          operationWaitStartedAt: pending && pending.startedAt !== null
+            ? new Date(pending.startedAt).toISOString() : null,
+          operationWaitSpeed: pending ? pending.speed : controller.speed
+        };
+      });
+    }
+    if (controller.status === 'complete' && controller.wallClockStartedAt && !controller.wallClockCompletedAt) {
+      controller.wallClockCompletedAt = new Date().toISOString();
+    }
     simulatorRunStore.updateRun(runId, {
       status: controller.status,
       speed: controller.speed,
@@ -122,20 +174,27 @@ function createSimulatorRunRouter({
       startAt: state ? state.startedAt : undefined,
       stepDurationMs: state ? state.stepDurationMs : undefined,
       state: state || undefined,
-      failure: controller.failure || undefined
+      failure: controller.failure || undefined,
+      wallClockStartedAt: controller.wallClockStartedAt || undefined,
+      wallClockCompletedAt: controller.wallClockCompletedAt || undefined
     });
     return state;
   }
 
-  function wait(controller, milliseconds) {
+  function wait(controller, pending) {
     return new Promise((resolve) => {
-      const timer = setTimeout(finish, milliseconds);
+      pending.startedAt = Date.now();
+      pending.speed = controller.speed;
+      const timer = setTimeout(finish, Math.max(10, Math.ceil(pending.remainingMs / pending.speed)));
       function finish() {
         clearTimeout(timer);
-        controller.wakeRunner = null;
+        controller.wakeRunners.delete(finish);
+        pending.remainingMs = Math.max(0,
+          pending.remainingMs - Math.max(0, Date.now() - pending.startedAt) * pending.speed);
+        pending.startedAt = null;
         resolve();
       }
-      controller.wakeRunner = finish;
+      controller.wakeRunners.add(finish);
     });
   }
 
@@ -161,7 +220,8 @@ function createSimulatorRunRouter({
           const currentGroupNumber = normalizedGroupNumber(
             assignment.groupDivisionNumber || assignment.currentGroupDivisionNumber
           );
-          const queuedGroupNumbers = (assignment.queuedGroupDivisionNumbers || []).map(normalizedGroupNumber).filter(Boolean);
+          const queuedGroupNumbers = (assignment.queuedGroupDivisionNumbers || [])
+            .map(normalizedGroupNumber).filter(Boolean).slice(0, 1);
           const completedGroupNumbers = (assignment.completedGroupDivisionNumbers || []).map(normalizedGroupNumber).filter(Boolean);
           const stateCompleted = stateRing ? stateRing.completedGroupNumbers : [];
           const completedNumbers = [...new Set([...completedGroupNumbers, ...stateCompleted.map(normalizedGroupNumber)])];
@@ -179,9 +239,6 @@ function createSimulatorRunRouter({
             group: groupByNumber.get(number) || null,
             result: resultByGroup.get(number) || null
           }));
-          const pendingGroupNumbers = stateRing
-            ? stateRing.pendingGroupNumbers.map(normalizedGroupNumber)
-            : [];
           return {
             ringId,
             ringLabel: assignment.ringLabel,
@@ -189,13 +246,11 @@ function createSimulatorRunRouter({
             currentGroupNumber: currentGroupNumber || null,
             currentGroup,
             currentPhase: stateRing ? stateRing.currentPhase : assignment.phase,
+            currentPhaseProgress: stateRing ? stateRing.currentPhaseProgress : assignment.phaseProgress || 0,
+            estimatedDivisionDurationMs: stateRing && stateRing.estimatedDivisionDurationMs || null,
+            phaseDurationsMs: stateRing && stateRing.phaseDurationsMs || {},
             queuedGroupNumbers,
             queuedGroups,
-            pendingGroupNumbers,
-            pendingGroups: pendingGroupNumbers.map((number) => ({
-              groupDivisionNumber: number,
-              group: groupByNumber.get(number) || null
-            })),
             completedGroupNumbers: completedNumbers,
             completedGroups,
             completedCount: completedNumbers.length,
@@ -213,13 +268,18 @@ function createSimulatorRunRouter({
         };
         return {
           runId: manifest.runId,
+          schedule: scheduleState(workspace.groups, workspace.assignments),
           status: manifest.status,
+          timing: buildSimulatorRunTiming(workspace),
           progress: {
             completedGroupCount,
             totalGroupCount,
             percent: totalGroupCount ? Math.round((completedGroupCount / totalGroupCount) * 100) : 0
           },
           rings,
+          availableGroupNumbers: (workspace.assignments.pendingGroupDivisionNumbers || [])
+            .map((entry) => normalizedGroupNumber(entry.groupDivisionNumber)),
+          availableGroupCount: (workspace.assignments.pendingGroupDivisionNumbers || []).length,
           results,
           virtualTime,
           errors: state && state.errors || (manifest.failure ? [{ message: manifest.failure }] : []),
@@ -229,6 +289,7 @@ function createSimulatorRunRouter({
             scenarioSeed: manifest.scenarioSeed || state && state.scenarioSeed || manifest.runId,
             startAt: virtualTime.startedAt,
             stepDurationMs: virtualTime.stepDurationMs,
+            timingModelVersion: TIMING_MODEL_VERSION,
             inputSnapshotSha256: manifest.inputSnapshotSha256,
             inputSnapshot: {
               groups: 'groups.json',
@@ -238,35 +299,181 @@ function createSimulatorRunRouter({
         };
   }
 
+  function durationText(milliseconds) {
+    if (!Number.isFinite(milliseconds) || milliseconds <= 0) return '';
+    const seconds = Math.round(milliseconds / 1000);
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  }
+
+  function simulatorHeadTable(workspace) {
+    const { manifest, groups, assignments } = workspace;
+    const stateByRingId = new Map(((manifest.state && manifest.state.rings) || [])
+      .map((ring) => [ring.ringId, ring]));
+    const rings = Object.entries(assignments.rings).map(([ringId, assignment]) => {
+      const state = stateByRingId.get(ringId);
+      const groupDivisionNumber = normalizedGroupNumber(
+        state && state.currentGroupNumber || assignment.groupDivisionNumber ||
+        assignment.currentGroupDivisionNumber
+      );
+      const phaseDurationsMs = state && state.phaseDurationsMs || {};
+      const phaseOrder = Object.keys(phaseDurationsMs);
+      const phases = phaseOrder.map((key) => {
+        const currentIndex = phaseOrder.indexOf(state && state.currentPhase);
+        const index = phaseOrder.indexOf(key);
+        return {
+          key,
+          label: key === 'setup' ? 'Setup' : key[0].toUpperCase() + key.slice(1),
+          state: state && state.currentPhase === 'uploading-report' ? 'complete' : !groupDivisionNumber ? 'upcoming'
+            : index < currentIndex ? 'complete'
+              : index === currentIndex ? 'active' : 'upcoming',
+          progress: state && state.currentPhase === 'uploading-report' ? 100 : groupDivisionNumber && index === currentIndex
+            ? Number(state.currentPhaseProgress) || 0
+            : index < currentIndex ? 100 : 0
+        };
+      });
+      const phaseTotalCount = assignment.phaseTotalCount || 0;
+      const phaseCompletedCount = assignment.phaseCompletedCount || 0;
+      const queue = (assignment.queuedGroupDivisionNumbers || []).map(normalizedGroupNumber).filter(Boolean);
+      const stateCompleted = state && state.completedGroupNumbers || [];
+      const completedGroupDivisionNumbers = [...new Set([
+        ...(assignment.completedGroupDivisionNumbers || []),
+        ...stateCompleted
+      ].map(normalizedGroupNumber).filter(Boolean))];
+      const currentIndex = phaseOrder.indexOf(state && state.currentPhase);
+      const completedPhaseDuration = phaseOrder
+        .slice(0, Math.max(0, currentIndex))
+        .reduce((sum, key) => sum + (Number(phaseDurationsMs[key]) || 0), 0);
+      const currentPhaseDuration = Number(phaseDurationsMs[state && state.currentPhase]) || 0;
+      const simulatedElapsed = completedPhaseDuration + currentPhaseDuration *
+        Math.max(0, Math.min(1, (state && state.currentPhaseProgress || 0) / 100));
+      return {
+        ringId,
+        ringLabel: assignment.ringLabel,
+        groupDivisionNumber: groupDivisionNumber || '',
+        queuedGroupDivisionNumbers: queue.slice(0, 1),
+        completedGroupDivisionNumbers,
+        tabletLabel: assignment.tabletLabel || '',
+        lastHeartbeatAt: assignment.lastHeartbeatAt || '',
+        phase: state && state.currentPhase || assignment.phase || 'idle',
+        currentPhaseName: ({ 'uploading-report': 'Uploading report', 'loading-division': 'Loading division',
+          idle: 'Idle' })[state && state.currentPhase] || state && state.currentPhase || assignment.phase || 'Idle',
+        phaseProgress: state && state.currentPhaseProgress || 0,
+        phaseCompletedCount,
+        phaseTotalCount,
+        currentPhaseCompletedCount: phaseCompletedCount,
+        currentPhaseTotalCount: phaseTotalCount,
+        checkInCount: assignment.checkInCount || 0,
+        checkInTotal: assignment.checkInTotal || 0,
+        phasePlan: groupDivisionNumber ? { phases } : null,
+        queuedPhasePlan: queue.length ? {
+          groupDivisionNumber: queue[0],
+          phases: (() => {
+            const queuedGroup = groups.find((group) => normalizedGroupNumber(
+              group.groupDivisionNumber ?? group.id ?? group.groupId
+            ) === queue[0]);
+            return estimateDivisionTiming(queuedGroup).phases
+              .map((key) => ({ key, label: key === 'setup' ? 'Setup' : key[0].toUpperCase() + key.slice(1) }));
+          })()
+        } : null,
+        ringEstimated: durationText(state && state.estimatedDivisionDurationMs),
+        currentPhaseEstimated: durationText(phaseDurationsMs[state && state.currentPhase]),
+        ringElapsed: durationText(simulatedElapsed),
+        currentPhaseElapsed: durationText(phaseDurationsMs[state && state.currentPhase] *
+          Math.max(0, Math.min(1, (state && state.currentPhaseProgress || 0) / 100))),
+        assignmentStartedAt: manifest.state && manifest.state.simulatedAt || '',
+        currentPhaseStartTime: manifest.state && manifest.state.simulatedAt || '',
+        assistanceType: '',
+        sparringActualBoutCount: null,
+        sparringCompletedBoutCount: 0,
+        sparringByeCount: null,
+        phaseHistory: []
+      };
+    });
+    const assigned = new Set(rings.flatMap((ring) => [
+      ring.groupDivisionNumber,
+      ...ring.queuedGroupDivisionNumbers,
+      ...ring.completedGroupDivisionNumbers
+    ]).filter(Boolean).map(normalizedGroupNumber));
+    const availableGroupDivisionNumbers = sortDivisionIds((assignments.pendingGroupDivisionNumbers || [])
+      .map((entry) => normalizedGroupNumber(entry.groupDivisionNumber))
+      .filter((number) => number && !assigned.has(number)), groups);
+    return {
+      eventName: `SIMULATION · ${manifest.sourceEventName} · ${manifest.runId.slice(0, 8)}`,
+      simulatorRunId: manifest.runId,
+      simulatorStatus: manifest.status,
+      schedule: scheduleState(groups, assignments),
+      rings,
+      availableGroupDivisionNumbers,
+      groups,
+      eventStartedAt: manifest.state && manifest.state.startedAt || '',
+      heartbeatPolicy: { disconnectAfterSeconds: 90 }
+    };
+  }
+
   function startRunner(runId, controller) {
     if (controller.runnerPromise) return controller.runnerPromise;
     controller.status = 'running';
     controller.failure = null;
-    persistController(runId, controller);
+    if (!controller.wallClockStartedAt) controller.wallClockStartedAt = new Date().toISOString();
+    try {
+      persistController(runId, controller);
+    } catch (error) {
+      controller.status = 'failed';
+      controller.failure = error.message || String(error);
+      throw error;
+    }
     controller.runnerPromise = (async () => {
       try {
-        while (controller.status === 'running') {
-          const currentState = controller.simulator.getState();
-          const activeRings = currentState.rings.filter((ring) =>
-            !['complete', 'failed'].includes(ring.state));
-          if (!activeRings.length) break;
-
-          for (const ring of activeRings) {
-            if (controller.status !== 'running') break;
+        const activeRings = controller.simulator.getState().rings.filter((ring) =>
+          !['complete', 'failed'].includes(ring.state) || controller.pendingOperations.has(ring.ringId));
+        const operations = await Promise.allSettled(activeRings.map(async (ring) => {
+          while (controller.status === 'running') {
+            const pending = controller.pendingOperations.get(ring.ringId);
+            if (pending && pending.remainingMs > 0) {
+              const waiting = wait(controller, pending);
+              try {
+                persistController(runId, controller);
+              } catch (error) {
+                controller.status = 'failed';
+                controller.failure = error.message || String(error);
+                for (const wake of controller.wakeRunners) wake();
+                await waiting;
+                throw error;
+              }
+              await waiting;
+              continue;
+            }
+            controller.pendingOperations.delete(ring.ringId);
+            const currentRing = controller.simulator.getState().rings.find((item) => item.ringId === ring.ringId);
+            if (!currentRing || ['complete', 'failed'].includes(currentRing.state)) break;
             try {
               await controller.simulator.step(ring.ringId);
             } catch (error) {
               controller.failure = error.message || String(error);
             }
-            persistController(runId, controller);
-            if (controller.status === 'running') {
-              await wait(controller, Math.max(1, Math.round(100 / controller.speed)));
+            const nextRing = controller.simulator.getState().rings.find((item) => item.ringId === ring.ringId);
+            if (nextRing && nextRing.state !== 'failed') {
+              controller.pendingOperations.set(ring.ringId, {
+                remainingMs: nextRing.recommendedDelayMs || 1000,
+                startedAt: null,
+                speed: controller.speed
+              });
+            }
+            try {
+              persistController(runId, controller);
+            } catch (error) {
+              controller.status = 'failed';
+              controller.failure = error.message || String(error);
+              for (const wake of controller.wakeRunners) wake();
+              throw error;
             }
           }
-        }
+        }));
+        const rejected = operations.find((operation) => operation.status === 'rejected');
+        if (rejected) throw rejected.reason;
         if (controller.status === 'running') {
           const finalState = controller.simulator.getState();
-          controller.status = finalState.errors.length ? 'failed' : 'complete';
+          controller.status = finalState.errors.length ? 'failed' : completedLifecycle(runId);
           if (finalState.errors.length) {
             controller.failure = finalState.errors.map((error) => error.message).join('; ');
           }
@@ -275,9 +482,16 @@ function createSimulatorRunRouter({
         controller.status = 'failed';
         controller.failure = error.message || String(error);
       } finally {
-        controller.wakeRunner = null;
-        persistController(runId, controller);
-        controller.runnerPromise = null;
+        controller.wakeRunners.clear();
+        try {
+          persistController(runId, controller);
+        } catch (error) {
+          controller.status = 'failed';
+          controller.failure = `Failed to persist simulator run: ${error.message || String(error)}`;
+          console.error(`Failed to persist final simulator state ${runId}:`, error);
+        } finally {
+          controller.runnerPromise = null;
+        }
       }
     })();
     return controller.runnerPromise;
@@ -287,7 +501,7 @@ function createSimulatorRunRouter({
     if (controller.status !== 'complete' && controller.status !== 'failed') {
       controller.status = status;
     }
-    if (controller.wakeRunner) controller.wakeRunner();
+    for (const wake of controller.wakeRunners) wake();
     if (controller.runnerPromise) await controller.runnerPromise;
   }
 
@@ -326,7 +540,8 @@ function createSimulatorRunRouter({
       }
       const assignments = JSON.parse(fs.readFileSync(actualAssignmentsPath, 'utf8'));
       const groups = await loadGroupsFromDatabase(actualDbPath);
-      const run = simulatorRunStore.createRun({ eventName, groups, assignments });
+      const run = simulatorRunStore.createRun({ eventName, groups, assignments,
+        tournamentDays: readEventConfig(eventName).tournamentDays });
       return res.status(201).json(run);
     } catch (error) {
       console.error('Failed to create simulator run:', error);
@@ -340,7 +555,8 @@ function createSimulatorRunRouter({
     try {
       let run = simulatorRunStore.getRun(req.params.runId);
       if (!run) return res.status(404).json({ error: 'Simulator run not found' });
-      const controller = getController(req.params.runId);
+      const controller = controllers.get(req.params.runId) ||
+        (run.status === 'created' ? null : getController(req.params.runId));
       if (controller && controller.simulator) {
         persistController(req.params.runId, controller);
       }
@@ -366,6 +582,53 @@ function createSimulatorRunRouter({
     } catch (error) {
       console.error(`Failed to read simulator run log ${req.params.runId}:`, error);
       return res.status(500).json({ error: 'Failed to read simulator run log' });
+    }
+  });
+
+  router.get('/simulator/runs/:runId/audience', (req, res) => {
+    try {
+      const workspace = simulatorRunStore.getRunWorkspace(req.params.runId);
+      if (!workspace) return res.status(404).json({ error: 'Simulator run not found' });
+      res.set('Cache-Control', 'no-store');
+      return res.json(buildSimulatorAudienceMonitor(workspace));
+    } catch (error) {
+      console.error(`Failed to build simulator audience view ${req.params.runId}:`, error);
+      return res.status(500).json({ error: 'Failed to build simulator audience view' });
+    }
+  });
+
+  router.get('/simulator/runs/:runId/head-table', (req, res) => {
+    try {
+      let run = simulatorRunStore.getRun(req.params.runId);
+      if (!run) return res.status(404).json({ error: 'Simulator run not found' });
+      const controller = controllers.get(req.params.runId) ||
+        (run.status === 'created' ? null : getController(req.params.runId));
+      if (controller && controller.simulator) persistController(req.params.runId, controller);
+      const workspace = simulatorRunStore.getRunWorkspace(req.params.runId);
+      res.set('Cache-Control', 'no-store');
+      return res.json(simulatorHeadTable(workspace));
+    } catch (error) {
+      console.error(`Failed to build simulator Head Table ${req.params.runId}:`, error);
+      return res.status(500).json({ error: 'Failed to build simulator Head Table' });
+    }
+  });
+
+  router.get('/simulator/runs/:runId/ring-assignment', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const workspace = simulatorRunStore.getRunWorkspace(req.params.runId);
+      if (!workspace) return res.status(404).json({ error: 'Simulator run not found' });
+      const board = simulatorHeadTable(workspace);
+      return res.json({
+        ...board,
+        runId: workspace.manifest.runId,
+        ringConfig: workspace.assignments.config,
+        eventStartedAt: workspace.manifest.wallClockStartedAt || '',
+        estimates: buildSimulatorAssignmentEstimates(workspace, board)
+      });
+    } catch (error) {
+      console.error(`Failed to build simulator Ring Assignment ${req.params.runId}:`, error);
+      return res.status(500).json({ error: 'Failed to build simulator Ring Assignment' });
     }
   });
 
@@ -398,11 +661,13 @@ function createSimulatorRunRouter({
       if (!workspace.assignments.rings[ringId]) {
         return res.status(400).json({ error: `Unknown simulator ring: ${ringId}` });
       }
+      if (!controller.wallClockStartedAt) controller.wallClockStartedAt = new Date().toISOString();
+      controller.pendingOperations.delete(ringId);
       const ring = await controller.simulator.step(ringId);
       const state = controller.simulator.getState();
       controller.status = state.errors.length
         ? 'failed'
-        : (state.rings.every((item) => item.state === 'complete') ? 'complete' : 'paused');
+        : (state.rings.every((item) => item.state === 'complete') ? completedLifecycle(runId) : 'paused');
       persistController(runId, controller);
       return res.json({ ring, state: { ...state, lifecycleStatus: controller.status } });
     } catch (error) {
@@ -411,10 +676,43 @@ function createSimulatorRunRouter({
       if (controller && controller.simulator) {
         controller.status = 'failed';
         controller.failure = error.message || String(error);
-        persistController(runId, controller);
+        try {
+          persistController(runId, controller);
+        } catch (persistenceError) {
+          console.error(`Failed to persist simulator failure ${runId}:`, persistenceError);
+        }
       }
       if (!simulatorRunStore.getRunWorkspace(runId)) return res.status(404).json({ error: 'Simulator run not found' });
       return res.status(409).json({ error: error.message || 'Failed to step simulator run' });
+    }
+  });
+
+  router.post('/simulator/runs/:runId/schedule/day2', async (req, res) => {
+    const runId = String(req.params.runId || '');
+    try {
+      const workspace = simulatorRunStore.getRunWorkspace(runId);
+      if (!workspace) return res.status(404).json({ error: 'Simulator run not found' });
+      const schedule = scheduleState(workspace.groups, workspace.assignments);
+      if (workspace.manifest.status !== 'day-break' || schedule.tournamentDays !== 2 ||
+          !schedule.day1Complete || schedule.day2Started) {
+        return res.status(409).json({ error: 'Day 2 requires the Day 1 completion checkpoint and can only be started once.' });
+      }
+      workspace.assignments.day2StartedAt = new Date().toISOString();
+      writeJsonAtomicSync(path.join(workspace.runDirectory, 'ring-assignments.json'), workspace.assignments);
+      simulatorRunStore.updateRun(runId, {
+        status: 'created',
+        previousDayState: workspace.manifest.state,
+        startAt: workspace.manifest.state && workspace.manifest.state.simulatedAt || DEFAULT_START_AT,
+        wallClockCompletedAt: null
+      });
+      controllers.delete(runId);
+      if (typeof createRunClient.invalidateRun === 'function') createRunClient.invalidateRun(runId);
+      const controller = getController(runId);
+      startRunner(runId, controller);
+      return res.status(202).json(simulatorRunStore.getRun(runId));
+    } catch (error) {
+      console.error(`Failed to start simulator Day 2 ${runId}:`, error);
+      return res.status(500).json({ error: 'Failed to start simulator Day 2.' });
     }
   });
 
@@ -446,7 +744,7 @@ function createSimulatorRunRouter({
         return res.status(409).json({ error: `Cannot pause a simulator run that is ${controller.status}` });
       }
       controller.status = 'paused';
-      if (controller.wakeRunner) controller.wakeRunner();
+      for (const wake of controller.wakeRunners) wake();
       persistController(runId, controller);
       if (controller.runnerPromise) await controller.runnerPromise;
       return res.json(simulatorRunStore.getRun(runId));
@@ -476,17 +774,25 @@ function createSimulatorRunRouter({
   router.post('/simulator/runs/:runId/speed', (req, res) => {
     const runId = String(req.params.runId || '');
     const speed = req.body && req.body.speed;
-    if (!Number.isFinite(speed) || speed < 0.1 || speed > 100) {
-      return res.status(400).json({ error: 'speed must be a number from 0.1 through 100' });
+    if (!Number.isFinite(speed) || speed < 1 || speed > 3600) {
+      return res.status(400).json({ error: 'speed must be a number from 1 through 3600' });
     }
-    const controller = getController(runId);
-    if (!controller) return res.status(404).json({ error: 'Simulator run not found' });
-    if (!['created', 'running', 'paused'].includes(controller.status)) {
-      return res.status(409).json({ error: `Cannot change speed when simulator run is ${controller.status}` });
+    const controller = controllers.get(runId);
+    if (controller) {
+      if (!['created', 'running', 'paused'].includes(controller.status)) {
+        return res.status(409).json({ error: `Cannot change speed when simulator run is ${controller.status}` });
+      }
+      controller.speed = speed;
+      for (const wake of controller.wakeRunners) wake();
+      persistController(runId, controller);
+      return res.json(simulatorRunStore.getRun(runId));
     }
-    controller.speed = speed;
-    if (controller.wakeRunner) controller.wakeRunner();
-    persistController(runId, controller);
+    const workspace = simulatorRunStore.getRunWorkspace(runId);
+    if (!workspace) return res.status(404).json({ error: 'Simulator run not found' });
+    if (!['created', 'running', 'paused'].includes(workspace.manifest.status)) {
+      return res.status(409).json({ error: `Cannot change speed when simulator run is ${workspace.manifest.status}` });
+    }
+    simulatorRunStore.updateRun(runId, { speed });
     return res.json(simulatorRunStore.getRun(runId));
   });
 
@@ -533,7 +839,11 @@ function createSimulatorRunRouter({
       if (controller && controller.simulator) {
         controller.status = 'failed';
         controller.failure = error.message || String(error);
-        persistController(runId, controller);
+        try {
+          persistController(runId, controller);
+        } catch (persistenceError) {
+          console.error(`Failed to persist simulator failure ${runId}:`, persistenceError);
+        }
       }
       if (!simulatorRunStore.getRunWorkspace(runId)) return res.status(404).json({ error: 'Simulator run not found' });
       return res.status(409).json({ error: error.message || 'Failed to run simulator to completion' });
@@ -573,6 +883,14 @@ function createSimulatorRunRouter({
     }
   });
 
+  router.shutdown = async () => {
+    await Promise.all([...controllers.entries()].map(async ([runId, controller]) => {
+      if (['running', 'paused'].includes(controller.status)) {
+        await stopRunner(controller, 'stopped');
+        persistController(runId, controller);
+      }
+    }));
+  };
   return router;
 }
 

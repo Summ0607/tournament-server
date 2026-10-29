@@ -4,7 +4,7 @@ param(
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $nodeExe = "node"
-$serverScript = Join-Path $repoRoot "group-server.js"
+$serverScript = Join-Path $repoRoot "server-launcher.js"
 
 $surfaces = @(
   [pscustomobject]@{

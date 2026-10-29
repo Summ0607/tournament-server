@@ -186,8 +186,22 @@
 
     .ra-heading h2 { margin: 0; font-size: 14px; }
     .ra-heading span, .ra-meta { font-size: 12px; color: var(--text-soft); }
-    .ra-search { padding: 10px 12px 0; }
-    .ra-search input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+    .ra-filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px 0; }
+      .ra-filters button { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font: inherit; font-size: 12px; cursor: pointer; }
+      .ra-filters button[aria-pressed="true"] { background: #dce8fb; border-color: #2f66c8; font-weight: 700; }
+      .ra-schedule-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; color: var(--text-soft); }
+      .ra-schedule-summary[hidden] { display: none; }
+      .ra-schedule-summary { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #f6f9fe; }
+      .ra-schedule-summary .ra-format-badge { padding: 4px 12px; border-radius: 999px; background: #dce8fb; border: 1px solid #2f66c8; color: #17407f; font-size: 13px; font-weight: 800; }
+      .ra-schedule-summary .ra-format-badge[data-day="2"] { background: #fff1d6; border-color: #b7791f; color: #6f4504; }
+      .ra-schedule-summary .ra-format-lock { font-weight: 700; }
+      .ra-schedule-summary button { min-height: 28px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+      .ra-schedule-summary button[data-ra-start-day2] { min-height: 44px; padding: 8px 18px; font-size: 14px; font-weight: 800; background: #1764c0; border: 1px solid #1764c0; color: #fff; border-radius: 8px; }
+      .ra-schedule-summary button[data-ra-start-day2]:disabled { opacity: .5; cursor: not-allowed; }
+      .ra-day2-tag { padding: 1px 8px; border-radius: 999px; background: #fff1d6; border: 1px solid #b7791f; color: #6f4504; font-size: 11px; font-weight: 800; }
+      .ra-card.ra-division.ra-day2-locked { opacity: .6; border-style: dashed; cursor: not-allowed; }
+      .event-format-hint { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-soft); }
+      .event-format-hint.locked { color: #8a4b00; font-weight: 700; }
     .ra-list { display: grid; gap: 8px; padding: 12px; max-height: 65vh; overflow: auto; }
     .ra-rings { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); align-content: start; }
     .ra-card {
@@ -228,6 +242,7 @@
     .ra-ring-line .ra-meta { flex-shrink: 0; font-size: 11px; white-space: nowrap; }
     .estimate-text { font-size: 11px; color: #475569; font-weight: 400; }
     .ra-division-estimate { white-space: nowrap; font-size: 11px; color: #475569; }
+    .ra-division-badge { display: inline-block; padding: 1px 5px; border-radius: 4px; background: #e2e8f0; color: #1e293b; font-size: 10px; font-weight: 700; }
     .estimate-summary { font-size: 12px; color: #475569; }
     .event-timing { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
     .event-timing:empty { display: none; }
@@ -1278,6 +1293,7 @@
         <div class="banner-meta" id="bannerMetadata" aria-label="Selected event metadata" aria-live="polite">
           <span><span id="bannerEventLabel">Selected Event:</span> <strong id="bannerEventName">None selected</strong></span>
           <span>Event Date: <strong id="bannerEventDate">Not set</strong></span>
+          <span>Format: <strong id="bannerEventFormat">One day</strong></span>
           <span>Status: <strong class="banner-status" id="bannerEventStatus">No event selected</strong></span>
           <span id="bannerClock" hidden>Time: <strong id="bannerClockTime" class="banner-clock">--</strong></span>
         </div>
@@ -1335,6 +1351,12 @@
             </svg>
             Reports &amp; Results
           </button>
+          <button class="sidebar-item" type="button" onclick="window.location.href='/admin/'">
+            Admin
+          </button>
+          <button class="sidebar-item" type="button" onclick="window.location.href='/simulator/'">
+            Simulator
+          </button>
         </aside>
 
         <section class="workspace" aria-label="Event setup workspace">
@@ -1381,7 +1403,8 @@
                   <div class="button-cluster-label">Secondary Actions</div>
                   <div class="button-row">
                     <button class="danger" id="deleteEventBtn" type="button" data-help="Delete the selected event after confirmation.">Delete Event</button>
-                    <button id="resetEventBtn" type="button" title="Discard unsaved form edits and reload the selected event. Does not reset ring assignments.">Reset</button>
+                    <button id="resetEventBtn" type="button" title="Discard unsaved form edits and reload the selected event. Does not reset ring assignments.">Discard edits</button>
+                    <button id="resetRunBtn" type="button" title="Archive results and return to preparation, preserving competitors, divisions, and event settings.">Reset run / Return to preparation</button>
                   </div>
                 </div>
 
@@ -1444,20 +1467,25 @@
 
             <div class="view" id="ringAssignmentView" data-help-page="ring-assignment" data-help-title="Ring Assignment" hidden>
               <div class="overview">
+                <label for="raSourceRun">View</label>
+                <select id="raSourceRun" aria-label="Ring Assignment data source"><option value="">Active event</option></select>
                 <span class="chip">Active Event: <strong id="raEvent">No active event</strong></span>
                 <button id="raRefreshBtn" type="button" data-help="Reload the active event's saved divisions and current ring assignments.">Refresh</button>
-                <button id="raLayoutBtn" type="button" title="Apply the event's saved ring dimensions. Confirmation is required because this clears operational ring state and assignments." hidden>Apply saved event ring layout</button>
               </div>
+              <div id="raSimulationNotice" class="notice" role="status" aria-live="polite" hidden></div>
+              <p data-help-source="Division badges">Available divisions display TT (Tiny Tiger), SD (Special Dragons), Gup (G10-CDB), or BB (D1-D3). A CDB competitor in a Black Belt division does not change its BB badge. Special Needs is displayed as Special Dragons without changing stored data.</p>
               <p class="ra-meta" data-help-source="Assigning divisions">Select a ring to view its details. Click a division to queue it to the selected ring, or drag a division onto any ring. Rings remain in label order. Green means connected, red disconnected, and gray no tablet; blue indicates selection or a drop target.</p>
-              <p data-help-source="Ring details and maintenance">Show or hide a division's competitor list in Ring Details. Lists scroll after ten rows. Remove takes a division out of the queue without deleting it. Reset ring and applying a saved layout require confirmation because they clear operational state.</p>
-              <p data-help-source="Planning estimates">Available division tiles show an approximate start and total ring time on one extra line; no hover is needed. Each start assumes assigning that division next to the earliest projected available ring, independently of other available divisions. It is not a reservation or automatic assignment. Start TBD means no usable prediction; ring time can still be shown. Ring time assumes everyone competes in all applicable disciplines, including Weapons only where applicable. Seven minutes per saved competitor is a rough total baseline, not a learned average or a separate calculation for each discipline. Empty configured rings may contribute planning starts even without a connected tablet; this does not mean they are operationally ready. Rings with current or queued work still need a connected tablet. Assistance and missing saved data can block predictions. Select a ring for queue windows and completion estimates. Two-minute transitions assume prompt starts without unreported breaks. Times are low confidence, not call times, and starts expire after 30 seconds without refresh.</p>
+              <p data-help-source="Schedule order and filters">Available divisions are listed in running order: Black Belt (BB) oldest to youngest, then Tiny Tiger (TT) and Special Dragons (SD) interleaved youngest to oldest, then Gup youngest to oldest. Gender is ignored. Mixed-age divisions show their age range. Filter buttons (All, BB, TT, SD, Gup) and their counts only show or hide tiles; they never change the schedule, and you can still manually assign a division out of priority order. For two-day events the list opens filtered to BB (Day 1); select All to preview Day 2 divisions, which are marked Day 2 - locked, cannot be queued and show Start TBD until Start Day 2 is pressed after Day 1 is complete.</p>
+              <p data-help-source="Ring details and maintenance">Show or hide a division's competitor list in Ring Details. Lists scroll after ten rows. Remove takes a division out of the queue without deleting it. Reset ring requires confirmation because it clears that ring's operational state, but it does not unlock event settings.</p>
+              <p data-help-source="Planning estimates">Available division tiles show an approximate start and total ring time on one extra line; no hover is needed. Starts share a cumulative projected schedule in division-number order: each division goes to the earliest free ring, advancing that ring's projected availability before the next division is placed. Existing active and queued work comes first. This does not reserve rings or automatically assign divisions. The same schedule determines projected event completion. Start TBD means no usable prediction; ring time can still be shown. Timing includes seven-minute setup, ten-minute awards, 1.5 minutes per weapons or hyungs entrant, two minutes per contested sparring bout excluding byes, and three-minute review/wrap-up after each applicable competition discipline. No additional between-division transition is added. Empty configured rings may contribute planning starts even without a connected tablet; this does not mean they are operationally ready. Rings with current or queued work still need a connected tablet. Assistance and missing saved data can block predictions; an unknown division duration blocks later projected starts. Select a ring for queue windows and completion estimates. Times assume prompt starts without unreported breaks, are low confidence rather than call times, and expire after 30 seconds without refresh.</p>
               <div class="notice" id="raNotice" role="status" aria-live="polite"></div>
+              <div id="raScheduleSummary" class="ra-schedule-summary" role="status" hidden></div>
               <div id="raEventTiming" class="event-timing" aria-label="Event timing"></div>
               <div id="raEstimateSummary" class="estimate-summary" role="status"></div>
               <div class="ra-board">
                 <section class="ra-section" aria-labelledby="raDivisionsTitle">
                   <div class="ra-heading"><h2 id="raDivisionsTitle">Available Divisions</h2><span id="raDivisionCount"></span></div>
-                  <div class="ra-search"><input id="raSearch" type="search" aria-label="Search available divisions" placeholder="Search divisions"></div>
+                  <div class="ra-filters" id="raFilters" role="group" aria-label="Filter available divisions by schedule category" data-help="Filters only change which available divisions are shown; they never change the schedule. Select several to combine them. With none selected, All is shown."></div>
                   <div class="ra-list" id="raDivisions"></div>
                 </section>
                 <section class="ra-section" aria-labelledby="raRingsTitle">
@@ -1469,15 +1497,20 @@
 
             <div class="view" id="headTableView" data-help-page="head-table" data-help-title="Head Table" hidden>
               <div class="ht-toolbar">
-                <button type="button" id="htRefreshBtn" data-help="Reload ring progress and summary counts for the active event.">Refresh</button>
+                <label for="htSourceRun">View</label>
+                <select id="htSourceRun" aria-label="Head Table data source">
+                  <option value="">Active event</option>
+                </select>
+                <button type="button" id="htRefreshBtn" data-help="Reload ring progress and summary counts for the selected data source.">Refresh</button>
                 <label for="htOrder">Display order</label>
                 <select id="htOrder"><option value="priority">Priority</option><option value="ring">Ring order</option></select>
                 <button type="button" id="htAssignmentBtn" data-help="Open Ring Assignment to manage queues and ring assignments.">Open Ring Assignment</button>
-                <a href="/audience-monitor/" target="_blank" rel="noopener" data-help="Open the standalone read-only audience display in a new tab.">Audience Monitor</a>
+                <a id="htAudienceMonitorLink" href="/audience-monitor/" target="_blank" rel="noopener" data-help="Open the standalone read-only audience display in a new tab.">Audience Monitor</a>
               </div>
+              <div id="htSimulationNotice" class="notice" role="status" aria-live="polite" hidden></div>
               <div id="htFreshness" class="ht-freshness" role="status" aria-live="polite">Waiting for first refresh.</div>
               <div id="htNotice" class="notice" role="status" aria-live="polite"></div>
-              <div id="htSummary" class="ht-summary" aria-label="Active event summary"></div>
+              <div id="htSummary" class="ht-summary" aria-label="Tournament summary"></div>
               <div id="htEventTiming" class="event-timing" aria-label="Event timing"></div>
               <div id="htEstimateSummary" class="estimate-summary" role="status"></div>
               <p data-help-source="Ring progression and status">Select a ring for details. Green phases are complete, blue fills the active phase, and neutral phases are upcoming. Queued previews are unfilled. Weapons appears only when applicable. Connection badges use green for connected, red for disconnected, and gray for no tablet. A red exclamation mark indicates assistance. Missing timing does not imply a delay. Counts are status indicators, not filters.</p>
@@ -1574,7 +1607,7 @@
             </div>
             <div class="metadata-panel" id="metadataPanel" hidden>
               <div class="summary-label" id="metadataTitle">Edit Event</div>
-              <p data-help-source="Event details" data-help-for="event-setup">Save Changes stores event metadata. Ring columns use letters and rows use numbers. Saved dimensions do not automatically change operational rings; applying a layout is a separate confirmed action in Ring Assignment.</p>
+              <p data-help-source="Event details" data-help-for="event-setup">Save Changes saves all event settings and synchronizes the operational ring layout automatically before operational use begins. All settings are locked once tablets, assignments, queues, or progress exist, including while paused. Stop tablet activity and use Reset run / Return to preparation to archive results and unlock settings without losing competitors or divisions.</p>
               <div class="field-stack">
                 <label for="locationInput">Location</label>
                 <input id="locationInput" type="text" placeholder="Tournament location">
@@ -1583,17 +1616,26 @@
                 <label for="dateInput">Date</label>
                 <input id="dateInput" type="date">
               </div>
+              <div class="field-stack event-format-field">
+                <label for="tournamentDaysInput">Event format</label>
+                <select id="tournamentDaysInput" aria-describedby="tournamentDaysHint" data-help="One-day events run every division in a single day. Two-day events run Black Belt first, then Tiny Tiger and Special Dragons, then Gup; Day 2 begins only when you press Start Day 2 on Ring Assignment after Day 1 is complete.">
+                  <option value="1">One day - all divisions in one continuous event</option>
+                  <option value="2">Two days - Day 1: Black Belt; Day 2: TT/SD/Gup</option>
+                </select>
+                <p id="tournamentDaysHint" class="event-format-hint"></p>
+              </div>
               <div class="field-stack">
                 <label for="ringConfigXInput">Ring Config Columns (Letters)</label>
-                <input id="ringConfigXInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+                <input id="ringConfigXInput" type="number" min="0" max="26" step="1" inputmode="numeric" placeholder="0">
               </div>
               <div class="field-stack">
                 <label for="ringConfigYInput">Ring Config Rows (Numbers)</label>
-                <input id="ringConfigYInput" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+                <input id="ringConfigYInput" type="number" min="0" max="50" step="1" inputmode="numeric" placeholder="0">
               </div>
               <div class="button-row">
-                <button class="metadata-action" id="saveMetadataBtn" type="button" data-help="Save the event details shown here without activating the event or applying its ring layout.">Save Changes</button>
+                <button class="metadata-action" id="saveMetadataBtn" type="button" data-help="Save all event settings and synchronize the operational ring layout before operational use begins.">Save Changes</button>
               </div>
+              <p id="eventConfigurationHelp" class="help-text"></p>
             </div>
           </div>
         </aside>
@@ -1631,7 +1673,10 @@
         location: '',
         date: '',
         ringConfigX: '',
-        ringConfigY: ''
+        ringConfigY: '',
+        tournamentDays: 1,
+        configurationLocked: false,
+        configurationLockReason: ''
       });
 
       const state = {
@@ -1651,6 +1696,9 @@
       const bannerMetadataEl = document.getElementById('bannerMetadata');
       const bannerEventLabelEl = document.getElementById('bannerEventLabel');
       const bannerEventDateEl = document.getElementById('bannerEventDate');
+      const bannerEventFormatEl = document.getElementById('bannerEventFormat');
+      const tournamentDaysHintEl = document.getElementById('tournamentDaysHint');
+      const formatLabel = (meta) => normalizeTournamentDays(meta && meta.tournamentDays) === 2 ? 'Two days' : 'One day';
       const bannerEventStatusEl = document.getElementById('bannerEventStatus');
       const bannerClockEl = document.getElementById('bannerClock');
       const bannerClockTimeEl = document.getElementById('bannerClockTime');
@@ -1721,12 +1769,15 @@
       const goToImportBtn = document.getElementById('goToImportBtn');
       const deleteEventBtn = document.getElementById('deleteEventBtn');
       const resetEventBtn = document.getElementById('resetEventBtn');
+      const resetRunBtn = document.getElementById('resetRunBtn');
       const metadataPanelEl = document.getElementById('metadataPanel');
       const locationInputEl = document.getElementById('locationInput');
       const dateInputEl = document.getElementById('dateInput');
+      const tournamentDaysInputEl = document.getElementById('tournamentDaysInput');
       const ringConfigXInputEl = document.getElementById('ringConfigXInput');
       const ringConfigYInputEl = document.getElementById('ringConfigYInput');
       const saveMetadataBtn = document.getElementById('saveMetadataBtn');
+      const eventConfigurationHelpEl = document.getElementById('eventConfigurationHelp');
 
       function normalizeEventName(value) {
         return String(value || '').trim();
@@ -1743,6 +1794,10 @@
         return Number.isFinite(parsed) ? String(parsed) : '';
       }
 
+      function normalizeTournamentDays(value) {
+        return Number(value) === 2 ? 2 : 1;
+      }
+
       function metaFromConfig(config, fallbackName) {
         const ringConfigX = normalizeNumberInput(config && config.ringConfigX);
         const ringConfigY = normalizeNumberInput(config && config.ringConfigY);
@@ -1751,7 +1806,11 @@
           location: normalizeTextValue(config && config.location),
           date: normalizeTextValue(config && config.date),
           ringConfigX,
-          ringConfigY
+          ringConfigY,
+          tournamentDays: normalizeTournamentDays(config && config.tournamentDays),
+          configurationLocked: Boolean(config && config.configurationLocked),
+          configurationLockReason: normalizeTextValue(config && config.configurationLockReason),
+          layoutMismatch: Boolean(config && config.layoutMismatch)
         };
       }
 
@@ -1820,6 +1879,7 @@
           dateInputEl.value = '';
           ringConfigXInputEl.value = '';
           ringConfigYInputEl.value = '';
+          tournamentDaysInputEl.value = '1';
         }
       }
 
@@ -1828,20 +1888,22 @@
         dateInputEl.value = normalizeTextValue(meta && meta.date);
         ringConfigXInputEl.value = normalizeNumberInput(meta && meta.ringConfigX);
         ringConfigYInputEl.value = normalizeNumberInput(meta && meta.ringConfigY);
+        tournamentDaysInputEl.value = String(normalizeTournamentDays(meta && meta.tournamentDays));
       }
 
       function readMetadataForm() {
         for (const input of [ringConfigXInputEl, ringConfigYInputEl]) {
           if (!input.checkValidity()) {
             input.reportValidity();
-            throw new Error('Ring Config Columns (Letters) and Rows (Numbers) must be non-negative whole numbers.');
+            throw new Error('Ring columns must be whole numbers from 0 to 26, and rows from 0 to 50. Zero leaves the layout unconfigured.');
           }
         }
         return {
           location: normalizeTextValue(locationInputEl.value),
           date: normalizeTextValue(dateInputEl.value),
           ringConfigX: Number(ringConfigXInputEl.value),
-          ringConfigY: Number(ringConfigYInputEl.value)
+          ringConfigY: Number(ringConfigYInputEl.value),
+          tournamentDays: normalizeTournamentDays(tournamentDaysInputEl.value)
         };
       }
 
@@ -1871,7 +1933,20 @@
         eventNameInputEl.hidden = !state.newEventMode;
       }
 
+      function updateFormatHint() {
+        const days = normalizeTournamentDays(tournamentDaysInputEl.value);
+        const started = Boolean(state.selectedEventMeta.configurationLocked);
+        tournamentDaysHintEl.classList.toggle('locked', started);
+        tournamentDaysHintEl.textContent = started
+          ? 'All event settings are locked. Stop tablet activity, then reset the run to return to preparation.'
+          : days === 2
+            ? 'Day 1 runs Black Belt only. Day 2 (TT/SD/Gup) stays locked until every BB division is complete and an administrator presses Start Day 2 on Ring Assignment. The format is locked once competition starts.'
+            : 'All divisions run in one continuous event: BB oldest to youngest, then TT/SD, then Gup youngest to oldest. The format is locked once competition starts.';
+      }
+      tournamentDaysInputEl.addEventListener('change', updateFormatHint);
+
       function renderBanner() {
+        updateFormatHint();
         const dayOf = ['placeholder', 'ring-assignment', 'head-table', 'competitors'].includes(currentView);
         bannerClockEl.hidden = !dayOf;
         bannerEventLabelEl.textContent = dayOf ? 'Active Event:' : 'Selected Event:';
@@ -1879,6 +1954,7 @@
         if (dayOf) {
           bannerEventNameEl.textContent = state.activeEventName || 'No active event';
           bannerEventDateEl.textContent = state.activeEventMeta.date || 'Not set';
+          bannerEventFormatEl.textContent = formatLabel(state.activeEventMeta);
           bannerEventStatusEl.textContent = state.activeEventError ? 'Unavailable'
             : state.activeEventName ? 'Active' : 'No active event';
           placeholderMessage.textContent = state.activeEventError
@@ -1894,13 +1970,16 @@
           normalizeTextValue(locationInputEl.value) !== meta.location ||
           dateInputEl.value !== meta.date ||
           Number(ringConfigXInputEl.value) !== Number(meta.ringConfigX) ||
-          Number(ringConfigYInputEl.value) !== Number(meta.ringConfigY)
+          Number(ringConfigYInputEl.value) !== Number(meta.ringConfigY) ||
+          normalizeTournamentDays(tournamentDaysInputEl.value) !== normalizeTournamentDays(meta.tournamentDays)
         );
         const groupChanges = name && (gb.eventName === name
           ? !gb.saved && (gb.groups.length > 0 || gb.unassigned.length > 0 || gb.flagged.length > 0 || Boolean(gbReadDraft(name)))
           : Boolean(gbReadDraft(name)));
         bannerEventNameEl.textContent = name || 'None selected';
         bannerEventDateEl.textContent = meta.date || 'Not set';
+        bannerEventFormatEl.textContent = name ? formatLabel(meta) : '-';
+        updateFormatHint();
         bannerEventStatusEl.textContent = !name ? 'No event selected'
           : metadataChanged || groupChanges ? 'Unsaved changes'
           : name.toLowerCase() === state.activeEventName.toLowerCase() ? 'Active'
@@ -1957,7 +2036,18 @@
         goToImportBtn.disabled = !selectedName || !existsNow;
         deleteEventBtn.disabled = !selectedName || !existsNow;
         resetEventBtn.disabled = !selectedName && !state.metadataOpen;
-        saveMetadataBtn.disabled = !state.metadataOpen || !selectedName;
+        const configurationLocked = Boolean(existsNow && state.selectedEventMeta.configurationLocked);
+        saveMetadataBtn.disabled = !state.metadataOpen || !selectedName || configurationLocked;
+        resetRunBtn.disabled = !existsNow;
+        for (const input of [locationInputEl, dateInputEl, tournamentDaysInputEl, ringConfigXInputEl, ringConfigYInputEl]) {
+          input.disabled = configurationLocked;
+        }
+        eventConfigurationHelpEl.textContent = configurationLocked
+          ? state.selectedEventMeta.configurationLockReason
+          : 'Saving synchronizes operational rings automatically, even for an inactive event. Zero dimensions leave the layout unconfigured.';
+        if (state.selectedEventMeta.layoutMismatch) {
+          eventConfigurationHelpEl.textContent += ' The saved layout differs from this run. Existing ring state has been preserved; reset the run to reconcile it.';
+        }
         renderState();
       }
 
@@ -1975,7 +2065,8 @@
         }
 
         const data = await fetchJson(`/api/events/config?eventName=${encodeURIComponent(name)}`);
-        return metaFromConfig(data.eventConfig || {}, name);
+        return metaFromConfig({ ...data.eventConfig, configurationLocked: data.configurationLocked,
+          configurationLockReason: data.configurationLockReason, layoutMismatch: data.layoutMismatch }, name);
       }
 
       async function refreshActiveEvent() {
@@ -2107,7 +2198,8 @@
                 location: metadata.location,
                 date: metadata.date,
                 ringConfigX: metadata.ringConfigX,
-                ringConfigY: metadata.ringConfigY
+                ringConfigY: metadata.ringConfigY,
+                tournamentDays: metadata.tournamentDays
               })
             });
             state.metadataMode = 'modify';
@@ -2123,7 +2215,8 @@
                 location: metadata.location,
                 date: metadata.date,
                 ringConfigX: metadata.ringConfigX,
-                ringConfigY: metadata.ringConfigY
+                ringConfigY: metadata.ringConfigY,
+                tournamentDays: metadata.tournamentDays
               })
             });
             showNotice(`Saved ${selectedName}.`, 'ok');
@@ -2133,6 +2226,37 @@
           await refreshAll();
         } catch (error) {
           showNotice(error.message, 'error');
+          try {
+            await refreshSelectedEventFromInput();
+          } catch (refreshError) {
+            showNotice(`${error.message} Unable to refresh event settings: ${refreshError.message}`, 'error');
+          }
+        }
+      }
+
+      async function resetEventRun() {
+        const selectedName = getSelectedEventName();
+        if (!selectedName || !eventExists(selectedName)) return;
+        if (!window.confirm(
+          `Stop all tablet activity before continuing. Reset the run for ${selectedName} and return to preparation? ` +
+          'Results and ring state will be archived. All ring assignments, queues, connections, and progress will be cleared. ' +
+          'Competitors, prepared divisions, and saved event settings will be preserved. Unsaved edits will be discarded.'
+        )) return;
+        resetRunBtn.disabled = true;
+        try {
+          const result = await fetchJson('/api/events/reset-run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventName: selectedName, confirm: true })
+          });
+          await refreshAll();
+          openMetadataPanel('modify', state.selectedEventMeta);
+          syncButtons();
+          showNotice(`Returned ${selectedName} to preparation. Previous run archived in ${result.archive}.`, 'ok');
+        } catch (error) {
+          showNotice(error.message, 'error');
+        } finally {
+          syncButtons();
         }
       }
 
@@ -2258,8 +2382,10 @@
       deleteEventBtn.addEventListener('click', deleteEvent);
       resetEventBtn.addEventListener('click', resetSelection);
       saveMetadataBtn.addEventListener('click', saveMetadata);
-      [locationInputEl, dateInputEl, ringConfigXInputEl, ringConfigYInputEl].forEach((input) => {
+      resetRunBtn.addEventListener('click', resetEventRun);
+      [locationInputEl, dateInputEl, tournamentDaysInputEl, ringConfigXInputEl, ringConfigYInputEl].forEach((input) => {
         input.addEventListener('input', renderBanner);
+        input.addEventListener('change', renderBanner);
       });
 
       function setSidebarActive(item) {
@@ -2320,11 +2446,11 @@
           return;
         }
         if (view === 'ring-assignment') {
-          raLoad();
+          raPrepareAndLoad();
           return;
         }
         if (view === 'head-table') {
-          htLoad();
+          htPrepareAndLoad();
           htTickFreshness();
           return;
         }
@@ -2779,7 +2905,7 @@
         const chips = [
           ['Event', gbReady() ? getSelectedEventName() : 'None selected'],
           ['Competitors', gb.competitors.length],
-          ['Special Needs', gb.competitors.filter(DivisionRules.isSpecialNeeds).length],
+          ['Special Dragons', gb.competitors.filter(DivisionRules.isSpecialNeeds).length],
           ['Groups', gb.groups.length],
           ['Assigned', assigned]
         ];
@@ -2846,7 +2972,7 @@
             const categories = comps.map(DivisionRules.specialNeedsCategory);
             const ranks = [...new Set(categories.map((category) => category.rankCategory))];
             const ages = [...new Set(categories.map((category) => category.ageBracket))];
-            chips.unshift({ text: `Special Needs - ${ranks.length === 1 ? ranks[0] : 'Mixed ranks'} - ${ages.length === 1 ? ages[0] : 'Mixed age bands'}`, cls: 'special-needs' });
+            chips.unshift({ text: `Special Dragons - ${ranks.length === 1 ? ranks[0] : 'Mixed ranks'} - ${ages.length === 1 ? ages[0] : 'Mixed age bands'}`, cls: 'special-needs' });
           }
           if (entry.weapons != null) chips.push({ text: `Weapons ${entry.eligible}`, cls: 'weapons' });
           html.push(gbBannerHtml({
@@ -2875,7 +3001,7 @@
         gdNameEl.textContent = id === GB_UNASSIGNED ? 'Unassigned' : id === GB_FLAGGED ? 'Flagged for review' : gbDivLabel(group);
         const plan = group && gb.plan[group.id];
         const subs = plan ? `<span>${plan.weapons != null ? `Weapons ${plan.weapons} · ` : ''}Hyungs ${plan.hyungs} · Sparring ${plan.sparring}</span>` : '';
-        gdMetaEl.innerHTML = `<span>${list.length} competitor${list.length === 1 ? '' : 's'}</span>${group && group.specialNeeds && list.length ? '<span>Special Needs</span>' : ''}${group && list.length ? `<span>${gbEsc(gbRankRange(list))}</span><span>${gbEsc(gbAgeRange(list))}</span>` : ''}${subs}`;
+        gdMetaEl.innerHTML = `<span>${list.length} competitor${list.length === 1 ? '' : 's'}</span>${group && group.specialNeeds && list.length ? '<span>Special Dragons</span>' : ''}${group && list.length ? `<span>${gbEsc(gbRankRange(list))}</span><span>${gbEsc(gbAgeRange(list))}</span>` : ''}${subs}`;
         if (!list.length) {
           gdMembersEl.innerHTML = `<div class="gd-sub">${group && group.hasHadCompetitors
             ? 'This division is now empty. Add competitors again or delete it if no longer needed.'
@@ -2883,7 +3009,7 @@
           return;
         }
         gdMembersEl.innerHTML = list.map((c) => {
-          const sub = `<div class="gd-sub"><span class="gd-badge">${gbEsc(c.gender.charAt(0))}</span><span class="gd-badge">${gbEsc(c.rank || '?')}</span><span>Age ${c.age}</span>${DivisionRules.isSpecialNeeds(c) ? '<span class="gd-badge">Special Needs</span>' : ''}</div>`;
+          const sub = `<div class="gd-sub"><span class="gd-badge">${gbEsc(c.gender.charAt(0))}</span><span class="gd-badge">${gbEsc(c.rank || '?')}</span><span>Age ${c.age}</span>${DivisionRules.isSpecialNeeds(c) ? '<span class="gd-badge">Special Dragons</span>' : ''}</div>`;
           if (id === GB_FLAGGED) {
             const options = ['<option value="">Corrected rank…</option>'].concat(GB_RANKS.map((r) => `<option value="${r}">${r}</option>`)).join('');
             return `<div class="gd-row static" data-comp="${gbEsc(c.id)}"><div><div class="gd-name">${gbEsc(c.fullName)}</div>${sub}<div class="gd-sub">${gbEsc(c.reviewReason || 'review required')}</div></div><div class="gd-fix"><select>${options}</select><button class="gd-apply" type="button" data-apply data-help="Apply the corrected rank and move this competitor to Unassigned for grouping.">Apply</button></div></div>`;
@@ -3043,7 +3169,7 @@
         if (index === -1) return false;
         const destination = gb.groups.find((g) => g.id === toId);
         if (destination && !gbCanAccept(destination, from[index])) {
-          gbNotice(DivisionRules.specialNeedsGroupError([...to, from[index]]) || 'TTLD competitors must remain separate from other ranks.', 'warn');
+          gbNotice(DivisionRules.displayDivisionName(DivisionRules.specialNeedsGroupError([...to, from[index]])) || 'TTLD competitors must remain separate from other ranks.', 'warn');
           return false;
         }
         to.push(from.splice(index, 1)[0]);
@@ -3207,14 +3333,47 @@
       const ra = {
         eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
         ready: false, busy: false, requestToken: 0, timer: null, estimates: null, startedAt: '', completion: null,
-        heartbeatSeconds: 90, config: {}, pointerDrag: null, nativeDragging: false, suppressClickUntil: 0
+        heartbeatSeconds: 90, config: {}, pointerDrag: null, nativeDragging: false, suppressClickUntil: 0,
+        simulatorRunId: new URLSearchParams(window.location.search).get('simulatorRunId') || '', simulatorStatus: '',
+        schedule: null, filters: new Set()
       };
       const raDivisionsEl = document.getElementById('raDivisions');
       const raRingsEl = document.getElementById('raRings');
-      const raSearchEl = document.getElementById('raSearch');
+      const raFiltersEl = document.getElementById('raFilters');
+      const raScheduleSummaryEl = document.getElementById('raScheduleSummary');
+      const RA_CATEGORIES = ['BB', 'TT', 'SD', 'Gup'];
       const raNoticeEl = document.getElementById('raNotice');
       const raRefreshBtn = document.getElementById('raRefreshBtn');
-      const raLayoutBtn = document.getElementById('raLayoutBtn');
+      const raSourceRunEl = document.getElementById('raSourceRun');
+      const raSimulationNoticeEl = document.getElementById('raSimulationNotice');
+
+      function raResetData() {
+        raEndDrag();
+        ra.requestToken += 1;
+        Object.assign(ra, { eventName: '', groups: [], rings: [], available: [], estimates: null,
+          startedAt: '', completion: null, selectedRingId: '', selectedGroupId: '', ready: false, simulatorStatus: '', schedule: null });
+      }
+
+      async function raPrepareAndLoad() {
+        const selected = ra.simulatorRunId;
+        let runListError = '';
+        try {
+          const response = await fetchJson('/api/simulator/runs');
+          if (selected !== ra.simulatorRunId || currentView !== 'ring-assignment') return;
+          if (!Array.isArray(response.runs)) throw new Error('Invalid simulator run list returned by server.');
+          raSourceRunEl.innerHTML = `<option value="">Active event</option>${response.runs.map((run) =>
+            `<option value="${gbEsc(run.runId)}">SIM - ${gbEsc(run.sourceEventName)} (${gbEsc(run.status)}, ${gbEsc(run.runId.slice(0, 8))})</option>`).join('')}${
+              selected && !response.runs.some((run) => run.runId === selected)
+                ? `<option value="${gbEsc(selected)}">Unavailable simulation (${gbEsc(selected.slice(0, 8))})</option>` : ''}`;
+          raSourceRunEl.value = selected;
+        } catch (error) {
+          runListError = error.message;
+        }
+        await raLoad();
+        if (runListError && selected === ra.simulatorRunId && currentView === 'ring-assignment') {
+          raNotice(`Unable to list simulations: ${runListError}`, 'error');
+        }
+      }
 
       function raNotice(message, kind = 'info') {
         raNoticeEl.className = message ? `notice visible ${kind}` : 'notice';
@@ -3250,7 +3409,7 @@
             && (forecast.status === 'complete' || validEstimateWindow(forecast.window)) ? forecast.status : 'unavailable';
           const held = context.completion;
           // Hold the displayed forecast for a minute so it does not jitter on every 10-second refresh.
-          if (!held || held.eventName !== context.eventName || held.startedAt !== context.startedAt
+          if (context.simulatorRunId || !held || held.eventName !== context.eventName || held.startedAt !== context.startedAt
             || held.status !== status || Date.now() - held.at >= COMPLETION_REFRESH_MS) {
             context.completion = { eventName: context.eventName, startedAt: context.startedAt, status, forecast,
               reason: reason || (forecast && forecast.reason) || 'No completion estimate reported.', at: Date.now() };
@@ -3375,14 +3534,21 @@
       }
 
       function raDivisionEstimate(group) {
-        const suggestion = !estimateContext(ra)
-          && ra.estimates.unassigned.find((item) => item && item.groupDivisionNumber === raAnchor(group));
-        const validStart = suggestion && suggestion.status === 'estimated' && validEstimateWindow(suggestion.window);
+        const usable = !estimateContext(ra);
+        const snapshot = ra.estimates;
+        const inactiveSimulation = ra.simulatorRunId && snapshot?.version === 1
+          && snapshot.eventName === ra.eventName && snapshot.status === 'unavailable'
+          && Array.isArray(snapshot.unassigned) && Date.parse(snapshot.generatedAt) <= Date.now() + 5000
+          && Date.parse(snapshot.validUntil) > Date.now();
+        const suggestion = (usable || inactiveSimulation)
+          && snapshot.unassigned.find((item) => item && item.groupDivisionNumber === raAnchor(group));
+        const validStart = usable && suggestion && suggestion.status === 'estimated' && validEstimateWindow(suggestion.window);
         const time = validStart ? new Date(suggestion.window.expectedAt) : null;
-        const clock = time && time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const clock = time && time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit',
+          ...(ra.simulatorRunId ? { second: '2-digit' } : {}) });
         const start = time ? `Start ~${time.toDateString() === new Date().toDateString() ? '' : `${time.toLocaleDateString([], { month: 'short', day: 'numeric' })} `}${clock}` : 'Start TBD';
         const duration = suggestion && Number.isFinite(suggestion.durationMs) && suggestion.durationMs > 0
-          ? `Ring ~${Math.ceil(suggestion.durationMs / 60000)} min` : 'Ring time TBD';
+          ? `Ring ~${Math.ceil(suggestion.durationMs / 60000)} ${ra.simulatorRunId ? 'real min' : 'min'}` : 'Ring time TBD';
         return `<span class="ra-division-estimate"><span${validStart ? ` data-estimate-expiry="${estimateExpiry(ra)}" data-estimate-stale-text="Start TBD (stale)"` : ''}>${gbEsc(start)}</span> &middot; ${gbEsc(duration)}</span>`;
       }
 
@@ -3392,7 +3558,7 @@
 
       function raGroupLabel(id) {
         const group = raGroup(id);
-        return `Division ${id}${group && group.name ? ` - ${group.name}` : ''}`;
+        return `Division ${id}${group && group.name ? ` - ${DivisionRules.displayDivisionName(group.name)}` : ''}`;
       }
 
       function raConnection(ring, heartbeatSeconds = ra.heartbeatSeconds) {
@@ -3403,8 +3569,13 @@
       }
 
       function raStatus(ring) {
+        if (ra.simulatorRunId) {
+          if (['paused', 'stopped', 'failed', 'day-break'].includes(ra.simulatorStatus)) return ra.simulatorStatus;
+          return ring.groupDivisionNumber ? 'Active'
+            : (ring.queuedGroupDivisionNumbers || []).length ? 'Queued' : 'Available';
+        }
         const assigned = Boolean(ring.groupDivisionNumber) || (ring.queuedGroupDivisionNumbers || []).length > 0;
-        const connection = raConnection(ring);
+        const connection = ra.simulatorRunId ? { label: 'Simulation', tone: 'no-tablet' } : raConnection(ring);
         if (connection.tone === 'no-tablet') return assigned ? 'Waiting' : 'Unassigned';
         return connection.tone === 'connected' && assigned ? 'Active' : connection.label;
       }
@@ -3453,38 +3624,106 @@
             ${queue.length ? `<ol class="ra-queue">${queue.map((id) => `<li>
               <div class="ra-division-label">${gbEsc(raGroupLabel(id))}<br>${estimateSpan(ra, (estimateRing(ra, ring.ringId) || { queue: [] }).queue.find((item) => item.groupDivisionNumber === String(id)), 'Estimated start')}</div>
               <div class="ra-division-actions">${competitorButton(id)}
-              <button type="button" data-ra-remove="${gbEsc(id)}" data-help="Remove this division from the ring queue without deleting the division."${ra.busy ? ' disabled' : ''} aria-label="Remove Division ${gbEsc(id)} from queue">Remove</button>
+              ${ra.simulatorRunId ? '' : `<button type="button" data-ra-remove="${gbEsc(id)}" data-help="Remove this division from the ring queue without deleting the division."${ra.busy ? ' disabled' : ''} aria-label="Remove Division ${gbEsc(id)} from queue">Remove</button>`}
               </div>
             </li>`).join('')}</ol>` : '<p class="ra-meta">No queued divisions</p>'}
           </section>
           ${detailGroup ? `<section class="ra-detail"><h3>${gbEsc(raGroupLabel(raAnchor(detailGroup)))}</h3>${raMembers(detailGroup)}</section>` : ''}
-          <div class="ra-ring-maintenance"><button type="button" data-ra-reset data-help="Clear this ring's assignments and operational state after confirmation."${ra.busy ? ' disabled' : ''}>Reset ring</button></div>`;
+          ${ra.simulatorRunId ? '<p class="ra-meta">Simulation data is read-only.</p>'
+            : `<div class="ra-ring-maintenance"><button type="button" data-ra-reset data-help="Clear this ring's assignments and operational state after confirmation."${ra.busy ? ' disabled' : ''}>Reset ring</button></div>`}`;
+      }
+
+      function raScheduleState() {
+        const schedule = ra.schedule || {};
+        return { days: Number(schedule.tournamentDays) === 2 ? 2 : 1, day1Complete: Boolean(schedule.day1Complete),
+          day2Started: Boolean(schedule.day2Started) };
+      }
+
+      function raRenderSchedule(counts) {
+        const schedule = raScheduleState();
+        raScheduleSummaryEl.hidden = !ra.ready;
+        if (!ra.ready) { raScheduleSummaryEl.innerHTML = ''; return; }
+        const live = !ra.simulatorRunId;
+        const formatNote = !live ? '<span class="ra-format-lock">Format is fixed by the simulation run.</span>'
+          : ra.startedAt ? '<span class="ra-format-lock">Format locked: competition has started.</span>'
+          : '<button type="button" data-ra-event-setup data-help="Open Event Setup to change the event format. The format is locked once competition starts.">Change in Event Setup</button>';
+        if (schedule.days === 1) {
+          raScheduleSummaryEl.innerHTML = `<span class="ra-format-badge" data-day="1">One-day event</span>
+            <span>BB oldest first &middot; TT/SD then Gup youngest first</span>${formatNote}`;
+          return;
+        }
+        const badge = schedule.day2Started ? 'Two-day event &middot; Day 2 (TT/SD/Gup)' : 'Two-day event &middot; Day 1 (BB)';
+        const status = schedule.day2Started ? 'Day 2 in progress'
+          : schedule.day1Complete ? 'All BB divisions complete - Day 2 is ready to start'
+          : 'Day 2 is locked until every BB division is complete';
+        const canStart = schedule.day1Complete && !ra.busy;
+        const category = RA_CATEGORIES.map((key) => `${key} ${counts[key]}`).join(' / ');
+        raScheduleSummaryEl.innerHTML = `<span class="ra-format-badge" data-day="${schedule.day2Started ? 2 : 1}">${badge}</span>
+          <span>${gbEsc(status)}</span>
+          <span>${counts.All} available (${gbEsc(category)})</span>
+          ${ra.simulatorRunId ? '<span>Read-only: start Day 2 on the Simulator page.</span>'
+            : schedule.day2Started ? '' : `<button type="button" data-ra-start-day2 data-help="Begin Day 2. Available only after every Day 1 division is complete."${canStart ? '' : ' disabled'}>Start Day 2</button>`}
+          ${formatNote}`;
+      }
+
+      async function raStartDay2() {
+        const schedule = raScheduleState();
+        if (ra.simulatorRunId || ra.busy || !ra.ready || !schedule.day1Complete || schedule.day2Started) return;
+        if (!window.confirm('Start Day 2? Day 2 divisions will become assignable and receive estimated starts. This cannot be undone.')) return;
+        await raUpdate('/api/rings/schedule/day2', { method: 'POST' });
       }
 
       function raRender() {
         if (ra.pointerDrag || ra.nativeDragging) return;
         document.getElementById('raEvent').textContent = ra.eventName || 'No active event';
+        raSimulationNoticeEl.hidden = !ra.simulatorRunId;
+        raSimulationNoticeEl.className = ra.simulatorRunId ? 'notice visible' : 'notice';
+        raSimulationNoticeEl.textContent = ra.simulatorRunId
+          ? `SIMULATION - READ ONLY - ${ra.simulatorStatus || 'loading'} - estimates use local clock. Manage execution on the Simulator page.` : '';
         const available = new Set(ra.available.map(String));
-        const query = raSearchEl.value.trim().toLowerCase();
-        const groups = ra.groups.filter((group) => available.has(raAnchor(group)))
-          .filter((group) => [raGroupLabel(raAnchor(group)), gbRankRange(group.competitors), gbAgeRange(group.competitors)]
-            .join(' ').toLowerCase().includes(query))
-          .sort((a, b) => raAnchor(a).localeCompare(raAnchor(b), undefined, { numeric: true }));
+        const availableGroups = ra.groups.filter((group) => available.has(raAnchor(group)))
+          .sort((a, b) => DivisionRules.compareRunningOrder(a, b));
+        const counts = { All: availableGroups.length };
+        RA_CATEGORIES.forEach((category) => { counts[category] = 0; });
+        availableGroups.forEach((group) => {
+          const category = DivisionRules.scheduleCategory(group);
+          if (category in counts) counts[category] += 1;
+        });
+        const scheduleNow = raScheduleState();
+        const filterKey = `${ra.eventName}|${ra.simulatorRunId}|${scheduleNow.days}|${scheduleNow.day2Started}`;
+        if (ra.ready && ra.filterKey !== filterKey) {
+          ra.filterKey = filterKey;
+          ra.filters.clear();
+          if (scheduleNow.days === 2 && !scheduleNow.day2Started) ra.filters.add('BB');
+        }
+        const active = RA_CATEGORIES.filter((category) => ra.filters.has(category));
+        const groups = active.length ? availableGroups.filter((group) => active.includes(DivisionRules.scheduleCategory(group))) : availableGroups;
+        raFiltersEl.innerHTML = ['All', ...RA_CATEGORIES].map((key) => {
+          const pressed = key === 'All' ? !active.length : active.includes(key);
+          return `<button type="button" data-ra-filter="${key}" aria-pressed="${pressed}">${key} (${counts[key]})</button>`;
+        }).join('');
+        raRenderSchedule(counts);
         document.getElementById('raDivisionCount').textContent = `${groups.length} divisions`;
         raDivisionsEl.innerHTML = groups.length ? groups.map((group) => {
           const title = `Division ${raAnchor(group)}`;
           const count = group.competitors.length;
           const countLabel = `${count} ${count === 1 ? 'competitor' : 'competitors'}`;
-          const description = group.name && group.name !== title ? group.name
-            : [gbRankRange(group.competitors), gbAgeRange(group.competitors)].filter(Boolean).join(' - ');
-          return `<button type="button" class="ra-card ra-division" draggable="${!ra.busy}" data-ra-division="${gbEsc(raAnchor(group))}"${ra.busy ? ' disabled' : ''}>
-            <span class="ra-division-head"><strong>${gbEsc(title)}</strong><span class="ra-meta">${countLabel}</span></span>
+          const description = DivisionRules.displayDivisionName(group.name && group.name !== title ? group.name
+            : [gbRankRange(group.competitors), gbAgeRange(group.competitors)].filter(Boolean).join(' - '));
+          const badge = DivisionRules.divisionBadge(group);
+          const age = DivisionRules.runningOrderAge(group);
+          const mixedAge = age && age.mixed && Number.isFinite(age.min) && Number.isFinite(age.max)
+            ? `Mixed ages ${age.min === age.max ? age.min : `${age.min}-${age.max}`}` : '';
+          const day2Locked = scheduleNow.days === 2 && !scheduleNow.day2Started && DivisionRules.scheduleCategory(group) !== 'BB';
+          return `<button type="button" class="ra-card ra-division${day2Locked ? ' ra-day2-locked' : ''}" draggable="${!ra.busy && !ra.simulatorRunId && !day2Locked}" data-ra-division="${gbEsc(raAnchor(group))}"${day2Locked ? ' aria-disabled="true" title="Day 2 division - locked until Day 2 is started."' : ''}${ra.busy ? ' disabled' : ''}>
+            <span class="ra-division-head"><strong>${gbEsc(title)}</strong>${badge ? `<span class="ra-division-badge" aria-label="${gbEsc(badge.label)}">${badge.text}</span>` : ''}${day2Locked ? '<span class="ra-day2-tag">Day 2 &middot; locked</span>' : ''}<span class="ra-meta">${countLabel}</span></span>
             ${description ? `<span class="ra-meta ra-division-description">${gbEsc(description)}</span>` : ''}
+            ${mixedAge ? `<span class="ra-meta ra-division-mixed-age">${gbEsc(mixedAge)}</span>` : ''}
             ${raDivisionEstimate(group)}
           </button>`;
         }).join('') : `<p class="ra-meta">${!ra.ready ? 'Divisions unavailable.' : !ra.groups.length
             ? 'No saved divisions for the active event. Build and save groups first.'
-            : 'No available divisions match this search.'}</p>`;
+            : availableGroups.length ? 'No available divisions match the selected filters.' : 'No available divisions.'}</p>`;
         document.getElementById('raRingCount').textContent = `${ra.rings.length} rings`;
         raRingsEl.innerHTML = ra.rings.map((ring) => {
           const connection = raConnection(ring);
@@ -3495,12 +3734,8 @@
             <span class="ra-ring-line"><span class="ra-assignment" title="${gbEsc(assignment)}">${gbEsc(assignment)}</span><span class="ra-meta">${queued} queued</span></span>
           </button>`;
         }).join('') || '<p class="ra-meta">No configured rings available.</p>';
-        const x = Number(state.activeEventMeta.ringConfigX);
-        const y = Number(state.activeEventMeta.ringConfigY);
-        raLayoutBtn.hidden = !ra.ready || x === Number(ra.config.letterCount) && y === Number(ra.config.numberCount);
-        raLayoutBtn.disabled = ra.busy || !Number.isInteger(x) || !Number.isInteger(y) || x < 1 || x > 26 || y < 1 || y > 50;
-        raLayoutBtn.textContent = `Apply saved event ring layout (${x} x ${y})`;
         raRefreshBtn.disabled = ra.busy;
+        raSourceRunEl.disabled = ra.busy;
         raRenderDetails();
         estimateSummary(ra, 'raEstimateSummary');
         eventTiming(ra, 'raEventTiming');
@@ -3511,11 +3746,25 @@
         if (ra.pointerDrag || ra.nativeDragging || currentView !== 'ring-assignment') return;
         const token = ++ra.requestToken;
         if (ra.timer) clearTimeout(ra.timer);
+        const selectedRun = ra.simulatorRunId;
         try {
-          await refreshActiveEvent();
+          let divisions;
+          let board;
+          let eventName;
+          if (selectedRun) {
+            board = await fetchJson(`/api/simulator/runs/${encodeURIComponent(selectedRun)}/ring-assignment`);
+            divisions = { groups: board.groups };
+            eventName = board.eventName;
+          } else {
+            await refreshActiveEvent();
+            if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
+            eventName = state.activeEventName;
+            if (!eventName) throw new Error('No active event. Activate an event on Event Setup first.');
+            // Loading saved groups first primes the active-event division cache.
+            divisions = await fetchJson(`/api/groups?eventName=${encodeURIComponent(eventName)}`);
+            board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(eventName)}`);
+          }
           if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
-          const eventName = state.activeEventName;
-          if (!eventName) throw new Error('No active event. Activate an event on Event Setup first.');
           if (ra.eventName !== eventName) {
             ra.estimates = null;
             ra.startedAt = '';
@@ -3527,9 +3776,6 @@
             ra.ready = false;
           }
           ra.eventName = eventName;
-          // Loading saved groups first also primes the server's active-event division cache.
-          const divisions = await fetchJson(`/api/groups?eventName=${encodeURIComponent(eventName)}`);
-          const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(eventName)}`);
           if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
           if (ra.pointerDrag || ra.nativeDragging) return;
           if (!Array.isArray(divisions.groups) || !Array.isArray(board.rings) || !Array.isArray(board.availableGroupDivisionNumbers)) {
@@ -3538,9 +3784,11 @@
           ra.groups = divisions.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
           ra.rings = board.rings.slice().sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
           ra.available = board.availableGroupDivisionNumbers;
+          ra.schedule = board.schedule || null;
           ra.estimates = board.estimates || null;
           ra.startedAt = board.eventStartedAt || '';
           ra.config = board.ringConfig || {};
+          ra.simulatorStatus = selectedRun ? board.simulatorStatus : '';
           ra.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
           if (!ra.rings.some((ring) => ring.ringId === ra.selectedRingId)) ra.selectedRingId = '';
           if (!raGroup(ra.selectedGroupId)) ra.selectedGroupId = '';
@@ -3555,9 +3803,10 @@
           ra.groups = [];
           ra.rings = [];
           ra.available = [];
+          ra.schedule = null;
           ra.selectedRingId = '';
           ra.selectedGroupId = '';
-          ra.eventName = state.activeEventError ? '' : state.activeEventName;
+          ra.eventName = selectedRun ? '' : state.activeEventError ? '' : state.activeEventName;
           raRender();
           raNotice(`Unable to load Ring Assignment: ${error.message}`, 'error');
         } finally {
@@ -3568,7 +3817,7 @@
       }
 
       async function raUpdate(path, options) {
-        if (ra.busy || !ra.ready) return;
+        if (ra.simulatorRunId || ra.busy || !ra.ready) return;
         ra.busy = true;
         ra.requestToken += 1;
         if (ra.timer) clearTimeout(ra.timer);
@@ -3586,13 +3835,18 @@
       }
 
       async function raQueue(ringId, divisionId) {
-        if (!ra.ready || ra.busy) return;
+        if (ra.simulatorRunId || !ra.ready || ra.busy) return;
         if (!ra.rings.some((ring) => ring.ringId === ringId)) {
           raNotice('Select a ring before assigning a division.', 'warn');
           return;
         }
         if (!ra.available.map(String).includes(divisionId) || !raGroup(divisionId)) {
           raNotice('That division is no longer available. Refresh Ring Assignment.', 'warn');
+          return;
+        }
+        const schedule = raScheduleState();
+        if (schedule.days === 2 && !schedule.day2Started && DivisionRules.scheduleCategory(raGroup(divisionId)) !== 'BB') {
+          raNotice('Day 2 divisions cannot be assigned until Day 2 is started.', 'warn');
           return;
         }
         ra.selectedRingId = ringId;
@@ -3604,7 +3858,34 @@
       }
 
       raRefreshBtn.addEventListener('click', raLoad);
-      raSearchEl.addEventListener('input', raRender);
+      raSourceRunEl.addEventListener('change', () => {
+        ra.simulatorRunId = raSourceRunEl.value;
+        raResetData();
+        raRender();
+        const url = new URL(window.location.href);
+        if (ra.simulatorRunId) url.searchParams.set('simulatorRunId', ra.simulatorRunId);
+        else url.searchParams.delete('simulatorRunId');
+        window.history.replaceState(null, '', url);
+        raLoad();
+      });
+      raScheduleSummaryEl.addEventListener('click', (event) => {
+        if (event.target.closest('[data-ra-start-day2]')) { raStartDay2(); return; }
+        if (event.target.closest('[data-ra-event-setup]')) {
+          const setupItem = navItems.find((item) => navLabel(item) === 'Event Setup');
+          if (setupItem) showView('event-setup', setupItem);
+        }
+      });
+      raFiltersEl.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-ra-filter]');
+        if (!button) return;
+        const key = button.dataset.raFilter;
+        if (key === 'All') ra.filters.clear();
+        else if (RA_CATEGORIES.includes(key)) {
+          if (ra.filters.has(key)) ra.filters.delete(key);
+          else ra.filters.add(key);
+        }
+        raRender();
+      });
       raRingsEl.addEventListener('click', (event) => {
         const button = event.target.closest('[data-ra-ring]');
         if (!button) return;
@@ -3627,22 +3908,14 @@
         if (button.dataset.raGroup) {
           ra.selectedGroupId = ra.selectedGroupId === button.dataset.raGroup ? '' : button.dataset.raGroup;
           raRenderDetails();
-        } else if (button.dataset.raRemove) {
+        } else if (button.dataset.raRemove && !ra.simulatorRunId) {
           await raUpdate(`/api/rings/${encodeURIComponent(ra.selectedRingId)}/queue/${encodeURIComponent(button.dataset.raRemove)}`,
             { method: 'DELETE' });
-        } else if (button.hasAttribute('data-ra-reset')) {
+        } else if (button.hasAttribute('data-ra-reset') && !ra.simulatorRunId) {
           if (!window.confirm('Reset this ring? This clears its current division, queue, completed-division history, tablet, progress, and assistance state.')) return;
           ra.selectedGroupId = '';
           await raUpdate(`/api/rings/${encodeURIComponent(ra.selectedRingId)}/reset`, { method: 'POST' });
         }
-      });
-      raLayoutBtn.addEventListener('click', async () => {
-        if (raLayoutBtn.disabled || !ra.ready || ra.busy) return;
-        if (!window.confirm('Apply the saved event ring layout? This resets ALL ring assignments, queues, completed-division history, tablet connections, and progress for the active event.')) return;
-        await raUpdate('/api/rings/config', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ letterCount: Number(state.activeEventMeta.ringConfigX), numberCount: Number(state.activeEventMeta.ringConfigY) })
-        });
       });
       function raEndDrag() {
         raRingsEl.querySelectorAll('.drop').forEach((card) => card.classList.remove('drop'));
@@ -3655,7 +3928,7 @@
 
       raDivisionsEl.addEventListener('pointerdown', (event) => {
         const card = event.target.closest('[data-ra-division]');
-        if (!card || event.pointerType !== 'mouse' || event.button !== 0 || !ra.ready || ra.busy) return;
+        if (ra.simulatorRunId || !card || event.pointerType !== 'mouse' || event.button !== 0 || !ra.ready || ra.busy) return;
         event.preventDefault();
         card.focus({ preventScroll: true });
         card.setPointerCapture(event.pointerId);
@@ -3698,7 +3971,7 @@
       raDivisionsEl.addEventListener('dragstart', (event) => {
         if (ra.pointerDrag) { event.preventDefault(); return; }
         const card = event.target.closest('[data-ra-division]');
-        if (!card || !ra.ready || ra.busy) { event.preventDefault(); return; }
+        if (ra.simulatorRunId || !card || !ra.ready || ra.busy) { event.preventDefault(); return; }
         ra.nativeDragging = true;
         if (ra.timer) clearTimeout(ra.timer);
         event.dataTransfer.effectAllowed = 'move';
@@ -3707,7 +3980,7 @@
       raDivisionsEl.addEventListener('dragend', raEndDrag);
       raRingsEl.addEventListener('dragover', (event) => {
         const card = event.target.closest('[data-ra-ring]');
-        if (!card || !ra.ready || ra.busy) return;
+        if (ra.simulatorRunId || !card || !ra.ready || ra.busy) return;
         event.preventDefault();
         card.classList.add('drop');
         event.dataTransfer.dropEffect = 'move';
@@ -3718,7 +3991,7 @@
       });
       raRingsEl.addEventListener('drop', async (event) => {
         const card = event.target.closest('[data-ra-ring]');
-        if (!card) return;
+        if (ra.simulatorRunId || !card) return;
         event.preventDefault();
         card.classList.remove('drop');
         raEndDrag();
@@ -3728,7 +4001,8 @@
       const ht = {
         eventName: '', groups: [], rings: [], available: [], selectedRingId: '', selectedGroupId: '',
         ready: false, busy: false, error: '', lastLoadedAt: null, heartbeatSeconds: 90, estimates: null, startedAt: '', completion: null,
-        requestToken: 0, timer: null, freshnessTimer: null, historyOpen: false, order: [], hovering: false
+        simulatorRunId: new URLSearchParams(window.location.search).get('simulatorRunId') || '',
+        simulatorStatus: '', requestToken: 0, timer: null, freshnessTimer: null, historyOpen: false, order: [], hovering: false
       };
       const htRingsEl = document.getElementById('htRings');
       const htSummaryEl = document.getElementById('htSummary');
@@ -3736,6 +4010,66 @@
       const htFreshnessEl = document.getElementById('htFreshness');
       const htOrderEl = document.getElementById('htOrder');
       const htRefreshBtn = document.getElementById('htRefreshBtn');
+      const htSourceRunEl = document.getElementById('htSourceRun');
+      const htSimulationNoticeEl = document.getElementById('htSimulationNotice');
+      const htAssignmentBtn = document.getElementById('htAssignmentBtn');
+      const htAudienceMonitorLink = document.getElementById('htAudienceMonitorLink');
+
+      async function htLoadSimulatorRuns() {
+        const response = await fetchJson('/api/simulator/runs');
+        if (!Array.isArray(response.runs)) throw new Error('Invalid simulator run list returned by server.');
+        const selected = ht.simulatorRunId || htSourceRunEl.value;
+        htSourceRunEl.replaceChildren();
+        const activeOption = document.createElement('option');
+        activeOption.value = '';
+        activeOption.textContent = 'Active event';
+        htSourceRunEl.append(activeOption);
+        const runs = response.runs;
+        for (const run of runs) {
+          const option = document.createElement('option');
+          option.value = run.runId;
+          option.textContent = `SIM - ${run.sourceEventName} (${run.status}, ${run.runId.slice(0, 8)})`;
+          htSourceRunEl.append(option);
+        }
+        if (selected && !runs.some((run) => run.runId === selected)) {
+          const unavailableOption = document.createElement('option');
+          unavailableOption.value = selected;
+          unavailableOption.textContent = `Unavailable simulator run (${selected.slice(0, 8)})`;
+          htSourceRunEl.append(unavailableOption);
+        }
+        htSourceRunEl.value = selected;
+        ht.simulatorRunId = selected;
+      }
+
+      async function htPrepareAndLoad() {
+        let runListError = '';
+        try {
+          await htLoadSimulatorRuns();
+        } catch (error) {
+          runListError = error.message;
+          console.error('Head Table simulator run list refresh failed:', error);
+        }
+        if (currentView !== 'head-table') return;
+        await htLoad();
+        if (runListError && currentView === 'head-table') {
+          htNotice(`Simulator run selector unavailable: ${runListError}`, 'warn');
+        }
+      }
+
+      function htResetData() {
+        ht.eventName = '';
+        ht.estimates = null;
+        ht.startedAt = '';
+        ht.completion = null;
+        ht.simulatorStatus = '';
+        ht.ready = false;
+        ht.rings = [];
+        ht.groups = [];
+        ht.available = [];
+        ht.selectedRingId = '';
+        ht.selectedGroupId = '';
+        ht.order = [];
+      }
 
       function htNotice(message, kind = 'error') {
         htNoticeEl.className = message ? `notice visible ${kind}` : 'notice';
@@ -3761,7 +4095,7 @@
 
       function htGroupLabel(id) {
         const group = ht.groups.find((item) => raAnchor(item) === String(id));
-        return `Division ${id}${group && group.name ? ` - ${group.name}` : ''}`;
+        return `Division ${id}${group && group.name ? ` - ${DivisionRules.displayDivisionName(group.name)}` : ''}`;
       }
 
       function htPace(ring) {
@@ -3908,7 +4242,7 @@
           ${phases.length ? `<section class="ra-detail"><h3>${ring.groupDivisionNumber ? 'Phase progression' : 'Next phase - not started'}</h3><ol class="ht-phase-list">${phases.map((item) => `<li>${gbEsc(item.label)} - ${item.state}${item.percent == null ? ' (progress unavailable)' : ` (${Math.round(item.percent)}%)`}</li>`).join('')}</ol></section>` : ''}
           ${ring.assistanceType ? `<section class="ra-detail ht-alert urgent"><h3>${gbEsc(ring.assistanceType)} assistance</h3>
             <p>Waiting ${gbEsc(htElapsed(ring.assistanceRequestedAt))}. Requested: ${gbEsc(htDate(ring.assistanceRequestedAt))}</p>
-            <button type="button" data-ht-clear data-help="Clear this request after confirming it has been addressed. Unavailable while ring data is stale."${ht.busy || htIsStale() ? ' disabled' : ''}>Clear assistance request</button></section>` : ''}
+            ${ht.simulatorRunId ? '<p class="ra-meta">Simulator data is read-only.</p>' : `<button type="button" data-ht-clear data-help="Clear this request after confirming it has been addressed. Unavailable while ring data is stale."${ht.busy || htIsStale() ? ' disabled' : ''}>Clear assistance request</button>`}</section>` : ''}
           ${phase.toLowerCase().includes('sparring') ? `<section class="ra-detail"><h3>Sparring</h3><dl>
             ${row('Bouts', ring.sparringActualBoutCount != null ? `${ring.sparringCompletedBoutCount || 0} / ${ring.sparringActualBoutCount}` : 'Unavailable')}
             ${row('Byes', ring.sparringByeCount ?? 'Unavailable')}</dl></section>` : ''}
@@ -3964,6 +4298,17 @@
             <span class="ht-count-title">Rings (${ht.rings.length})</span>
             <span class="ht-count-items">${ringCounts.map(count).join('')}</span>
           </div>` : '<span class="ra-meta">Event totals unavailable.</span>';
+        const simulationMode = Boolean(ht.simulatorRunId);
+        htSimulationNoticeEl.hidden = !simulationMode;
+        htSimulationNoticeEl.className = simulationMode ? 'notice visible info' : 'notice';
+        htSimulationNoticeEl.textContent = simulationMode
+          ? `SIMULATION - ${ht.simulatorStatus || 'run'} - read-only view; progress and timing are simulated. No real-event ring data or controls are changed.`
+          : '';
+        htSourceRunEl.disabled = ht.busy;
+        htAssignmentBtn.hidden = false;
+        htAudienceMonitorLink.href = simulationMode
+          ? `/audience-monitor/?simulatorRunId=${encodeURIComponent(ht.simulatorRunId)}`
+          : '/audience-monitor/';
         let rings = ht.rings.slice().sort((a, b) =>
           (htOrderEl.value === 'ring' ? 0 : htAttention(a).rank - htAttention(b).rank) || a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
         if (ht.order.length && (ht.selectedRingId || ht.hovering || focusedId)) {
@@ -3987,8 +4332,17 @@
         htRenderDetails();
         renderState();
         htTickFreshness();
-        estimateSummary(ht, 'htEstimateSummary');
-        eventTiming(ht, 'htEventTiming');
+        if (simulationMode) {
+          document.getElementById('htEstimateSummary').textContent =
+            'Progress and division timing are provided by the simulator; live-event planning estimates are not shown.';
+          const simulatedStart = Date.parse(ht.startedAt);
+          document.getElementById('htEventTiming').innerHTML = Number.isFinite(simulatedStart)
+            ? `<span>Simulated timeline started <strong>${gbEsc(new Date(simulatedStart).toLocaleString())}</strong></span>`
+            : '<span>Simulated timeline has not started.</span>';
+        } else {
+          estimateSummary(ht, 'htEstimateSummary');
+          eventTiming(ht, 'htEventTiming');
+        }
       }
 
       async function htLoad() {
@@ -3997,27 +4351,45 @@
         clearTimeout(ht.timer);
         let verifiedEvent = '';
         try {
-          await refreshActiveEvent();
-          if (token !== ht.requestToken || currentView !== 'head-table') return;
-          verifiedEvent = state.activeEventName;
-          if (!verifiedEvent) throw new Error('No active event. Activate an event on Event Setup first.');
-          if (verifiedEvent !== ht.eventName) {
-            ht.estimates = null; ht.startedAt = ''; ht.completion = null;
-            ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
-            ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = []; ht.lastLoadedAt = null;
-            htRender();
+          if (ht.simulatorRunId) {
+            const board = await fetchJson(`/api/simulator/runs/${encodeURIComponent(ht.simulatorRunId)}/head-table`);
+            if (token !== ht.requestToken || currentView !== 'head-table') return;
+            if (!Array.isArray(board.groups) || !Array.isArray(board.rings) ||
+                !Array.isArray(board.availableGroupDivisionNumbers)) {
+              throw new Error('Invalid simulator Head Table data returned by server.');
+            }
+            ht.eventName = board.eventName;
+            ht.groups = board.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
+            ht.rings = board.rings;
+            ht.available = board.availableGroupDivisionNumbers;
+            ht.estimates = null;
+            ht.startedAt = board.eventStartedAt || '';
+            ht.heartbeatSeconds = board.heartbeatPolicy.disconnectAfterSeconds;
+            ht.simulatorStatus = board.simulatorStatus;
+          } else {
+            await refreshActiveEvent();
+            if (token !== ht.requestToken || currentView !== 'head-table') return;
+            verifiedEvent = state.activeEventName;
+            if (!verifiedEvent) throw new Error('No active event. Activate an event on Event Setup first.');
+            if (verifiedEvent !== ht.eventName) {
+              htResetData();
+              ht.lastLoadedAt = null;
+              htRender();
+            }
+            ht.eventName = verifiedEvent;
+            const groups = await fetchJson(`/api/groups?eventName=${encodeURIComponent(verifiedEvent)}`);
+            const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(verifiedEvent)}`);
+            if (token !== ht.requestToken || currentView !== 'head-table') return;
+            if (!Array.isArray(groups.groups) || !Array.isArray(board.rings) || !Array.isArray(board.availableGroupDivisionNumbers)) throw new Error('Invalid Head Table data returned by server.');
+            ht.groups = groups.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
+            ht.rings = board.rings;
+            ht.available = board.availableGroupDivisionNumbers;
+            ht.estimates = board.estimates || null;
+            ht.startedAt = board.eventStartedAt || '';
+            ht.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
+            ht.simulatorStatus = '';
           }
-          ht.eventName = verifiedEvent;
-          const groups = await fetchJson(`/api/groups?eventName=${encodeURIComponent(verifiedEvent)}`);
-          const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(verifiedEvent)}`);
           if (token !== ht.requestToken || currentView !== 'head-table') return;
-          if (!Array.isArray(groups.groups) || !Array.isArray(board.rings) || !Array.isArray(board.availableGroupDivisionNumbers)) throw new Error('Invalid Head Table data returned by server.');
-          ht.groups = groups.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
-          ht.rings = board.rings;
-          ht.available = board.availableGroupDivisionNumbers;
-          ht.estimates = board.estimates || null;
-          ht.startedAt = board.eventStartedAt || '';
-          ht.heartbeatSeconds = board.heartbeatPolicy ? board.heartbeatPolicy.disconnectAfterSeconds : 90;
           if (!ht.rings.some((ring) => ring.ringId === ht.selectedRingId)) ht.selectedRingId = '';
           if (!ht.groups.some((group) => raAnchor(group) === ht.selectedGroupId)) ht.selectedGroupId = '';
           ht.ready = true; ht.error = ''; ht.lastLoadedAt = Date.now();
@@ -4026,10 +4398,8 @@
         } catch (error) {
           if (token !== ht.requestToken || currentView !== 'head-table') return;
           ht.error = error.message;
-          if (!verifiedEvent || ht.eventName !== verifiedEvent) {
-            ht.estimates = null; ht.startedAt = ''; ht.completion = null;
-            ht.ready = false; ht.rings = []; ht.groups = []; ht.available = [];
-            ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.order = [];
+          if (ht.simulatorRunId || !verifiedEvent || ht.eventName !== verifiedEvent) {
+            htResetData();
           }
           htNotice(`Head Table refresh failed: ${error.message}`);
           htRender();
@@ -4039,8 +4409,20 @@
       }
 
       htRefreshBtn.addEventListener('click', htLoad);
+      htSourceRunEl.addEventListener('change', () => {
+        ht.simulatorRunId = htSourceRunEl.value;
+        htResetData();
+        ht.lastLoadedAt = null;
+        const url = new URL(window.location.href);
+        if (ht.simulatorRunId) url.searchParams.set('simulatorRunId', ht.simulatorRunId);
+        else url.searchParams.delete('simulatorRunId');
+        window.history.replaceState(null, '', url);
+        htLoad();
+      });
       htOrderEl.addEventListener('change', () => { ht.order = []; htRender(); });
       document.getElementById('htAssignmentBtn').addEventListener('click', () => {
+        ra.simulatorRunId = ht.simulatorRunId;
+        raResetData();
         showView('ring-assignment', navItems.find((item) => navLabel(item) === 'Ring Assignment'));
       });
       htRingsEl.addEventListener('mouseenter', () => { ht.hovering = true; });
@@ -4065,7 +4447,7 @@
         } else if (button.hasAttribute('data-ht-close')) {
           ht.selectedRingId = ''; ht.selectedGroupId = ''; ht.historyOpen = false;
           htRender();
-        } else if (button.hasAttribute('data-ht-clear') && !htIsStale()) {
+        } else if (button.hasAttribute('data-ht-clear') && !ht.simulatorRunId && !htIsStale()) {
           const ring = ht.rings.find((item) => item.ringId === ht.selectedRingId);
           if (!ring || !ring.assistanceType || !window.confirm(`Clear the ${ring.assistanceType} assistance request for Ring ${ring.ringLabel}? Confirm the request has been addressed.`)) return;
           ht.busy = true; clearTimeout(ht.timer); ht.requestToken += 1;

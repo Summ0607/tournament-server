@@ -1,6 +1,9 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { compareRunningOrder } = require('../assets/division-rules');
+const { normalizeTournamentDays, isDayBlocked } = require('./tournamentSchedule');
+const { writeJsonAtomicSync } = require('./atomicJsonFile');
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
@@ -59,6 +62,17 @@ function assignmentGroupNumbers(ringState) {
     .filter((groupNumber) => !completed.has(groupNumber));
 }
 
+function completedGroupNumbersForAssignments(assignments) {
+  const rings = assignments && assignments.rings && typeof assignments.rings === 'object'
+    ? Object.values(assignments.rings)
+    : [];
+  return new Set(rings.flatMap((ring) => (
+    Array.isArray(ring && ring.completedGroupDivisionNumbers)
+      ? ring.completedGroupDivisionNumbers
+      : Array.isArray(ring && ring.completedGroupIds) ? ring.completedGroupIds : []
+  )).map(stringGroupNumber));
+}
+
 function createFreshRingState(label, groupNumbers) {
   return {
     ringLabel: label,
@@ -82,12 +96,15 @@ function createFreshRingState(label, groupNumbers) {
   };
 }
 
-function buildFreshAssignments(sourceAssignments, groups) {
+function buildFreshAssignments(sourceAssignments, groups, tournamentDays = 1) {
+  const schedule = { tournamentDays: normalizeTournamentDays(tournamentDays), day2Started: false };
+  groups = groups.slice().sort(compareRunningOrder);
   const config = normalizeRingConfig(sourceAssignments && sourceAssignments.config);
   const sourceRings = sourceAssignments && sourceAssignments.rings &&
     typeof sourceAssignments.rings === 'object'
     ? sourceAssignments.rings
     : {};
+  const completedGroupNumbers = completedGroupNumbersForAssignments({ rings: sourceRings });
   const groupNumbers = new Set();
   for (const group of groups) {
     const groupNumber = stringGroupNumber(group && (group.groupDivisionNumber ?? group.id ?? group.groupId));
@@ -105,6 +122,7 @@ function buildFreshAssignments(sourceAssignments, groups) {
   }
   const rings = {};
   const assigned = new Set();
+  const manualQueues = {};
 
   for (let letterIndex = 0; letterIndex < config.letterCount; letterIndex += 1) {
     const letter = LETTERS[letterIndex];
@@ -112,7 +130,8 @@ function buildFreshAssignments(sourceAssignments, groups) {
       const id = ringId(letter, number);
       const label = ringLabel(letter, number);
       const sourceRing = sourceRings[id] || sourceRings[label] || {};
-      const assignedGroupDivisionNumbers = assignmentGroupNumbers(sourceRing);
+      const assignedGroupDivisionNumbers = assignmentGroupNumbers(sourceRing)
+        .filter((groupNumber) => !completedGroupNumbers.has(groupNumber));
       for (const groupNumber of assignedGroupDivisionNumbers) {
         if (!groupNumbers.has(groupNumber)) {
           const error = new Error(`Ring ${label} references missing saved group ${groupNumber}`);
@@ -126,13 +145,46 @@ function buildFreshAssignments(sourceAssignments, groups) {
         }
         assigned.add(groupNumber);
       }
-      rings[id] = createFreshRingState(label, assignedGroupDivisionNumbers);
+      manualQueues[id] = assignedGroupDivisionNumbers;
+      const firstGroup = groups.find((group) =>
+        stringGroupNumber(group.groupDivisionNumber ?? group.id ?? group.groupId) === assignedGroupDivisionNumbers[0]);
+      rings[id] = createFreshRingState(label, firstGroup && !isDayBlocked(firstGroup, schedule)
+        ? assignedGroupDivisionNumbers.slice(0, 1) : []);
     }
+  }
+  const pendingGroupDivisionNumbers = [];
+  for (const [id, groupNumbersForRing] of Object.entries(manualQueues)) {
+    for (const groupNumber of groupNumbersForRing.filter((number) =>
+      !rings[id].queuedGroupDivisionNumbers.includes(number))) {
+      pendingGroupDivisionNumbers.push({ groupDivisionNumber: groupNumber, preferredRingId: null });
+    }
+  }
+  const automaticGroupDivisionNumbers = [];
+  for (const group of groups) {
+    const groupNumber = stringGroupNumber(group && (group.groupDivisionNumber ?? group.id ?? group.groupId));
+    if (completedGroupNumbers.has(groupNumber) || assigned.has(groupNumber)) continue;
+    assigned.add(groupNumber);
+    automaticGroupDivisionNumbers.push(groupNumber);
+    pendingGroupDivisionNumbers.push({ groupDivisionNumber: groupNumber, preferredRingId: null });
+  }
+  const groupMap = new Map(groups.map((group) => [stringGroupNumber(group.groupDivisionNumber ?? group.id ?? group.groupId), group]));
+  pendingGroupDivisionNumbers.sort((a, b) => compareRunningOrder(
+    groupMap.get(a.groupDivisionNumber), groupMap.get(b.groupDivisionNumber)));
+  for (const ring of Object.values(rings)) {
+    if (ring.queuedGroupDivisionNumbers.length) continue;
+    const index = pendingGroupDivisionNumbers.findIndex((entry) =>
+      !isDayBlocked(groupMap.get(entry.groupDivisionNumber), schedule));
+    if (index >= 0) ring.queuedGroupDivisionNumbers.push(pendingGroupDivisionNumbers.splice(index, 1)[0].groupDivisionNumber);
   }
   return {
     config,
+    tournamentDays: schedule.tournamentDays,
+    day2StartedAt: '',
+    sourceCompletedGroupDivisionNumbers: [...completedGroupNumbers],
     eventStartedAt: '',
-    rings
+    rings,
+    pendingGroupDivisionNumbers,
+    automaticGroupDivisionNumbers
   };
 }
 
@@ -149,7 +201,7 @@ function createSimulatorRunStore({ runsRoot }) {
     return path.join(runsRoot, normalizedRunId);
   }
 
-  function createRun({ eventName: sourceEventName, groups, assignments, now = () => new Date() }) {
+  function createRun({ eventName: sourceEventName, groups, assignments, tournamentDays = 1, now = () => new Date() }) {
     const eventName = normalizeEventName(sourceEventName);
     if (!Array.isArray(groups) || groups.length === 0) {
       const error = new Error(`Event has no saved groups to simulate: ${eventName}`);
@@ -166,9 +218,14 @@ function createSimulatorRunStore({ runsRoot }) {
     const runId = crypto.randomUUID();
     const runDirectory = path.join(runsRoot, runId);
     const temporaryDirectory = path.join(runsRoot, `.creating-${runId}`);
-    const freshAssignments = buildFreshAssignments(assignments, groups);
+    const freshAssignments = buildFreshAssignments(assignments, groups, tournamentDays);
     const groupSnapshot = JSON.parse(JSON.stringify(groups));
     const assignmentSnapshot = JSON.parse(JSON.stringify(freshAssignments));
+    const completedGroupNumbers = completedGroupNumbersForAssignments(assignments);
+    const eligibleGroupCount = groupSnapshot.filter((group) =>
+      !completedGroupNumbers.has(
+        stringGroupNumber(group.groupDivisionNumber ?? group.id ?? group.groupId)
+      )).length;
     const inputSnapshotSha256 = crypto.createHash('sha256')
       .update(JSON.stringify({
         sourceEventName: eventName,
@@ -182,15 +239,15 @@ function createSimulatorRunStore({ runsRoot }) {
       sourceEventName: eventName,
       createdAt,
       status: 'created',
-      speed: 10,
+      speed: 600,
       groupCount: groupSnapshot.length,
       ringCount: Object.keys(assignmentSnapshot.rings).length,
       inputSnapshotSha256,
-      assignedGroupCount: Object.values(assignmentSnapshot.rings)
-        .reduce((count, ring) => count + ring.queuedGroupDivisionNumbers.length, 0)
+      assignedGroupCount: eligibleGroupCount,
+      autoAssignedGroupCount: assignmentSnapshot.automaticGroupDivisionNumbers.length
     };
     if (!manifest.assignedGroupCount) {
-      const error = new Error(`Event has no assigned, incomplete groups to simulate: ${eventName}`);
+      const error = new Error(`Event has no incomplete saved divisions to simulate: ${eventName}`);
       error.statusCode = 409;
       throw error;
     }
@@ -221,6 +278,18 @@ function createSimulatorRunStore({ runsRoot }) {
     return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   }
 
+  function listRuns() {
+    if (!fs.existsSync(runsRoot)) return [];
+    return fs.readdirSync(runsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => getRun(entry.name))
+      .filter(Boolean)
+      .map(({ runId, sourceEventName, createdAt, status, speed }) => ({
+        runId, sourceEventName, createdAt, status, speed
+      }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
   function getRunWorkspace(runId) {
     const runDirectory = runDirectoryFor(runId);
     if (!runDirectory || !fs.existsSync(path.join(runDirectory, 'manifest.json'))) return null;
@@ -237,9 +306,7 @@ function createSimulatorRunStore({ runsRoot }) {
     if (!workspace) return null;
     const nextManifest = { ...workspace.manifest, ...updates };
     const manifestPath = path.join(workspace.runDirectory, 'manifest.json');
-    const temporaryPath = `${manifestPath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-    fs.writeFileSync(temporaryPath, JSON.stringify(nextManifest, null, 2), { encoding: 'utf8', flag: 'wx' });
-    fs.renameSync(temporaryPath, manifestPath);
+    writeJsonAtomicSync(manifestPath, nextManifest);
     return nextManifest;
   }
 
@@ -249,12 +316,7 @@ function createSimulatorRunStore({ runsRoot }) {
     const initialAssignmentsPath = path.join(workspace.runDirectory, 'initial-ring-assignments.json');
     const initialAssignments = JSON.parse(fs.readFileSync(initialAssignmentsPath, 'utf8'));
     const assignmentsPath = path.join(workspace.runDirectory, 'ring-assignments.json');
-    const temporaryAssignmentsPath = `${assignmentsPath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-    fs.writeFileSync(temporaryAssignmentsPath, JSON.stringify(initialAssignments, null, 2), {
-      encoding: 'utf8',
-      flag: 'wx'
-    });
-    fs.renameSync(temporaryAssignmentsPath, assignmentsPath);
+    writeJsonAtomicSync(assignmentsPath, initialAssignments);
 
     const resultsPath = path.join(workspace.runDirectory, 'results');
     fs.rmSync(resultsPath, { recursive: true, force: true });
@@ -266,19 +328,15 @@ function createSimulatorRunStore({ runsRoot }) {
       sourceEventName: workspace.manifest.sourceEventName,
       createdAt: workspace.manifest.createdAt,
       status: 'created',
-      speed: 10,
+      speed: workspace.manifest.speed,
       groupCount: workspace.manifest.groupCount,
       ringCount: workspace.manifest.ringCount,
       assignedGroupCount: workspace.manifest.assignedGroupCount,
+      autoAssignedGroupCount: workspace.manifest.autoAssignedGroupCount || 0,
       inputSnapshotSha256: workspace.manifest.inputSnapshotSha256
     };
     const manifestPath = path.join(workspace.runDirectory, 'manifest.json');
-    const temporaryManifestPath = `${manifestPath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-    fs.writeFileSync(temporaryManifestPath, JSON.stringify(resetManifest, null, 2), {
-      encoding: 'utf8',
-      flag: 'wx'
-    });
-    fs.renameSync(temporaryManifestPath, manifestPath);
+    writeJsonAtomicSync(manifestPath, resetManifest);
     return resetManifest;
   }
 
@@ -289,7 +347,7 @@ function createSimulatorRunStore({ runsRoot }) {
     return true;
   }
 
-  return { createRun, getRun, getRunWorkspace, updateRun, resetRun, deleteRun };
+  return { createRun, getRun, listRuns, getRunWorkspace, updateRun, resetRun, deleteRun };
 }
 
 module.exports = {
