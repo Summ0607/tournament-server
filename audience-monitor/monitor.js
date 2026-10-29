@@ -52,15 +52,11 @@
     const rows = Math.max(1, Math.floor((height + 12) / (rowHeight + 12)));
     return { columns, count: columns * rows };
   }
-  function windowText(window, now = Date.now()) {
+  function windowText(window, showSeconds = false) {
     if (!validWindow(window)) return 'Start TBD';
-    const format = (iso) => {
-      const date = new Date(iso);
-      return (date.toDateString() === new Date(now).toDateString() ? ''
-        : `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} `)
-        + date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    };
-    return `~${format(window.earliestAt)} - ${format(window.latestAt)}`;
+    return `~${new Date(window.expectedAt).toLocaleTimeString([], {
+      hour: 'numeric', minute: '2-digit', ...(showSeconds ? { second: '2-digit' } : {})
+    })}`;
   }
   const api = { ROTATE_MS, REFRESH_MS, key, ringOrder, upcomingOrder, validWindow, fresh, validate, reconcile, capacity, windowText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -70,16 +66,18 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[character]));
   const sections = {
-    rings: { items: [], latest: [], page: 0, rowHeight: 64 },
-    upcoming: { items: [], latest: [], page: 0, rowHeight: 160 }
+    rings: { items: [], latest: [], page: 0, rowHeight: 192 },
+    upcoming: { items: [], latest: [], page: 0, rowHeight: 216 }
   };
   let snapshot = null;
   let error = '';
   let paused = false;
   let wasFresh = false;
   const status = document.getElementById('connection');
+  const sourceRun = document.getElementById('sourceRun');
+  let selectedRunId = new URLSearchParams(window.location.search).get('simulatorRunId') || '';
   function ringCard(ring) {
-    const labels = { active: 'In progress', waiting: 'Waiting', paused: 'Temporarily paused', 'updates-unavailable': 'Updates unavailable' };
+    const labels = { paused: 'Temporarily paused', 'updates-unavailable': 'Updates unavailable' };
     const showPhases = ring.phases.length && (ring.status === 'active' || ring.status === 'waiting' && ring.queuedDivisionNumber);
     const progress = showPhases ? `<div class="phases" role="img" aria-label="${esc(`${ring.queuedDivisionNumber ? `Division ${ring.queuedDivisionNumber} - queued, not started. ` : ''}` + ring.phases.map((phase) =>
       `${phase.label}: ${phase.state === 'active' ? `${Math.round(phase.progress)}%` : phase.state}`).join('; '))}">${ring.phases.map((phase) =>
@@ -87,17 +85,17 @@
       : `<div class="phases neutral-pill">${ring.status === 'paused' || ring.status === 'updates-unavailable' ? labels[ring.status] : 'No current division'}</div>`;
     const number = ring.divisionNumber || ring.queuedDivisionNumber;
     const description = ring.divisionNumber ? ring.description : ring.queuedDescription;
-    return `<article class="card ring-card"><div class="ring-identity"><div class="card-heading"><strong>Ring ${esc(ring.ringLabel)}</strong><span class="badge">${ring.queuedDivisionNumber && ring.status === 'waiting' ? 'Queued - not started' : labels[ring.status]}</span></div>
-      <div class="description">${number ? `<strong>Division ${esc(number)}</strong>${description ? ` - ${esc(description)}` : ''}` : 'No current division'}</div></div>${progress}</article>`;
+    return `<article class="card ring-card"><div class="ring-top"><div class="card-heading"><strong>Ring ${esc(ring.ringLabel)}</strong>${number ? `<strong>Division ${esc(number)}</strong>` : ''}</div>${progress}</div>
+      <div class="description">${esc(number ? description || '' : 'No current division')}</div></article>`;
   }
   function upcomingCard(item) {
     return `<article class="card upcoming-card"><div class="card-heading"><strong>Division ${esc(item.divisionNumber)}</strong><strong class="ring-badge">Ring ${esc(item.ringLabel)}</strong></div>
-      <div class="description">${esc(item.description)}</div><div class="start">${esc(windowText(item.startWindow))}</div><div class="queue-position">Queue ${item.position}</div></article>`;
+      <div class="start">${esc(windowText(item.startWindow, snapshot?.source === 'simulator'))}</div><div class="description">${esc(item.description)}</div></article>`;
   }
   function renderSection(name) {
     const section = sections[name];
     const node = document.getElementById(name);
-    const fit = capacity(node.clientWidth, node.clientHeight, section.rowHeight, name === 'rings' ? node.clientWidth : 320);
+    const fit = capacity(node.clientWidth, node.clientHeight, section.rowHeight, name === 'rings' ? node.clientWidth : 800);
     const pages = Math.max(1, Math.ceil(section.items.length / fit.count));
     section.page = Math.min(section.page, pages - 1);
     node.style.gridTemplateColumns = `repeat(${fit.columns}, minmax(0, 1fr))`;
@@ -114,6 +112,8 @@
     status.className = usable ? '' : 'warning';
     status.textContent = error ? `Updates unavailable: ${error} Retrying automatically.`
       : snapshot?.status === 'unavailable' ? 'Waiting for an active event.'
+      : usable && snapshot?.source === 'simulator'
+        ? `SIMULATION - ${snapshot.simulatorStatus} - estimated times use local clock - refresh every 10 seconds`
       : usable ? `Updated ${new Date(snapshot.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - live refresh every 10 seconds`
       : 'Data is stale - waiting for fresh updates.';
     renderSection('rings');
@@ -124,7 +124,10 @@
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      const response = await fetch('/api/rings/monitor', { cache: 'no-store', signal: controller.signal });
+      const url = selectedRunId
+        ? `/api/simulator/runs/${encodeURIComponent(selectedRunId)}/audience`
+        : '/api/rings/monitor';
+      const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
       if (!response.ok) throw new Error(`Server returned ${response.status}.`);
       const next = validate(await response.json());
       const eventChanged = snapshot?.eventName !== next.eventName;
@@ -145,6 +148,55 @@
       setTimeout(refresh, REFRESH_MS);
     }
   }
+  async function loadSimulatorRuns() {
+    try {
+      const response = await fetch('/api/simulator/runs', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Server returned ${response.status}.`);
+      const result = await response.json();
+      const previous = sourceRun.value || selectedRunId;
+      sourceRun.replaceChildren();
+      sourceRun.disabled = false;
+      const activeOption = document.createElement('option');
+      activeOption.value = '';
+      activeOption.textContent = 'Active event';
+      sourceRun.append(activeOption);
+      for (const run of result.runs || []) {
+        const option = document.createElement('option');
+        option.value = run.runId;
+        option.textContent = `SIM - ${run.sourceEventName} (${run.status}, ${run.runId.slice(0, 8)})`;
+        sourceRun.append(option);
+      }
+      if (previous && [...sourceRun.options].some((option) => option.value === previous)) {
+        sourceRun.value = previous;
+        selectedRunId = previous;
+      } else if (previous) {
+        const unavailable = document.createElement('option');
+        unavailable.value = previous;
+        unavailable.textContent = `SIM - unavailable (${previous.slice(0, 8)})`;
+        sourceRun.append(unavailable);
+        sourceRun.value = previous;
+        selectedRunId = previous;
+      } else {
+        sourceRun.value = '';
+        selectedRunId = '';
+      }
+    } catch (failure) {
+      console.error('Audience monitor could not load simulator runs:', failure);
+      sourceRun.replaceChildren();
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Simulator runs unavailable';
+      sourceRun.append(option);
+      sourceRun.disabled = true;
+      status.className = 'warning';
+      status.textContent = `Simulator run list unavailable: ${failure.message}`;
+    }
+  }
+  sourceRun.addEventListener('change', () => {
+    selectedRunId = sourceRun.value;
+    refresh();
+  });
+  setInterval(loadSimulatorRuns, 30000);
   setInterval(() => {
     if (paused || document.hidden || error || !fresh(snapshot, Date.now())) return;
     for (const name of ['rings', 'upcoming']) {
@@ -184,5 +236,5 @@
       status.className = 'warning';
     }
   });
-  refresh();
+  loadSimulatorRuns().then(refresh);
 })();

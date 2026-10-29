@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tournament Simulator</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #172336;
+      background: #eaf0f7;
+      --panel: #fff;
+      --line: #d5deea;
+      --muted: #617187;
+      --blue: #1764c0;
+      --green: #17804d;
+      --red: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    header {
+      background: #243248;
+      color: #fff;
+      padding: 18px max(20px, calc((100vw - 1440px) / 2));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    header a { color: #d9eaff; }
+    main { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 24px; margin: 0; }
+    h2 { font-size: 17px; margin: 0 0 14px; }
+    .subtle { color: var(--muted); font-size: 13px; }
+    .header-nav { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .header-nav a {
+      display: inline-block;
+      border: 1px solid #9db5d4;
+      border-radius: 7px;
+      padding: 8px 11px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .header-nav a:hover, .header-nav a:focus-visible { background: #3a4d68; text-decoration: underline; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 5px 16px #1723360c;
+      margin-bottom: 16px;
+    }
+    .controls { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; align-items: end; }
+    label { display: grid; gap: 6px; color: #34445a; font-size: 12px; font-weight: 700; }
+    input, select {
+      min-height: 40px;
+      width: 100%;
+      border: 1px solid #bdc9d8;
+      border-radius: 7px;
+      background: white;
+      color: #172336;
+      padding: 8px 10px;
+      font: inherit;
+    }
+    button {
+      min-height: 38px;
+      border: 1px solid #aebccd;
+      border-radius: 7px;
+      background: #fff;
+      color: #23344b;
+      font: inherit;
+      font-weight: 700;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button.primary { background: var(--blue); border-color: var(--blue); color: #fff; min-height: 44px; }
+    button.danger { color: var(--red); }
+    dialog button.danger { min-height: 44px; }
+    @media (pointer: coarse) { button { min-height: 44px; } .panel-heading button { min-height: 36px; padding: 6px 12px; } }
+    button:disabled { opacity: .48; cursor: not-allowed; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    #notice { min-height: 20px; margin-top: 8px; color: var(--red); font-size: 13px; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .metric { padding: 12px; border-radius: 8px; background: #f3f6fa; }
+    .metric strong { display: block; font-size: 18px; margin-top: 4px; }
+    .ring-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .ring {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 13px;
+      background: #fff;
+    }
+    .ring-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .badge { background: #eaf1fa; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+    .badge.running { background: #e5f5ec; color: var(--green); }
+    .badge.failed { background: #fde9e7; color: var(--red); }
+    .badge.complete { background: #e5f5ec; color: var(--green); }
+    progress { width: 100%; height: 12px; accent-color: var(--blue); margin: 10px 0 4px; }
+    .ring dl { margin: 8px 0 0; display: grid; grid-template-columns: 90px 1fr; gap: 5px 8px; font-size: 12px; }
+    .ring dt { color: var(--muted); }
+    .ring dd { margin: 0; overflow-wrap: anywhere; }
+    .error { color: var(--red); }
+    .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .panel-heading h2 { margin: 0; }
+    .panel-heading button { min-height: 28px; padding: 3px 10px; font-size: 12px; font-weight: 600; border-radius: 5px; }
+    .run-history { max-height: 280px; overflow-y: auto; margin-top: 12px; }
+    .run-history label { display: flex; align-items: center; padding: 8px 0; }
+    input[type="checkbox"] { width: auto; min-height: auto; }
+    #runLog li { margin-bottom: 8px; overflow-wrap: anywhere; }
+    dialog { max-width: 560px; border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+    dialog::backdrop { background: #17233699; }
+    @media (max-width: 740px) {
+      main { padding: 14px; }
+      .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary { grid-template-columns: repeat(2, 1fr); }
+      header { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Tournament Simulator</h1>
+      <div class="subtle" style="color:#d1dbea">Isolated rehearsal — divisions roll onto rings as capacity opens, without changing the saved event</div>
+    </div>
+    <div>
+      <time id="systemClock" class="subtle" aria-label="Current local time"></time>
+      <nav class="header-nav" aria-label="Tournament navigation">
+        <a id="audienceViewLink" href="/audience-monitor/">Audience View</a>
+        <a id="headTableLink" href="/tournament-management/?view=head-table" title="Open Head Table">Open Head Table</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <section class="panel">
+      <div class="panel-heading">
+        <h2>Saved simulator runs</h2>
+        <button id="toggleRunsButton" type="button" aria-expanded="true" aria-controls="savedRunsContent">Minimize</button>
+      </div>
+      <div id="savedRunsContent">
+      <label>Simulation history
+        <select id="runSelect"><option value="">Select a saved simulation</option></select>
+      </label>
+      <button id="refreshRunsButton" type="button">Refresh history</button>
+      <p class="subtle">Choose a run above to view it. Check runs below to delete several at once. Running simulations must be paused or stopped before selecting them for deletion. Saved event selects the source tournament for a new run.</p>
+      <div class="actions">
+        <button id="selectAllRunsButton" type="button">Select all deletable</button>
+        <button id="clearRunSelectionButton" type="button">Clear selection</button>
+        <button id="deleteSelectedRunsButton" type="button" class="danger" disabled>Delete selected (0)</button>
+      </div>
+      <div id="runHistory" class="run-history">Loading history...</div>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="setup-title">
+      <h2 id="setup-title">Create a run</h2>
+      <div class="controls">
+        <label>Saved event
+          <select id="eventSelect"><option value="">Loading events…</option></select>
+        </label>
+        <label>Scenario seed
+          <input id="seedInput" maxlength="80" placeholder="Leave blank to generate from run ID">
+        </label>
+        <label>Simulation time scale
+          <select id="speedSelect">
+            <option value="2">2× — 2 simulated seconds / real second</option>
+            <option value="5">5× — 5 simulated seconds / real second</option>
+            <option value="10">10× — 10 simulated seconds / real second</option>
+            <option value="20" selected>20× — 20 simulated seconds / real second</option>
+            <option value="40">40× — 40 simulated seconds / real second</option>
+            <option value="60">60× — 1 simulated minute / real second</option>
+            <option value="120">120× — 2 simulated minutes / real second</option>
+            <option value="300">300× — 5 simulated minutes / real second</option>
+            <option value="600">600× — 10 simulated minutes / real second</option>
+            <option value="1200">1200× — 20 simulated minutes / real second</option>
+            <option value="2400">2400× — 40 simulated minutes / real second</option>
+            <option value="3600">3600× — 1 simulated hour / real second</option>
+          </select>
+        </label>
+        <button id="createButton" class="primary">Create run</button>
+      </div>
+      <div class="actions">
+        <button id="startButton" disabled>Start</button>
+        <label style="min-width:180px">Single-step ring
+          <select id="stepRingSelect" disabled></select>
+        </label>
+        <button id="stepButton" disabled>Step ring</button>
+        <button id="pauseButton" disabled>Pause</button>
+        <button id="resumeButton" disabled>Resume</button>
+        <button id="startDay2Button" hidden disabled>Start Day 2</button>
+        <button id="stopButton" disabled>Stop</button>
+        <button id="resetButton" disabled>Reset run</button>
+        <button id="deleteButton" class="danger" disabled>Delete run</button>
+      </div>
+      <div id="notice" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Run overview</h2>
+      <div id="summary" class="summary"><div class="subtle">No run selected.</div></div>
+      <p class="subtle">Tournament timing uses your local clock, not the simulated calendar. Estimated Tournament Completion includes active, queued, and unassigned divisions at the current time scale; it is approximate and updates while running.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Ring progression</h2>
+      <div id="rings" class="ring-grid"><div class="subtle">Create or load a run to see ring activity.</div></div>
+    </section>
+    <section class="panel">
+      <h2>Unassigned divisions</h2>
+      <p class="subtle">Divisions waiting for an active or queued slot on any ring.</p>
+      <div id="availableDivisions" class="subtle">Create or load a run to see unassigned divisions.</div>
+    </section>
+    <section class="panel">
+      <div class="panel-heading">
+        <h2>Recent simulator events</h2>
+        <button id="toggleEventsButton" type="button" aria-expanded="true" aria-controls="recentEventsContent">Minimize</button>
+      </div>
+      <div id="recentEventsContent">
+      <p id="runLogContext" class="subtle">No run selected.</p>
+      <label><span><input id="showProgressEvents" type="checkbox"> Show repetitive phase progress updates</span></label>
+      <ol id="runLog" class="subtle"><li>No run events yet.</li></ol>
+      </div>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const runStorageKey = 'tournament-simulator-current-run';
+    let activeRunId = localStorage.getItem(runStorageKey) || '';
+    let refreshTimer;
+    let speedChangePending = false;
+    let selectionVersion = 0;
+    let savedRuns = [];
+    const selectedRunIds = new Set();
+    let deletingRuns = false;
+    let displayedRun = null;
+
+    for (const [buttonId, contentId] of [
+      ['toggleRunsButton', 'savedRunsContent'], ['toggleEventsButton', 'recentEventsContent']
+    ]) {
+      const button = $(buttonId);
+      const content = $(contentId);
+      const key = `tournament-simulator-${contentId}-expanded`;
+      const setMinimized = (minimized) => {
+        content.hidden = minimized;
+        button.textContent = minimized ? 'Expand' : 'Minimize';
+        button.setAttribute('aria-expanded', String(!minimized));
+      };
+      setMinimized(localStorage.getItem(key) !== 'true');
+      button.addEventListener('click', () => {
+        setMinimized(!content.hidden);
+        localStorage.setItem(key, String(!content.hidden));
+      });
+    }
+
+    function renderHistorySelection() {
+      const history = $('runHistory');
+      history.replaceChildren();
+      if (!savedRuns.length) history.textContent = 'No saved simulations.';
+      for (const run of savedRuns) {
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = selectedRunIds.has(run.runId);
+        checkbox.disabled = deletingRuns || run.status === 'running';
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) selectedRunIds.add(run.runId);
+          else selectedRunIds.delete(run.runId);
+          updateHistoryButtons();
+        });
+        const text = document.createElement('span');
+        text.textContent = runHistoryLabel(run);
+        label.append(checkbox, text);
+        history.append(label);
+      }
+      updateHistoryButtons();
+    }
+
+    function updateHistoryButtons() {
+      $('deleteSelectedRunsButton').textContent = `Delete selected (${selectedRunIds.size})`;
+      $('deleteSelectedRunsButton').disabled = deletingRuns || !selectedRunIds.size;
+      $('selectAllRunsButton').disabled = deletingRuns || !savedRuns.some((run) => run.status !== 'running');
+      $('clearRunSelectionButton').disabled = deletingRuns || !selectedRunIds.size;
+      $('refreshRunsButton').disabled = deletingRuns;
+    }
+
+    function runHistoryLabel(run) {
+      return `${run.sourceEventName} - ${run.status} - ${run.runId.slice(0, 8)}${run.createdAt ? ` - ${new Date(run.createdAt).toLocaleString()}` : ''}`;
+    }
+
+    function clearRunDisplay() {
+      displayedRun = null;
+      clearInterval(refreshTimer);
+      $('summary').textContent = 'No run selected.';
+      $('rings').textContent = 'Create or load a run to see ring activity.';
+      $('availableDivisions').textContent = 'Create or load a run to see unassigned divisions.';
+      $('runLog').textContent = 'No run events yet.';
+      $('runLogContext').textContent = 'No run selected.';
+      for (const id of ['startButton', 'stepButton', 'stepRingSelect', 'pauseButton', 'resumeButton', 'startDay2Button', 'stopButton', 'resetButton', 'deleteButton']) $(id).disabled = true;
+      $('startDay2Button').hidden = true;
+    }
+
+    function selectRun(runId) {
+      selectionVersion += 1;
+      activeRunId = runId;
+      if (runId) localStorage.setItem(runStorageKey, runId);
+      else localStorage.removeItem(runStorageKey);
+      $('runSelect').value = runId;
+      clearRunDisplay();
+      updateAudienceViewLink();
+    }
+
+    async function loadRuns() {
+      const data = await api('/api/simulator/runs');
+      if (!Array.isArray(data.runs)) throw new Error('Invalid simulator history returned by server.');
+      savedRuns = data.runs;
+      for (const id of selectedRunIds) {
+        if (!savedRuns.some((run) => run.runId === id && run.status !== 'running')) selectedRunIds.delete(id);
+      }
+      renderHistorySelection();
+      const select = $('runSelect');
+      select.replaceChildren();
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = data.runs.length ? 'Select a saved simulation' : 'No saved simulations';
+      select.append(placeholder);
+      for (const run of data.runs) {
+        const option = document.createElement('option');
+        option.value = run.runId;
+        option.textContent = runHistoryLabel(run);
+        select.append(option);
+      }
+      if (activeRunId && !data.runs.some((run) => run.runId === activeRunId)) {
+        selectRun('');
+        showNotice('The previously selected simulation no longer exists. Select another saved simulation or create a new run.');
+      }
+      select.value = activeRunId;
+    }
+
+    function syncRunSpeed(speed) {
+      const select = $('speedSelect');
+      const value = String(speed);
+      if (![...select.options].some((option) => option.value === value)) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = `${speed}×`;
+        select.append(option);
+      }
+      select.value = value;
+    }
+
+    function updateSystemClock() {
+      $('systemClock').textContent = `Local time: ${new Date().toLocaleTimeString([], {
+        hour: 'numeric', minute: '2-digit', second: '2-digit'
+      })}`;
+    }
+
+    updateSystemClock();
+    setInterval(updateSystemClock, 1000);
+
+    function updateAudienceViewLink() {
+      $('audienceViewLink').href = activeRunId
+        ? `/audience-monitor/?simulatorRunId=${encodeURIComponent(activeRunId)}`
+        : '/audience-monitor/';
+      $('headTableLink').href = activeRunId
+        ? `/tournament-management/?view=head-table&simulatorRunId=${encodeURIComponent(activeRunId)}`
+        : '/tournament-management/?view=head-table';
+    }
+
+    function showNotice(message, isError = true) {
+      $('notice').textContent = message || '';
+      $('notice').className = isError ? 'error' : '';
+    }
+
+    async function api(url, method = 'GET', body) {
+      const response = await fetch(url, {
+        method,
+        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const error = new Error(data.error || `Request failed (${response.status})`);
+        error.status = response.status;
+        throw error;
+      }
+      return data;
+    }
+
+    function addMetric(parent, label, value) {
+      const item = document.createElement('div');
+      item.className = 'metric';
+      const caption = document.createElement('span');
+      caption.className = 'subtle';
+      caption.textContent = label;
+      const strong = document.createElement('strong');
+      strong.textContent = value;
+      item.append(caption, strong);
+      parent.append(item);
+    }
+
+    function formatDuration(milliseconds) {
+      if (!Number.isFinite(milliseconds) || milliseconds <= 0) return '—';
+      const minutes = Math.round(milliseconds / 60000);
+      if (minutes < 60) return `${minutes} min`;
+      return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+    }
+
+    function renderRun(run) {
+      if (!speedChangePending) syncRunSpeed(run.speed);
+      displayedRun = run;
+      const savedRun = savedRuns.find((entry) => entry.runId === run.runId);
+      if (savedRun && savedRun.status !== run.status) {
+        savedRun.status = run.status;
+        if (run.status === 'running') selectedRunIds.delete(run.runId);
+        renderHistorySelection();
+        const option = [...$('runSelect').options].find((entry) => entry.value === run.runId);
+        if (option) option.textContent = runHistoryLabel(savedRun);
+      }
+      const diagnostics = run.diagnostics;
+      const schedule = diagnostics.schedule || { tournamentDays: 1 };
+      $('startDay2Button').hidden = schedule.tournamentDays !== 2;
+      $('startDay2Button').disabled = run.status !== 'day-break' || !schedule.day1Complete || schedule.day2Started;
+      const summary = $('summary');
+      summary.replaceChildren();
+      addMetric(summary, 'Status', run.status);
+      addMetric(summary, 'Schedule', schedule.tournamentDays === 2
+        ? `Day ${schedule.currentDay} of 2${run.status === 'day-break' ? ' - complete; start Day 2 when ready' : ''}`
+        : 'One day - BB, TT/SD, Gup');
+      addMetric(summary, 'Completed divisions', `${diagnostics.progress.completedGroupCount} / ${diagnostics.progress.totalGroupCount}`);
+      addMetric(summary, 'Unassigned divisions', String(diagnostics.availableGroupCount || 0));
+      addMetric(summary, 'Tournament progress', `${diagnostics.progress.percent}%`);
+      addMetric(summary, 'Current local time', new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }));
+      addMetric(summary, 'Time scale', `${run.speed}×`);
+      const timing = diagnostics.timing || {};
+      const localTime = (value) => value && Number.isFinite(Date.parse(value))
+        ? new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+        : null;
+      addMetric(summary, 'Tournament started', localTime(timing.startedAt) ||
+        (run.status === 'created' ? 'Not started' : 'Not recorded'));
+      addMetric(summary, run.status === 'complete' ? 'Run completed' : 'Estimated Tournament Completion',
+        run.status === 'complete' ? localTime(timing.completedAt) || 'Not recorded'
+          : run.status === 'running' ? localTime(timing.estimatedCompletionAt) || 'Unavailable'
+            : run.status === 'paused' ? 'Paused - resume for estimate'
+              : run.status === 'created' ? 'Start run for estimate'
+                : 'Unavailable - run ' + run.status);
+      const rings = $('rings');
+      rings.replaceChildren();
+      const availableDivisions = $('availableDivisions');
+      const availableGroupNumbers = diagnostics.availableGroupNumbers || [];
+      availableDivisions.textContent = availableGroupNumbers.length
+        ? availableGroupNumbers.join(', ')
+        : 'None';
+      const stepSelect = $('stepRingSelect');
+      const previousRing = stepSelect.value;
+      stepSelect.replaceChildren();
+      for (const ring of diagnostics.rings) {
+        const option = document.createElement('option');
+        option.value = ring.ringId;
+        option.textContent = `Ring ${ring.ringLabel}`;
+        stepSelect.append(option);
+        const card = document.createElement('article');
+        card.className = 'ring';
+        const head = document.createElement('div');
+        head.className = 'ring-head';
+        const title = document.createElement('strong');
+        title.textContent = `Ring ${ring.ringLabel}`;
+        const badge = document.createElement('span');
+        badge.className = `badge ${ring.state}`;
+        badge.textContent = ring.state;
+        head.append(title, badge);
+        const progress = document.createElement('progress');
+        progress.max = 100;
+        progress.value = ring.currentPhaseProgress || (ring.progressPercent === 100 ? 100 : 0);
+        const details = document.createElement('dl');
+        const rows = [
+          ['Active division', ring.currentGroup ? `${ring.currentGroupNumber} — ${ring.currentGroup.name || ''}` : 'None'],
+          ['Phase', ({ 'uploading-report': 'Uploading report', 'loading-division': 'Loading division',
+            idle: 'Idle' })[ring.currentPhase] || ring.currentPhase || 'Idle'],
+          ['Phase progress', `${ring.currentPhaseProgress || 0}%`],
+          ['Estimated division', formatDuration(ring.estimatedDivisionDurationMs)],
+          ['Queued division', ring.queuedGroupNumbers[0] || 'None'],
+          ['Completed', ring.completedGroupNumbers.join(', ') || 'None']
+        ];
+        if (ring.error) rows.push(['Error', ring.error]);
+        for (const [label, value] of rows) {
+          const term = document.createElement('dt');
+          term.textContent = label;
+          const description = document.createElement('dd');
+          description.textContent = value;
+          if (label === 'Error') description.className = 'error';
+          details.append(term, description);
+        }
+        card.append(head, progress, details);
+        rings.append(card);
+      }
+      if (diagnostics.rings.some((ring) => ring.ringId === previousRing)) stepSelect.value = previousRing;
+      $('stepRingSelect').disabled = !['created', 'paused'].includes(run.status);
+      const hasRun = Boolean(activeRunId);
+      $('startButton').disabled = !hasRun || !['created'].includes(run.status);
+      $('stepButton').disabled = !hasRun || !['created', 'paused'].includes(run.status) || !diagnostics.rings.length;
+      $('pauseButton').disabled = run.status !== 'running';
+      $('resumeButton').disabled = run.status !== 'paused';
+      $('stopButton').disabled = !['running', 'paused', 'created'].includes(run.status);
+      $('resetButton').disabled = !hasRun || ['running'].includes(run.status);
+      $('deleteButton').disabled = !hasRun || ['running'].includes(run.status);
+      renderRunLog(run);
+      if (['complete', 'failed', 'stopped', 'day-break'].includes(run.status)) clearInterval(refreshTimer);
+    }
+
+    function renderRunLog(run) {
+      const diagnostics = run.diagnostics;
+      $('runLogContext').textContent = `${run.sourceEventName} - Run ${run.runId}. Latest 30 matching events, newest first. Times are actual local date/time; simulated elapsed time is labeled separately.`;
+      const log = $('runLog');
+      log.replaceChildren();
+      const events = diagnostics.runLog.filter((event) =>
+        $('showProgressEvents').checked || event.type !== 'phase_progress' || event.progress === 100
+      ).slice(-30).reverse();
+      if (!events.length) {
+        const empty = document.createElement('li');
+        empty.textContent = 'No run events yet.';
+        log.append(empty);
+      }
+      for (const event of events) {
+        const item = document.createElement('li');
+        const actualTime = event.occurredAt && Number.isFinite(Date.parse(event.occurredAt))
+          ? new Date(event.occurredAt).toLocaleString() : 'Actual time not recorded (historical event)';
+        const elapsedMs = Date.parse(event.simulatedAt) - Date.parse(diagnostics.virtualTime?.startedAt);
+        const elapsedSeconds = Math.floor(Math.max(0, elapsedMs) / 1000);
+        const elapsed = Number.isFinite(elapsedMs)
+          ? ` | simulated elapsed ${Math.floor(elapsedSeconds / 3600)}h ${Math.floor(elapsedSeconds / 60) % 60}m ${elapsedSeconds % 60}s` : '';
+        item.textContent = `${actualTime}${elapsed} — ${event.ringLabel || event.ringId}: ${event.type.replaceAll('_', ' ')}${event.groupDivisionNumber ? ` (division ${event.groupDivisionNumber})` : ''}${event.phase ? ` — ${event.phase} ${event.progress ?? ''}%` : ''}${event.message ? ` — ${event.message}` : ''}`;
+        log.append(item);
+      }
+    }
+
+    $('showProgressEvents').addEventListener('change', () => {
+      if (displayedRun) renderRunLog(displayedRun);
+    });
+
+    $('selectAllRunsButton').addEventListener('click', () => {
+      for (const run of savedRuns) if (run.status !== 'running') selectedRunIds.add(run.runId);
+      renderHistorySelection();
+    });
+    $('clearRunSelectionButton').addEventListener('click', () => {
+      selectedRunIds.clear();
+      renderHistorySelection();
+    });
+    $('deleteSelectedRunsButton').addEventListener('click', async () => {
+      if (deletingRuns || !selectedRunIds.size) return;
+      const ids = [...selectedRunIds];
+      if (!confirm(`Delete ${ids.length} selected simulator runs and their isolated data? This cannot be undone. The real tournament is unchanged.`)) return;
+      deletingRuns = true;
+      renderHistorySelection();
+      const failures = [];
+      let deleted = 0;
+      try {
+        for (const id of ids) {
+          try {
+            const current = await api(`/api/simulator/runs/${encodeURIComponent(id)}`);
+            if (current.status === 'running') throw new Error('Run is running; pause or stop it first.');
+            await api(`/api/simulator/runs/${encodeURIComponent(id)}`, 'DELETE');
+            selectedRunIds.delete(id);
+            deleted += 1;
+            if (activeRunId === id) selectRun('');
+          } catch (error) {
+            failures.push(`${id}: ${error.message}`);
+          }
+        }
+        try { await loadRuns(); }
+        catch (error) { failures.push(`History refresh: ${error.message}`); }
+        showNotice(`Deleted ${deleted} of ${ids.length} simulator runs.${failures.length ? ` Failed: ${failures.join('; ')}` : ''}`, failures.length > 0);
+      } finally {
+        deletingRuns = false;
+        renderHistorySelection();
+      }
+    });
+
+    async function inspect() {
+      if (!activeRunId) return;
+      const runId = activeRunId;
+      const version = selectionVersion;
+      try {
+        const run = await api(`/api/simulator/runs/${encodeURIComponent(runId)}`);
+        if (version !== selectionVersion) return;
+        renderRun(run);
+        showNotice(run.failure || '', Boolean(run.failure));
+      } catch (error) {
+        if (version !== selectionVersion) return;
+        if (error.status === 404) selectRun('');
+        else clearRunDisplay();
+        showNotice(error.message);
+        clearInterval(refreshTimer);
+      }
+    }
+
+    function beginPolling() {
+      clearInterval(refreshTimer);
+      inspect();
+      refreshTimer = setInterval(inspect, 1200);
+    }
+
+    async function loadEvents() {
+      const [list, active] = await Promise.all([api('/api/events/list'), api('/api/events/active')]);
+      const select = $('eventSelect');
+      select.replaceChildren();
+      for (const eventName of list.events || []) {
+        const option = document.createElement('option');
+        option.value = eventName;
+        option.textContent = `${eventName}${eventName === active.activeEvent ? ' (active event — source remains unchanged)' : ''}`;
+        select.append(option);
+      }
+      if (!select.options.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No saved events';
+        select.append(option);
+        $('createButton').disabled = true;
+      }
+    }
+
+    $('createButton').addEventListener('click', async () => {
+      try {
+        showNotice('');
+        const run = await api('/api/simulator/runs', 'POST', { eventName: $('eventSelect').value });
+        selectRun(run.runId);
+        await loadRuns();
+        const speed = Number($('speedSelect').value);
+        await api(`/api/simulator/runs/${activeRunId}/speed`, 'POST', { speed });
+        showNotice(`Created isolated run ${activeRunId}; ${run.autoAssignedGroupCount || 0} unassigned divisions will roll onto rings as they become available.`, false);
+        beginPolling();
+      } catch (error) {
+        showNotice(error.message);
+      }
+    });
+
+    $('speedSelect').addEventListener('change', async () => {
+      if (!activeRunId) return;
+      speedChangePending = true;
+      $('speedSelect').disabled = true;
+      try {
+        const run = await api(`/api/simulator/runs/${activeRunId}/speed`, 'POST', { speed: Number($('speedSelect').value) });
+        speedChangePending = false;
+        await inspect();
+        showNotice(`Simulation speed set to ${run.speed}×`, false);
+      } catch (error) {
+        speedChangePending = false;
+        await inspect();
+        showNotice(error.message);
+      } finally {
+        $('speedSelect').disabled = false;
+      }
+    });
+
+    $('stepButton').addEventListener('click', async () => {
+      try {
+        await api(`/api/simulator/runs/${activeRunId}/step`, 'POST', { ringId: $('stepRingSelect').value });
+        beginPolling();
+      } catch (error) {
+        showNotice(error.message);
+        beginPolling();
+      }
+    });
+
+    $('startDay2Button').addEventListener('click', async () => {
+      if (!activeRunId || $('startDay2Button').disabled) return;
+      if (!confirm('Day 1 is complete. Start Day 2 (Tiny Tigers, Special Dragons, then Gup divisions) now?')) return;
+      $('startDay2Button').disabled = true;
+      try {
+        await api(`/api/simulator/runs/${encodeURIComponent(activeRunId)}/schedule/day2`, 'POST', {});
+        beginPolling();
+      } catch (error) {
+        showNotice(error.message);
+        await inspect();
+      }
+    });
+
+    for (const [buttonId, action] of [
+      ['startButton', 'start'], ['pauseButton', 'pause'], ['resumeButton', 'resume'], ['stopButton', 'stop']
+    ]) {
+      $(buttonId).addEventListener('click', async () => {
+        try {
+          const body = action === 'start'
+            ? { scenarioSeed: $('seedInput').value.trim() || undefined }
+            : {};
+          await api(`/api/simulator/runs/${activeRunId}/${action}`, 'POST', body);
+          showNotice(`Run ${action} requested`, false);
+          beginPolling();
+        } catch (error) { showNotice(error.message); }
+      });
+    }
+
+    $('resetButton').addEventListener('click', async () => {
+      if (!confirm('Reset this simulator run and clear only its simulated results?')) return;
+      try {
+        await api(`/api/simulator/runs/${activeRunId}/reset`, 'POST', {});
+        showNotice('Run reset to its saved initial snapshot', false);
+        beginPolling();
+      } catch (error) { showNotice(error.message); }
+    });
+
+    $('deleteButton').addEventListener('click', async () => {
+      if (!activeRunId || $('deleteButton').disabled) return;
+      if (!confirm('Delete this simulator run and its isolated data?')) return;
+      try {
+        await api(`/api/simulator/runs/${activeRunId}`, 'DELETE');
+        selectRun('');
+        await loadRuns();
+        showNotice('Simulator run deleted', false);
+      } catch (error) { showNotice(error.message); }
+    });
+
+    $('runSelect').addEventListener('change', () => {
+      selectRun($('runSelect').value);
+      showNotice('', false);
+      if (activeRunId) beginPolling();
+    });
+    $('refreshRunsButton').addEventListener('click', async () => {
+      try {
+        await loadRuns();
+        if (activeRunId) beginPolling();
+      } catch (error) { showNotice(error.message); }
+    });
+
+    updateAudienceViewLink();
+    Promise.all([loadEvents(), loadRuns()]).then(() => { if (activeRunId) beginPolling(); })
+      .catch((error) => showNotice(error.message));
+  </script>
+</body>
+</html>

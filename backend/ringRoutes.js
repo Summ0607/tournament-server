@@ -1,11 +1,17 @@
 const crypto = require('crypto');
 const express = require('express');
 const fs = require('fs');
-const { appendDivisionTrace, summarizeGroupDivisionNumbers } = require('./groupDivisionAssignments');
+const {
+  appendDivisionTrace: defaultAppendDivisionTrace,
+  summarizeGroupDivisionNumbers
+} = require('./groupDivisionAssignments');
 const { buildAvailableGroupDivisionNumbers } = require('./ringAvailability');
 const { sanitizePhaseHistory } = require('./resultPacket');
 const { buildEstimates } = require('./ringEstimates');
 const { buildAudienceMonitor } = require('./audienceMonitor');
+const { estimateDivisionTiming } = require('./simulatorTiming');
+const { scheduleState, isDayBlocked, sortDivisionIds } = require('./tournamentSchedule');
+const { hasOperationalUse, normalizeEventRingConfig, CONFIG_LOCK_MESSAGE } = require('./eventConfig');
 
 function resolveGroupAnchorValue(value) {
   const parsed = Number.parseInt(value, 10);
@@ -231,8 +237,14 @@ function createRingRouter(deps) {
     DISCONNECT_AFTER_MS,
     saveUploadedDivisionPacket,
     resultPacketStore,
-    readActiveEvent
+    readActiveEvent,
+    appendDivisionTrace = defaultAppendDivisionTrace
   } = deps;
+
+  function currentSchedule(state) {
+    return scheduleState(typeof loadGroups === 'function' ? loadGroups() : [], state,
+      typeof deps.readEventConfig === 'function' ? deps.readEventConfig(readActiveEvent()).tournamentDays : 1);
+  }
 
   router.use('/rings', (req, res, next) => {
     const requestedEvent = String(req.query.eventName || '').trim();
@@ -252,18 +264,13 @@ function createRingRouter(deps) {
   }
 
   function phaseDefinitionsForGroup(group) {
-    const competitors = group && Array.isArray(group.competitors) ? group.competitors : [];
-    const hasWeapons = competitors.some((competitor) => {
-      if (competitor && competitor.weaponsEligible) return true;
-      const division = String(competitor && competitor.weaponsDivision ? competitor.weaponsDivision : '').trim().toLowerCase();
-      return division && division !== 'unassigned';
-    });
+    const phases = estimateDivisionTiming(group).phases;
 
     return [
       { key: 'setup', label: 'Setup', visible: true },
-      { key: 'weapons', label: 'Weapons', visible: hasWeapons },
-      { key: 'hyungs', label: 'Hyungs', visible: true },
-      { key: 'sparring', label: 'Sparring', visible: true },
+      { key: 'weapons', label: 'Weapons', visible: phases.includes('weapons') },
+      { key: 'hyungs', label: 'Hyungs', visible: phases.includes('hyungs') },
+      { key: 'sparring', label: 'Sparring', visible: phases.includes('sparring') },
       { key: 'awards', label: 'Awards', visible: true }
     ].filter((phase) => phase.visible);
   }
@@ -277,6 +284,7 @@ function createRingRouter(deps) {
   function promoteQueuedGroupIfIdle(state, ringId, ringState, source) {
     normalizeRingAssignmentState(ringState);
     if (ringState.currentGroupId || ringState.queuedGroupDivisionNumbers.length === 0) return false;
+    if (isDayBlocked(loadGroup(ringState.queuedGroupDivisionNumbers[0]), currentSchedule(state))) return false;
     ringState.currentGroupId = ringState.queuedGroupDivisionNumbers.shift() || '';
     ringState.currentGroupDivisionNumber = ringState.currentGroupId;
     ringState.groupDivisionNumber = ringState.currentGroupId;
@@ -506,6 +514,24 @@ function createRingRouter(deps) {
     const state = readAssignmentsState();
     if (applyHeartbeatPolicy(state)) writeAssignmentsState(state);
     const { letterCount, numberCount } = req.body || {};
+    if (letterCount == null || numberCount == null) {
+      return res.status(400).json({ error: 'letterCount and numberCount are required' });
+    }
+    try {
+      normalizeEventRingConfig({ ringConfigX: letterCount, ringConfigY: numberCount });
+    } catch (error) {
+      if (error.statusCode !== 400) throw error;
+      return res.status(400).json({ error: error.message });
+    }
+    if (Number(letterCount) === state.config.letterCount && Number(numberCount) === state.config.numberCount) {
+      return res.json({ ok: true, config: state.config, message: 'Ring configuration is unchanged. All ring state preserved.' });
+    }
+    if (hasOperationalUse(state)) {
+      return res.status(409).json({ error: CONFIG_LOCK_MESSAGE });
+    }
+    if (readActiveEvent()) {
+      return res.status(409).json({ error: 'Change the ring layout using Save Changes in Event Setup. Operational layout is derived from event configuration.' });
+    }
     setRingConfig(state, letterCount, numberCount);
     writeAssignmentsState(state);
     return res.json({
@@ -531,15 +557,18 @@ function createRingRouter(deps) {
       response.currentGroupName = (response.currentGroup || {}).name || '';
       return response;
     });
-    const availableGroupDivisionNumbers = buildAvailableGroupDivisionNumbers(
+    const groups = typeof loadGroups === 'function' ? loadGroups() : [];
+    const schedule = currentSchedule(state);
+    const availableGroupDivisionNumbers = sortDivisionIds(buildAvailableGroupDivisionNumbers(
       typeof loadGroups === 'function' ? loadGroups() : [],
       state.rings
-    );
+    ), groups);
 
     const estimates = buildEstimates({
       eventName: readActiveEvent(), rings,
       groups: typeof loadGroups === 'function' ? loadGroups() : [],
-      heartbeatSeconds: DISCONNECT_AFTER_MS / 1000
+      heartbeatSeconds: DISCONNECT_AFTER_MS / 1000,
+      schedule
     });
     res.set('Cache-Control', 'no-store');
     if (req.path.endsWith('/monitor')) return res.json(buildAudienceMonitor({
@@ -551,6 +580,7 @@ function createRingRouter(deps) {
       serverBaseUrl: serverBaseUrlForRequest(req),
       ringConfig: state.config,
       eventStartedAt: state.eventStartedAt || '',
+      schedule,
       availableGroupDivisionNumbers,
       heartbeatPolicy: {
         disconnectAfterSeconds: DISCONNECT_AFTER_MS / 1000,
@@ -578,6 +608,27 @@ function createRingRouter(deps) {
   router.get('/rings', loadRingBoard);
   router.get('/rings/estimates', loadRingBoard);
   router.get('/rings/monitor', loadRingBoard);
+
+  router.post('/rings/schedule/day2', async (req, res) => {
+    try {
+      const eventName = readActiveEvent();
+      if (eventName && typeof deps.loadSavedGroups === 'function') await deps.loadSavedGroups(eventName);
+      if (!eventName || readActiveEvent() !== eventName) {
+        return res.status(409).json({ error: 'Select and refresh the active event before starting Day 2.' });
+      }
+      const state = readAssignmentsState();
+      const schedule = currentSchedule(state);
+      if (schedule.tournamentDays !== 2 || !schedule.day1Complete || schedule.day2Started) {
+        return res.status(409).json({ error: 'Day 2 requires a two-day event with all Black Belt divisions completed and saved, and cannot be started twice.' });
+      }
+      state.day2StartedAt = new Date().toISOString();
+      writeAssignmentsState(state);
+      return res.json({ ok: true, schedule: currentSchedule(state) });
+    } catch (error) {
+      console.error('Failed to start Day 2:', error);
+      return res.status(500).json({ error: 'Unable to start Day 2.' });
+    }
+  });
 
   router.get('/rings/:ringId/bootstrap', handleRequestGroup);
   router.post('/rings/:ringId/request-group', handleRequestGroup);
@@ -800,7 +851,9 @@ function createRingRouter(deps) {
         ringLabel: ringState.ringLabel,
         authoritativePhaseHistory
       });
-      ringState.currentGroupDivisionNumber = ringState.queuedGroupDivisionNumbers.shift() || '';
+      ringState.currentGroupDivisionNumber = isDayBlocked(
+        loadGroup(ringState.queuedGroupDivisionNumbers[0]), currentSchedule(state))
+        ? '' : ringState.queuedGroupDivisionNumbers.shift() || '';
       ringState.currentGroupId = ringState.currentGroupDivisionNumber;
       ringState.groupDivisionNumber = ringState.currentGroupDivisionNumber;
       ringState.queuedGroupIds = ringState.queuedGroupDivisionNumbers;
@@ -1006,6 +1059,9 @@ function createRingRouter(deps) {
     }
     normalizeRingAssignmentState(ringState);
 
+    if (isDayBlocked(loadGroup(groupId), currentSchedule(state))) {
+      return res.status(409).json({ error: 'Day 2 divisions cannot be assigned until all Black Belt divisions finish and an administrator starts Day 2.' });
+    }
     if (ringState.currentGroupId === groupId || ringState.queuedGroupDivisionNumbers.includes(groupId)) {
       return res.status(409).json({ error: `Group already assigned or queued: ${groupId}` });
     }

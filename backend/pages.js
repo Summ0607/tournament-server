@@ -6,6 +6,12 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
   const isMonitoringSurface = normalizedSurface === 'monitoring';
   const isAdminProgressSurface = normalizedSurface === 'adminprogress';
   const progressPagePath = path.join(rootDir, 'head-table', 'index.html');
+  app.get(['/simulator', '/simulator/'], (_req, res) => {
+    res.sendFile(path.join(rootDir, 'simulator', 'index.html'));
+  });
+  app.get(['/admin', '/admin/'], (_req, res) => {
+    res.sendFile(path.join(rootDir, 'admin', 'index.html'));
+  });
   const canonicalProgressPath = isAdminProgressSurface ? '/administration-progress/' : '/event-progress/';
   const canonicalProgressHtml = isAdminProgressSurface ? '/administration-progress.html' : '/event-progress.html';
   const alternateProgressPath = isAdminProgressSurface ? '/event-progress/' : '/administration-progress/';

@@ -6,6 +6,27 @@ const { test } = require('node:test');
 
 const script = fs.readFileSync(path.join(__dirname, '..', 'assets', 'help-tooltips.js'), 'utf8');
 
+test('production help excludes simulator instructions while retaining mode safeguards', () => {
+  for (const relativePath of [
+    ['tournament-management', 'index.html'], ['audience-monitor', 'index.html']
+  ]) {
+    const source = fs.readFileSync(path.join(__dirname, '..', ...relativePath), 'utf8');
+    const help = Array.from(source.matchAll(/<p\b[^>]*data-help-source="[^"]*"[^>]*>([\s\S]*?)<\/p>/g),
+      (match) => match[1]).join('\n');
+    assert.ok(help.length > 0);
+    assert.doesNotMatch(help, /simulat|\bSIM\b/i);
+  }
+  const management = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
+  assert.match(management, /SIMULATION - READ ONLY/);
+  const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
+  assert.match(readme, /\[Simulator guide\]\(docs\/simulator-guide\.md\)/);
+  assert.doesNotMatch(readme, /\/api\/simulator\/|## Day-of simulator engine/);
+  const guide = fs.readFileSync(path.join(__dirname, '..', 'docs', 'simulator-guide.md'), 'utf8');
+  for (const section of ['Running a rehearsal', 'Viewing a run', 'Developer reference', 'Isolation, assignments, and recovery']) {
+    assert.ok(guide.includes(`## ${section}`));
+  }
+});
+
 function loadTooltips() {
   const handlers = {};
   const timers = new Map();
@@ -272,7 +293,7 @@ test('completed integrated pages explain each primary, next-step and maintenance
   for (const id of [
     'createEventBtn', 'modifyEventBtn', 'activateEventBtn', 'goToImportBtn', 'deleteEventBtn',
     'resetEventBtn', 'saveMetadataBtn', 'importBtn', 'clearImportBtn', 'importNextBtn',
-    'gbBuildBtn', 'gbAddBtn', 'gbSaveBtn', 'gbDoneBtn', 'raRefreshBtn', 'raLayoutBtn',
+    'gbBuildBtn', 'gbAddBtn', 'gbSaveBtn', 'gbDoneBtn', 'raRefreshBtn', 'resetRunBtn',
     'htRefreshBtn', 'htAssignmentBtn', 'clRefreshBtn', 'clSearchBtn', 'clFiltersBtn',
     'clApplyFiltersBtn', 'clClearFiltersBtn', 'clSortName'
   ]) {

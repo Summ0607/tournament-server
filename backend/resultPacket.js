@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { writeJsonAtomicSync } = require('./atomicJsonFile');
 
 const FORM_STATUSES = new Set(['COMPLETED', 'NOT_HELD']);
 const ENTRY_STATUSES = new Set(['REGISTERED', 'SCRATCHED', 'COMPLETED']);
@@ -61,7 +62,8 @@ const PACKET_BLOCK_FIELDS = [
   'disciplines',
   'overallAwards',
   'signatures',
-  'source'
+  'source',
+  'simulation'
 ];
 
 function isIsoTimestamp(value) {
@@ -340,6 +342,11 @@ function validateResultPacket(packet, ringId, activeEventName) {
       !isIsoTimestamp(packet.source.createdAt)) {
     addError(errors, 'source', 'must contain valid client, version, tabletLabel, and createdAt fields');
   }
+  if (packet.simulation != null &&
+      (!packet.simulation || typeof packet.simulation !== 'object' || Array.isArray(packet.simulation) ||
+       !nonEmpty(packet.simulation.runId))) {
+    addError(errors, 'simulation', 'must contain a nonempty runId when present');
+  }
   if (JSON.stringify(packet).includes('"IN_PROGRESS"')) {
     addError(errors, 'payload', 'must not contain an unresolved IN_PROGRESS state');
   }
@@ -408,9 +415,7 @@ function createResultPacketStore({ getResultsDirectory }) {
     const record = resolveSubmissionRecord(packet, receipt);
     const directory = resultsDirectory();
     const filePath = path.join(directory, `${safeFileIdentifier(record.serverRecordId)}.json`);
-    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(record, null, 2), { encoding: 'utf8', flag: 'wx' });
-    fs.renameSync(tempPath, filePath);
+    writeJsonAtomicSync(filePath, record);
     return {
       ...record,
       filePath,

@@ -1,8 +1,9 @@
 const { buildAvailableGroupDivisionNumbers } = require('./ringAvailability');
+const { estimateDivisionTiming } = require('./simulatorTiming');
+const { isDayBlocked, sortDivisionIds } = require('./tournamentSchedule');
 
 const POLICY = Object.freeze({
-  baselineMinutesPerCompetitor: 7,
-  transitionMinutes: 2,
+  transitionMinutes: 0,
   uncertaintyPercent: 25,
   freshnessSeconds: 30,
   minimumRemainingMinutes: 2,
@@ -11,7 +12,7 @@ const POLICY = Object.freeze({
 
 function divisionDurationMs(group) {
   const count = group && Array.isArray(group.competitors) ? group.competitors.length : 0;
-  return count > 0 ? count * POLICY.baselineMinutesPerCompetitor * 60000 : null;
+  return count > 0 ? estimateDivisionTiming(group).estimatedDurationMs : null;
 }
 
 function unavailable(reason) {
@@ -26,24 +27,29 @@ function windowAt(now, delayMs, uncertaintyMs) {
   };
 }
 
-function currentProgress(ring) {
+function currentProgress(ring, group) {
   const phases = ring.phasePlan && ring.phasePlan.phases;
   if (!Array.isArray(phases) || !phases.length) return null;
+  const timing = estimateDivisionTiming(group);
   let sum = 0;
+  let total = 0;
   let active = 0;
   for (const phase of phases) {
-    if (phase.state === 'complete') sum += 1;
+    const duration = timing.phaseDurationsMs[phase.key];
+    if (!Number.isFinite(duration)) return null;
+    total += duration;
+    if (phase.state === 'complete') sum += duration;
     else if (phase.state === 'active') {
       active += 1;
       if (phase.progress == null || phase.progress === '' || !Number.isFinite(Number(phase.progress))) return null;
-      sum += Math.max(0, Math.min(100, Number(phase.progress))) / 100;
+      sum += duration * Math.max(0, Math.min(100, Number(phase.progress))) / 100;
     } else if (!['upcoming', 'idle'].includes(phase.state)) return null;
   }
   if (active !== 1 && !phases.every((phase) => phase.state === 'complete')) return null;
-  return sum / phases.length;
+  return total > 0 ? sum / total : null;
 }
 
-function buildEstimates({ eventName, rings, groups, now = Date.now(), heartbeatSeconds = 90 }) {
+function buildEstimates({ eventName, rings, groups, now = Date.now(), heartbeatSeconds = 90, schedule = { tournamentDays: 1 } }) {
   const groupMap = new Map(groups.map((group) => [
     String(group.groupDivisionNumber ?? group.id ?? group.groupId), group
   ]));
@@ -73,7 +79,7 @@ function buildEstimates({ eventName, rings, groups, now = Date.now(), heartbeatS
     let current = null;
     if (currentId) {
       const durationMs = divisionDurationMs(groupMap.get(currentId));
-      const progress = currentProgress(ring);
+      const progress = currentProgress(ring, groupMap.get(currentId));
       const start = Date.parse(ring.assignmentStartedAt);
       if (!reason && !durationMs) reason = 'Current division has no saved competitor roster.';
       if (!reason && (!Number.isFinite(start) || start > now)) reason = 'Current division start time is unavailable.';
@@ -81,7 +87,6 @@ function buildEstimates({ eventName, rings, groups, now = Date.now(), heartbeatS
       if (reason) current = { groupDivisionNumber: currentId, ...unavailable(reason) };
       else {
         const elapsedMs = now - start;
-        // Equal phase shares match the progression pill; they are not measured phase durations.
         const paceFactor = progress >= POLICY.minimumPaceProgressPercent / 100
           ? Math.max(1, elapsedMs / Math.max(1, durationMs * progress)) : 1;
         delayMs = Math.max(floorMs, durationMs * (1 - progress) * paceFactor);
@@ -99,9 +104,10 @@ function buildEstimates({ eventName, rings, groups, now = Date.now(), heartbeatS
     }
     const projectedQueue = queue.map((id, index) => {
       const durationMs = divisionDurationMs(groupMap.get(id));
+      if (isDayBlocked(groupMap.get(id), schedule)) reason = 'Day 2 has not been started.';
       if (!reason && !durationMs) reason = `Queued division ${id} has no saved competitor roster.`;
       if (reason) return { groupDivisionNumber: id, position: index + 1, durationMs, ...unavailable(reason) };
-      // Include a transition before every start, including a queued division on an idle ring.
+      // Setup and discipline reviews are already included in the shared duration.
       delayMs += transitionMs;
       uncertaintyMs += transitionMs * fraction;
       const window = windowAt(now, delayMs, uncertaintyMs);
@@ -124,30 +130,50 @@ function buildEstimates({ eventName, rings, groups, now = Date.now(), heartbeatS
     };
   });
   const availableIds = buildAvailableGroupDivisionNumbers(groups, Object.fromEntries(rings.map((ring) => [ring.ringId, ring])));
-  const candidates = estimates.filter((ring) => ring.availability.status === 'estimated').sort((a, b) =>
-    Date.parse(a.availability.window.expectedAt) - Date.parse(b.availability.window.expectedAt)
-      || a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }));
-  const unassigned = availableIds.map((id) => {
+  const slots = estimates.filter((ring) => ring.availability.status === 'estimated')
+    .sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }))
+    .map((ring) => {
+      const expected = Date.parse(ring.availability.window.expectedAt);
+      return {
+        ringId: ring.ringId, ringLabel: ring.ringLabel,
+        working: Boolean(ring.current) || ring.queue.length > 0,
+        planningOnly: ring.availability.planningOnly,
+        delayMs: expected - now,
+        uncertaintyMs: Date.parse(ring.availability.window.latestAt) - expected
+      };
+    });
+  let projectionReason = '';
+  const pending = sortDivisionIds(availableIds, groups);
+  const unassigned = pending.map((id) => {
     const durationMs = divisionDurationMs(groupMap.get(id));
-    const ring = candidates[0];
-    if (!durationMs || !ring) return {
-      groupDivisionNumber: id, durationMs, hypothetical: true,
-      ...unavailable(!durationMs ? 'Division has no saved competitor roster.' : 'No ring has a reliable availability estimate.')
+    if (isDayBlocked(groupMap.get(id), schedule)) return {
+      groupDivisionNumber: id, durationMs, hypothetical: true, ...unavailable('Day 2 has not been started.')
     };
-    const availability = ring.availability.window;
+    const slot = slots.reduce((best, item) => !best || item.delayMs < best.delayMs ? item : best, null);
+    if (!projectionReason && !durationMs) projectionReason = `Division ${id} has no saved competitor roster.`;
+    if (!projectionReason && !slot) projectionReason = 'No ring has a reliable availability estimate.';
+    if (projectionReason) return {
+      groupDivisionNumber: id, durationMs, hypothetical: true,
+      ...unavailable(projectionReason)
+    };
+    slot.delayMs += transitionMs;
+    slot.uncertaintyMs += transitionMs * fraction;
+    const window = windowAt(now, slot.delayMs, slot.uncertaintyMs);
+    slot.delayMs += durationMs;
+    slot.uncertaintyMs += durationMs * fraction;
+    slot.working = true;
     return {
       groupDivisionNumber: id, durationMs, hypothetical: true, status: 'estimated', reason: null,
-      planningOnly: ring.availability.planningOnly,
-      suggestedRingId: ring.ringId, suggestedRingLabel: ring.ringLabel, confidence: 'low',
-      window: {
-        earliestAt: new Date(Date.parse(availability.earliestAt) + transitionMs * (1 - fraction)).toISOString(),
-        expectedAt: new Date(Date.parse(availability.expectedAt) + transitionMs).toISOString(),
-        latestAt: new Date(Date.parse(availability.latestAt) + transitionMs * (1 + fraction)).toISOString()
-      }
+      planningOnly: slot.planningOnly,
+      suggestedRingId: slot.ringId, suggestedRingLabel: slot.ringLabel, confidence: 'low',
+      window, completionWindow: windowAt(now, slot.delayMs, slot.uncertaintyMs)
     };
   });
   const eventCompletion = buildEventCompletion({
-    eventName, rings: estimates, availableIds, groupMap, now, transitionMs, fraction
+    eventName, rings: estimates, availableIds, groupMap, now, slots,
+    projectionReason: pending.some((id) => isDayBlocked(groupMap.get(id), schedule))
+      ? 'Day 2 has not been started; tournament completion is not yet available.' : projectionReason,
+    planningOnly: unassigned.some((entry) => entry.planningOnly)
   });
   return {
     version: 1, eventName: eventName || null,
@@ -158,48 +184,25 @@ function buildEstimates({ eventName, rings, groups, now = Date.now(), heartbeatS
     advisory: 'Planning estimates only; subject to change. Not a guaranteed call time.',
     policy: POLICY,
     assumptions: [
-      'Seven minutes per saved competitor is the existing planning baseline, not a learned tournament average.',
-      'Total division duration assumes every saved competitor participates in all applicable disciplines; it is not a per-discipline calculation.',
+      'Shared phase timing uses seven-minute setup, ten-minute awards, 1.5 minutes per weapons/hyungs entrant, two minutes per contested sparring bout and three-minute discipline reviews.',
       'Empty configured rings without connected tablets can contribute planning-only availability; operational readiness is not implied.',
-      'Applicable phases use equal work shares; reported phase progress and slower observed pace adjust remaining time.',
-      'Two minutes between divisions; queue order is unchanged and staff start queued work promptly.',
+      'Applicable phases are weighted by modeled duration; reported phase progress and slower observed pace adjust remaining time.',
+      'Setup and reviews are included in division duration; queue order is unchanged and staff start queued work promptly.',
       'Windows allow 25 percent uncertainty, accumulating through the queue; confidence is low.',
-      'Unassigned suggestions are independent what-if scenarios, not simultaneous reservations or automatic assignments.',
-      'Event completion places every unassigned division, in division order, on whichever ring is projected to free up first.',
+      'Unassigned divisions use BB oldest first, then TT/SD youngest first, then Gup youngest first, ignoring gender; projections do not reserve or assign rings.',
+      'Event completion follows the running order on the earliest available ring; an unreleased Day 2 has no predicted start or finish.',
       'Unknown breaks, future assistance, staffing and schedule changes cannot be predicted.'
     ],
     rings: estimates, unassigned, eventCompletion
   };
 }
 
-function buildEventCompletion({ eventName, rings, availableIds, groupMap, now, transitionMs, fraction }) {
+function buildEventCompletion({ eventName, rings, availableIds, groupMap, now, slots, projectionReason, planningOnly }) {
   if (!eventName) return unavailable('No active event.');
   const hasWork = (ring) => Boolean(ring.current) || ring.queue.length > 0;
   const blocked = rings.find((ring) => hasWork(ring) && ring.availability.status !== 'estimated');
   if (blocked) return unavailable(`Ring ${blocked.ringLabel}: ${blocked.availability.reason}`);
-  const pending = availableIds.slice().sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
-  const missing = pending.find((id) => !divisionDurationMs(groupMap.get(String(id))));
-  if (missing) return unavailable(`Division ${missing} has no saved competitor roster.`);
-  const slots = rings.filter((ring) => ring.availability.status === 'estimated')
-    .sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }))
-    .map((ring) => {
-      const window = ring.availability.window;
-      const expected = Date.parse(window.expectedAt);
-      return {
-        working: hasWork(ring), planningOnly: ring.availability.planningOnly,
-        delayMs: expected - now, uncertaintyMs: Date.parse(window.latestAt) - expected
-      };
-    });
-  if (pending.length && !slots.length) return unavailable('No ring has a reliable availability estimate.');
-  let planningOnly = false;
-  for (const id of pending) {
-    const slot = slots.reduce((best, item) => (item.delayMs < best.delayMs ? item : best));
-    const workMs = transitionMs + divisionDurationMs(groupMap.get(String(id)));
-    slot.delayMs += workMs;
-    slot.uncertaintyMs += workMs * fraction;
-    slot.working = true;
-    planningOnly = planningOnly || slot.planningOnly;
-  }
+  if (projectionReason) return unavailable(projectionReason);
   const working = slots.filter((slot) => slot.working);
   if (!working.length) {
     return groupMap.size
@@ -209,7 +212,7 @@ function buildEventCompletion({ eventName, rings, availableIds, groupMap, now, t
   const expectedMs = Math.max(...working.map((slot) => slot.delayMs));
   return {
     status: 'estimated', reason: null, confidence: 'low', planningOnly,
-    remainingDivisions: pending.length,
+    remainingDivisions: availableIds.length,
     window: {
       earliestAt: new Date(now + Math.max(0, ...working.map((slot) => slot.delayMs - slot.uncertaintyMs))).toISOString(),
       expectedAt: new Date(now + expectedMs).toISOString(),

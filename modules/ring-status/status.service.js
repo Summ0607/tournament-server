@@ -2,9 +2,13 @@ const fs = require('fs');
 const path = require('path');
 
 const { clampInt, buildRingId, buildRingLabel } = require('../../group-server-helpers');
+const { estimateDivisionTiming } = require('../../backend/simulatorTiming');
+const { createEventConfigStore, hasOperationalUse } = require('../../backend/eventConfig');
+const { writeJsonAtomicSync } = require('../../backend/atomicJsonFile');
 
 const ROOT_RING_ASSIGNMENTS_FILE = path.join(__dirname, '../../ring-assignments.json');
 const EVENTS_ROOT = path.join(__dirname, '../../events');
+const eventConfigStore = createEventConfigStore(EVENTS_ROOT);
 const ACTIVE_EVENT_FILE = path.join(EVENTS_ROOT, 'active.json');
 const GROUPS_DIR = path.join(__dirname, '../../groups');
 const MAX_LETTERS = 26;
@@ -128,8 +132,8 @@ function normalizeConfig(rawConfig) {
   const defaults = { letterCount: 1, numberCount: 2 };
   if (!rawConfig || typeof rawConfig !== 'object') return defaults;
   return {
-    letterCount: clampInt(rawConfig.letterCount, defaults.letterCount, 1, MAX_LETTERS),
-    numberCount: clampInt(rawConfig.numberCount, defaults.numberCount, 1, MAX_NUMBERS)
+    letterCount: clampInt(rawConfig.letterCount, defaults.letterCount, 0, MAX_LETTERS),
+    numberCount: clampInt(rawConfig.numberCount, defaults.numberCount, 0, MAX_NUMBERS)
   };
 }
 
@@ -159,11 +163,20 @@ function ensureStateStructure(rawState) {
   const config = normalizeConfig(state.config);
   return {
     config,
+    configLockedAt: state.configLockedAt || (hasOperationalUse(state) ? new Date().toISOString() : ''),
+    eventStartedAt: state.eventStartedAt || '',
+    day2StartedAt: state.day2StartedAt || '',
     rings: generateRings(config, state.rings || {})
   };
 }
 
 function readAssignmentsState() {
+  const eventName = readActiveEventName();
+  if (eventName) {
+    const state = ensureStateStructure(eventConfigStore.readAssignmentState(eventName));
+    writeAssignmentsState(state);
+    return state;
+  }
   const ringAssignmentsFile = resolveRingAssignmentsFile();
   if (!fs.existsSync(ringAssignmentsFile)) {
     const defaults = createDefaultAssignments();
@@ -198,12 +211,13 @@ function readAssignmentsState() {
 function writeAssignmentsState(state) {
   const ringAssignmentsFile = resolveRingAssignmentsFile();
   ensureAssignmentsFile(ringAssignmentsFile);
-  fs.writeFileSync(ringAssignmentsFile, JSON.stringify({
+  if (hasOperationalUse(state) && !state.configLockedAt) state.configLockedAt = new Date().toISOString();
+  writeJsonAtomicSync(ringAssignmentsFile, {
     ...state,
     rings: Object.fromEntries(
       Object.entries(state.rings || {}).map(([ringId, ringState]) => [ringId, stripLegacyRingAliases(ringState)])
     )
-  }, null, 2));
+  });
 }
 
 function getRingState(state, ringId) {
@@ -253,36 +267,18 @@ function getRingStartTime(ringState, state = {}) {
 function buildRingEstimateMs(currentGroup) {
   const competitorCount = currentGroup && Array.isArray(currentGroup.competitors) ? currentGroup.competitors.length : 0;
   if (competitorCount <= 0) return 0;
-  return competitorCount * 7 * 60 * 1000;
+  return estimateDivisionTiming(currentGroup).estimatedDurationMs;
 }
 
 function buildPhaseEstimateMs(phaseName, ringState, currentGroup) {
   const phase = normalizePhaseName(phaseName);
-  const competitorCount = currentGroup && Array.isArray(currentGroup.competitors) ? currentGroup.competitors.length : 0;
-    const setupTotal = Number.isFinite(Number(ringState.checkInTotal)) ? Number(ringState.checkInTotal) : competitorCount;
-  const phaseTotal = Number.isFinite(Number(ringState.phaseTotalCount)) ? Number(ringState.phaseTotalCount) : competitorCount;
-  const sparringByes = competitorCount % 2;
-  const sparringActualBoutCount = Math.max(0, Math.floor((competitorCount - sparringByes) / 2));
-  const unitByPhase = {
-    setup: 7 * 60 * 1000,
-    weapons: 5 * 60 * 1000,
-    hyungs: 5 * 60 * 1000,
-    sparring: 120 * 1000,
-    awards: 2 * 60 * 1000
-  };
-
-  if (phase === 'setup') return Math.max(1, setupTotal || competitorCount || 1) * unitByPhase.setup;
-  if (phase === 'sparring') return Math.max(1, sparringActualBoutCount || 1) * unitByPhase.sparring;
-  if (phase === 'weapons' || phase === 'hyungs' || phase === 'awards') {
-    return Math.max(1, phaseTotal || competitorCount || 1) * unitByPhase[phase];
-  }
-  return Math.max(1, competitorCount || 1) * unitByPhase.setup;
+  return estimateDivisionTiming(currentGroup).phaseDurationsMs[phase] || 0;
 }
 
 function buildSparringMetrics(currentGroup, ringState) {
-  const competitorCount = currentGroup && Array.isArray(currentGroup.competitors) ? currentGroup.competitors.length : 0;
-  const sparringByeCount = competitorCount % 2;
-  const sparringActualBoutCount = Math.max(0, Math.floor((competitorCount - sparringByeCount) / 2));
+  const timing = estimateDivisionTiming(currentGroup);
+  const sparringByeCount = timing.sparringByeCount;
+  const sparringActualBoutCount = timing.sparringBoutCount;
   const sparringCompletedBoutCount = normalizePhaseName(ringState.phase) === 'sparring'
     ? Math.max(0, Number.parseInt(ringState.phaseCompletedCount, 10) || 0)
     : 0;

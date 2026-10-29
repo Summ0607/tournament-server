@@ -4,6 +4,69 @@ Tournament Management Server Source
 Feature overview for Audience Monitor, Competitor Lookup, and Day-of clocks:
 [docs/audience-monitor-lookup.md](docs/audience-monitor-lookup.md).
 
+Rehearsal and developer instructions are maintained separately in the
+[Simulator guide](docs/simulator-guide.md).
+
+## Release checkpoint: 2026-10-29
+
+This checkpoint completes the simulator timing and audience-view work before
+starting judges and volunteers database changes:
+
+- Isolated rehearsal runs with scaled timing, per-ring scheduling, saved history,
+  lifecycle controls, and read-only Ring Assignment, Head Table, and audience views.
+- Shared running-order and timing rules, explicit two-day release, division badges,
+  and Special Dragons display terminology.
+- Atomic JSON persistence and failure/recovery coverage for simulation state.
+- Local server maintenance through the managed launcher and separate Admin page.
+- One Event Setup save action, automatically derived operational ring layouts,
+  all-settings locking after operational use, and an archive-first Reset run
+  that preserves competitors, prepared divisions, and event settings.
+
+Validation: `npm test` passed all 246 Node test cases and the ring-contract suite;
+`git diff --check` passed. Runtime event data, databases, results, and simulation
+workspaces are excluded from source control. Restart running server processes
+and refresh browser pages to load the updated backend and UI.
+
+## Available division badges
+
+### Tournament running order and event days
+
+Event Setup saves **Event format: One day / Two days**; existing events default
+to one day. Group-building gender separation is unchanged. Available divisions
+and their planning estimates use BB oldest age bracket first, then TT/SD
+together youngest first, then Gup youngest first, without gender priority.
+Division numbers are stable identities and break ties within an age bracket.
+Mixed age bands use the actual age range and show a **Mixed ages** label.
+
+The Available divisions search is replaced by **All / BB / TT / SD / Gup**
+filter buttons with counts. Multiple categories may be shown together; clearing
+the selection returns to All. Filters only change visibility, never assignment
+or forecast priority. Existing manual assignment remains possible.
+
+For two-day events, Day 1 is BB only. Day 2 divisions remain visible (marked
+**Day 2 - locked**, not draggable) but cannot be assigned or given projected
+start times before release. The list opens filtered to BB; select All to preview
+Day 2. Ring Assignment shows a format badge ("One-day event", "Two-day event -
+Day 1 (BB)" or "Day 2 (TT/SD/Gup)"), a link to Event Setup (or a locked note once
+competition starts), and the banner shows the format beside the event date.
+After every BB
+division is completed and its results saved, Ring Assignment enables
+**Start Day 2**, with confirmation. Day 2 contains TT/SD then Gup; no automatic
+overnight restart or guessed break length is used. Overall tournament completion
+is unavailable until Day 2 starts. Full assignment reset or run reset clears the Day 2
+release when resetting the event. All event settings, including event format and
+ring dimensions, lock once operational use begins. Ordinary ring/assignment resets
+do not unlock configuration; use **Reset run / Return to preparation**.
+
+Available-pool division cards show compact **TT**, **SD**, **Gup**, or **BB**
+badges: Tiny Tiger (TTLD), Special Dragons, G10-CDB, and D1-D3 respectively.
+Special Dragons takes precedence over rank categories. A Black Belt division
+containing a manually added CDB remains BB; a CDB-only ordinary division is Gup.
+Badges and Special Dragons display names are derived without changing saved
+division names, rank codes, or the database's Special Needs flag. Search matches
+the displayed Special Dragons name. Group Builder and Head Table labels and
+Audience View descriptions use the same terminology.
+
 ## Build Groups: firm division rules
 
 Every ordinary generated division contains a **single gender, a single rank tier**
@@ -26,7 +89,9 @@ isolation from standard divisions. Saving preserves those manual combinations,
 with server-side checks against the saved roster. Automatic rebalancing still
 does not combine different age or rank categories. Manually combined cards
 show mixed ranks or mixed age bands rather than the first member's category.
-Group Builder shows the Special Needs count, division labels, and member badges.
+Group Builder displays this category as **Special Dragons**, including the count,
+division labels, and member badges. Stored names, flags and import columns retain
+**Special Needs**; display mapping does not rewrite event data.
 Missing gender, invalid age, or ineligible rank requires review before grouping.
 
 CSV imports accept both `Special Needs` and `Special Needs (Y|N)` column
@@ -217,8 +282,9 @@ automatic assignments, ring resets, or saved-data migrations are required.
   queued-division start windows, and availability after its existing queue.
 - Available division tiles show one additional line, for example
   `Start ~10:40 AM · Ring ~42 min`, without a hover summary.
-  The start assumes the earliest projected available ring. Suggestions are independent:
-  they do not reserve capacity, reorder the queue, or promise a call time.
+  Starts share a cumulative projection in division-number order, placing each
+  division on the earliest free ring after its preceding projected workload.
+  They do not write assignments, reorder existing queues, or promise a call time.
   If a start cannot be predicted, `Start TBD` is shown; a valid saved-roster
   duration remains visible. Missing duration data explicitly shows `Ring time TBD`.
 - A compact summary identifies the earliest projected ring availability.
@@ -247,10 +313,10 @@ automatic assignments, ring resets, or saved-data migrations are required.
   chips below their headings. Both read **TBD** until the event starts, which is
   recorded when the first ring with a **named tablet** connects, sends a heartbeat,
   or starts/completes a division (`eventStartedAt`). Requests without a tablet
-  name, such as tests or simulated heartbeats, never start the event, and the
+  name never start the event, and the
   start is never inferred from old saved heartbeat or phase timestamps.
-  The start time is cleared by Reset assignments and when a ring layout is
-  applied (Ring Assignment **Apply layout**), and by event create/reset.
+  The start time is cleared by Reset assignments, Reset run, and event create/reset.
+  Reset assignments alone does not unlock event configuration.
 - Completion (`estimates.eventCompletion`) covers current, queued **and
   unassigned** divisions: unassigned divisions, in division order, are placed
   on whichever ring frees up first. It shows `~time (window)`, **All divisions
@@ -259,20 +325,40 @@ automatic assignments, ring resets, or saved-data migrations are required.
   every **60 seconds** (or immediately on event/start/status change) so it does
   not jitter on each 10-second board refresh. Restart the server after updating.
 
-### Initial model and confidence
+### Shared timing model and confidence
 
-The existing **seven minutes per saved competitor** remains the total division
-baseline; it is not a learned or calibrated average. Total ring time assumes
-every saved competitor participates in all applicable disciplines (Weapons only
-where applicable). This is a rough total, not a separate per-discipline timing
-calculation; the seven-minute baseline is unchanged. Applicable server-defined
-phases (including Weapons where appropriate) use equal work shares. Reported
-progress reduces remaining work; after at least 10% overall progress, slower
+Live planning estimates and server phase estimates use timing model version 2:
+
+| Activity | Real tournament minutes |
+| --- | --- |
+| Setup | 7 per group division |
+| Weapons | 1.5 per weapons entrant |
+| Hyungs | 1.5 per hyungs entrant |
+| Sparring | 2 per contested bout |
+| Review/wrap-up | 3 after each applicable competition discipline, before the next discipline or awards |
+| Awards | 10 per group division |
+
+Review time is included in the preceding discipline's phase estimate; it does
+not add new tablet phase names. The standard three reviews are weapons to
+hyungs, hyungs to sparring, and sparring to awards. A missing discipline has no
+performance or review allowance. Single-elimination sparring uses N - 1 actual
+bouts for N entrants (zero for zero or one entrant), excluding byes. Explicit
+discipline eligibility/division assignments and entry statuses determine entrant
+counts; scratches and no-shows are excluded. Legacy rosters without discipline
+metadata assume hyungs and sparring participation, but not weapons.
+
+Eight entrants in all three disciplines take **64 minutes**: 7 setup, 12 weapons,
+12 hyungs, 14 sparring, 9 review, and 10 awards. Two such divisions per ring
+take approximately **2 hours 8 minutes**, excluding unreported delays.
+
+Reported progress is weighted by modeled phase duration, rather than equal
+shares. After at least 10% overall modeled progress, slower
 observed pace extends it. Faster early progress never accelerates the model
 below the baseline pace. A running division retains at least two minutes of
 remaining work until staff/tablet completion is reported.
 
-Every queued start includes a two-minute transition. The model assumes prompt
+No additional between-division transition is added: setup and discipline reviews
+are already included. The model assumes prompt
 manual starts, existing queue order, and no unreported breaks. Windows use 25%
 uncertainty, accumulated through preceding work and transitions; current-work
 uncertainty has a two-minute minimum and expands for overdue work without useful
@@ -298,8 +384,14 @@ The snapshot contains:
   with division IDs/positions, and `availability` after the queue. Current work
   includes `remainingMs` and a `completionWindow`; queue entries include
   `durationMs`, a start `window`, and a `completionWindow`.
-- `unassigned[]`: independent hypothetical starts, division IDs, duration,
-  and suggested ring identity where available.
+- `unassigned[]`: a cumulative hypothetical schedule in numeric division order,
+  with division IDs, duration, suggested ring identity, start `window`, and
+  `completionWindow`. Each projected division advances that ring's availability
+  before the next division is placed on the earliest free ring (ties use ring
+  label order). The first wave can start now; later waves include preceding
+  workloads. These same projected workloads determine event completion.
+  Projections never write assignments or reserve rings. A missing roster blocks
+  downstream projections rather than silently ignoring unknown work.
 - Estimated ring availability and unassigned suggestions include `planningOnly`
   to distinguish an empty unconnected ring from operationally connected capacity.
 - Estimated items have `status: "estimated"`, `confidence: "low"`, and ISO
@@ -318,8 +410,9 @@ Times include dates when needed for queues extending into another day.
 
 The audience-safe projection endpoint is support for future monitor development,
 not a separate access-control boundary. Audience Monitor and competitor-facing
-UI, automatic scheduling, simulation, learned timings, and Android changes are
-deliberately deferred. Validate with `npm test` and `git diff --check`.
+UI, automatic scheduling,
+learned timings, and Android changes are deliberately deferred. Validate with
+`npm test` and `git diff --check`.
 
 ## Tooltip and UI cleanup checkpoint: 2026-10-25
 
@@ -377,7 +470,7 @@ details-panel updates.
 
 Tooltips at this checkpoint supplemented, rather than replaced, instructional text.
 Late-ring priority and details are implemented; a dedicated amber pace indicator
-is not. Viewer/competitor enhancements and tournament simulation are future work,
+is not. Viewer/competitor enhancements are future work,
 not part of this checkpoint. No Android tablet-project changes are included.
 
 ## Consistent contextual help
@@ -473,13 +566,28 @@ Ring Assignment cards use two compact lines: ring name with connection status,
 then assignment status with queue count. Cards wrap into a responsive grid
 without horizontal scrolling and remain distinct click/drag targets.
 
-Saved event layout dimensions and the operational ring layout are separate.
-When they differ, **Apply saved event ring layout** offers an explicit,
-confirmed operation; opening the page never resets assignments automatically.
-Applying a layout clears all ring assignments, queues, completed-division
-history, tablet connections, and progress for the active event. Operational
-layouts support 1-26 letter columns and 1-50 numbered rows. Zero dimensions
-remain valid event metadata but cannot be applied as an operational layout.
+Event Setup has one **Save Changes** action. Event configuration is authoritative;
+operational layout dimensions are derived automatically on creation, saving,
+activation, and reading unused event state, including for inactive events.
+Layouts support up to 26 letter columns and 50 numbered rows. Zero dimensions
+mean no operational rings are configured; no default 1-by-2 layout is substituted.
+
+All event settings (labels, date, format, and layout) become read-only once any
+tablet, current/queued/completed assignment, run progress, or result exists.
+The lock persists across pauses, disconnects, server restarts, and individual or
+full assignment resets. Existing in-use layout mismatches preserve operational
+state and are reported in Event Setup; they are never automatically rebuilt.
+The legacy ring configuration endpoint cannot independently change event layout,
+and submitting identical dimensions preserves all ring state.
+
+To abandon a test run, stop tablet activity, select the event in Event Setup, and
+choose **Reset run / Return to preparation**. Confirmation archives results,
+assignment state, and event configuration under the event's `run-archives`
+directory, then clears operational state and unlocks all settings. Competitors,
+prepared divisions, saved settings, and the active-event selection are preserved.
+Save the new configuration and start again. **Discard edits** only reloads the
+form; the older destructive `/api/events/reset` endpoint remains separate and
+still removes the event database and results.
 
 ### Integrated Head Table
 

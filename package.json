@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test": "node --test tests/event-config.test.js tests/pageRoutes.test.js tests/surfacePorts.test.js tests/competitorStore.test.js tests/divisionRoutes.test.js tests/integratedImport.test.js tests/helpTooltips.test.js tests/ringEstimates.test.js tests/audienceMonitor.test.js tests/groupBuilder.test.js && node tests/ring-contract.test.js"
+    "test": "node --test tests/event-config.test.js tests/pageRoutes.test.js tests/serverControl.test.js tests/surfacePorts.test.js tests/competitorStore.test.js tests/divisionRoutes.test.js tests/integratedImport.test.js tests/helpTooltips.test.js tests/ringEstimates.test.js tests/audienceMonitor.test.js tests/groupBuilder.test.js tests/dayOfSimulator.test.js tests/dayOfSparring.test.js tests/dayOfSimulator.integration.test.js tests/simulatorTiming.test.js tests/atomicJsonFile.test.js tests/simulatorRunStore.test.js tests/simulatorScheduler.test.js tests/simulatorAssignment.test.js && node tests/ring-contract.test.js"
   },
   "dependencies": {
     "csv-parser": "^3.2.1",
