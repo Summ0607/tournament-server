@@ -6,6 +6,14 @@ const { writeJsonAtomicSync } = require('./atomicJsonFile');
 
 const CONFIG_LOCK_MESSAGE = 'Event configuration is locked because operational use has begun. Reset the run to return to preparation before editing.';
 
+function normalizeTournamentScope(value) {
+  if (value == null || value === '') return '';
+  if (typeof value === 'string' && ['regional', 'national', 'world', 'in-house'].includes(value)) return value;
+  const error = new Error('scope must be Regional, National, World, In-House, or empty (Unspecified)');
+  error.statusCode = 400;
+  throw error;
+}
+
 function hasOperationalUse(state) {
   return Boolean(state && (state.configLockedAt || state.eventStartedAt || state.day2StartedAt ||
     Object.values(state.rings || {}).some((ring) =>
@@ -65,6 +73,7 @@ function createEventConfigStore(eventsRoot) {
     const config = readEventConfig(eventName);
     return {
       configurationLocked: hasOperationalUse(state),
+      ageDateLocked: fs.existsSync(path.join(eventsRoot, eventName, 'age-context.json')),
       configurationLockReason: hasOperationalUse(state) ? CONFIG_LOCK_MESSAGE : '',
       layoutMismatch: state.config?.letterCount !== config.ringConfigX || state.config?.numberCount !== config.ringConfigY
     };
@@ -76,6 +85,7 @@ function createEventConfigStore(eventsRoot) {
       eventName: name,
       name,
       location: '',
+      scope: '',
       date: '',
       tournamentDays: 1,
       ringConfigX: 0,
@@ -101,6 +111,7 @@ function createEventConfigStore(eventsRoot) {
       ...defaults,
       ...metadata,
       ...dimensions,
+      scope: normalizeTournamentScope(raw.scope),
       tournamentDays: normalizeTournamentDays(raw.tournamentDays),
       eventName: name,
       name: String(raw.name || name).trim() || name
@@ -110,6 +121,10 @@ function createEventConfigStore(eventsRoot) {
   function writeEventConfig(eventName, config) {
     const name = String(eventName || '').trim();
     if (!name) throw new Error('eventName is required');
+    const ageContext = path.join(eventsRoot, name, 'age-context.json');
+    if (fs.existsSync(ageContext) && JSON.parse(fs.readFileSync(ageContext, 'utf8')).date !== String(config && config.date || '').trim()) {
+      throw Object.assign(new Error('Tournament date is fixed once age data exists. Create a new tournament for a different date.'), { statusCode: 409 });
+    }
     if (configurationStatus(name).configurationLocked) {
       const error = new Error(CONFIG_LOCK_MESSAGE);
       error.statusCode = 409;
@@ -120,6 +135,7 @@ function createEventConfigStore(eventsRoot) {
       eventName: name,
       name: String(config && config.name || name).trim() || name,
       location: String(config && config.location || '').trim(),
+      scope: normalizeTournamentScope(config && config.scope),
       date: String(config && config.date || '').trim(),
       tournamentDays: normalizeTournamentDays(config && config.tournamentDays),
       ...normalizeEventRingConfig(config),
@@ -170,4 +186,4 @@ function createEventConfigStore(eventsRoot) {
   return { readEventConfig, writeEventConfig, readAssignmentState, configurationStatus, resetRun };
 }
 
-module.exports = { createEventConfigStore, normalizeEventRingConfig, hasOperationalUse, CONFIG_LOCK_MESSAGE };
+module.exports = { createEventConfigStore, normalizeEventRingConfig, normalizeTournamentScope, hasOperationalUse, CONFIG_LOCK_MESSAGE };

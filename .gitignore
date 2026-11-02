@@ -149,7 +149,11 @@ vite.config.ts.timestamp-*
 /groups/
 tournament.db
 db/tournament.db
+db/age-context.json
 ring-assignments.json
+/visual-definitions.json
+/schools.json
+/ranks.json
 
 # Executables
 *.apk

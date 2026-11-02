@@ -77,18 +77,10 @@
 
   function ageOf(competitor) {
     if (!competitor) return null;
-    if (competitor.age !== undefined && competitor.age !== null && competitor.age !== '' && Number.isFinite(Number(competitor.age))) {
-      return Number(competitor.age);
+    if (Number.isInteger(competitor.age) && competitor.age >= 0 && competitor.age <= 120) {
+      return competitor.age;
     }
-    const value = competitor.dob || competitor.dobIso || competitor.dateOfBirth;
-    if (!value) return null;
-    const dob = new Date(value);
-    if (Number.isNaN(dob.getTime())) return null;
-    const now = new Date();
-    let age = now.getFullYear() - dob.getFullYear();
-    const monthDiff = now.getMonth() - dob.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) age -= 1;
-    return age;
+    return null;
   }
 
   function specialNeedsCategory(competitor) {

@@ -1,0 +1,45 @@
+body.defined-presentation {
+  font-family: var(--vd-font);
+  font-size: var(--vd-body-size);
+  line-height: var(--vd-line-height);
+}
+#presentationNotice { margin: 0; padding: 8px 12px; background: #fff1f4; color: #8c0018; }
+#presentationNotice[hidden] { display: none; }
+.defined-presentation main { padding: var(--vd-page-padding); }
+html.embedded-administration .defined-presentation main { padding: 0; }
+.defined-presentation .panel {
+  padding: var(--vd-card-padding);
+  margin-bottom: var(--vd-section-gap);
+  border-radius: var(--vd-radius);
+}
+.defined-presentation h1 { font-size: var(--vd-page-title-size); }
+.defined-presentation h2 { font-size: var(--vd-section-title-size); margin-bottom: 10px; }
+.defined-presentation :is(h1, h2) { font-weight: var(--vd-heading-weight); line-height: var(--vd-line-height); }
+.defined-presentation :is(.subtle, #notice, .badge, .ring dl) { font-size: var(--vd-secondary-size); }
+.defined-presentation label { font-size: var(--vd-body-size); font-weight: var(--vd-heading-weight); gap: 4px; }
+.defined-presentation :is(input:not([type="checkbox"]), select, button) {
+  min-height: var(--vd-control-height);
+  font-family: var(--vd-font);
+  font-size: var(--vd-body-size);
+  line-height: var(--vd-line-height);
+  padding: 4px 8px;
+  border-radius: var(--vd-radius);
+}
+.defined-presentation button { font-weight: var(--vd-nav-weight); }
+.defined-presentation .controls {
+  grid-template-columns: minmax(160px, 1fr) minmax(140px, 1fr) minmax(180px, 1.2fr) auto;
+  gap: var(--vd-section-gap);
+}
+.defined-presentation .actions { align-items: flex-end; gap: 8px; margin-top: var(--vd-section-gap); }
+.defined-presentation .step-ring-control { min-width: 120px; flex: 0 1 160px; }
+.defined-presentation .summary { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+.defined-presentation .metric { padding: 7px 9px; border-radius: var(--vd-radius); min-width: 0; overflow-wrap: anywhere; }
+.defined-presentation .metric strong { font-size: var(--vd-body-size); font-weight: var(--vd-heading-weight); margin-top: 3px; line-height: var(--vd-line-height); }
+.defined-presentation .panel-heading { margin-bottom: 10px; }
+.defined-presentation .ring { padding: var(--vd-card-padding); border-radius: var(--vd-radius); }
+@media (max-width: 740px) {
+  .defined-presentation .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (pointer: coarse) {
+  .defined-presentation :is(button, select, input:not([type="checkbox"])) { min-height: max(44px, var(--vd-control-height)); }
+}

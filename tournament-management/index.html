@@ -159,6 +159,104 @@
     #groupDetails[hidden] {
       display: none;
     }
+    #tmForm { display: grid; gap: 14px; }
+    #tmForm[hidden], #tmList[hidden], #tmDanger[hidden] { display: none; }
+    #tmForm label, .tm-settings-card label { display: grid; gap: 6px; }
+    #teamSettingsView { gap: 12px; width: 100%; max-width: 800px; font-size: 12px; }
+    #teamSettingsView h2 { margin: 0; font-size: 18px; }
+    #teamSettingsView .tm-settings-intro { margin: 0; color: #748094; font-size: 11px; }
+    #tmSettingsLock:empty, #tmSettingsNotice:empty { display: none; }
+    .tm-settings-card { display: grid; gap: 10px; padding: 12px; border: 1px solid #dce0e8; border-radius: 5px; background: #fff; }
+    .tm-settings-card label { gap: 3px; }
+    .tm-settings-card h3 { margin: 0 0 2px; font-size: 14px; }
+    .tm-settings-card select, .tm-settings-card input { padding: 4px 6px; min-height: 28px; border: 1px solid #dce0e8; border-radius: 4px; box-sizing: border-box; font: inherit; }
+    .tm-settings-card select { width: 100%; background: #fff; }
+    .tm-settings-card .tm-size-label { display: flex; align-items: center; gap: 6px; }
+    .tm-settings-card .tm-size-label input { width: 54px; }
+    .tm-settings-card button { justify-self: start; padding: 5px 12px; min-height: 28px; border: 0; border-radius: 4px; background: #45698b; color: #fff; font: inherit; cursor: pointer; }
+    .tm-settings-card button:disabled { opacity: .5; cursor: not-allowed; }
+    #tmForm input:not([type="checkbox"]), #tmForm select { width: 100%; padding: 8px; box-sizing: border-box; }
+    #tmNotice[data-state="error"], #tmSettingsNotice[data-state="error"] { color: #a52828; }
+    #tmDanger { border: 1px solid #d8b9b9; border-radius: 8px; margin-top: 20px; }
+    #tmDelete { color: #a52828; }
+    #visualDefinitionsView { font-size: 12px; gap: 12px; }
+    #visualDefinitionsView p { margin: 0; }
+    #vdForm { display: grid; gap: 12px; }
+    #vdFields { display: grid; gap: 12px; }
+    .vd-card { min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 5px; }
+    .vd-card legend { font-size: 14px; font-weight: 600; }
+    .vd-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+    .vd-fields label { display: block; margin-bottom: 4px; }
+    .vd-fields input, .vd-fields select { width: 100%; min-height: 28px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+    .vd-color { display: flex; gap: 6px; }
+    .vd-color input[type="color"] { width: 32px; flex-shrink: 0; padding: 2px; }
+    #vdForm button { min-height: 28px; padding: 5px 12px; font: inherit; }
+    #vdPreview { width: 100%; height: 500px; border: 1px solid var(--line); border-radius: 5px; background: #fff; }
+    #vdPreview[hidden] { display: none; }
+    #vdNotice[data-state="error"], #vdPreviewError { color: #a52828; }
+    #vdDirty { color: var(--text-soft); }
+    #administrationToolView { min-width: 0; }
+    #administrationToolFrame { display: block; width: 100%; height: max(500px, calc(100dvh - 130px)); border: 0; }
+    #schoolDialog { width: min(650px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--line); border-radius: var(--vd-radius, 5px); padding: var(--vd-card-padding, 12px); font-family: var(--vd-font, "Segoe UI", sans-serif); font-size: var(--vd-body-size, 12px); }
+    #schoolDialog::backdrop { background: #17233680; }
+    #schoolDialogTitle { margin: 0 0 12px; font-size: var(--vd-section-title-size, 14px); }
+    #schoolForm { display: grid; gap: var(--vd-section-gap, 12px); }
+    #schoolForm label { display: grid; gap: 4px; }
+    #schoolForm input:not([type="checkbox"]) { width: 100%; box-sizing: border-box; border: 1px solid var(--line); }
+    #schoolForm input:not([type="checkbox"]), #schoolForm button, #addSchool { min-height: var(--vd-control-height, 28px); padding: 4px 8px; border-radius: var(--vd-radius, 5px); font: inherit; }
+    #schoolForm .school-archive { display: flex; align-items: center; gap: 6px; }
+    #schoolForm p { margin: 0; }
+    #schoolError, #schoolsNotice[data-state="error"] { color: #a52828; }
+    #schoolSave, #addSchool { background: #45698b; color: #fff; border: 1px solid #45698b; }
+    #rankDialog { width: min(650px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--line); border-radius: var(--vd-radius, 5px); padding: var(--vd-card-padding, 12px); font-family: var(--vd-font, "Segoe UI", sans-serif); font-size: var(--vd-body-size, 12px); }
+    #rankDialog::backdrop { background: #17233680; }
+    #rankDialogTitle { margin: 0 0 12px; font-size: var(--vd-section-title-size, 14px); }
+    #rankForm { display: grid; gap: var(--vd-section-gap, 12px); }
+    #rankForm label { display: grid; gap: 4px; }
+    #rankForm input { width: 100%; border: 1px solid var(--line); }
+    #rankForm input, #rankForm button, #addRank, #deleteRanks { min-height: var(--vd-control-height, 28px); padding: 4px 8px; border-radius: var(--vd-radius, 5px); font: inherit; }
+    #rankForm p { margin: 0; }
+    #rankError, #ranksNotice[data-state="error"] { color: #a52828; }
+    #rankSave, #addRank { background: #45698b; color: #fff; border: 1px solid #45698b; }
+    #ranksView .table-wrap { max-height: none; }
+    #ranksView .table-wrap th { position: static; }
+    #csDialog { width: min(650px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: var(--vd-card-padding, 12px); border: 1px solid var(--line); border-radius: var(--vd-radius, 5px); font-family: var(--vd-font, "Segoe UI", sans-serif); font-size: var(--vd-body-size, 12px); }
+    #csDialog::backdrop { background: #17233680; }
+    #csFields, #csForm { display: grid; gap: var(--vd-section-gap, 12px); }
+    #csFields label { display: grid; gap: 4px; }
+    #csFields input:not([type="checkbox"]), #csFields select { width: 100%; border: 1px solid var(--line); }
+    #csFields input:not([type="checkbox"]), #csFields select, #csForm button { min-height: var(--vd-control-height, 28px); padding: 4px 8px; font: inherit; border-radius: var(--vd-radius, 5px); }
+    #csDialogTitle { font-size: var(--vd-section-title-size, 14px); margin: 0 0 12px; }
+    #csError, #csNotice[data-state="error"] { color: #a52828; }
+    #csSave, #csAdd { background: #45698b; color: #fff; border: 1px solid #45698b; }
+    #competitionSettingsView .table-wrap { max-height: none; }
+    #resultsView .result-card { background: #fff; border: 1px solid #d3dce5; border-radius: var(--vd-radius, 5px); padding: var(--vd-card-padding, 12px); margin-top: var(--vd-gap, 12px); }
+    #resultsView h2 { font-size: var(--vd-section-title-size, 14px); margin: 0 0 8px; }
+    #resultsView h2 span { font-weight: 400; }
+    #resultsView .table-wrap { max-height: none; }
+    #resultsView p { margin: 0; }
+    #resultsView .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    #resultSource { max-width: 100%; min-height: var(--vd-control-height, 28px); font: inherit; }
+    #resultNotice[data-state="error"] { color: #a02020; }
+    #ringJudgesView .table-wrap { max-height: none; }
+    #ringJudgesView .actions, #rjSearchForm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    #rjDialog { width: min(650px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--line); border-radius: var(--vd-radius, 5px); padding: var(--vd-card-padding, 12px); font-family: var(--vd-font, "Segoe UI", sans-serif); font-size: var(--vd-body-size, 12px); }
+    #rjDialogTitle { margin: 0 0 12px; font-size: var(--vd-section-title-size, 14px); }
+    #rjForm { display: grid; gap: var(--vd-section-gap, 12px); }
+    #rjForm label { display: grid; gap: 4px; }
+    #rjForm input:not([type="checkbox"]), #rjForm textarea, #rjForm button { padding: 4px 8px; min-height: var(--vd-control-height, 28px); border-radius: var(--vd-radius, 5px); font: inherit; }
+    #rjForm .rj-flag { display: flex; align-items: center; }
+    #rjAdd, #rjPopulate, #rjPopulateVolunteers, #rjSave, #vmAdd, #vmImport, #vmSave { background: #45698b; color: #fff; border: 1px solid #45698b; }
+    #volunteersView .table-wrap { max-height: none; }
+    #volunteersView .actions, #vmSearchForm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    #vmDialog { width: min(650px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--line); border-radius: var(--vd-radius, 5px); padding: var(--vd-card-padding, 12px); font-family: var(--vd-font, "Segoe UI", sans-serif); font-size: var(--vd-body-size, 12px); }
+    #vmDialogTitle { margin: 0 0 12px; font-size: var(--vd-section-title-size, 14px); }
+    #vmForm, #vmVolunteerFields:not([hidden]) { display: grid; gap: 8px; }
+    #vmForm label { display: grid; gap: 4px; }
+    #vmForm input, #vmForm select, #vmForm button { padding: 4px 8px; min-height: var(--vd-control-height, 28px); border-radius: var(--vd-radius, 5px); font: inherit; }
+    #vmCsv { max-width: 100%; }
+    #vmError, #vmNotice[data-state="error"] { color: #a02020; }
+    #rjError, #rjNotice[data-state="error"] { color: #a02020; }
 
     .ra-board {
       display: grid;
@@ -251,45 +349,50 @@
     .event-timing small { color: #64748b; font-size: 12px; }
     .banner-clock { font-variant-numeric: tabular-nums; }
     .estimate-details p { margin: 5px 0; font-size: 12px; }
-    #competitorLookupView { container-type: inline-size; --cl-name-width: 25%; --cl-rank-width: 14%; --cl-studio-width: 25%; --cl-division-width: 16%; --cl-ring-width: 20%; }
-    .cl-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
-    .cl-search-field { display: flex; align-items: center; gap: 8px; flex: 1 1 240px; max-width: 420px; height: 38px; padding: 0 10px; border: 1px solid #bac7d8; border-radius: 7px; background: #fff; color: #526580; }
-    .cl-search-field:focus-within { outline: 2px solid #9dbff0; border-color: #2f66c8; }
-    .cl-search-field input { border: 0; outline: none; width: 100%; min-width: 0; font: inherit; font-size: 14px; background: transparent; color: #20334e; }
-    #competitorLookupView button, #competitorLookupDetails button { border: 1px solid #bac7d8; border-radius: 7px; background: #fff; color: #29415f; padding: 8px 12px; min-height: 38px; cursor: pointer; font-family: inherit; font-size: 14px; line-height: 20px; font-weight: 600; }
+    .tournament-reference { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 16px; padding: 10px 12px; border: 1px solid #d8e1ed; border-radius: 8px; background: #f7f9fc; color: #526580; font-size: 13px; }
+    .tournament-reference[hidden] { display: none; }
+    .tournament-reference label { font-weight: 600; color: #344a67; }
+    .tournament-reference select { min-width: min(320px, 100%); max-width: 100%; height: 34px; padding: 5px 9px; border: 1px solid #bac7d8; border-radius: 6px; background: #fff; color: #20334e; font: inherit; }
+    .tournament-reference strong { color: #20334e; }
+    #competitorLookupView { container-type: inline-size; }
+    .cl-page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .cl-page-head p { margin: 0; color: #526580; font-size: 13px; }
+    .cl-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 12px; margin-bottom: 12px; background: #f6f8fc; border: 1px solid #d8e1ed; border-radius: 8px; }
+    .cl-toolbar label { display: grid; gap: 5px; min-width: 0; flex: 1 1 125px; color: #344a67; font-size: 12px; font-weight: 600; }
+    .cl-toolbar .cl-search-field { flex: 2 1 210px; }
+    .cl-toolbar .cl-age-field { flex: 0 1 76px; }
+    .cl-toolbar .cl-page-size { flex: 0 1 90px; }
+    .cl-toolbar input, .cl-toolbar select { box-sizing: border-box; width: 100%; min-width: 0; height: 36px; border: 1px solid #bac7d8; border-radius: 6px; padding: 5px 8px; background: #fff; color: #20334e; font: inherit; font-size: 13px; }
+    .cl-toolbar input:focus-visible, .cl-toolbar select:focus-visible { outline: 2px solid #2f66c8; outline-offset: 2px; }
+    #competitorLookupView button, #competitorLookupDetails button { border: 1px solid #bac7d8; border-radius: 7px; background: #fff; color: #29415f; padding: 6px 10px; min-height: 34px; cursor: pointer; font-family: inherit; font-size: 13px; line-height: 18px; font-weight: 600; }
     #competitorLookupView button:hover, #competitorLookupDetails button:hover { background: #edf3fc; }
     #competitorLookupView button:focus-visible, #competitorLookupDetails button:focus-visible { outline: 2px solid #2f66c8; outline-offset: 2px; }
     #competitorLookupView .cl-primary { background: #2b61b3; color: #fff; border-color: #2b61b3; }
     #competitorLookupView .cl-primary:hover { background: #204e94; }
-    #clResultCount { margin-left: auto; color: #526580; font-size: 13px; white-space: nowrap; }
+    .cl-results-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; color: #526580; font-size: 13px; }
+    #clPagination { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+    #competitorLookupView button[aria-current="page"] { background: #2b61b3; color: #fff; border-color: #2b61b3; }
+    #competitorLookupView button:disabled { opacity: .5; cursor: default; }
     #clStatus { color: #526580; font-size: 13px; margin: 8px 0 12px; }
-    .cl-filters { padding: 14px 0; margin-bottom: 14px; border: 1px solid #d8e1ed; background: #f6f8fc; border-radius: 8px; }
-    .cl-filters[hidden] { display: none; }
-    .cl-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; padding: 0 12px; }
-    .cl-filter-grid label { display: grid; min-width: 0; gap: 5px; color: #344a67; font-size: 13px; font-weight: 600; }
-    .cl-filter-grid input, .cl-filter-grid select { width: 100%; min-width: 0; height: 38px; border: 1px solid #bac7d8; border-radius: 6px; padding: 6px 8px; background: #fff; color: #20334e; font: inherit; }
-    .cl-filter-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding: 0 12px; font-size: 13px; color: #344a67; }
-    .cl-filter-actions label { margin-right: auto; }
-    .cl-table-wrap { border: 1px solid #d8e1ed; border-radius: 8px; overflow: auto; }
+    .cl-table-wrap { max-height: 72vh; border: 1px solid #d8e1ed; border-radius: 8px; overflow: auto; }
     .cl-table { width: 100%; border-collapse: collapse; table-layout: fixed; color: #253b57; }
-    .cl-table th { padding: 10px 12px; background: #f3f6fb; color: #526580; text-align: left; font-size: 12px; font-weight: 700; border-bottom: 1px solid #d8e1ed; }
-    .cl-table td { height: 42px; padding: 8px 12px; border-bottom: 1px solid #e8edf4; font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
+    .cl-table th { position: sticky; top: 0; padding: 8px 10px; background: #f3f6fb; color: #526580; text-align: left; font-size: 11px; font-weight: 700; border-bottom: 1px solid #d8e1ed; }
+    .cl-table td { height: 36px; padding: 6px 10px; border-bottom: 1px solid #e8edf4; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
     .cl-table tbody tr:nth-child(even) { background: #fafbfd; }
     .cl-table tbody tr:hover { background: #f0f5fc; }
     .cl-table tbody tr { cursor: pointer; }
     .cl-table tbody tr[aria-selected="true"] { background: #eaf2ff; box-shadow: inset 3px 0 #2f66c8; }
-    .cl-table col:nth-child(1) { width: var(--cl-name-width); }
-    .cl-table col:nth-child(2) { width: var(--cl-rank-width); }
-    .cl-table col:nth-child(3) { width: var(--cl-studio-width); }
-    .cl-table col:nth-child(4) { width: var(--cl-division-width); }
-    .cl-table col:nth-child(5) { width: var(--cl-ring-width); }
-    @container (min-width: 760px) {
-      .cl-filter-grid { grid-template-columns: var(--cl-name-width) var(--cl-rank-width) var(--cl-studio-width) var(--cl-division-width) var(--cl-ring-width); gap: 0; padding: 0; }
-      .cl-filter-grid label { padding: 0 12px; }
-    }
-    #competitorLookupView .cl-result { border: 0; background: transparent; padding: 0; min-height: 24px; color: #20334e; font: inherit; font-weight: 700; text-align: left; }
+    .cl-table col:nth-child(1) { width: 12%; }
+    .cl-table col:nth-child(2) { width: 22%; }
+    .cl-table col:nth-child(3) { width: 7%; }
+    .cl-table col:nth-child(4) { width: 10%; }
+    .cl-table col:nth-child(5) { width: 10%; }
+    .cl-table col:nth-child(6) { width: 22%; }
+    .cl-table col:nth-child(7) { width: 17%; }
+    #competitorLookupView .cl-result { border: 0; background: transparent; padding: 0; min-height: 22px; color: #20334e; font: inherit; font-weight: 700; text-align: left; }
     #competitorLookupView .cl-sort { border: 0; background: transparent; padding: 0; min-height: 20px; font: inherit; color: inherit; }
-    .cl-rank { display: inline-block; border: 1px solid #cddbee; background: #eef3fa; color: #31547d; border-radius: 5px; padding: 0 6px; font-size: 12px; font-weight: 700; }
+    .cl-rank { display: inline-block; border: 1px solid #cddbee; background: #eef3fa; color: #31547d; border-radius: 5px; padding: 0 5px; font-size: 11px; font-weight: 700; }
+    .cl-division-link { color: #24599b; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
     .cl-muted { color: #64748b; }
     #competitorLookupView mark { background: #fff0b5; color: inherit; border-radius: 2px; }
     .cl-footer { padding: 12px 2px; font-size: 13px; color: #526580; }
@@ -315,7 +418,7 @@
     }
     @media (max-width: 600px) {
       .cl-table th, .cl-table td { padding: 8px 6px; font-size: 12px; }
-      #competitorLookupView { --cl-name-width: 24%; --cl-rank-width: 11%; --cl-studio-width: 22%; --cl-division-width: 14%; --cl-ring-width: 29%; }
+      .cl-table { min-width: 720px; }
       #clResultCount { margin-left: 0; }
     }
     .ra-ring.connected { --ra-connection-color: #15803d; }
@@ -685,43 +788,77 @@
     }
 
     .sidebar {
-      background: linear-gradient(180deg, rgba(246, 248, 251, 0.96) 0%, rgba(236, 241, 247, 0.96) 100%);
-      border-color: rgba(186, 194, 205, 0.72);
-      box-shadow: 0 6px 16px rgba(24, 39, 75, 0.035);
+      background: #172333;
+      border-color: #304158;
+      color: #fff;
+      position: sticky;
+      top: 12px;
+      max-height: calc(100dvh - 24px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
     }
 
-    .sidebar-item {
+    .sidebar-item,
+    .sidebar-disclosure,
+    .sidebar-tool {
       width: 100%;
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 13px 13px;
+      gap: 6px;
+      padding: 11px 8px;
       border: 0;
-      border-top: 1px solid rgba(255, 255, 255, 0.65);
-      border-bottom: 1px solid rgba(188, 197, 210, 0.55);
-      background: linear-gradient(180deg, rgba(242, 245, 249, 0.92) 0%, rgba(230, 236, 243, 0.92) 100%);
-      color: #2a3443;
+      border-bottom: 1px solid #304158;
+      border-radius: 0;
+      background: transparent;
+      color: #e6edf7;
       text-align: left;
+      text-decoration: none;
       font: inherit;
-      font-size: 15px;
-      font-weight: 650;
-      cursor: default;
+      font-size: 13px;
+      font-weight: 400;
+      white-space: nowrap;
+      cursor: pointer;
     }
 
-    .sidebar-heading {
-      padding: 10px 13px 6px;
+    .sidebar-disclosure,
+    .sidebar > .sidebar-item {
+      background: #213147;
+      color: #9fb3ca;
+      font-family: "Segoe UI", Arial, sans-serif;
       font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
+      font-weight: 400;
+      letter-spacing: 0.3px;
       text-transform: uppercase;
-      color: #5b6b82;
-      background: rgba(223, 230, 240, 0.9);
-      border-bottom: 1px solid rgba(188, 197, 210, 0.55);
     }
+    .sidebar-disclosure::after { content: '\25B8'; margin-left: auto; }
+    .sidebar-disclosure[aria-expanded="true"]::after { content: '\25BE'; }
+    .sidebar-children > .sidebar-disclosure {
+      color: #fff;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: normal;
+      text-transform: none;
+    }
+    .sidebar-children { padding-left: 8px; }
+    .sidebar-children[hidden] { display: none; }
+    .sidebar-item:hover,
+    .sidebar-tool:hover,
+    .sidebar-disclosure:hover { background: #31465f; color: #fff; }
+    .sidebar :focus-visible { outline: 3px solid #a9d0ff; outline-offset: -3px; }
+    .nav-planned {
+      margin-left: auto;
+      padding: 2px 4px;
+      border: 1px solid #71859f;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+    }
+    .nav-toggle { display: none; }
 
     .sidebar-item.locked {
-      opacity: 0.5;
-      color: #5b6b82;
+      color: #a7b5c8;
     }
 
     .sidebar-item.active {
@@ -1061,6 +1198,12 @@
 
     .notice.visible { display: block; }
     #eventNameInput::placeholder { color: #8a94a3; font-style: italic; opacity: 1; }
+    .tournament-list-actions { justify-content: flex-end; margin-bottom: 16px; }
+    .tournament-form { width: 100%; max-width: none; }
+    .tournament-form .field-stack { max-width: 720px; }
+    .tournament-run-zone, .tournament-danger-zone { border-top: 1px solid #dce3ec; margin-top: 28px; padding-top: 16px; }
+    .tournament-danger-zone h3 { font-size: 15px; font-weight: 500; }
+    .tournament-name { background: none; border: 0; padding: 0; color: #2257b3; text-align: left; text-decoration: underline; }
     .notice.ok { border-color: rgba(10, 124, 0, 0.25); background: #f1fbf1; color: #166116; }
     .notice.warn { border-color: rgba(168, 109, 0, 0.25); background: #fff8eb; color: #8d5b00; }
     .notice.error { border-color: rgba(176, 0, 32, 0.25); background: #fff1f4; color: #8c0018; }
@@ -1068,14 +1211,10 @@
 
     .under-dev {
       display: grid;
-      gap: 10px;
-      justify-items: center;
-      text-align: center;
-      padding: 28px 24px;
-      border: 1px dashed rgba(124, 135, 151, 0.35);
-      border-radius: 18px;
-      background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(240, 244, 249, 0.95));
-      max-width: 520px;
+      gap: 6px;
+      justify-items: start;
+      text-align: left;
+      padding: 12px 0;
       width: 100%;
     }
 
@@ -1160,9 +1299,9 @@
 
     .under-dev h2 {
       margin: 0;
-      font-size: clamp(28px, 2.6vw, 40px);
-      letter-spacing: -0.04em;
-      line-height: 1;
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1.4;
       color: var(--text);
     }
 
@@ -1250,9 +1389,14 @@
       .content.group-builder #gbBanners,
       .content.group-builder #gdMembers { max-height: 65dvh; }
       .shell { padding: 12px; }
-      .content {
+      .content,
+      .content.details-hidden,
+      .content.competitor-lookup:not(.details-hidden) {
         grid-template-columns: 1fr;
       }
+      .nav-toggle { display: inline-flex; align-self: flex-start; }
+      .sidebar { position: static; max-height: 65dvh; }
+      .sidebar.mobile-closed { display: none; }
 
       .banner {
         align-items: flex-start;
@@ -1275,13 +1419,16 @@
     }
   </style>
   <link rel="stylesheet" href="/assets/help-tooltips.css">
+  <link rel="stylesheet" href="/assets/tournament-presentation.css">
   <script src="/assets/help-tooltips.js" defer></script>
   <script src="/assets/division-rules.js"></script>
 </head>
 <body>
   <main class="shell">
+    <p id="presentationNotice" role="alert" hidden></p>
     <section class="frame" aria-label="Tournament management shell">
       <header class="banner">
+        <button id="navToggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="primaryNavigation">Menu</button>
         <svg class="banner-icon" viewBox="0 0 24 24" role="img" aria-label="Globe">
           <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75" />
           <ellipse cx="12" cy="12" rx="4.5" ry="9" fill="none" stroke="currentColor" stroke-width="1.75" />
@@ -1300,115 +1447,135 @@
       </header>
 
       <div class="content" id="pageContent">
-        <aside class="sidebar" aria-label="Primary navigation">
-          <div class="sidebar-heading">Pre-Tournament</div>
-          <button class="sidebar-item active" type="button">
-            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5zM7 6h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/>
-            </svg>
-            Event Setup
-          </button>
-          <button class="sidebar-item" type="button">
-            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M12 3l5 5h-3.5v6h-3V8H7zM5 17h14v4H5z"/>
-            </svg>
-            Import
-          </button>
-          <button class="sidebar-item" type="button">
-            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M12 2l3 6 6 .9-4.3 4.2 1 6-5.7-3-5.7 3 1-6L3 8.9 9 8z"/>
-            </svg>
-            Group Builder
-          </button>
-          <div class="sidebar-heading">Day-Of</div>
-          <button class="sidebar-item" type="button">
-            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M12 2c2.3 0 4.2 1.9 4.2 4.2S14.3 10.4 12 10.4 7.8 8.5 7.8 6.2 9.7 2 12 2zm0 11c4.4 0 8 2.8 8 6.2V22H4v-2.8C4 15.8 7.6 13 12 13z"/>
-            </svg>
-            Ring Assignment
-          </button>
-          <button class="sidebar-item" type="button">
-            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M5 3h14a2 2 0 0 1 2 2v4H3V5a2 2 0 0 1 2-2zm-2 8h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8zm5 2v4h8v-4z"/>
-            </svg>
-            Head Table
-          </button>
-          <button class="sidebar-item" type="button">
-            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm-7 17v-1.2c0-3.4 3.1-6.1 7-6.1s7 2.7 7 6.1V20z"/>
-            </svg>
-            Competitors
-          </button>
-          <button class="sidebar-item" type="button">
-            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M12 2l3 6 6 .9-4.3 4.2 1 6-5.7-3-5.7 3 1-6L3 8.9 9 8z"/>
-            </svg>
-            Judges &amp; Volunteers
-          </button>
-          <button class="sidebar-item" type="button">
-            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="currentColor" d="M4 4h16v4H4zm0 6h10v4H4zm0 6h16v4H4z"/>
-            </svg>
-            Reports &amp; Results
-          </button>
-          <button class="sidebar-item" type="button" onclick="window.location.href='/admin/'">
-            Admin
-          </button>
-          <button class="sidebar-item" type="button" onclick="window.location.href='/simulator/'">
-            Simulator
-          </button>
-        </aside>
+        <nav class="sidebar mobile-closed" id="primaryNavigation" aria-label="Primary navigation">
+          <button id="navTournament" class="sidebar-disclosure" type="button" data-nav-group="tournament" aria-expanded="true" aria-controls="navTournamentChildren">Tournament Management</button>
+          <div id="navTournamentChildren" class="sidebar-children">
+            <button class="sidebar-item" type="button" data-nav-id="event-setup" data-nav-label="Tournament" data-nav-parents="tournament">Tournament</button>
+            <button class="sidebar-item" type="button" data-nav-id="competitors" data-nav-label="Competitors" data-nav-parents="tournament">Competitors</button>
+            <button class="sidebar-item" type="button" data-nav-id="groups" data-nav-label="Divisions" data-nav-parents="tournament">Divisions</button>
+            <button class="sidebar-item" type="button" data-nav-id="results" data-nav-label="Results" data-nav-parents="tournament">Results</button>
+            <button id="navVolunteers" class="sidebar-disclosure" type="button" data-nav-group="volunteer-management" aria-expanded="false" aria-controls="navVolunteerChildren">Volunteer Management</button>
+            <div class="sidebar-children" id="navVolunteerChildren" hidden>
+              <button class="sidebar-item" type="button" data-nav-id="volunteers" data-nav-label="Volunteers" data-nav-parents="tournament volunteer-management">Volunteers</button>
+              <button class="sidebar-item" type="button" data-nav-id="volunteer-types" data-nav-label="Volunteer Types" data-nav-parents="tournament volunteer-management">Volunteer Types</button>
+            </div>
+            <button id="navCompetitionSettings" class="sidebar-disclosure" type="button" data-nav-group="competition-settings" aria-expanded="false" aria-controls="navCompetitionSettingsChildren">Competition Settings</button>
+            <div id="navCompetitionSettingsChildren" class="sidebar-children" hidden>
+              <button class="sidebar-item" type="button" data-nav-id="competition-types" data-nav-label="Competition Types" data-nav-parents="tournament competition-settings">Competition Types</button>
+              <button class="sidebar-item" type="button" data-nav-id="grand-champion-categories" data-nav-label="Grand Champion Categories" data-nav-parents="tournament competition-settings">Grand Champion Categories</button>
+              <button class="sidebar-item" type="button" data-nav-id="medal-points" data-nav-label="Medal Points" data-nav-parents="tournament competition-settings">Medal Points</button>
+            </div>
+            <button id="navTeams" class="sidebar-disclosure" type="button" data-nav-group="teams" aria-expanded="false" aria-controls="navTeamsChildren">Team Management</button>
+            <div id="navTeamsChildren" class="sidebar-children" hidden>
+              <button class="sidebar-item" type="button" data-nav-id="team-management" data-nav-label="Teams" data-nav-parents="tournament teams">Teams</button>
+              <button class="sidebar-item" type="button" data-nav-id="team-settings" data-nav-label="Settings" data-nav-parents="tournament teams">Settings</button>
+            </div>
+            <button id="navRings" class="sidebar-disclosure" type="button" data-nav-group="rings" aria-expanded="false" aria-controls="navRingsChildren">Ring Management</button>
+            <div id="navRingsChildren" class="sidebar-children" hidden>
+              <button class="sidebar-item" type="button" data-nav-id="ring-judges" data-nav-label="Ring Judges" data-nav-parents="tournament rings">Ring Judges</button>
+              <button class="sidebar-item" type="button" data-nav-id="judge-assignments" data-nav-label="Judge Assignments" data-nav-parents="tournament rings" data-nav-planned="true">Judge Assignments <span class="nav-planned">Planned</span></button>
+              <button class="sidebar-item" type="button" data-nav-id="ring-assignment" data-nav-label="Division Assignments" data-nav-parents="tournament rings">Division Assignments</button>
+              <button class="sidebar-item" type="button" data-nav-id="head-table" data-nav-label="Head Table" data-nav-parents="tournament rings">Head Table</button>
+            </div>
+            <button class="sidebar-item" type="button" data-nav-id="printing" data-nav-label="Printing" data-nav-parents="tournament" data-nav-planned="true">Printing <span class="nav-planned">Planned</span></button>
+            <button class="sidebar-item" type="button" data-nav-id="csv-settings" data-nav-label="CSV Settings" data-nav-parents="tournament" data-nav-planned="true">CSV Settings <span class="nav-planned">Planned</span></button>
+          </div>
+          <button class="sidebar-item" type="button" data-nav-id="judge-management" data-nav-label="Judge Management" data-nav-planned="true">Judge Management <span class="nav-planned">Planned</span></button>
+          <button class="sidebar-item" type="button" data-nav-id="clinic-management" data-nav-label="Clinic Management" data-nav-planned="true">Clinic Management <span class="nav-planned">Planned</span></button>
+          <button class="sidebar-item" type="button" data-nav-id="event-history" data-nav-label="Event History" data-nav-planned="true">Event History <span class="nav-planned">Planned</span></button>
+          <button id="navAdministration" class="sidebar-disclosure" type="button" data-nav-group="administration" aria-expanded="false" aria-controls="navAdministrationChildren">Administration</button>
+          <div id="navAdministrationChildren" class="sidebar-children" hidden>
+            <button class="sidebar-item" type="button" data-nav-id="schools" data-nav-label="Schools" data-nav-parents="administration">Schools</button>
+            <button class="sidebar-item" type="button" data-nav-id="ranks" data-nav-label="Ranks" data-nav-parents="administration">Ranks</button>
+            <button class="sidebar-item" type="button" data-nav-id="visual-definitions" data-nav-label="Visual Definitions" data-nav-parents="administration">Visual Definitions</button>
+            <button class="sidebar-item" type="button" data-nav-id="server-maintenance" data-nav-label="Server Maintenance" data-nav-parents="administration">Server Maintenance</button>
+            <button class="sidebar-item" type="button" data-nav-id="simulator" data-nav-label="Simulator" data-nav-parents="administration">Simulator</button>
+          </div>
+          <button class="sidebar-item" type="button" data-nav-id="your-account" data-nav-label="Your Account" data-nav-planned="true">Your Account <span class="nav-planned">Planned</span></button>
+        </nav>
 
-        <section class="workspace" aria-label="Event setup workspace">
+        <section class="workspace" id="workspacePanel" aria-label="Tournament workspace">
           <div class="workspace-head" data-help-root>
-            <h1 id="workspaceTitle" aria-live="polite">Event Setup</h1>
+            <h1 id="workspaceTitle" tabindex="-1" aria-live="polite">Tournaments</h1>
             <p id="workspaceSubtitle" data-help-source="Overview" data-help-for="*">Manage the event that downstream tournament pages will use.</p>
           </div>
+          <div class="tournament-reference" id="tournamentReference" aria-live="polite" hidden>
+            <label id="tournamentReferenceLabel" for="tournamentReferenceSelect">Tournament</label>
+            <select id="tournamentReferenceSelect" aria-label="Tournament for this page"></select>
+          </div>
           <div class="workspace-body">
-            <div class="view" id="eventSetupView" data-help-page="event-setup" data-help-title="Event Setup">
-            <div class="overview">
-              <span class="chip">Active Event: <strong id="activeEventChip">No event selected</strong></span>
-              <span class="chip">Selected Event: <strong id="selectedEventChip">None selected</strong></span>
-            </div>
-
-            <section class="workflow-panel" aria-label="Event setup workflow">
-              <div class="workflow-head">
-                <h2 id="eventWorkflowTitle">Create, Select, Modify, Delete</h2>
-                <p data-help-source="Event setup">Choose an existing event or enter a new name. Create or Modify saves event details without activating the event. Activate Event explicitly selects the event used by day-of pages. Preparation selection and active event are separate.</p>
+            <div class="notice" id="notice" aria-live="polite"></div>
+            <div class="view" id="eventSetupView" data-help-page="event-setup" data-help-title="Tournament (Event Setup)">
+            <section id="tournamentList" aria-label="Tournaments">
+              <div class="button-row tournament-list-actions">
+                <button class="primary" id="createEventBtn" type="button" data-help="Open the workspace form for a new tournament. Saving does not activate it.">Create Tournament</button>
               </div>
-              <div class="workflow-body">
-                <div class="field-stack">
-                  <label for="eventSelect">Event Name</label>
-                  <select id="eventSelect"></select>
-                  <input id="eventNameInput" type="text" placeholder="Enter new event name" autocomplete="off" aria-label="New event name" hidden>
-                </div>
-
-                <div class="button-cluster">
-                  <div class="button-cluster-label">Primary Actions</div>
-                  <div class="button-row">
-                    <button class="primary" id="createEventBtn" type="button" data-help="Open details for a new event. Save the details to create it.">Create Event</button>
-                    <button id="modifyEventBtn" type="button" data-help="Open the selected event's saved details for editing.">Modify Event</button>
-                    <button id="activateEventBtn" type="button" title="Make this the active event for all day-of pages. Selecting or editing an event alone does not activate it.">Activate Event</button>
-                  </div>
-                </div>
-
-                <div class="button-cluster">
-                  <div class="button-cluster-label">Next Step</div>
-                  <div class="button-row">
-                    <button class="next-action" id="goToImportBtn" type="button" data-help="Open registration import for the selected saved event.">Next: Import Registration</button>
-                  </div>
-                </div>
-
-                <div class="button-cluster">
-                  <div class="button-cluster-label">Secondary Actions</div>
-                  <div class="button-row">
-                    <button class="danger" id="deleteEventBtn" type="button" data-help="Delete the selected event after confirmation.">Delete Event</button>
-                    <button id="resetEventBtn" type="button" title="Discard unsaved form edits and reload the selected event. Does not reset ring assignments.">Discard edits</button>
-                    <button id="resetRunBtn" type="button" title="Archive results and return to preparation, preserving competitors, divisions, and event settings.">Reset run / Return to preparation</button>
-                  </div>
-                </div>
-
-                <div class="notice" id="notice" aria-live="polite"></div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Name</th><th>Location</th><th>Date</th><th>Format</th><th>Scope</th><th>Status</th></tr></thead>
+                  <tbody id="tournamentListBody"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="metadata-panel tournament-form" id="metadataPanel" aria-label="Tournament settings" hidden>
+              <h2 id="metadataTitle">Edit Tournament</h2>
+              <p data-help-source="Event details" data-help-for="event-setup">Save saves settings without activating the tournament. All settings lock after operational use begins, including while paused. Reset run archives results and unlocks settings without losing competitors or divisions.</p>
+              <div class="field-stack">
+                <label for="eventNameInput">Name</label>
+                <input id="eventNameInput" type="text" autocomplete="off" required>
+                <p id="eventNameHelp" class="help-text"></p>
+              </div>
+              <div class="field-stack">
+                <label for="locationInput">Location</label>
+                <input id="locationInput" type="text">
+              </div>
+              <div class="field-stack">
+                <label for="dateInput">Date</label>
+                <input id="dateInput" type="date">
+              </div>
+              <div class="field-stack">
+                <label for="tournamentDaysInput">Format</label>
+                <select id="tournamentDaysInput" aria-describedby="tournamentDaysHint">
+                  <option value="1">One day - all divisions in one continuous event</option>
+                  <option value="2">Two days - Day 1: Black Belt; Day 2: TT/SD/Gup</option>
+                </select>
+                <p id="tournamentDaysHint" class="event-format-hint"></p>
+              </div>
+              <div class="field-stack">
+                <label for="scopeInput">Scope</label>
+                <select id="scopeInput">
+                  <option value="">Unspecified</option>
+                  <option value="regional">Regional</option>
+                  <option value="national">National</option>
+                  <option value="world">World</option>
+                  <option value="in-house">In-House</option>
+                </select>
+              </div>
+              <div class="field-stack">
+                <label for="ringConfigXInput">Ring columns (Letters)</label>
+                <input id="ringConfigXInput" type="number" min="0" max="26" step="1" inputmode="numeric" placeholder="0">
+              </div>
+              <div class="field-stack">
+                <label for="ringConfigYInput">Ring rows (Numbers)</label>
+                <input id="ringConfigYInput" type="number" min="0" max="50" step="1" inputmode="numeric" placeholder="0">
+              </div>
+              <output id="ringCountSummary" aria-live="polite"></output>
+              <p id="eventConfigurationHelp" class="help-text"></p>
+              <div class="button-row">
+                <button class="primary" id="saveMetadataBtn" type="button" data-help="Save tournament settings; operational rings synchronize before operational use begins.">Save</button>
+                <button id="resetEventBtn" type="button" data-help="Return to the list, confirming before discarding unsaved edits.">Cancel / Back</button>
+              </div>
+              <div id="tournamentSavedActions">
+                <section class="tournament-run-zone" aria-label="Reset run">
+                  <h3>Return to preparation</h3>
+                  <p>Archive results and ring state first, then clear assignments, queues, connections and progress. Competitors, divisions and settings are preserved. Stop all tablet activity before resetting.</p>
+                  <button id="resetRunBtn" type="button" data-help="Stop tablet activity, archive results and ring state, then return to preparation while preserving competitors, divisions and settings.">Reset run / Return to preparation</button>
+                </section>
+                <section class="tournament-danger-zone" aria-label="Danger zone">
+                  <h3>Delete tournament</h3>
+                  <p>Permanently remove this tournament folder and its data. This cannot be undone.</p>
+                  <button class="danger" id="deleteEventBtn" type="button" data-help="Permanently delete this named tournament after confirmation.">Delete Tournament</button>
+                </section>
               </div>
             </section>
             </div>
@@ -1435,14 +1602,14 @@
                   <div class="button-row">
                     <button id="importBtn" type="button" data-help="Import the chosen CSV file or pasted CSV into the selected event. Replacing a saved roster requires confirmation." disabled>Import CSV</button>
                     <button id="clearImportBtn" type="button" title="Clear pending CSV input and return to the saved roster. Saved competitors are not deleted.">Clear</button>
-                    <button id="importNextBtn" type="button" data-help="Continue to Group Builder using the saved competitor roster. Import or clear any pending CSV input first." disabled>Next: Build Groups</button>
+                    <button id="importNextBtn" type="button" data-help="Continue to Divisions using the saved competitor roster. Import or clear any pending CSV input first." disabled>Next: Build Divisions</button>
                   </div>
                   <div class="notice" id="importNotice" aria-live="polite"></div>
                 </div>
               </section>
             </div>
 
-            <div class="view" id="groupsView" data-help-page="groups" data-help-title="Group Builder" hidden>
+            <div class="view" id="groupsView" data-help-page="groups" data-help-title="Divisions (Group Builder)" hidden>
               <section class="workflow-panel" aria-label="Group builder">
                 <div class="workflow-head">
                   <h2 id="groupsWorkflowTitle">Groups</h2>
@@ -1457,7 +1624,7 @@
                     <button class="primary" id="gbBuildBtn" type="button" title="Build groups from the selected event's roster using the chosen maximum size. Review and save separately.">Build Groups</button>
                     <button id="gbAddBtn" type="button" data-help="Add an empty group to arrange competitors manually. Save your changes separately.">+ Add Group</button>
                     <button id="gbSaveBtn" type="button" data-help="Save the reviewed groups for this event. Day-of pages use saved groups, not unsaved drafts.">Save &amp; Finish Setup</button>
-                    <button class="primary" id="gbDoneBtn" type="button" data-help="Return to Event Setup to activate this event. This button does not activate it automatically." hidden>Go to Event Setup to Activate</button>
+                    <button class="primary" id="gbDoneBtn" type="button" data-help="Open Division Assignments and use its Active Tournament selector to switch live operations after confirmation. This button does not activate automatically." hidden>Go to Division Assignments</button>
                   </div>
                   <div class="notice" id="gbNotice" aria-live="polite"></div>
                   <div class="gb-banners" id="gbBanners"></div>
@@ -1465,10 +1632,10 @@
               </section>
             </div>
 
-            <div class="view" id="ringAssignmentView" data-help-page="ring-assignment" data-help-title="Ring Assignment" hidden>
+            <div class="view" id="ringAssignmentView" data-help-page="ring-assignment" data-help-title="Division Assignments (Ring Assignment)" hidden>
               <div class="overview">
                 <label for="raSourceRun">View</label>
-                <select id="raSourceRun" aria-label="Ring Assignment data source"><option value="">Active event</option></select>
+                <select id="raSourceRun" aria-label="Division Assignments data source"><option value="">Active event</option></select>
                 <span class="chip">Active Event: <strong id="raEvent">No active event</strong></span>
                 <button id="raRefreshBtn" type="button" data-help="Reload the active event's saved divisions and current ring assignments.">Refresh</button>
               </div>
@@ -1504,7 +1671,7 @@
                 <button type="button" id="htRefreshBtn" data-help="Reload ring progress and summary counts for the selected data source.">Refresh</button>
                 <label for="htOrder">Display order</label>
                 <select id="htOrder"><option value="priority">Priority</option><option value="ring">Ring order</option></select>
-                <button type="button" id="htAssignmentBtn" data-help="Open Ring Assignment to manage queues and ring assignments.">Open Ring Assignment</button>
+                <button type="button" id="htAssignmentBtn" data-help="Open Division Assignments to manage queues and ring assignments.">Open Division Assignments</button>
                 <a id="htAudienceMonitorLink" href="/audience-monitor/" target="_blank" rel="noopener" data-help="Open the standalone read-only audience display in a new tab.">Audience Monitor</a>
               </div>
               <div id="htSimulationNotice" class="notice" role="status" aria-live="polite" hidden></div>
@@ -1514,52 +1681,201 @@
               <div id="htEventTiming" class="event-timing" aria-label="Event timing"></div>
               <div id="htEstimateSummary" class="estimate-summary" role="status"></div>
               <p data-help-source="Ring progression and status">Select a ring for details. Green phases are complete, blue fills the active phase, and neutral phases are upcoming. Queued previews are unfilled. Weapons appears only when applicable. Connection badges use green for connected, red for disconnected, and gray for no tablet. A red exclamation mark indicates assistance. Missing timing does not imply a delay. Counts are status indicators, not filters.</p>
-              <p data-help-source="Ring details and assistance">Ring Details shows timing, the queue, competitors, and expandable phase history. Competitor lists scroll after ten rows. Clear assistance only after the request has been addressed; confirmation is required. Clearing is not a separate acknowledgement and is disabled when data is stale. Use Ring Assignment for queue editing or ring reset.</p>
+              <p data-help-source="Ring details and assistance">Ring Details shows timing, the queue, competitors, and expandable phase history. Competitor lists scroll after ten rows. Clear assistance only after the request has been addressed; confirmation is required. Clearing is not a separate acknowledgement and is disabled when data is stale. Use Division Assignments for queue editing or ring reset.</p>
               <p data-help-source="Planning estimates">Select a ring for approximate current completion, queued starts, and availability after the queue. These are not call times. Seven minutes per saved competitor is a total planning baseline assuming everyone competes in all applicable disciplines, not a learned average or per-discipline calculation; equal applicable-phase shares and slower observed pace adjust remaining work. Empty configured rings without connected tablets contribute planning-only availability, not operational readiness. Rings with current or queued work still require a connected tablet. Two-minute transitions assume staff start queued work promptly without unreported breaks. Windows widen through the queue, are low confidence, and expire after 30 seconds. Assistance, missing rosters, or unknown phase progress block affected predictions.</p>
               <p class="ra-meta" id="htOrderHint" data-help-source="Display order">Priority highlights assistance, connection problems, and rings needing work. Select a ring for details.</p>
               <div id="htRings" class="ht-rings" aria-label="Ring operations overview"></div>
             </div>
 
             <div class="view" id="competitorLookupView" data-help-page="competitors" data-help-title="Competitor Lookup" hidden>
-              <div class="cl-toolbar">
-                <label class="cl-search-field"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"></circle><path d="m15 15 5 5"></path></svg>
-                  <input id="clSearch" type="search" autocomplete="off" aria-label="Search competitors by name or rank" placeholder="Name or rank; commas for multiple" aria-describedby="clStatus">
+              <div class="cl-page-head">
+                <p>Saved competitor roster for the selected tournament.</p>
+                <button id="clImportBtn" class="cl-primary" type="button" data-help="Open Import for the currently selected tournament.">Import Competitors</button>
+              </div>
+              <form id="clToolbar" class="cl-toolbar" aria-label="Filter competitors">
+                <label class="cl-search-field">Search
+                  <input id="clSearch" type="search" autocomplete="off" placeholder="Name or TSD ID" aria-describedby="clStatus">
                 </label>
-                <button id="clSearchBtn" class="cl-primary" type="button" data-help="Run the current name/rank search. Comma-separated terms match with OR.">Search</button>
-                <button id="clFiltersBtn" type="button" aria-expanded="false" aria-controls="clFilters" data-help="Show or hide advanced filters without changing the current results.">Filters</button>
-                <button id="clRefreshBtn" type="button" data-help="Reload saved competitors and ring assignments for the active event.">Refresh</button>
-                <span id="clResultCount"></span>
-              </div>
-              <div id="clFilters" class="cl-filters" hidden>
-                <div class="cl-filter-grid">
-                  <label>Name<input id="clFilterName" type="text" autocomplete="off"></label>
-                  <label>Rank<select id="clFilterRank"><option value="">All ranks</option></select></label>
-                  <label>Studio<select id="clFilterStudio"><option value="">All studios</option></select></label>
-                  <label>Division<select id="clFilterDivision"><option value="">All divisions</option></select></label>
-                  <label>Ring<select id="clFilterRing"><option value="">All rings</option></select></label>
-                </div>
-                <div class="cl-filter-actions">
-                  <label><input id="clFilterUnassigned" type="checkbox"> Show only unassigned</label>
-                  <button id="clClearFiltersBtn" type="button" data-help="Clear advanced filters without clearing the search text.">Clear filters</button>
-                  <button id="clApplyFiltersBtn" class="cl-primary" type="button" data-help="Apply all advanced filters to the current search results.">Apply filters</button>
-                </div>
-              </div>
+                <label>School/Studio<select id="clFilterStudio"><option value="">All</option></select></label>
+                <label>Gender<select id="clFilterGender"><option value="">All</option></select></label>
+                <label class="cl-age-field">Min Age<input id="clFilterAgeMin" type="number" min="0" max="120" inputmode="numeric"></label>
+                <label class="cl-age-field">Max Age<input id="clFilterAgeMax" type="number" min="0" max="120" inputmode="numeric"></label>
+                <label class="cl-page-size">Per page<select id="clPageSize"><option>25</option><option>50</option><option>100</option><option selected>250</option></select></label>
+                <button id="clApplyFiltersBtn" class="cl-primary" type="submit" data-help="Apply search, school/studio, gender, and age together. Enter also applies these filters.">Filter</button>
+              </form>
               <p id="clStatus" role="status" aria-live="polite"></p>
               <div id="clNotice" class="notice" role="status" aria-live="polite"></div>
-              <p data-help-source="Finding a competitor">Enter at least two characters of a first name, last name, or rank. Separate multiple terms with commas: Anna, G1 finds anyone matching Anna OR G1, not only people matching both. Spaces around terms and duplicate terms are ignored; terms shorter than two characters are ignored. Matching is case-insensitive and literal; all matching saved competitors for the active event appear once with matching text highlighted. Search updates as you type; Search or Enter also runs it. Studio, parent, and phone are not search fields. Use advanced filters for studio, division, or ring rather than typing Crescent D2 or Division 76 into the name/rank search. Select a competitor name to open complete details. Click the Competitor heading to reverse name order.</p>
-              <p data-help-source="Advanced filters">Filters opens a compact optional panel. Apply filters combines name, rank, studio, division, ring, and unassigned conditions with AND, within the comma-separated OR search results. A blank search with applied filters searches the saved roster using those filters alone; a nonempty search still needs a two-character term. Name matches the full name as a literal substring. Show only unassigned means no identifiable current, queued, or completed ring assignment; unknown ring data is not treated as unassigned. Clear filters restores the existing name/rank search. Closing Filters hides the controls but preserves applied filters. Options come from the active event. All matches are displayed without pagination; the footer reports actual counts.</p>
-              <p data-help-source="Details and assignments">Details show first name, last name, parent name, phone, rank, studio, saved group division, and identifiable ring. Current and queued assignments are distinguished from completed ring history; conflicting assignments are marked ambiguous rather than guessed. Missing registration fields say Not provided. Refreshes occur every ten seconds. Failed refreshes clear old personal details; if only ring data fails, registration remains searchable with ring assignments explicitly unavailable. This staff lookup is not part of the public Audience Monitor and provides no editing actions.</p>
-              <div class="cl-table-wrap">
-                <table class="cl-table" aria-label="Matching competitors">
-                  <colgroup><col><col><col><col><col></colgroup>
+              <p data-help-source="Competitor roster">Browse the selected tournament's saved roster, 250 per page by default. Filter or Enter applies search and school/studio, gender, and age together. Comma-separated search terms match names, association/TSD ID, or rank with OR; terms shorter than two characters are ignored. Per page changes immediately. Pagination follows filtering and surname sorting. Saved division links open Divisions for this same tournament, not unsaved drafts. The roster refreshes every ten seconds.</p>
+              <p data-help-source="Competitor details">Select a competitor name to inspect registration details. This directory does not edit registrations; use Import Competitors to replace the saved roster.</p>
+              <div class="cl-results-bar">
+                <span id="clResultCount" role="status" aria-live="polite"></span>
+                <nav id="clPagination" aria-label="Competitor results pages"></nav>
+                <button id="clRefreshBtn" type="button" data-help="Reload the selected tournament's saved competitors and divisions, retaining a valid page.">Refresh</button>
+              </div>
+              <div id="clTableWrap" class="cl-table-wrap">
+                <table class="cl-table" aria-label="Competitors in the selected tournament">
+                  <colgroup><col><col><col><col><col><col><col></colgroup>
                   <thead><tr>
-                    <th scope="col" id="clNameHeading" aria-sort="ascending"><button id="clSortName" class="cl-sort" type="button" data-help="Reverse the last-name, first-name result order.">Competitor <span id="clSortIndicator" aria-hidden="true">&#8593;</span></button></th>
-                    <th scope="col">Rank</th><th scope="col">Studio</th><th scope="col">Division</th><th scope="col">Ring</th>
+                    <th scope="col">TSD ID</th>
+                    <th scope="col" id="clNameHeading" aria-sort="ascending"><button id="clSortName" class="cl-sort" type="button" data-help="Reverse competitor surname order.">Competitor <span id="clSortIndicator" aria-hidden="true">&#8593;</span></button></th>
+                    <th scope="col">Age</th><th scope="col">Gender</th><th scope="col">Rank</th><th scope="col">Studio / School</th><th scope="col">Division</th>
                   </tr></thead>
                   <tbody id="clResults"></tbody>
                 </table>
               </div>
-              <div id="clResultsFooter" class="cl-footer" role="status"></div>
+            </div>
+            <div class="view" id="teamsView" data-help-page="teams" data-help-title="Teams" hidden>
+              <p id="tmLock" role="status"></p>
+              <p id="tmNotice" role="status" aria-live="polite"></p>
+              <div id="tmList">
+                <div class="actions"><button id="tmAdd" type="button" data-help="Create a manual team using registered competitors from the selected tournament.">Add Team</button> <button id="tmRefresh" type="button" data-help="Reload this tournament's teams, roster and lock state when there are no unsaved changes.">Refresh</button> <button type="button" disabled>Auto-build Teams</button> <button type="button" disabled>Unassigned Competitors</button></div>
+                <p class="ra-meta">Auto-build and Unassigned Competitors are not available in this delivery. Division assignment is deferred. Select a team name to edit.</p>
+                <p data-help-source="Manual team management">Create and edit teams using registered competitors in the selected tournament. Auto-build and Unassigned Competitors workflows and team division assignments are deferred.</p>
+                <div class="table-wrap"><table><thead><tr><th>Name</th><th>Type</th><th>Gender</th><th>Captain</th><th>Members</th><th>Division</th></tr></thead><tbody id="tmTeamsBody"></tbody></table></div>
+              </div>
+              <form id="tmForm" hidden>
+                <h2 id="tmFormTitle">Add Team</h2>
+                <label>Team name <input id="tmName" maxlength="100" required></label>
+                <label>Type <select id="tmDiscipline"><option value="TS">Team Sparring</option><option value="TH">Team Hyung</option></select></label>
+                <p data-help-source="Team rules">Choose any registered competitors in this tournament. Mixed studios, ages and ranks are allowed. Each competitor can belong to one team per discipline, and may compete in both. Captain is automatic: highest rank, then oldest age, then lowest competitor ID. Unknown ranks, genders or invalid ages must be corrected in the roster.</p>
+                <p id="tmSelected" aria-live="polite"></p><p id="tmCaptain" aria-live="polite"></p>
+                <label>Search registered competitors <input id="tmSearch" type="search" placeholder="Name, ID, age, gender, rank or studio"></label>
+                <div class="table-wrap"><table><thead><tr><th>Select</th><th>Name</th><th>ID</th><th>Age</th><th>Gender</th><th>Rank</th><th>Studio</th></tr></thead><tbody id="tmRosterBody"></tbody></table></div>
+                <div class="actions"><button id="tmPrev" type="button">Previous</button> <span id="tmPage"></span> <button id="tmNext" type="button">Next</button></div>
+                <div class="actions"><button id="tmSave" type="submit" data-help="Validate and save the team atomically; its captain is chosen automatically.">Save Team</button> <button id="tmCancel" type="button" data-help="Return to Teams, confirming before discarding unsaved changes.">Cancel / Back</button></div>
+                <fieldset id="tmDanger" hidden><legend>Danger zone</legend><p>Deleting a team keeps its members registered.</p><button id="tmDelete" type="button" class="danger" data-help="Delete only this team after confirmation, keeping all competitors registered.">Delete Team</button></fieldset>
+              </form>
+            </div>
+            <div class="view" id="teamSettingsView" data-help-page="team-settings" data-help-title="Team Settings" hidden>
+              <h2>Team Management Settings</h2>
+              <p class="tm-settings-intro">These rules are enforced when manually creating or editing a team.</p>
+              <p id="tmSettingsLock" role="status"></p><p id="tmSettingsNotice" role="status" aria-live="polite"></p>
+              <form id="tmSettingsForm" class="tm-settings-card">
+                <h3>Team Sparring</h3>
+                <label>Gender <select id="tmPolicy"><option value="single">Separate (teams must be a single gender)</option><option value="mixed">Mixed (single or mixed gender teams allowed)</option></select></label>
+                <label class="tm-size-label">Team Size <input id="tmSize" type="number" min="1" max="50" step="1" value="3" required></label>
+                <button id="tmSettingsSave" type="submit" data-help="Save Team Sparring rules only; changes that invalidate existing teams are rejected.">Save</button>
+              </form>
+              <form id="tmHyungSettingsForm" class="tm-settings-card">
+                <h3>Team Hyung</h3>
+                <label>Gender <select id="tmHyungPolicy"><option value="single">Separate (teams must be a single gender)</option><option value="mixed">Mixed (single or mixed gender teams allowed)</option></select></label>
+                <label class="tm-size-label">Team Size <input id="tmHyungSize" type="number" min="1" max="50" step="1" value="3" required></label>
+                <button id="tmHyungSettingsSave" type="submit" data-help="Save Team Hyung rules only; changes that invalidate existing teams are rejected.">Save</button>
+              </form>
+                <p data-help-source="Tournament-specific settings">Save separate team size and gender policy for Team Sparring and Team Hyung. Settings changes must keep all existing teams valid. Operational use locks writes until Reset Run; resetting preserves teams and settings.</p>
+            </div>
+            <div class="view" id="visualDefinitionsView" data-help-page="visual-definitions" data-help-title="Visual Definitions" hidden>
+              <p>Typography, style and dimensions are used by Tournament Management and its integrated pages on refresh. Colors are reference-only and are not applied to existing screens. The preview below updates as you edit.</p>
+              <p id="vdNotice" role="status" aria-live="polite"></p>
+              <form id="vdForm">
+                <div id="vdFields"></div>
+                <div class="actions">
+                  <button id="vdSave" type="submit" data-help="Save definitions. Refresh Tournament Management to apply typography, style and dimensions; existing colors are preserved.">Save Definitions</button>
+                  <button id="vdReload" type="button" data-help="Reload saved definitions, confirming before discarding edits.">Reload Saved</button>
+                  <button id="vdDefaults" type="button" data-help="Load the starting reference values into this draft; save explicitly to persist them.">Starting Values</button>
+                  <span id="vdDirty" role="status"></span>
+                </div>
+              </form>
+              <p data-help-source="Visual definitions adoption">Definitions are server-wide, not tournament-specific. Typography, style and dimensions apply to the integrated Tournament Management interface on refresh, not standalone tools or tablets. Colors remain reference-only. Draft preview changes are contained in a sandboxed frame.</p>
+              <strong>Preview — not the live application</strong>
+              <p id="vdPreviewError" role="alert"></p>
+              <iframe id="vdPreview" title="Visual definition preview" sandbox="" hidden></iframe>
+            </div>
+            <div class="view" id="schoolsView" data-help-page="schools" data-help-title="Schools" hidden>
+              <div class="actions"><button id="addSchool" type="button" data-help="Add a school to the server-wide directory.">Add School</button></div>
+              <p id="schoolsNotice" role="status" aria-live="polite"></p>
+              <div class="table-wrap"><table aria-label="Schools"><thead><tr><th><input id="schoolsSelectAll" type="checkbox" aria-label="Select all schools"></th><th>School Name</th><th>Alternate Names</th><th>Chief Instructor</th><th>Archived</th></tr></thead><tbody id="schoolsBody"></tbody></table></div>
+              <div class="actions"><button id="deleteSchools" type="button" disabled data-help="Permanently delete selected directory schools after confirmation; competitor registrations remain unchanged.">Delete selected</button></div>
+              <p data-help-source="School directory">Select a school name to edit it. Schools are shared across tournaments. Alternate names are semicolon-separated reference values; automatic import matching is not enabled yet. Archiving or deleting directory entries does not modify existing registrations or their stored school names.</p>
+              <dialog id="schoolDialog" aria-labelledby="schoolDialogTitle">
+                <h2 id="schoolDialogTitle">Add School</h2>
+                <form id="schoolForm">
+                  <label>School Name<input id="schoolName" maxlength="200" required></label>
+                  <label>Alternate Names<input id="schoolAlternateNames" maxlength="1000" aria-describedby="schoolAliasHelp"></label>
+                  <p id="schoolAliasHelp">Semicolon-separated additional names. Stored for reference; import matching is not yet enabled.</p>
+                  <label>Chief Instructor<input id="schoolInstructor" maxlength="200"></label>
+                  <label class="school-archive"><input id="schoolArchived" type="checkbox">Archived</label>
+                  <p id="schoolError" role="alert"></p>
+                  <div class="actions"><button id="schoolSave" type="submit" data-help="Save this school without changing competitor registrations.">Save</button><button id="schoolCancel" type="button" data-help="Close the overlay, confirming before discarding edits.">Cancel</button></div>
+                </form>
+              </dialog>
+            </div>
+            <div class="view" id="ranksView" data-help-page="ranks" data-help-title="Ranks" hidden>
+              <div class="actions"><button id="addRank" type="button" data-help="Add a reference rank without changing live rank normalization.">Add Rank</button></div>
+              <p id="ranksNotice" role="status" aria-live="polite"></p>
+              <div class="table-wrap"><table aria-label="Rank directory"><thead><tr><th><input id="ranksSelectAll" type="checkbox" aria-label="Select all reference ranks"></th><th>Rank Name</th><th>Code</th><th>Belt</th><th>Alternate Names</th><th>Sort Weight</th></tr></thead><tbody id="ranksBody"></tbody></table></div>
+              <div class="actions"><button id="deleteRanks" type="button" disabled data-help="Delete selected reference entries after confirmation; existing competitors and rank rules are unaffected.">Delete selected</button></div>
+              <p data-help-source="Reference rank directory">Higher sort weights display first, from beginner categories to senior titles. Weights affect only this directory's display order, not scoring or captain selection. TTLD is the combined Tiny Tigers / Little Dragons category; SD follows it. TT and LD are separate reference entries. Gx means Gup number; Dx means Dan number. Several titles can share a Dan code. Blank codes indicate titles whose numeric level has not been defined. Adding TT, LD or SD here does not enable new import or grouping behavior.</p>
+              <dialog id="rankDialog" aria-labelledby="rankDialogTitle">
+                <h2 id="rankDialogTitle">Add Rank</h2>
+                <form id="rankForm">
+                  <label>Rank Name<input id="rank-name" maxlength="200" required></label>
+                  <label>Abbreviated Code<input id="rank-code" maxlength="10" aria-describedby="rankCodeHelp"></label>
+                  <p id="rankCodeHelp">TTLD, TT, LD, SD, CDB, G1-G10 or D1-D10. Leave blank for a title without a defined numeric level. Codes may be shared by titles.</p>
+                  <label>Belt<input id="rank-belt" maxlength="200"></label>
+                  <label>Alternate Names<input id="rank-alternateNames" maxlength="1000"></label>
+                  <label>Sort Weight<input id="rank-sortWeight" type="number" min="0" max="10000" step="1" required></label>
+                  <p>Display order only: higher numbers appear first.</p>
+                  <p id="rankError" role="alert"></p>
+                  <div class="actions"><button id="rankSave" type="submit" data-help="Save this reference rank.">Save</button><button id="rankCancel" type="button" data-help="Close the overlay, confirming before discarding edits.">Cancel</button></div>
+                </form>
+              </dialog>
+            </div>
+            <div class="view" id="volunteersView" data-help-page="volunteers" data-help-title="Volunteer Management" hidden>
+              <div class="actions"><button id="vmAdd" type="button" data-help="Add a volunteer or volunteer type to this tournament.">Add Volunteer</button><button id="vmReload" type="button" data-help="Reload saved volunteers, types and operational lock status.">Reload Saved</button></div>
+              <div id="vmImportArea"><label for="vmCsv">Volunteer CSV (max 2 MB)</label><input id="vmCsv" type="file" accept=".csv,text/csv"><button id="vmImport" type="button" data-help="Validate the entire CSV, then add or update volunteers by Assoc ID. Blank IDs always add.">Import CSV</button><p>Headers: First Name, Last Name, DOB, Assoc ID, School, Rank, Certification, Primary Volunteer Type, Secondary Volunteer Type. DOB: YYYY-MM-DD or MM/DD/YYYY, converted to age on the tournament date and not stored. Certification and Secondary may be blank; Assoc ID may be blank (add-only).</p></div>
+              <form id="vmSearchForm"><label for="vmSearch">Search</label><input id="vmSearch" type="search"><button type="submit" data-help="Filter this list. Selection is cleared when filtering.">Filter</button></form>
+              <p id="vmNotice" role="status"></p><p id="vmCount"></p>
+              <div class="table-wrap"><table aria-label="Volunteer management"><thead><tr><th><input id="vmAll" type="checkbox" aria-label="Select all filtered entries"></th><th>Name</th><th id="vmCol0">Age</th><th id="vmCol1">Assoc ID</th><th id="vmCol2">School</th><th id="vmCol3">Rank</th><th id="vmCol4">Certification</th><th id="vmCol5">Primary Type</th><th id="vmCol6">Secondary Type</th></tr></thead><tbody id="vmBody"></tbody></table></div>
+              <div class="actions"><button id="vmDelete" type="button" disabled data-help="Delete selected entries after confirmation. Types in use cannot be deleted.">Delete selected</button></div>
+              <p data-help-source="Volunteer preparation">Volunteers and editable types belong to the selected tournament. Operational use locks changes until Reset Run. CSV imports validate completely before saving; duplicate nonblank Assoc IDs within a file are rejected. Existing nonblank IDs update; blank IDs always add. Primary type is required; secondary is optional and must differ. Type names in CSV must match existing types (case-insensitive). Judging volunteers can be copied into Ring Judges if Dan-ranked and aged 18+ on the tournament date. Population does not certify judges or confirm availability; later volunteer edits or deletion do not change copied judges.</p>
+              <dialog id="vmDialog" aria-labelledby="vmDialogTitle"><h2 id="vmDialogTitle">Add Volunteer</h2><form id="vmForm">
+                <div id="vmTypeFields" hidden><label>Type Name<input id="vm-typeName" maxlength="100"></label></div>
+                <div id="vmVolunteerFields">
+                  <label>First Name<input id="vm-firstName" required maxlength="100"></label><label>Last Name<input id="vm-lastName" required maxlength="100"></label>
+                  <label>Age<input id="vm-age" type="number" required min="0" max="120" step="1"></label><label>Assoc ID<input id="vm-associationNumber" maxlength="100"></label>
+                  <label>School<input id="vm-school" required maxlength="200"></label><label>Rank<input id="vm-rank" required maxlength="100" placeholder="D1"></label>
+                  <label>Certification<input id="vm-certification" maxlength="200"></label><label>Primary Volunteer Type<select id="vm-primaryType" required></select></label>
+                  <label>Secondary Volunteer Type<select id="vm-secondaryType"></select></label>
+                </div><p id="vmError" role="alert"></p><div class="actions"><button id="vmSave" type="submit" data-help="Save this volunteer management entry.">Save</button><button id="vmCancel" type="button" data-help="Close the overlay, confirming before discarding changes.">Cancel</button></div>
+              </form></dialog>
+            </div>
+            <div class="view" id="ringJudgesView" data-help-page="ring-judges" data-help-title="Ring Judges" hidden>
+              <div class="actions"><button id="rjAdd" type="button" data-help="Add a judge to the selected tournament's preparation directory.">Add Judge</button><button id="rjPopulate" type="button" data-help="Add adult Dan-ranked competitors using age on the tournament date. Existing judges are not overwritten.">Populate Judges from Competitors</button><button id="rjPopulateVolunteers" type="button" data-help="Add adult Dan-ranked primary or secondary Judging volunteers, copying supplied certification without overwriting existing judges.">Populate Judges from Volunteers</button><button id="rjReload" type="button" data-help="Reload the saved judges and operational lock status.">Reload Saved</button></div>
+              <form id="rjSearchForm"><label for="rjSearch">Search</label><input id="rjSearch" type="search" maxlength="200"><button type="submit" data-help="Filter judges by name, Association ID, school, rank, certification or review notes.">Filter</button></form>
+              <p id="rjNotice" role="status"></p><p id="rjCount"></p>
+              <div class="table-wrap"><table aria-label="Ring Judges"><thead><tr><th><input id="rjAll" type="checkbox" aria-label="Select all filtered judges"></th><th>Name</th><th>Association ID</th><th>School</th><th>Rank</th><th>Certification</th><th>Flagged for Review</th><th>Review Notes</th><th>Source</th></tr></thead><tbody id="rjBody"></tbody></table></div>
+              <div class="actions"><button id="rjDelete" type="button" disabled data-help="Delete selected judges after confirmation, without deleting their competitor registrations.">Delete selected</button></div>
+              <p data-help-source="Ring Judges preparation">Judges belong to the selected tournament, not necessarily the active tournament. Operational use locks edits until Reset Run. Populate adds competitors or primary/secondary Judging volunteers aged 18+ on the tournament date with Dan rank, without duplicating linked identities or Association IDs. Competitor certification starts blank; volunteer certification is copied. Certification and availability must be verified. Review flags and notes record observations for follow-up, not automatic exclusion. Judge assignments, Priority and Manual Only are not implemented. Deletion affects only this directory.</p>
+              <dialog id="rjDialog" aria-labelledby="rjDialogTitle"><h2 id="rjDialogTitle">Add Judge</h2><form id="rjForm">
+                <label>Name<input id="rj-name" required maxlength="200"></label>
+                <label>Association ID<input id="rj-associationNumber" maxlength="100"></label>
+                <label>School<input id="rj-school" maxlength="200"></label>
+                <label>Rank code<input id="rj-rank" required maxlength="100" placeholder="D1"></label>
+                <label>Certification<input id="rj-certification" maxlength="200"></label>
+                <label class="rj-flag"><input id="rj-flaggedForReview" type="checkbox">Flagged for Review</label>
+                <label>Review Notes<textarea id="rj-reviewNotes" maxlength="2000" rows="3"></textarea></label>
+                <p id="rjError" role="alert"></p>
+                <div class="actions"><button id="rjSave" type="submit" data-help="Save this judge without changing competitor registration.">Save</button><button id="rjCancel" type="button" data-help="Close the overlay, confirming before discarding edits.">Cancel</button></div>
+              </form></dialog>
+            </div>
+            <div class="view" id="resultsView" data-help-page="results" data-help-title="Running Results" hidden>
+              <div class="actions"><label for="resultSource">Result source</label><select id="resultSource" disabled></select><button id="resultRefresh" type="button" data-help="Refresh standings from the selected result source without changing scores.">Refresh Results</button></div>
+              <p id="resultNotice" role="status"></p>
+              <p id="resultSummary"></p>
+              <div id="resultCards"></div>
+              <p data-help-source="Running results">Read-only standings use this tournament's Competition Types, Medal Points and Grand Champion Categories. Simulation and live records are never mixed. Eligibility counts include competitors in completed result packets; zero-point competitors are not ranked. Team medals are excluded. Refresh to see new packets. Stored results are never modified.</p>
+            </div>
+            <div class="view" id="competitionSettingsView" data-help-page="competition-settings" data-help-title="Competition Settings" hidden>
+              <div class="actions"><button id="csAdd" type="button" data-help="Add a tournament-specific reference entry.">Add</button><button id="csReload" type="button" data-help="Reload this tournament's saved reference settings.">Reload Saved</button></div>
+              <p id="csNotice" role="status" aria-live="polite"></p>
+              <div class="table-wrap"><table aria-label="Competition settings"><thead><tr id="csHead"></tr></thead><tbody id="csBody"></tbody></table></div>
+              <div class="actions"><button id="csDelete" type="button" disabled data-help="Delete selected reference settings after confirmation.">Delete selected</button></div>
+              <p data-help-source="Reference competition settings">These definitions belong to the selected tournament and are used by the read-only Results standings. They do not change tablet scoring, division assignment or registrations. Rank ranges use Gup/Dan codes rather than another system's database IDs. Operational use locks edits until Reset Run.</p>
+              <dialog id="csDialog" aria-labelledby="csDialogTitle"><h2 id="csDialogTitle">Add</h2><form id="csForm"><div id="csFields"></div><p id="csError" role="alert"></p><div class="actions"><button id="csSave" type="submit" data-help="Save the reference entry for the selected tournament.">Save</button><button id="csCancel" type="button" data-help="Close the overlay, confirming before discarding edits.">Cancel</button></div></form></dialog>
+            </div>
+            <div class="view" id="administrationToolView" hidden>
+              <iframe id="administrationToolFrame" title="Administration tool"></iframe>
             </div>
             <div class="view" id="placeholderView" hidden>
               <div class="under-dev">
@@ -1605,44 +1921,24 @@
               </div>
               <div class="warning-list" id="importWarningList"></div>
             </div>
-            <div class="metadata-panel" id="metadataPanel" hidden>
-              <div class="summary-label" id="metadataTitle">Edit Event</div>
-              <p data-help-source="Event details" data-help-for="event-setup">Save Changes saves all event settings and synchronizes the operational ring layout automatically before operational use begins. All settings are locked once tablets, assignments, queues, or progress exist, including while paused. Stop tablet activity and use Reset run / Return to preparation to archive results and unlock settings without losing competitors or divisions.</p>
-              <div class="field-stack">
-                <label for="locationInput">Location</label>
-                <input id="locationInput" type="text" placeholder="Tournament location">
-              </div>
-              <div class="field-stack">
-                <label for="dateInput">Date</label>
-                <input id="dateInput" type="date">
-              </div>
-              <div class="field-stack event-format-field">
-                <label for="tournamentDaysInput">Event format</label>
-                <select id="tournamentDaysInput" aria-describedby="tournamentDaysHint" data-help="One-day events run every division in a single day. Two-day events run Black Belt first, then Tiny Tiger and Special Dragons, then Gup; Day 2 begins only when you press Start Day 2 on Ring Assignment after Day 1 is complete.">
-                  <option value="1">One day - all divisions in one continuous event</option>
-                  <option value="2">Two days - Day 1: Black Belt; Day 2: TT/SD/Gup</option>
-                </select>
-                <p id="tournamentDaysHint" class="event-format-hint"></p>
-              </div>
-              <div class="field-stack">
-                <label for="ringConfigXInput">Ring Config Columns (Letters)</label>
-                <input id="ringConfigXInput" type="number" min="0" max="26" step="1" inputmode="numeric" placeholder="0">
-              </div>
-              <div class="field-stack">
-                <label for="ringConfigYInput">Ring Config Rows (Numbers)</label>
-                <input id="ringConfigYInput" type="number" min="0" max="50" step="1" inputmode="numeric" placeholder="0">
-              </div>
-              <div class="button-row">
-                <button class="metadata-action" id="saveMetadataBtn" type="button" data-help="Save all event settings and synchronize the operational ring layout before operational use begins.">Save Changes</button>
-              </div>
-              <p id="eventConfigurationHelp" class="help-text"></p>
-            </div>
           </div>
         </aside>
       </div>
     </section>
   </main>
 
+  <script src="/assets/team-rules.js"></script>
+  <script src="/tournament-management/team-management.js"></script>
+  <script src="/assets/visual-definitions.js"></script>
+  <script src="/tournament-management/visual-definitions.js"></script>
+  <script src="/tournament-management/schools.js"></script>
+  <script src="/tournament-management/ranks.js"></script>
+  <script src="/assets/competition-settings.js"></script>
+  <script src="/tournament-management/competition-settings.js"></script>
+  <script src="/tournament-management/results.js"></script>
+  <script src="/tournament-management/ring-judges.js"></script>
+  <script src="/tournament-management/volunteers.js"></script>
+  <script src="/assets/tournament-presentation.js" defer></script>
   <script>
     (function () {
       const apiBaseUrl = window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin;
@@ -1671,6 +1967,7 @@
       const emptyMeta = (name) => ({
         name: normalizeEventName(name || ''),
         location: '',
+        scope: '',
         date: '',
         ringConfigX: '',
         ringConfigY: '',
@@ -1688,9 +1985,33 @@
         selectedEventMeta: emptyMeta(''),
         metadataMode: '',
         metadataOpen: false,
-        newEventMode: false,
         selectionRequestToken: 0
       };
+      const visualDefinitions = VisualDefinitions.create({
+        document, request: (url, options) => fetchJson(url, options), confirm: (message) => window.confirm(message)
+      });
+      const schoolsWorkspace = SchoolsWorkspace.create({
+        document, request: (url, options) => fetchJson(url, options), confirm: (message) => window.confirm(message)
+      });
+      const ranksWorkspace = RanksWorkspace.create({
+        document, request: (url, options) => fetchJson(url, options), confirm: (message) => window.confirm(message)
+      });
+      const resultsWorkspace = TournamentResultsWorkspace.create({ document, request: (url, options) => fetchJson(url, options), selectedEvent: () => state.selectedEventName });
+      const ringJudgesWorkspace = RingJudgesWorkspace.create({ document, request: (url, options) => fetchJson(url, options),
+        selectedEvent: () => state.selectedEventName, confirm: (message) => window.confirm(message) });
+      const volunteersWorkspace = VolunteersWorkspace.create({ document, request: (url, options) => fetchJson(url, options),
+        selectedEvent: () => state.selectedEventName, confirm: (message) => window.confirm(message) });
+      const competitionSettings = CompetitionSettingsWorkspace.create({
+        document, request: (url, options) => fetchJson(url, options), selectedEvent: () => state.selectedEventName,
+        confirm: (message) => window.confirm(message)
+      });
+      const competitionSettingViews = ['competition-types', 'grand-champion-categories', 'medal-points'];
+      const teamWorkspace = TeamWorkspace.create({
+        document, request: (url, options) => fetchJson(url, options),
+        selectedEvent: () => state.selectedEventName,
+        confirm: (message) => window.confirm(message),
+        changed: () => renderBanner()
+      });
 
       const bannerEventNameEl = document.getElementById('bannerEventName');
       const bannerMetadataEl = document.getElementById('bannerMetadata');
@@ -1710,9 +2031,58 @@
       }
       tickBannerClock();
       const workspaceTitle = document.getElementById('workspaceTitle');
-      const sidebar = document.querySelector('.sidebar');
+      const sidebar = document.getElementById('primaryNavigation');
       const navItems = Array.from(document.querySelectorAll('.sidebar-item'));
-      navItems.forEach((item) => item.setAttribute('data-help', `Open ${item.textContent.trim()}.`));
+      const navById = new Map(navItems.map((item) => [item.getAttribute('data-nav-id'), item]));
+      const importDestination = document.getElementById('importView');
+      importDestination.setAttribute('data-nav-label', 'Import');
+      importDestination.setAttribute('data-nav-parents', 'tournament');
+      navById.set('import', importDestination);
+      const navLabel = (item) => item.getAttribute('data-nav-label');
+      const navGroups = Array.from(document.querySelectorAll('[data-nav-group]'));
+      const navStorageKey = 'tournamentManagement.navigation.expanded';
+      const navToggle = document.getElementById('navToggle');
+      const mobileNavigation = window.matchMedia('(max-width: 960px)');
+      let expandedGroups = {};
+      try {
+        const saved = JSON.parse(window.localStorage.getItem(navStorageKey));
+        if (saved && typeof saved === 'object' && !Array.isArray(saved)) expandedGroups = saved;
+      } catch (_) { /* Navigation still works when browser storage is unavailable. */ }
+      function setGroupExpanded(button, expanded, persist = true) {
+        button.setAttribute('aria-expanded', String(expanded));
+        document.getElementById(button.getAttribute('aria-controls')).hidden = !expanded;
+        expandedGroups[button.getAttribute('data-nav-group')] = expanded;
+        if (persist) {
+          try { window.localStorage.setItem(navStorageKey, JSON.stringify(expandedGroups)); } catch (_) {}
+        }
+      }
+      navGroups.forEach((button) => {
+        const saved = expandedGroups[button.getAttribute('data-nav-group')];
+        setGroupExpanded(button, typeof saved === 'boolean' ? saved : button.getAttribute('aria-expanded') === 'true', false);
+        button.addEventListener('click', () => setGroupExpanded(button, button.getAttribute('aria-expanded') !== 'true'));
+      });
+      function setMobileNavigation(open, returnFocus = false) {
+        sidebar.classList.toggle('mobile-closed', !open);
+        navToggle.setAttribute('aria-expanded', String(!mobileNavigation.matches || open));
+        if (returnFocus) navToggle.focus();
+      }
+      navToggle.addEventListener('click', () => setMobileNavigation(navToggle.getAttribute('aria-expanded') !== 'true'));
+      sidebar.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && mobileNavigation.matches) {
+          event.preventDefault();
+          setMobileNavigation(false, true);
+        }
+      });
+      mobileNavigation.addEventListener('change', () => {
+        const focusInside = sidebar.contains(document.activeElement);
+        setMobileNavigation(false, mobileNavigation.matches && focusInside);
+      });
+      setMobileNavigation(false);
+      navItems.forEach((item) => item.setAttribute('data-help',
+        item.getAttribute('data-nav-planned') === 'true' ? `${navLabel(item)} is planned, not operational.` : `Open ${navLabel(item)}.`));
+      let historyIndex = Number.isInteger(window.history.state?.tournamentNavIndex)
+        ? window.history.state.tournamentNavIndex : 0;
+      let currentPageUrl = window.location.href;
       const detailsPanel = document.getElementById('detailsPanel');
       const importDetailsEl = document.getElementById('importDetails');
       const groupDetailsEl = document.getElementById('groupDetails');
@@ -1726,11 +2096,12 @@
       const importDetailTimeEl = document.getElementById('importDetailTime');
       const pageContent = document.getElementById('pageContent');
       const noticeEl = document.getElementById('notice');
-      const activeEventChipEl = document.getElementById('activeEventChip');
-      const selectedEventChipEl = document.getElementById('selectedEventChip');
       const eventNameInputEl = document.getElementById('eventNameInput');
-      const eventSelectEl = document.getElementById('eventSelect');
-      const NEW_EVENT_VALUE = '__new__';
+      const tournamentListEl = document.getElementById('tournamentList');
+      const tournamentListBodyEl = document.getElementById('tournamentListBody');
+      const tournamentReferenceEl = document.getElementById('tournamentReference');
+      const tournamentReferenceSelectEl = document.getElementById('tournamentReferenceSelect');
+      const tournamentReferenceLabelEl = document.getElementById('tournamentReferenceLabel');
       const importView = document.getElementById('importView');
       const eventSetupView = document.getElementById('eventSetupView');
       const placeholderView = document.getElementById('placeholderView');
@@ -1761,17 +2132,19 @@
       let importSnapshot = { eventName: '', status: 'idle', dbExists: false, competitors: [] };
       let importSnapshotToken = 0;
       let currentView = 'event-setup';
+      let pendingDivisionSelection = '';
       let importInputEvent = '';
       let importBusy = false;
+      let activationBusy = false;
+      let activeRequestToken = 0;
+      const dayOfViews = ['ring-assignment', 'head-table', 'judge-assignments'];
       const createEventBtn = document.getElementById('createEventBtn');
-      const modifyEventBtn = document.getElementById('modifyEventBtn');
-      const activateEventBtn = document.getElementById('activateEventBtn');
-      const goToImportBtn = document.getElementById('goToImportBtn');
       const deleteEventBtn = document.getElementById('deleteEventBtn');
       const resetEventBtn = document.getElementById('resetEventBtn');
       const resetRunBtn = document.getElementById('resetRunBtn');
       const metadataPanelEl = document.getElementById('metadataPanel');
       const locationInputEl = document.getElementById('locationInput');
+      const scopeInputEl = document.getElementById('scopeInput');
       const dateInputEl = document.getElementById('dateInput');
       const tournamentDaysInputEl = document.getElementById('tournamentDaysInput');
       const ringConfigXInputEl = document.getElementById('ringConfigXInput');
@@ -1804,11 +2177,13 @@
         return {
           name: normalizeEventName(config && config.name ? config.name : fallbackName || ''),
           location: normalizeTextValue(config && config.location),
+          scope: normalizeTextValue(config && config.scope),
           date: normalizeTextValue(config && config.date),
           ringConfigX,
           ringConfigY,
           tournamentDays: normalizeTournamentDays(config && config.tournamentDays),
           configurationLocked: Boolean(config && config.configurationLocked),
+          ageDateLocked: Boolean(config && config.ageDateLocked),
           configurationLockReason: normalizeTextValue(config && config.configurationLockReason),
           layoutMismatch: Boolean(config && config.layoutMismatch)
         };
@@ -1850,7 +2225,6 @@
         const selectedName = normalizeEventName(name);
         state.selectedEventName = selectedName;
         eventNameInputEl.value = selectedName;
-        syncEventNameOptions();
         state.selectedEventMeta = meta ? metaFromConfig(meta, selectedName) : emptyMeta(selectedName);
         syncButtons();
       }
@@ -1858,20 +2232,13 @@
       function clearSelectedEvent() {
         state.selectedEventName = '';
         state.selectedEventMeta = emptyMeta('');
-        state.newEventMode = false;
         eventNameInputEl.value = '';
-        syncEventNameOptions();
         syncButtons();
       }
 
       function setMetadataPanelVisible(visible) {
         state.metadataOpen = Boolean(visible);
-        if (pageContent) {
-          pageContent.classList.toggle('details-hidden', !state.metadataOpen);
-        }
-        if (detailsPanel) {
-          detailsPanel.hidden = !state.metadataOpen;
-        }
+        tournamentListEl.hidden = state.metadataOpen;
         metadataPanelEl.hidden = !visible;
         if (!visible) {
           state.metadataMode = '';
@@ -1880,7 +2247,9 @@
           ringConfigXInputEl.value = '';
           ringConfigYInputEl.value = '';
           tournamentDaysInputEl.value = '1';
+          scopeInputEl.value = '';
         }
+        workspaceTitle.textContent = visible ? state.metadataMode === 'create' ? 'Create Tournament' : 'Edit Tournament' : 'Tournaments';
       }
 
       function populateMetadataForm(meta) {
@@ -1889,6 +2258,8 @@
         ringConfigXInputEl.value = normalizeNumberInput(meta && meta.ringConfigX);
         ringConfigYInputEl.value = normalizeNumberInput(meta && meta.ringConfigY);
         tournamentDaysInputEl.value = String(normalizeTournamentDays(meta && meta.tournamentDays));
+        scopeInputEl.value = normalizeTextValue(meta && meta.scope);
+        updateRingSummary();
       }
 
       function readMetadataForm() {
@@ -1900,37 +2271,12 @@
         }
         return {
           location: normalizeTextValue(locationInputEl.value),
+          scope: scopeInputEl.value,
           date: normalizeTextValue(dateInputEl.value),
           ringConfigX: Number(ringConfigXInputEl.value),
           ringConfigY: Number(ringConfigYInputEl.value),
           tournamentDays: normalizeTournamentDays(tournamentDaysInputEl.value)
         };
-      }
-
-      function syncEventNameOptions() {
-        const currentValue = findExistingEventName(eventNameInputEl.value);
-        eventSelectEl.innerHTML = '';
-        const addOption = (value, label) => {
-          const option = document.createElement('option');
-          option.value = value;
-          option.textContent = label;
-          eventSelectEl.appendChild(option);
-        };
-        addOption('', 'Select an event…');
-        state.events.forEach((eventName) => addOption(eventName, eventName));
-        addOption(NEW_EVENT_VALUE, '+ New event…');
-
-        if (currentValue) {
-          state.newEventMode = false;
-          eventNameInputEl.value = currentValue;
-          eventSelectEl.value = currentValue;
-        } else if (state.newEventMode) {
-          eventSelectEl.value = NEW_EVENT_VALUE;
-        } else {
-          eventNameInputEl.value = '';
-          eventSelectEl.value = '';
-        }
-        eventNameInputEl.hidden = !state.newEventMode;
       }
 
       function updateFormatHint() {
@@ -1940,14 +2286,14 @@
         tournamentDaysHintEl.textContent = started
           ? 'All event settings are locked. Stop tablet activity, then reset the run to return to preparation.'
           : days === 2
-            ? 'Day 1 runs Black Belt only. Day 2 (TT/SD/Gup) stays locked until every BB division is complete and an administrator presses Start Day 2 on Ring Assignment. The format is locked once competition starts.'
+            ? 'Day 1 runs Black Belt only. Day 2 (TT/SD/Gup) stays locked until every BB division is complete and an administrator presses Start Day 2 on Division Assignments. The format is locked once competition starts.'
             : 'All divisions run in one continuous event: BB oldest to youngest, then TT/SD, then Gup youngest to oldest. The format is locked once competition starts.';
       }
       tournamentDaysInputEl.addEventListener('change', updateFormatHint);
 
       function renderBanner() {
         updateFormatHint();
-        const dayOf = ['placeholder', 'ring-assignment', 'head-table', 'competitors'].includes(currentView);
+        const dayOf = dayOfViews.includes(currentView);
         bannerClockEl.hidden = !dayOf;
         bannerEventLabelEl.textContent = dayOf ? 'Active Event:' : 'Selected Event:';
         bannerMetadataEl.setAttribute('aria-label', dayOf ? 'Active event metadata' : 'Selected event metadata');
@@ -1959,8 +2305,8 @@
             : state.activeEventName ? 'Active' : 'No active event';
           placeholderMessage.textContent = state.activeEventError
             ? `Unable to load active event: ${state.activeEventError}`
-            : state.activeEventName ? 'This section is under development.'
-            : 'No active event. Activate an event on Event Setup before using day-of operations.';
+            : state.activeEventName ? 'Planned.'
+            : 'No active tournament. Choose an Active Tournament above to begin live operations.';
           return;
         }
         const name = state.selectedEventName;
@@ -1968,6 +2314,7 @@
         const metadataChanged = state.metadataOpen && (
           state.metadataMode === 'create' ||
           normalizeTextValue(locationInputEl.value) !== meta.location ||
+          scopeInputEl.value !== meta.scope ||
           dateInputEl.value !== meta.date ||
           Number(ringConfigXInputEl.value) !== Number(meta.ringConfigX) ||
           Number(ringConfigYInputEl.value) !== Number(meta.ringConfigY) ||
@@ -1981,17 +2328,15 @@
         bannerEventFormatEl.textContent = name ? formatLabel(meta) : '-';
         updateFormatHint();
         bannerEventStatusEl.textContent = !name ? 'No event selected'
-          : metadataChanged || groupChanges ? 'Unsaved changes'
+          : metadataChanged || groupChanges || teamWorkspace.dirty() ? 'Unsaved changes'
           : name.toLowerCase() === state.activeEventName.toLowerCase() ? 'Active'
           : 'Not active';
       }
 
       function renderState() {
         renderBanner();
-        const selectedName = state.selectedEventName || 'None selected';
-        activeEventChipEl.textContent = state.activeEventName || 'No event selected';
+        syncTournamentReference();
         syncDayOfNav();
-        selectedEventChipEl.textContent = selectedName;
         const onImport = currentView === 'import';
         const onGroups = currentView === 'groups';
         const onRings = currentView === 'ring-assignment';
@@ -2004,13 +2349,13 @@
             : onRings ? Boolean(ra.selectedRingId) && ra.ready
             : onHeadTable ? Boolean(ht.selectedRingId) && ht.ready
             : onCompetitors ? cl.ready && cl.selectedId !== ''
-            : state.metadataOpen && currentView === 'event-setup';
+            : false;
         if (detailsPanel) {
           detailsPanel.hidden = !detailsVisible;
         }
         if (pageContent) {
           pageContent.classList.toggle('details-hidden', !detailsVisible);
-          pageContent.classList.toggle('import-wide', onImport || onGroups || onRings || onHeadTable || onCompetitors);
+          pageContent.classList.toggle('import-wide', onImport || onGroups || onRings || onHeadTable || onCompetitors || currentView === 'team-management' || currentView === 'team-settings' || currentView === 'visual-definitions');
           pageContent.classList.toggle('competitor-lookup', onCompetitors);
           pageContent.classList.toggle('group-builder', onGroups);
         }
@@ -2030,32 +2375,85 @@
       function syncButtons() {
         const selectedName = getSelectedEventName();
         const existsNow = eventExists(selectedName);
-        createEventBtn.disabled = !selectedName || existsNow;
-        modifyEventBtn.disabled = !selectedName || !existsNow;
-        activateEventBtn.disabled = !selectedName || !existsNow;
-        goToImportBtn.disabled = !selectedName || !existsNow;
+        createEventBtn.disabled = false;
         deleteEventBtn.disabled = !selectedName || !existsNow;
         resetEventBtn.disabled = !selectedName && !state.metadataOpen;
         const configurationLocked = Boolean(existsNow && state.selectedEventMeta.configurationLocked);
         saveMetadataBtn.disabled = !state.metadataOpen || !selectedName || configurationLocked;
         resetRunBtn.disabled = !existsNow;
-        for (const input of [locationInputEl, dateInputEl, tournamentDaysInputEl, ringConfigXInputEl, ringConfigYInputEl]) {
+        eventNameInputEl.disabled = state.metadataMode === 'modify';
+        document.getElementById('eventNameHelp').textContent = state.metadataMode === 'modify'
+          ? 'The name identifies the tournament folder and cannot be renamed.' : 'Required. This name identifies the tournament folder.';
+        document.getElementById('tournamentSavedActions').hidden = !existsNow || state.metadataMode === 'create';
+        for (const input of [locationInputEl, scopeInputEl, dateInputEl, tournamentDaysInputEl, ringConfigXInputEl, ringConfigYInputEl]) {
           input.disabled = configurationLocked;
         }
+        dateInputEl.disabled = configurationLocked || Boolean(existsNow && state.selectedEventMeta.ageDateLocked);
         eventConfigurationHelpEl.textContent = configurationLocked
           ? state.selectedEventMeta.configurationLockReason
           : 'Saving synchronizes operational rings automatically, even for an inactive event. Zero dimensions leave the layout unconfigured.';
+        if (existsNow && state.selectedEventMeta.ageDateLocked) {
+          eventConfigurationHelpEl.textContent += ' The date is fixed because tournament-age data exists. Create a new tournament for a different date.';
+        }
         if (state.selectedEventMeta.layoutMismatch) {
           eventConfigurationHelpEl.textContent += ' The saved layout differs from this run. Existing ring state has been preserved; reset the run to reconcile it.';
         }
         renderState();
       }
 
+      let listRequestToken = 0;
+      let tournamentRows = [];
+      function renderTournamentList() {
+        const scopes = { regional: 'Regional', national: 'National', world: 'World', 'in-house': 'In-House' };
+        tournamentListBodyEl.innerHTML = tournamentRows.map(({ name, meta, error }) =>
+          `<tr><td><button class="tournament-name" type="button" data-edit-tournament="${gbEsc(name)}">${gbEsc(name)}</button></td>`
+          + (error ? `<td colspan="5">Unable to load metadata: ${gbEsc(error)}</td>` :
+            `<td>${gbEsc(meta.location || 'Not set')}</td><td>${gbEsc(meta.date || 'Not set')}</td><td>${gbEsc(formatLabel(meta))}</td>`
+            + `<td>${scopes[meta.scope] || 'Unspecified'}</td><td>${state.activeEventError ? 'Active status unavailable' : name === state.activeEventName ? 'Active' : 'Not active'}${meta.configurationLocked ? ' · Settings locked' : ''}</td>`) + '</tr>'
+        ).join('') || '<tr><td colspan="6">No tournaments. Create a tournament to begin.</td></tr>';
+      }
       async function refreshEvents() {
-        const data = await fetchJson('/api/events/list');
+        const token = ++listRequestToken;
+        tournamentListBodyEl.innerHTML = '<tr><td colspan="6">Loading tournaments…</td></tr>';
+        let data;
+        try {
+          data = await fetchJson('/api/events/list');
+        } catch (error) {
+          if (token === listRequestToken) tournamentListBodyEl.innerHTML = `<tr><td colspan="6">Unable to load tournaments: ${gbEsc(error.message)}</td></tr>`;
+          throw error;
+        }
+        const rows = await Promise.all((Array.isArray(data.events) ? data.events : []).map(async (name) => {
+          try { return { name, meta: await loadEventConfig(name) }; }
+          catch (error) { return { name, error: error.message }; }
+        }));
+        if (token !== listRequestToken) return state.events;
         state.events = Array.isArray(data.events) ? data.events : [];
-        syncEventNameOptions();
+        tournamentRows = rows;
+        renderTournamentList();
+        syncTournamentReference();
         return state.events;
+      }
+
+      function syncTournamentReference() {
+        const selectedViewItem = navById.get(currentView);
+        const isLivePage = dayOfViews.includes(currentView);
+        const tournamentScoped = !isLivePage && currentView !== 'event-setup' && (currentView === 'import' || currentView === 'groups'
+          || currentView === 'competitors'
+          || (selectedViewItem && (selectedViewItem.getAttribute('data-nav-parents') || '').split(' ').includes('tournament')));
+        tournamentReferenceEl.hidden = !isLivePage && !tournamentScoped;
+        tournamentReferenceSelectEl.hidden = !isLivePage && !tournamentScoped;
+        tournamentReferenceSelectEl.disabled = activationBusy || importBusy;
+        if (!isLivePage && !tournamentScoped) return;
+        tournamentReferenceLabelEl.textContent = isLivePage ? 'Active Tournament' : 'Tournament for this page';
+        tournamentReferenceSelectEl.setAttribute('aria-label', tournamentReferenceLabelEl.textContent);
+        tournamentReferenceSelectEl.setAttribute('data-help', isLivePage
+          ? 'Switch the tournament used by live operations and connected tablets after confirmation. Browsing preparation tournaments does not activate them.'
+          : 'Select a tournament for preparation without changing the active tournament.');
+        const names = state.activeEventName && !state.events.includes(state.activeEventName)
+          ? [...state.events, state.activeEventName] : state.events;
+        tournamentReferenceSelectEl.innerHTML = `<option value="">${isLivePage ? 'No active tournament — choose a tournament…' : 'Select a tournament…'}</option>`
+          + names.map((name) => `<option value="${gbEsc(name)}">${gbEsc(name)}</option>`).join('');
+        tournamentReferenceSelectEl.value = isLivePage ? state.activeEventName : state.selectedEventName;
       }
 
       async function loadEventConfig(eventName) {
@@ -2066,20 +2464,26 @@
 
         const data = await fetchJson(`/api/events/config?eventName=${encodeURIComponent(name)}`);
         return metaFromConfig({ ...data.eventConfig, configurationLocked: data.configurationLocked,
-          configurationLockReason: data.configurationLockReason, layoutMismatch: data.layoutMismatch }, name);
+          configurationLockReason: data.configurationLockReason, layoutMismatch: data.layoutMismatch,
+          ageDateLocked: data.ageDateLocked }, name);
       }
 
-      async function refreshActiveEvent() {
+      async function refreshActiveEvent(allowDuringActivation = false) {
+        if (activationBusy && !allowDuringActivation) return;
+        const token = ++activeRequestToken;
         try {
           const data = await fetchJson('/api/events/active');
           const activeName = normalizeEventName(data.activeEvent);
           const meta = activeName ? await loadEventConfig(activeName) : emptyMeta('');
+          if (token !== activeRequestToken || activationBusy && !allowDuringActivation) return;
           state.activeEventName = activeName;
           state.activeEventMeta = meta;
           state.activeEventError = '';
+          renderTournamentList();
         } catch (error) {
-          state.activeEventMeta = emptyMeta('');
+          if (token !== activeRequestToken || activationBusy && !allowDuringActivation) return;
           state.activeEventError = error.message;
+          renderTournamentList();
           throw error;
         }
       }
@@ -2087,13 +2491,13 @@
       async function refreshSelectedEventFromInput() {
         const selectedName = normalizeEventName(eventNameInputEl.value);
         state.selectedEventName = selectedName;
+        const requestToken = ++state.selectionRequestToken;
         if (!selectedName) {
           state.selectedEventMeta = emptyMeta('');
           syncButtons();
           return;
         }
 
-        const requestToken = ++state.selectionRequestToken;
         if (!eventExists(selectedName)) {
           state.selectedEventMeta = emptyMeta(selectedName);
           syncButtons();
@@ -2107,6 +2511,63 @@
         state.selectedEventMeta = meta;
         storeLastSelectedEvent(selectedName);
         syncButtons();
+      }
+
+      function tournamentSelectionHasUnsavedChanges() {
+        const meta = state.selectedEventMeta;
+        const metadataDirty = state.metadataOpen && (
+          state.metadataMode === 'create'
+          || normalizeTextValue(locationInputEl.value) !== meta.location
+          || scopeInputEl.value !== meta.scope
+          || dateInputEl.value !== meta.date
+          || Number(ringConfigXInputEl.value) !== Number(meta.ringConfigX)
+          || Number(ringConfigYInputEl.value) !== Number(meta.ringConfigY)
+          || normalizeTournamentDays(tournamentDaysInputEl.value) !== normalizeTournamentDays(meta.tournamentDays)
+        );
+        const currentName = state.selectedEventName;
+        const groupDraftDirty = currentName && (gb.eventName === currentName
+          ? !gb.saved && (gb.groups.length > 0 || gb.unassigned.length > 0 || gb.flagged.length > 0 || Boolean(gbReadDraft(currentName)))
+          : Boolean(gbReadDraft(currentName)));
+        return { metadataDirty, groupDraftDirty: Boolean(groupDraftDirty), teamDirty: teamWorkspace.dirty() };
+      }
+
+      function allowTournamentSelection(nextName) {
+        if (volunteersWorkspace.busy() || !volunteersWorkspace.canLeave()) return false;
+        if (ringJudgesWorkspace.busy() || !ringJudgesWorkspace.canLeave()) return false;
+        if (competitionSettings.busy() || !competitionSettings.canLeave()) return false;
+        if (activationBusy || teamWorkspace.busy()) return false;
+        const currentName = state.selectedEventName;
+        if (normalizeEventName(nextName) === currentName) return true;
+        if (importBusy) {
+          setImportNotice('Wait for the import to finish before changing tournaments.', 'warn');
+          return false;
+        }
+        const unsaved = tournamentSelectionHasUnsavedChanges();
+        const reasons = [];
+        if (unsaved.metadataDirty) reasons.push('unsaved tournament details');
+        if (unsaved.groupDraftDirty) reasons.push('an unsaved division draft');
+        if (unsaved.teamDirty) reasons.push('unsaved team or team settings changes (these will be discarded)');
+        const allowed = !reasons.length || window.confirm(
+          `Switch tournaments with ${reasons.join(' and ')}? Your division draft remains saved locally and can be reopened.`
+        );
+        if (allowed) teamWorkspace.discard();
+        return allowed;
+      }
+
+      function reloadSelectedWorkspace() {
+        if (['volunteers', 'volunteer-types'].includes(currentView)) { volunteersWorkspace.load(currentView); return; }
+        if (currentView === 'ring-judges') { ringJudgesWorkspace.load(); return; }
+        if (currentView === 'results') { resultsWorkspace.load(); return; }
+        if (competitionSettingViews.includes(currentView)) { competitionSettings.load(currentView); return; }
+        if (currentView === 'team-management' || currentView === 'team-settings') { teamWorkspace.load(currentView); return; }
+        if (currentView === 'competitors') clLoad();
+        else if (currentView === 'import') {
+          importSnapshot.status = 'idle';
+          loadImportSnapshot();
+        } else if (currentView === 'groups') {
+          gbReset('');
+          gbLoad();
+        }
       }
 
       async function refreshAll() {
@@ -2124,10 +2585,9 @@
       async function initializePage() {
         await refreshEvents();
         await refreshActiveEvent();
-        if (!getSelectedEventName()) {
+        if (!getSelectedEventName() && !state.metadataOpen) {
           const initialName = findExistingEventName(readLastSelectedEvent()) || findExistingEventName(state.activeEventName);
           eventNameInputEl.value = initialName;
-          syncEventNameOptions();
         }
         await refreshSelectedEventFromInput();
         syncButtons();
@@ -2137,26 +2597,22 @@
         state.metadataMode = mode;
         setMetadataPanelVisible(true);
         populateMetadataForm(meta || emptyMeta(state.selectedEventName));
-        saveMetadataBtn.textContent = 'Save Changes';
+        saveMetadataBtn.textContent = 'Save';
+        document.getElementById('metadataTitle').textContent = mode === 'create' ? 'Create Tournament' : 'Edit Tournament';
+        syncButtons();
       }
 
       async function createEvent() {
-        const selectedName = getSelectedEventName();
-        if (!selectedName) {
-          showNotice('Enter an event name first.', 'warn');
-          return;
-        }
-
-        if (eventExists(selectedName)) {
-          showNotice(`Event already exists: ${selectedName}`, 'warn');
-          return;
-        }
-
+        if (!allowLeavingTournamentForm()) return;
+        const selectedName = '';
+        state.selectionRequestToken += 1;
+        eventNameInputEl.value = '';
         state.selectedEventName = selectedName;
         state.selectedEventMeta = emptyMeta(selectedName);
         openMetadataPanel('create', emptyMeta(selectedName));
         showNotice('Enter event details, then save the event.', 'info');
         syncButtons();
+        eventNameInputEl.focus();
       }
 
       async function modifyEvent() {
@@ -2171,7 +2627,9 @@
           return;
         }
 
+        const token = ++state.selectionRequestToken;
         const meta = await loadEventConfig(selectedName);
+        if (token !== state.selectionRequestToken) return;
         state.selectedEventName = selectedName;
         state.selectedEventMeta = meta;
         openMetadataPanel('modify', meta);
@@ -2186,6 +2644,8 @@
         }
 
         try {
+          if (!eventNameInputEl.checkValidity()) throw new Error('Name is required.');
+          if (state.metadataMode === 'create' && eventExists(selectedName)) throw new Error(`Event already exists: ${selectedName}`);
           const metadata = readMetadataForm();
           if (state.metadataMode === 'create') {
             showNotice(`Creating ${selectedName}...`, 'info');
@@ -2196,6 +2656,7 @@
                 eventName: selectedName,
                 name: selectedName,
                 location: metadata.location,
+                scope: metadata.scope,
                 date: metadata.date,
                 ringConfigX: metadata.ringConfigX,
                 ringConfigY: metadata.ringConfigY,
@@ -2213,6 +2674,7 @@
                 eventName: selectedName,
                 name: selectedName,
                 location: metadata.location,
+                scope: metadata.scope,
                 date: metadata.date,
                 ringConfigX: metadata.ringConfigX,
                 ringConfigY: metadata.ringConfigY,
@@ -2226,11 +2688,6 @@
           await refreshAll();
         } catch (error) {
           showNotice(error.message, 'error');
-          try {
-            await refreshSelectedEventFromInput();
-          } catch (refreshError) {
-            showNotice(`${error.message} Unable to refresh event settings: ${refreshError.message}`, 'error');
-          }
         }
       }
 
@@ -2260,34 +2717,75 @@
         }
       }
 
-      async function activateEvent() {
-        const selectedName = getSelectedEventName();
-        if (!selectedName) {
-          showNotice('Enter an event name first.', 'warn');
+      async function switchLiveTournament() {
+        const nextName = normalizeEventName(tournamentReferenceSelectEl.value);
+        const previousName = state.activeEventName;
+        if (importBusy || activationBusy || ra.busy || ht.busy ||
+            !nextName || !eventExists(nextName) || nextName === previousName ||
+            !dayOfViews.includes(currentView)) {
+          syncTournamentReference();
           return;
         }
-
-        if (!eventExists(selectedName)) {
-          showNotice(`No existing event found for ${selectedName}.`, 'warn');
+        if (!window.confirm(`Switch live operations to ${nextName}? Connected tablets will use this tournament instead of the current active tournament.`)) {
+          syncTournamentReference();
           return;
         }
-
-        const confirmed = window.confirm(`Activate ${selectedName}? This will set it as the active event for workflow pages.`);
-        if (!confirmed) {
-          return;
-        }
-
+        const previousMeta = state.activeEventMeta;
+        const previousError = state.activeEventError;
+        let activated = false;
+        activationBusy = true;
+        activeRequestToken += 1;
+        ra.requestToken += 1;
+        ht.requestToken += 1;
+        clearTimeout(ra.timer);
+        clearTimeout(ht.timer);
+        clearTimeout(ht.freshnessTimer);
+        clearTimeout(estimateTimer);
+        raEndDrag();
+        syncTournamentReference();
         try {
-          showNotice(`Activating ${selectedName}...`, 'info');
+          showNotice(`Switching live operations to ${nextName}...`, 'info');
           await fetchJson('/api/events/activate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ eventName: selectedName })
+            body: JSON.stringify({ eventName: nextName })
           });
-          await refreshAll();
-          showNotice(`Activated ${selectedName}.`, 'ok');
+          activated = true;
+          state.activeEventName = nextName;
+          state.activeEventMeta = emptyMeta(nextName);
+          state.activeEventError = '';
+          raResetData();
+          ra.filters.clear();
+          ra.filterKey = '';
+          htResetData();
+          ht.lastLoadedAt = null;
+          ra.simulatorRunId = '';
+          ht.simulatorRunId = '';
+          raSourceRunEl.value = '';
+          htSourceRunEl.value = '';
+          const url = new URL(window.location.href);
+          url.searchParams.delete('simulatorRunId');
+          window.history.replaceState(window.history.state, '', url);
+          currentPageUrl = window.location.href;
+          await refreshActiveEvent(true);
+          showNotice(`Live operations switched to ${nextName}.`, 'ok');
         } catch (error) {
-          showNotice(error.message, 'error');
+          // Only a failed activation keeps the previous pointer; a later refresh failure
+          // must not pretend a successful POST was rolled back.
+          if (!activated) {
+            state.activeEventName = previousName;
+            state.activeEventMeta = previousMeta;
+            state.activeEventError = previousError;
+          }
+          showNotice(activated
+            ? `Live operations switched to ${nextName}, but unable to refresh active context: ${error.message}`
+            : `Unable to switch live operations: ${error.message}`, 'error');
+        } finally {
+          activationBusy = false;
+          renderState();
+          renderTournamentList();
+          if (currentView === 'ring-assignment') raLoad();
+          else if (currentView === 'head-table') htLoad();
         }
       }
 
@@ -2329,16 +2827,17 @@
       }
 
       function resetSelection() {
-        clearSelectedEvent();
-        storeLastSelectedEvent('');
+        if (!allowLeavingTournamentForm()) return;
         setMetadataPanelVisible(false);
         showNotice('', '');
+        syncButtons();
       }
 
       async function handleSelectionChange() {
         state.selectedEventName = normalizeEventName(eventNameInputEl.value);
         await refreshSelectedEventFromInput();
         if (!state.metadataOpen) {
+          reloadSelectedWorkspace();
           return;
         }
         const name = getSelectedEventName();
@@ -2348,59 +2847,110 @@
           openMetadataPanel('create', emptyMeta(name));
         }
         syncButtons();
+        reloadSelectedWorkspace();
       }
 
       function normalizeSelectionFromInput() {
+        const nextName = normalizeEventName(eventNameInputEl.value);
+        if (!allowTournamentSelection(nextName)) {
+          eventNameInputEl.value = state.selectedEventName;
+          tournamentReferenceSelectEl.value = state.selectedEventName;
+          syncTournamentReference();
+          return;
+        }
         handleSelectionChange().catch((error) => showNotice(error.message, 'error'));
       }
 
-      eventSelectEl.addEventListener('change', () => {
-        if (eventSelectEl.value === NEW_EVENT_VALUE) {
-          state.newEventMode = true;
-          eventNameInputEl.value = '';
-          eventNameInputEl.hidden = false;
-          eventNameInputEl.focus();
-        } else {
-          state.newEventMode = false;
-          eventNameInputEl.value = eventSelectEl.value;
-          eventNameInputEl.hidden = true;
+      eventNameInputEl.addEventListener('input', () => {
+        if (state.metadataMode === 'create') {
+          state.selectedEventName = normalizeEventName(eventNameInputEl.value);
+          syncButtons();
         }
+      });
+      tournamentListBodyEl.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-edit-tournament]');
+        if (!button || !allowTournamentSelection(button.getAttribute('data-edit-tournament'))) return;
+        eventNameInputEl.value = button.getAttribute('data-edit-tournament');
+        modifyEvent().catch((error) => showNotice(error.message, 'error'));
+      });
+      tournamentReferenceSelectEl.addEventListener('change', () => {
+        if (dayOfViews.includes(currentView)) return switchLiveTournament();
+        if (activationBusy) { syncTournamentReference(); return; }
+        eventNameInputEl.value = tournamentReferenceSelectEl.value;
         normalizeSelectionFromInput();
       });
-      eventNameInputEl.addEventListener('input', normalizeSelectionFromInput);
       createEventBtn.addEventListener('click', createEvent);
-      modifyEventBtn.addEventListener('click', () => modifyEvent().catch((error) => showNotice(error.message, 'error')));
-      activateEventBtn.addEventListener('click', activateEvent);
-      goToImportBtn.addEventListener('click', () => {
-        const selectedName = getSelectedEventName();
-        if (!selectedName || !eventExists(selectedName)) {
-          showNotice('Select an existing event before going to Import Registration.', 'warn');
-          return;
-        }
-        showView('import', importNavItem);
-      });
       deleteEventBtn.addEventListener('click', deleteEvent);
       resetEventBtn.addEventListener('click', resetSelection);
       saveMetadataBtn.addEventListener('click', saveMetadata);
       resetRunBtn.addEventListener('click', resetEventRun);
-      [locationInputEl, dateInputEl, tournamentDaysInputEl, ringConfigXInputEl, ringConfigYInputEl].forEach((input) => {
-        input.addEventListener('input', renderBanner);
-        input.addEventListener('change', renderBanner);
+      function updateRingSummary() {
+        const x = Number(ringConfigXInputEl.value), y = Number(ringConfigYInputEl.value);
+        document.getElementById('ringCountSummary').textContent = Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x <= 26 && y >= 0 && y <= 50
+          ? `${x} × ${y} = ${x * y} rings${x * y === 0 ? ' (Unconfigured)' : ''}` : 'Enter valid ring dimensions.';
+      }
+      [locationInputEl, scopeInputEl, dateInputEl, tournamentDaysInputEl, ringConfigXInputEl, ringConfigYInputEl].forEach((input) => {
+        input.addEventListener('input', () => { renderBanner(); updateRingSummary(); });
+        input.addEventListener('change', () => { renderBanner(); updateRingSummary(); });
+      });
+      function allowLeavingTournamentForm() {
+        if (volunteersWorkspace.busy() || !volunteersWorkspace.canLeave()) return false;
+        if (competitionSettings.busy() || !competitionSettings.canLeave()) return false;
+        if (ranksWorkspace.busy() || !ranksWorkspace.canLeave()) return false;
+        if (ringJudgesWorkspace.busy() || !ringJudgesWorkspace.canLeave()) return false;
+        if (teamWorkspace.busy() || visualDefinitions.busy()) return false;
+        if (visualDefinitions.dirty()) {
+          if (!window.confirm('Discard unsaved visual definitions and leave this page?')) return false;
+          visualDefinitions.leave();
+        }
+        const dirty = tournamentSelectionHasUnsavedChanges();
+        const allowed = !(dirty.metadataDirty || dirty.teamDirty) ||
+          window.confirm(dirty.teamDirty ? 'Discard unsaved team or team settings changes and leave this page?' : 'Discard unsaved tournament details and leave this form?');
+        if (allowed && dirty.teamDirty) teamWorkspace.discard();
+        return allowed;
+      }
+      window.addEventListener('beforeunload', (event) => {
+        if (volunteersWorkspace.dirty() || volunteersWorkspace.busy()) { event.preventDefault(); event.returnValue = ''; return; }
+        const dirty = tournamentSelectionHasUnsavedChanges();
+        if (!dirty.metadataDirty && !dirty.teamDirty && !teamWorkspace.busy() && !visualDefinitions.dirty() && !visualDefinitions.busy() && !schoolsWorkspace.dirty() && !schoolsWorkspace.busy() && !ranksWorkspace.dirty() && !ranksWorkspace.busy() && !competitionSettings.dirty() && !competitionSettings.busy() && !ringJudgesWorkspace.dirty() && !ringJudgesWorkspace.busy()) return;
+        event.preventDefault();
+        event.returnValue = '';
       });
 
       function setSidebarActive(item) {
-        navItems.forEach((navItem) => navItem.classList.toggle('active', navItem === item));
+        if (item === importDestination) item = navById.get('competitors');
+        navItems.forEach((navItem) => {
+          navItem.classList.toggle('active', navItem === item);
+          if (navItem === item) navItem.setAttribute('aria-current', 'page');
+          else navItem.removeAttribute('aria-current');
+        });
+        const parents = (item.getAttribute('data-nav-parents') || '').split(' ');
+        navGroups.forEach((button) => {
+          if (parents.includes(button.getAttribute('data-nav-group'))) setGroupExpanded(button, true);
+        });
       }
 
-      const navLabel = (item) => item.textContent.trim();
-      const importNavItem = navItems.find((item) => navLabel(item) === 'Import');
+      const importNavItem = navById.get('import');
 
-      function showView(view, item) {
+      function showView(view, item = navById.get(view), historyMode = 'push') {
+        if (activationBusy) { showNotice('Wait for live activation to finish before changing pages.', 'warn'); return; }
+        if ((view !== currentView || view === 'event-setup' && state.metadataOpen || teamWorkspace.dirty() || visualDefinitions.dirty()) && !allowLeavingTournamentForm()) return;
+        if (view === 'event-setup' && state.metadataOpen) setMetadataPanelVisible(false);
         if (importBusy) {
           setImportNotice('Wait for the import to finish before changing pages.', 'warn');
           return;
         }
         currentView = view;
+        teamWorkspace.leave();
+        visualDefinitions.leave();
+        schoolsWorkspace.leave();
+        ranksWorkspace.leave();
+        competitionSettings.leave();
+        resultsWorkspace.leave();
+        ringJudgesWorkspace.leave();
+        volunteersWorkspace.leave();
+        activeRequestToken += 1;
+        syncTournamentReference();
         cl.requestToken += 1;
         clearTimeout(cl.timer);
         if (view !== 'competitors') {
@@ -2415,12 +2965,25 @@
         ht.hovering = false;
         ra.requestToken += 1;
         if (ra.timer) clearTimeout(ra.timer);
-        if (view !== 'placeholder') {
+        if (historyMode !== 'none') {
           const url = new URL(window.location.href);
           url.searchParams.set('view', view);
-          if (view !== 'groups') url.searchParams.delete('source');
-          window.history.replaceState(null, '', url);
+          if (view === 'groups' && pendingDivisionSelection) {
+            url.searchParams.set('source', 'saved');
+            url.searchParams.set('division', pendingDivisionSelection);
+            url.searchParams.set('eventName', state.selectedEventName);
+          }
+          if (view !== 'groups') {
+            url.searchParams.delete('source');
+            url.searchParams.delete('division');
+            url.searchParams.delete('eventName');
+          }
+          const push = historyMode === 'push' && url.href !== currentPageUrl;
+          if (push) historyIndex += 1;
+          window.history[push ? 'pushState' : 'replaceState'](
+            { ...window.history.state, tournamentNavIndex: historyIndex }, '', url);
         }
+        currentPageUrl = window.location.href;
         if (view === 'import') {
           importSnapshot.status = 'idle';
         }
@@ -2431,18 +2994,64 @@
         ringAssignmentView.hidden = view !== 'ring-assignment';
         headTableView.hidden = view !== 'head-table';
         document.getElementById('competitorLookupView').hidden = view !== 'competitors';
-        placeholderView.hidden = view !== 'placeholder';
+        document.getElementById('teamsView').hidden = view !== 'team-management';
+        document.getElementById('teamSettingsView').hidden = view !== 'team-settings';
+        document.getElementById('visualDefinitionsView').hidden = view !== 'visual-definitions';
+        document.getElementById('schoolsView').hidden = view !== 'schools';
+        document.getElementById('ranksView').hidden = view !== 'ranks';
+        document.getElementById('competitionSettingsView').hidden = !competitionSettingViews.includes(view);
+        document.getElementById('resultsView').hidden = view !== 'results';
+        document.getElementById('ringJudgesView').hidden = view !== 'ring-judges';
+        document.getElementById('volunteersView').hidden = !['volunteers', 'volunteer-types'].includes(view);
+        const toolPaths = { 'server-maintenance': '/admin/?embedded=1', simulator: '/simulator/?embedded=1' };
+        const toolFrame = document.getElementById('administrationToolFrame');
+        document.getElementById('administrationToolView').hidden = !toolPaths[view];
+        if (toolPaths[view]) {
+          toolFrame.setAttribute('title', navLabel(item));
+          if (toolFrame.getAttribute('src') !== toolPaths[view]) toolFrame.setAttribute('src', toolPaths[view]);
+        } else toolFrame.removeAttribute('src');
+        const planned = item.getAttribute('data-nav-planned') === 'true';
+        placeholderView.hidden = !planned;
         const title = navLabel(item);
-        workspaceTitle.textContent = title;
+        workspaceTitle.textContent = view === 'event-setup' ? state.metadataOpen ? 'Edit Tournament' : 'Tournaments' : view === 'results' ? 'Running Results' : title;
+        document.getElementById('workspacePanel').setAttribute('aria-label', `${title} workspace`);
         placeholderTitle.textContent = title;
         workspaceSubtitle.textContent = viewSubtitles[view];
         workspaceSubtitle.hidden = !viewSubtitles[view];
+        if (planned) {
+          placeholderTitle.textContent = title;
+          placeholderMessage.textContent = 'Planned.';
+        }
         if (view !== 'event-setup' && state.metadataOpen) {
           setMetadataPanelVisible(false);
         }
         syncButtons();
+        if (mobileNavigation.matches && navToggle.getAttribute('aria-expanded') === 'true') {
+          setMobileNavigation(false);
+          workspaceTitle.focus();
+        }
+        if (planned) {
+          if (dayOfViews.includes(view)) refreshActiveEvent().then(renderState).catch((error) => {
+            renderState();
+            showNotice(`Unable to load active tournament: ${error.message}`, 'error');
+          });
+          return;
+        }
+        if (toolPaths[view]) { renderState(); return; }
+        if (view === 'results') { renderState(); resultsWorkspace.load(); return; }
+        if (view === 'ring-judges') { renderState(); ringJudgesWorkspace.load(); return; }
+        if (['volunteers', 'volunteer-types'].includes(view)) { renderState(); volunteersWorkspace.load(view); return; }
+        if (competitionSettingViews.includes(view)) { renderState(); competitionSettings.load(view); return; }
+        if (view === 'schools') { renderState(); schoolsWorkspace.load(); return; }
+        if (view === 'ranks') { renderState(); ranksWorkspace.load(); return; }
+        if (view === 'visual-definitions') { visualDefinitions.load(); return; }
         if (view === 'competitors') {
           clLoad();
+          return;
+        }
+        if (view === 'team-management' || view === 'team-settings') {
+          teamWorkspace.load(view);
+          refreshAll().catch((error) => showNotice(error.message, 'error'));
           return;
         }
         if (view === 'ring-assignment') {
@@ -2455,17 +3064,14 @@
           return;
         }
         {
-          const refresh = view === 'placeholder' ? refreshActiveEvent : refreshAll;
-          refresh()
+          refreshAll()
             .then(() => {
               if (currentView !== view) return;
               syncButtons();
               return view === 'groups' ? gbLoad() : view === 'import' ? loadImportSnapshot() : null;
             })
             .catch((error) => {
-              if (currentView === 'placeholder') {
-                syncButtons();
-              } else if (currentView === 'import') {
+              if (currentView === 'import') {
                 importSnapshot.status = 'error';
                 renderImportView();
                 setImportNotice(error.message, 'error');
@@ -2578,14 +3184,14 @@
         importNextBtn.disabled = !canContinue || importBusy;
         importBtn.classList.toggle('primary', !canContinue);
         importNextBtn.classList.toggle('next-action', canContinue);
-        importSummaryEl.textContent = !ready ? 'Select an existing event on Event Setup.'
+        importSummaryEl.textContent = !ready ? 'Select an existing event on Tournament.'
           : !loaded ? (importSnapshot.status === 'error' ? 'Saved registration is unavailable. Reopen Import to retry.' : 'Loading saved registration...')
           : pendingCsv ? 'CSV input pending.'
           : canContinue ? `${importSnapshot.competitors.length} saved competitors loaded.`
           : importSnapshot.dbExists ? 'The database exists but has no competitors.'
           : 'No saved database exists.';
         if (!ready && currentView === 'import') {
-          setImportNotice('Select an existing event on Event Setup before importing.', 'warn');
+          setImportNotice('Select an existing event on Tournament before importing.', 'warn');
         }
         renderImportSnapshot(ready ? importResults.get(key) : null);
       }
@@ -2594,7 +3200,7 @@
         if (importBusy) return;
         const name = getSelectedEventName();
         if (!name || !eventExists(name)) {
-          setImportNotice('Select an existing event on Event Setup before importing.', 'warn');
+          setImportNotice('Select an existing event on Tournament before importing.', 'warn');
           return;
         }
         if (importSnapshot.eventName !== name || importSnapshot.status !== 'ready') {
@@ -2615,7 +3221,7 @@
           await refreshEvents();
           if (!eventExists(name)) {
             importSnapshot.status = 'error';
-            setImportNotice(`Event "${name}" no longer exists. Select an event on Event Setup.`, 'error');
+            setImportNotice(`Event "${name}" no longer exists. Select an event on Tournament.`, 'error');
             return;
           }
           if (!csvText) {
@@ -2683,7 +3289,7 @@
       const GB_UNASSIGNED = '__unassigned__';
       const GB_FLAGGED = '__flagged__';
       const GB_DRAFT_KEY = 'tournamentSetup.groupReviewDraft';
-      const gb = { eventName: '', competitors: [], groups: [], unassigned: [], flagged: [], selectedId: '', maxSize: 6, busy: false, saved: false };
+      const gb = { eventName: '', competitors: [], groups: [], unassigned: [], flagged: [], selectedId: '', maxSize: 6, busy: false, saved: false, requestToken: 0 };
       let gbDrag = null;
       const gbStatsEl = document.getElementById('gbStats');
       const gbMaxSizeEl = document.getElementById('gbMaxSize');
@@ -2705,18 +3311,6 @@
       function gbNotice(message, kind) {
         gbNoticeEl.className = message ? `notice visible ${kind || 'info'}` : 'notice';
         gbNoticeEl.textContent = message || '';
-      }
-
-      function gbAge(dob) {
-        const parts = String(dob || '').trim().split(/[\/\-]/).map((part) => parseInt(part, 10));
-        if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return NaN;
-        const birth = new Date(parts[2], parts[0] - 1, parts[1]);
-        if (Number.isNaN(birth.getTime())) return NaN;
-        const today = new Date();
-        let age = today.getFullYear() - birth.getFullYear();
-        const monthDiff = today.getMonth() - birth.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age -= 1;
-        return age;
       }
 
       function gbRank(value) {
@@ -2750,7 +3344,7 @@
       function gbComp(row) {
         const firstName = String(row.firstName || '').trim();
         const lastName = String(row.lastName || '').trim();
-        const age = gbAge(row.dob);
+        const age = DivisionRules.ageOf(row);
         return {
           ...row,
           id: row.id != null ? String(row.id) : gbId(),
@@ -2760,7 +3354,7 @@
           gender: gbGender(row.gender),
           rank: gbRank(row.rank),
           rankCode: gbRank(row.rank),
-          age: Number.isFinite(age) ? age : (Number(row.age) || 0),
+          age: Number.isInteger(age) ? age : null,
           studio: String(row.studio || '').trim(),
           reviewReason: String(row.reviewReason || '').trim()
         };
@@ -2869,15 +3463,25 @@
         }
       }
 
-      function gbReadDraft(eventName) {
+      function gbReadDraft(eventName, purgeLegacy = false) {
         try {
           const parsed = JSON.parse(window.localStorage.getItem(GB_DRAFT_KEY) || 'null');
+          if (parsed && /"(?:dob|dobIso|dateOfBirth|birthDate)"\s*:/i.test(JSON.stringify(parsed))) {
+            if (purgeLegacy) {
+              window.localStorage.removeItem(GB_DRAFT_KEY);
+              window.alert('An older group draft contained birth dates and has been removed. Reload the saved groups or rebuild from the age-only roster.');
+            }
+            return null;
+          }
           if (!parsed || !Array.isArray(parsed.groups) || String(parsed.eventName || '').trim() !== eventName) return null;
           return parsed;
         } catch (error) {
+          console.warn('Unable to read or clear the group draft.', error);
           return null;
         }
       }
+
+      gbReadDraft('', true);
 
       function gbReady() {
         const name = getSelectedEventName();
@@ -3031,6 +3635,7 @@
       }
 
       function gbReset(name) {
+        gb.requestToken += 1;
         gb.saved = false;
         gb.eventName = name;
         gb.competitors = [];
@@ -3044,15 +3649,17 @@
         const name = getSelectedEventName();
         if (!name || !eventExists(name)) {
           gbReset('');
-          gbNotice('Select an existing event on Event Setup first.', 'warn');
+          gbNotice('Select an existing event on Tournament first.', 'warn');
           gbRender();
           return;
         }
-        if (gb.eventName === name) {
+        const forceSaved = new URLSearchParams(window.location.search).get('source') === 'saved';
+        if (gb.eventName === name && !forceSaved && !pendingDivisionSelection) {
           gbRender();
           return;
         }
         gbReset('');
+        const requestToken = gb.requestToken;
         gbNotice('', '');
         gb.busy = true;
         gbRender();
@@ -3079,6 +3686,7 @@
               unassigned = competitors.filter((c) => !placed.has(c.id));
             }
           }
+          if (requestToken !== gb.requestToken || currentView !== 'groups' || getSelectedEventName() !== name) return;
           gb.eventName = name;
           gb.competitors = competitors;
           gb.groups = groups;
@@ -3087,12 +3695,21 @@
           gb.saved = !draft && groups.length > 0 && unassigned.length === 0 && flagged.length === 0;
           gb.maxSize = maxSize;
           gbMaxSizeEl.value = String(maxSize);
+          if (pendingDivisionSelection) {
+            const selectedGroup = gb.groups.find((group) =>
+              String(group.groupDivisionNumber ?? group.groupId ?? group.id ?? '') === pendingDivisionSelection);
+            gb.selectedId = selectedGroup ? selectedGroup.id : '';
+            if (!selectedGroup) gbNotice(`Saved Division ${pendingDivisionSelection} is not available for ${name}.`, 'warn');
+            pendingDivisionSelection = '';
+          }
           if (!competitors.length) gbNotice('No competitors yet. Import registrations first.', 'warn');
         } catch (error) {
-          gbNotice(error.message, 'error');
+          if (requestToken === gb.requestToken && currentView === 'groups') gbNotice(error.message, 'error');
         } finally {
-          gb.busy = false;
-          gbRender();
+          if (requestToken === gb.requestToken && currentView === 'groups') {
+            gb.busy = false;
+            gbRender();
+          }
         }
       }
 
@@ -3325,9 +3942,8 @@
       gbBuildBtn.addEventListener('click', gbBuild);
       gbAddBtn.addEventListener('click', gbAddGroup);
       gbSaveBtn.addEventListener('click', gbSave);
-      const eventSetupNavItem = navItems.find((item) => navLabel(item) === 'Event Setup');
       gbDoneBtn.addEventListener('click', () => {
-        if (eventSetupNavItem) showView('event-setup', eventSetupNavItem);
+        showView('ring-assignment', navById.get('ring-assignment'));
       });
 
       const ra = {
@@ -3355,11 +3971,12 @@
       }
 
       async function raPrepareAndLoad() {
+        const token = ++ra.requestToken;
         const selected = ra.simulatorRunId;
         let runListError = '';
         try {
           const response = await fetchJson('/api/simulator/runs');
-          if (selected !== ra.simulatorRunId || currentView !== 'ring-assignment') return;
+          if (token !== ra.requestToken || activationBusy || selected !== ra.simulatorRunId || currentView !== 'ring-assignment') return;
           if (!Array.isArray(response.runs)) throw new Error('Invalid simulator run list returned by server.');
           raSourceRunEl.innerHTML = `<option value="">Active event</option>${response.runs.map((run) =>
             `<option value="${gbEsc(run.runId)}">SIM - ${gbEsc(run.sourceEventName)} (${gbEsc(run.status)}, ${gbEsc(run.runId.slice(0, 8))})</option>`).join('')}${
@@ -3369,6 +3986,7 @@
         } catch (error) {
           runListError = error.message;
         }
+        if (token !== ra.requestToken || activationBusy || currentView !== 'ring-assignment') return;
         await raLoad();
         if (runListError && selected === ra.simulatorRunId && currentView === 'ring-assignment') {
           raNotice(`Unable to list simulations: ${runListError}`, 'error');
@@ -3646,7 +4264,7 @@
         const live = !ra.simulatorRunId;
         const formatNote = !live ? '<span class="ra-format-lock">Format is fixed by the simulation run.</span>'
           : ra.startedAt ? '<span class="ra-format-lock">Format locked: competition has started.</span>'
-          : '<button type="button" data-ra-event-setup data-help="Open Event Setup to change the event format. The format is locked once competition starts.">Change in Event Setup</button>';
+          : '<button type="button" data-ra-event-setup data-help="Open Tournament to change the event format. The format is locked once competition starts.">Change in Tournament</button>';
         if (schedule.days === 1) {
           raScheduleSummaryEl.innerHTML = `<span class="ra-format-badge" data-day="1">One-day event</span>
             <span>BB oldest first &middot; TT/SD then Gup youngest first</span>${formatNote}`;
@@ -3743,7 +4361,7 @@
       }
 
       async function raLoad() {
-        if (ra.pointerDrag || ra.nativeDragging || currentView !== 'ring-assignment') return;
+        if (activationBusy || ra.pointerDrag || ra.nativeDragging || currentView !== 'ring-assignment') return;
         const token = ++ra.requestToken;
         if (ra.timer) clearTimeout(ra.timer);
         const selectedRun = ra.simulatorRunId;
@@ -3757,14 +4375,15 @@
             eventName = board.eventName;
           } else {
             await refreshActiveEvent();
-            if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
+            if (token !== ra.requestToken || activationBusy || currentView !== 'ring-assignment') return;
             eventName = state.activeEventName;
-            if (!eventName) throw new Error('No active event. Activate an event on Event Setup first.');
+            if (!eventName) throw new Error('No active tournament. Choose an Active Tournament above to begin live operations.');
             // Loading saved groups first primes the active-event division cache.
             divisions = await fetchJson(`/api/groups?eventName=${encodeURIComponent(eventName)}`);
+            if (token !== ra.requestToken || activationBusy || currentView !== 'ring-assignment' || eventName !== state.activeEventName) return;
             board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(eventName)}`);
           }
-          if (token !== ra.requestToken || currentView !== 'ring-assignment') return;
+          if (token !== ra.requestToken || activationBusy || currentView !== 'ring-assignment' || !selectedRun && eventName !== state.activeEventName) return;
           if (ra.eventName !== eventName) {
             ra.estimates = null;
             ra.startedAt = '';
@@ -3808,7 +4427,7 @@
           ra.selectedGroupId = '';
           ra.eventName = selectedRun ? '' : state.activeEventError ? '' : state.activeEventName;
           raRender();
-          raNotice(`Unable to load Ring Assignment: ${error.message}`, 'error');
+          raNotice(`Unable to load Division Assignments: ${error.message}`, 'error');
         } finally {
           if (token === ra.requestToken && currentView === 'ring-assignment' && !ra.pointerDrag && !ra.nativeDragging) {
             ra.timer = setTimeout(raLoad, 10000);
@@ -3817,7 +4436,7 @@
       }
 
       async function raUpdate(path, options) {
-        if (ra.simulatorRunId || ra.busy || !ra.ready) return;
+        if (activationBusy || ra.simulatorRunId || ra.busy || !ra.ready) return;
         ra.busy = true;
         ra.requestToken += 1;
         if (ra.timer) clearTimeout(ra.timer);
@@ -3841,7 +4460,7 @@
           return;
         }
         if (!ra.available.map(String).includes(divisionId) || !raGroup(divisionId)) {
-          raNotice('That division is no longer available. Refresh Ring Assignment.', 'warn');
+          raNotice('That division is no longer available. Refresh Division Assignments.', 'warn');
           return;
         }
         const schedule = raScheduleState();
@@ -3871,7 +4490,7 @@
       raScheduleSummaryEl.addEventListener('click', (event) => {
         if (event.target.closest('[data-ra-start-day2]')) { raStartDay2(); return; }
         if (event.target.closest('[data-ra-event-setup]')) {
-          const setupItem = navItems.find((item) => navLabel(item) === 'Event Setup');
+          const setupItem = navById.get('event-setup');
           if (setupItem) showView('event-setup', setupItem);
         }
       });
@@ -4016,7 +4635,9 @@
       const htAudienceMonitorLink = document.getElementById('htAudienceMonitorLink');
 
       async function htLoadSimulatorRuns() {
+        const token = ht.requestToken;
         const response = await fetchJson('/api/simulator/runs');
+        if (token !== ht.requestToken || activationBusy || currentView !== 'head-table') return;
         if (!Array.isArray(response.runs)) throw new Error('Invalid simulator run list returned by server.');
         const selected = ht.simulatorRunId || htSourceRunEl.value;
         htSourceRunEl.replaceChildren();
@@ -4042,6 +4663,7 @@
       }
 
       async function htPrepareAndLoad() {
+        const token = ++ht.requestToken;
         let runListError = '';
         try {
           await htLoadSimulatorRuns();
@@ -4049,7 +4671,7 @@
           runListError = error.message;
           console.error('Head Table simulator run list refresh failed:', error);
         }
-        if (currentView !== 'head-table') return;
+        if (token !== ht.requestToken || activationBusy || currentView !== 'head-table') return;
         await htLoad();
         if (runListError && currentView === 'head-table') {
           htNotice(`Simulator run selector unavailable: ${runListError}`, 'warn');
@@ -4346,7 +4968,7 @@
       }
 
       async function htLoad() {
-        if (currentView !== 'head-table') return;
+        if (activationBusy || currentView !== 'head-table') return;
         const token = ++ht.requestToken;
         clearTimeout(ht.timer);
         let verifiedEvent = '';
@@ -4370,7 +4992,7 @@
             await refreshActiveEvent();
             if (token !== ht.requestToken || currentView !== 'head-table') return;
             verifiedEvent = state.activeEventName;
-            if (!verifiedEvent) throw new Error('No active event. Activate an event on Event Setup first.');
+            if (!verifiedEvent) throw new Error('No active tournament. Choose an Active Tournament above to begin live operations.');
             if (verifiedEvent !== ht.eventName) {
               htResetData();
               ht.lastLoadedAt = null;
@@ -4378,8 +5000,9 @@
             }
             ht.eventName = verifiedEvent;
             const groups = await fetchJson(`/api/groups?eventName=${encodeURIComponent(verifiedEvent)}`);
+            if (token !== ht.requestToken || activationBusy || currentView !== 'head-table' || verifiedEvent !== state.activeEventName) return;
             const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(verifiedEvent)}`);
-            if (token !== ht.requestToken || currentView !== 'head-table') return;
+            if (token !== ht.requestToken || activationBusy || currentView !== 'head-table' || verifiedEvent !== state.activeEventName) return;
             if (!Array.isArray(groups.groups) || !Array.isArray(board.rings) || !Array.isArray(board.availableGroupDivisionNumbers)) throw new Error('Invalid Head Table data returned by server.');
             ht.groups = groups.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
             ht.rings = board.rings;
@@ -4423,7 +5046,7 @@
       document.getElementById('htAssignmentBtn').addEventListener('click', () => {
         ra.simulatorRunId = ht.simulatorRunId;
         raResetData();
-        showView('ring-assignment', navItems.find((item) => navLabel(item) === 'Ring Assignment'));
+        showView('ring-assignment', navById.get('ring-assignment'));
       });
       htRingsEl.addEventListener('mouseenter', () => { ht.hovering = true; });
       htRingsEl.addEventListener('mouseleave', () => { ht.hovering = false; });
@@ -4440,7 +5063,7 @@
       }, true);
       headTableDetailsEl.addEventListener('click', async (event) => {
         const button = event.target.closest('button');
-        if (!button || !ht.ready || ht.busy) return;
+        if (activationBusy || !button || !ht.ready || ht.busy) return;
         if (button.dataset.htGroup) {
           ht.selectedGroupId = ht.selectedGroupId === button.dataset.htGroup ? '' : button.dataset.htGroup;
           htRenderDetails();
@@ -4471,47 +5094,46 @@
         }
       });
 
-      const cl = { eventName: '', roster: [], rings: [], ready: false, selectedId: '', ringError: '', requestToken: 0, timer: null,
-        filters: { name: '', rank: '', studio: '', division: '', ring: '', unassigned: false }, descending: false };
+      const cl = { eventName: '', roster: [], savedGroups: [], ready: false, selectedId: '', requestToken: 0, timer: null,
+        filters: { studio: '', gender: '', ageMin: '', ageMax: '' }, query: '', page: 1, pageSize: 250, busy: false, descending: false };
       const clSearch = document.getElementById('clSearch');
       const clResults = document.getElementById('clResults');
       const clDetails = document.getElementById('competitorLookupDetails');
-      function clTerms() {
-        return [...new Set(clSearch.value.toLowerCase().split(',').map((term) => term.trim()).filter((term) => term.length >= 2))];
-      }
+      function clQuery() { return cl.query; }
+      function clTerms() { return [...new Set(clQuery().split(',').map((term) => term.trim()).filter((term) => term.length >= 2))]; }
       function clMatches(person) {
-        return clTerms().some((term) => ['firstName', 'lastName', 'rank'].some((field) =>
-          String(person[field] || '').toLowerCase().includes(term)));
+        return !clQuery() || clTerms().some((term) =>
+          [person.firstName, person.lastName, [person.firstName, person.lastName].filter(Boolean).join(' '),
+            person.associationNumber, person.rank].some((value) => String(value || '').toLowerCase().includes(term)));
       }
       function clHighlight(value) {
         const text = String(value || '');
-        const lower = text.toLowerCase();
-        const ranges = [];
-        clTerms().forEach((term) => {
-          let start = 0, match;
-          while ((match = lower.indexOf(term, start)) !== -1) {
-            ranges.push([match, match + term.length]);
-            start = match + 1;
-          }
-        });
-        ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-        const merged = [];
-        ranges.forEach(([start, end]) => {
-          const last = merged[merged.length - 1];
-          if (last && start <= last[1]) last[1] = Math.max(last[1], end);
-          else merged.push([start, end]);
-        });
-        let result = '', start = 0;
-        for (const [from, to] of merged) {
-          result += gbEsc(text.slice(start, from)) + `<mark>${gbEsc(text.slice(from, to))}</mark>`;
-          start = to;
+        const terms = clTerms();
+        let result = '';
+        for (let index = 0; index < text.length;) {
+          const term = terms.find((entry) => text.toLowerCase().startsWith(entry, index));
+          result += term ? `<mark>${gbEsc(text.slice(index, index + term.length))}</mark>` : gbEsc(text[index]);
+          index += term ? term.length : 1;
         }
-        return result + gbEsc(text.slice(start));
+        return result;
       }
       function clDivision(person) {
         const value = person.groupDivisionNumber;
         return value != null && String(value).trim() && String(value).toLowerCase() !== 'unassigned'
           ? String(value) : '';
+      }
+      function clAge(person) { return DivisionRules.ageOf(person); }
+      function clDivisionGroup(division) {
+        return cl.savedGroups.find((group) =>
+          String(group.groupDivisionNumber ?? group.groupId ?? group.id ?? '') === String(division));
+      }
+      function clDivisionMarkup(person) {
+        const division = clDivision(person);
+        if (!division) return '<span class="cl-muted">—</span>';
+        const group = clDivisionGroup(division);
+        return group
+          ? `<a class="cl-division-link" href="?view=groups&source=saved&division=${encodeURIComponent(division)}&eventName=${encodeURIComponent(cl.eventName)}" data-cl-division="${gbEsc(division)}">Division ${gbEsc(division)}</a>`
+          : `<span>Division ${gbEsc(division)}</span>`;
       }
       function clPhone(value) {
         const text = String(value || '').trim();
@@ -4521,84 +5143,82 @@
         }
         return text;
       }
-      function clRing(person) {
-        if (cl.ringError) return 'Unavailable - ring data could not be refreshed';
-        const division = clDivision(person);
-        if (!division) return 'Not assigned';
-        const assignments = [];
-        const completed = [];
-        cl.rings.forEach((ring) => {
-          if (String(ring.groupDivisionNumber || '') === division) assignments.push(`Ring ${ring.ringLabel} - current`);
-          if ((ring.queuedGroupDivisionNumbers || []).map(String).includes(division)) assignments.push(`Ring ${ring.ringLabel} - queued`);
-          if ((ring.completedGroupDivisionNumbers || []).map(String).includes(division)) completed.push(`Ring ${ring.ringLabel} - completed`);
-        });
-        const matches = assignments.length ? assignments : completed;
-        return matches.length > 1 ? `Ambiguous: ${matches.join('; ')}` : matches[0] || 'Not assigned';
-      }
       function clHasFilters() {
         return Object.values(cl.filters).some(Boolean);
       }
       function clFilterMatches(person) {
         const filter = cl.filters;
-        const division = clDivision(person);
-        const ring = clRing(person);
-        const hasLiveAssignment = division && cl.rings.some((entry) => String(entry.groupDivisionNumber || '') === division
-          || (entry.queuedGroupDivisionNumbers || []).map(String).includes(division));
-        return (!filter.name || [person.firstName, person.lastName].filter(Boolean).join(' ').toLowerCase().includes(filter.name))
-          && (!filter.rank || String(person.rank || '') === filter.rank)
-          && (!filter.studio || String(person.studio || '') === filter.studio)
-          && (!filter.division || division === filter.division)
-          && (!filter.ring || !cl.ringError && cl.rings.some((entry) => entry.ringId === filter.ring
-            && division && [entry.groupDivisionNumber, ...(entry.queuedGroupDivisionNumbers || []),
-              ...(!hasLiveAssignment ? entry.completedGroupDivisionNumbers || [] : [])].map(String).includes(division)))
-          && (!filter.unassigned || !cl.ringError && ring === 'Not assigned');
+        const age = clAge(person);
+        const min = filter.ageMin === '' ? null : Number(filter.ageMin);
+        const max = filter.ageMax === '' ? null : Number(filter.ageMax);
+        return (!filter.studio || String(person.studio || '') === filter.studio)
+          && (!filter.gender || String(person.gender || '') === filter.gender)
+          && (min == null || Number.isFinite(age) && age >= min)
+          && (max == null || Number.isFinite(age) && age <= max);
       }
       function clFilterOptions() {
         const populate = (id, label, entries) => {
           const select = document.getElementById(id);
           const value = select.value;
+          const applied = cl.filters[id === 'clFilterStudio' ? 'studio' : 'gender'];
           select.innerHTML = `<option value="">${label}</option>` + entries.map(([key, text]) =>
             `<option value="${gbEsc(key)}">${gbEsc(text)}</option>`).join('');
-          select.value = entries.some(([key]) => key === value) ? value : '';
+          if (applied && !entries.some(([key]) => key === applied)) {
+            select.innerHTML += `<option value="${gbEsc(applied)}">${gbEsc(applied)}</option>`;
+          }
+          select.value = entries.some(([key]) => key === value) || value === applied ? value : '';
         };
-        for (const [field, id, label] of [['rank', 'clFilterRank', 'All ranks'], ['studio', 'clFilterStudio', 'All studios'], ['division', 'clFilterDivision', 'All divisions']]) {
-          const values = [...new Set(cl.roster.map((person) => field === 'division' ? clDivision(person) : String(person[field] || '')).filter(Boolean))]
+        for (const [field, id, label] of [['studio', 'clFilterStudio', 'All'], ['gender', 'clFilterGender', 'All']]) {
+          const values = [...new Set(cl.roster.map((person) => String(person[field] || '').trim()).filter(Boolean))]
             .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
           populate(id, label, values.map((value) => [value, value]));
         }
-        populate('clFilterRing', 'All rings', cl.rings.slice().sort((a, b) => a.ringLabel.localeCompare(b.ringLabel, undefined, { numeric: true }))
-          .map((ring) => [ring.ringId, `Ring ${ring.ringLabel}`]));
       }
       function clClearFilters() {
-        cl.filters = { name: '', rank: '', studio: '', division: '', ring: '', unassigned: false };
-        for (const id of ['clFilterName', 'clFilterRank', 'clFilterStudio', 'clFilterDivision', 'clFilterRing']) document.getElementById(id).value = '';
-        document.getElementById('clFilterUnassigned').checked = false;
+        cl.filters = { studio: '', gender: '', ageMin: '', ageMax: '' };
+        for (const id of ['clFilterStudio', 'clFilterGender', 'clFilterAgeMin', 'clFilterAgeMax']) document.getElementById(id).value = '';
       }
       function clRender() {
-        const terms = clTerms();
-        const filterOnly = !clSearch.value.trim() && clHasFilters();
-        const matches = cl.ready ? cl.roster.filter((person) => (filterOnly || clMatches(person)) && clFilterMatches(person)).sort((a, b) =>
+        const matches = cl.ready ? cl.roster.filter((person) => clMatches(person) && clFilterMatches(person)).sort((a, b) =>
           (cl.descending ? -1 : 1) * (String(a.lastName || '').localeCompare(String(b.lastName || ''))
           || String(a.firstName || '').localeCompare(String(b.firstName || ''))
           || String(a.id).localeCompare(String(b.id), undefined, { numeric: true }))) : [];
         if (!matches.some((person) => String(person.id) === cl.selectedId)) cl.selectedId = '';
-        document.getElementById('clStatus').textContent = !cl.ready ? 'Competitor lookup unavailable or loading.'
-          : !terms.length && !filterOnly ? 'Enter at least 2 characters per search term; separate terms with commas.'
-          : `${matches.length} match${matches.length === 1 ? '' : 'es'} - ${cl.eventName}${terms.length > 1 ? ' - matching any term' : ''}${clHasFilters() ? ' - filters applied' : ''}${clSearch.value.split(',').some((term) => term.trim().length === 1) ? ' - single-character terms ignored' : ''}`;
-        document.getElementById('clResultCount').textContent = `${matches.length} result${matches.length === 1 ? '' : 's'}`;
-        document.getElementById('clResultsFooter').textContent = `Showing ${matches.length ? '1' : '0'}-${matches.length} of ${matches.length} results`;
+        const pageCount = Math.max(1, Math.ceil(matches.length / cl.pageSize));
+        cl.page = Math.max(1, Math.min(cl.page, pageCount));
+        const start = (cl.page - 1) * cl.pageSize;
+        const pageMatches = matches.slice(start, start + cl.pageSize);
+        document.getElementById('clTableWrap').setAttribute('aria-busy', String(cl.busy));
+        document.getElementById('clRefreshBtn').disabled = cl.busy;
+        document.getElementById('clStatus').textContent = !cl.ready ? 'Competitor roster unavailable or loading.'
+          : `${matches.length} competitor${matches.length === 1 ? '' : 's'} - ${cl.eventName || 'no tournament selected'}${clQuery() ? ' - search applied' : ''}${clHasFilters() ? ' - filters applied' : ''}${cl.busy ? ' - refreshing' : ''}`;
+        const number = (value) => value.toLocaleString('en-US');
+        document.getElementById('clResultCount').textContent = `Showing ${number(matches.length ? start + 1 : 0)}–${number(start + pageMatches.length)} of ${number(matches.length)}`;
+        const pageButton = (page, label, disabled = false) => `<button type="button" data-cl-page="${page}" aria-label="${label === 'Previous' || label === 'Next' ? label + ' page' : 'Page ' + page}"${page === cl.page && typeof label === 'number' ? ' aria-current="page"' : ''}${disabled ? ' disabled' : ''}>${label}</button>`;
+        const windowStart = Math.max(1, Math.min(cl.page - 2, pageCount - 4));
+        const windowEnd = Math.min(pageCount, windowStart + 4);
+        const pages = [];
+        if (windowStart > 1) pages.push(pageButton(1, 1), ...(windowStart > 2 ? ['<span aria-hidden="true">…</span>'] : []));
+        for (let page = windowStart; page <= windowEnd; page++) pages.push(pageButton(page, page));
+        if (windowEnd < pageCount) pages.push(...(windowEnd < pageCount - 1 ? ['<span aria-hidden="true">…</span>'] : []), pageButton(pageCount, pageCount));
+        document.getElementById('clPagination').innerHTML = pageButton(cl.page - 1, 'Previous', cl.page === 1 || !cl.ready)
+          + pages.join('') + pageButton(cl.page + 1, 'Next', cl.page === pageCount || !cl.ready);
         document.getElementById('clNameHeading').setAttribute('aria-sort', cl.descending ? 'descending' : 'ascending');
         document.getElementById('clSortIndicator').textContent = cl.descending ? '\u2193' : '\u2191';
-        clResults.innerHTML = matches.map((person) => `<tr data-cl-row="${gbEsc(person.id)}" aria-selected="${String(person.id) === cl.selectedId}">
-          <td><button type="button" class="cl-result" data-cl-id="${gbEsc(person.id)}" aria-pressed="${String(person.id) === cl.selectedId}"><strong>${clHighlight(person.firstName)} ${clHighlight(person.lastName)}</strong></button></td>
-          <td><span class="cl-rank">${clHighlight(person.rank) || 'Not provided'}</span></td>
-          <td>${gbEsc(person.studio || 'Not provided')}</td>
-          <td>${clDivision(person) ? `<span aria-label="Group Division ${gbEsc(clDivision(person))}">${gbEsc(clDivision(person))}</span>` : '<span class="cl-muted">Not assigned</span>'}</td>
-          <td${clRing(person) === 'Not assigned' ? ' class="cl-muted"' : ''}>${gbEsc(clRing(person))}</td>
-        </tr>`).join('');
+        clResults.innerHTML = matches.length ? pageMatches.map((person) => `<tr data-cl-row="${gbEsc(person.id)}" aria-selected="${String(person.id) === cl.selectedId}">
+          <td>${clHighlight(person.associationNumber || '—')}</td>
+          <td><button type="button" class="cl-result" data-cl-id="${gbEsc(person.id)}" aria-pressed="${String(person.id) === cl.selectedId}"><strong>${[person.firstName, person.lastName].filter(Boolean).map(clHighlight).join(' ') || 'Unnamed competitor'}</strong></button></td>
+          <td>${clAge(person) == null ? '—' : gbEsc(clAge(person))}</td>
+          <td>${gbEsc(person.gender || '—')}</td>
+          <td><span class="cl-rank">${gbEsc(person.rank || '—')}</span></td>
+          <td>${gbEsc(person.studio || '—')}</td>
+          <td>${clDivisionMarkup(person)}</td>
+        </tr>`).join('')
+          : `<tr><td class="empty-state" colspan="7">${cl.ready ? 'No matching competitors found.'
+            : cl.eventName ? 'Competitor roster unavailable.' : 'Select a tournament to load its saved competitors.'}</td></tr>`;
         const person = matches.find((entry) => String(entry.id) === cl.selectedId);
         const section = (title, fields) => `<section class="cl-detail-section"><h4>${title}</h4><dl>${fields.map(([label, value]) =>
-          `<dt>${gbEsc(label)}</dt><dd>${gbEsc(value || 'Not provided')}</dd>`).join('')}</dl></section>`;
+          `<dt>${gbEsc(label)}</dt><dd>${label === 'Saved division' ? value : gbEsc(value || 'Not provided')}</dd>`).join('')}</dl></section>`;
         clDetails.innerHTML = person ? `<div class="cl-detail-heading">
           <h3>${gbEsc([person.firstName, person.lastName].filter(Boolean).join(' '))}</h3>
           <p>${gbEsc(person.studio || 'Studio not provided')}</p><span class="cl-rank">${gbEsc(person.rank || 'Rank not provided')}</span>
@@ -4607,11 +5227,13 @@
           ['First name', person.firstName], ['Last name', person.lastName],
           ['Parent/Guardian', [person.parentFirstName, person.parentLastName].filter(Boolean).join(' ')],
           ['Phone', clPhone(person.phone)], ...(person.email ? [['Email', person.email]] : [])
-        ]) + section('Competition Information / Assignments', [
+        ]) + section('Competition Information', [
           ['Rank', person.rank], ['Studio', person.studio],
-          ['Group division', clDivision(person) ? `Division ${clDivision(person)}${person.groupDivisionName ? ` - ${person.groupDivisionName}` : ''}` : 'Not assigned'],
-          ...(person.ageRange ? [['Age range', person.ageRange]] : []), ['Ring assignment', clRing(person)]
-        ]) + (clRing(person) === 'Not assigned' ? '<p class="cl-info">This competitor has not been assigned to a ring yet.</p>' : '')
+          ['Association / TSD ID', person.associationNumber],
+          ['Age', clAge(person) == null ? '' : String(clAge(person))],
+          ['Gender', person.gender],
+          ['Saved division', clDivision(person) ? `${clDivisionMarkup(person)}${person.groupDivisionName ? ` · ${gbEsc(person.groupDivisionName)}` : ''}` : 'Not assigned']
+        ])
           + `<section class="cl-detail-section"><h4>Notes</h4><p class="cl-muted">${gbEsc(person.notes || 'No notes provided.')}</p></section>` : '';
         renderState();
       }
@@ -4620,68 +5242,96 @@
         const token = ++cl.requestToken;
         clearTimeout(cl.timer);
         const notice = document.getElementById('clNotice');
+        cl.busy = true;
+        clRender();
         try {
-          await refreshActiveEvent();
-          if (token !== cl.requestToken || currentView !== 'competitors') return;
-          const eventName = state.activeEventName;
-          if (!eventName || state.activeEventError) throw new Error(state.activeEventError || 'No active event. Activate an event first.');
+          const eventName = state.selectedEventName;
+          if (!eventName || !eventExists(eventName)) {
+            cl.eventName = '';
+            cl.roster = []; cl.savedGroups = []; cl.selectedId = ''; cl.ready = false;
+            throw new Error('Select a tournament from the page reference above.');
+          }
           if (cl.eventName !== eventName) {
             clClearFilters();
-            cl.roster = []; cl.rings = []; cl.selectedId = ''; cl.ready = false;
+            cl.query = ''; clSearch.value = ''; cl.page = 1;
+            cl.roster = []; cl.savedGroups = []; cl.selectedId = ''; cl.ready = false;
             cl.eventName = eventName;
             clRender();
           }
           const roster = await fetchJson(`/api/competitors?eventName=${encodeURIComponent(eventName)}`);
           if (!Array.isArray(roster) || roster.some((person) => !person || person.id == null)) throw new Error('Invalid competitor roster returned by server.');
-          let rings = [], ringError = '';
+          let savedGroups = [];
           try {
-            const board = await fetchJson(`/api/rings?eventName=${encodeURIComponent(eventName)}`);
-            if (!Array.isArray(board.rings)) throw new Error('Invalid ring data returned by server.');
-            rings = board.rings;
+            const result = await fetchJson(`/api/groups?eventName=${encodeURIComponent(eventName)}`);
+            if (!Array.isArray(result.groups)) throw new Error('Invalid saved division data returned by server.');
+            savedGroups = result.groups;
           } catch (error) {
-            ringError = error.message;
-            console.error('Competitor lookup ring refresh failed:', error);
+            console.error('Competitor saved divisions refresh failed:', error);
           }
-          const active = await fetchJson('/api/events/active');
           if (token !== cl.requestToken || currentView !== 'competitors') return;
-          if (active.activeEvent !== eventName) throw new Error('The active event changed. Refresh Competitor Lookup.');
-          cl.roster = roster; cl.rings = rings; cl.ringError = ringError; cl.ready = true;
+          if (state.selectedEventName !== eventName) return;
+          cl.roster = roster; cl.savedGroups = savedGroups; cl.ready = true;
           clFilterOptions();
-          notice.textContent = ringError ? `Ring assignments unavailable: ${ringError}` : '';
-          notice.className = ringError ? 'notice visible warn' : 'notice';
+          notice.textContent = '';
+          notice.className = 'notice';
           clRender();
         } catch (error) {
           if (token !== cl.requestToken || currentView !== 'competitors') return;
           console.error('Competitor lookup refresh failed:', error);
-          cl.roster = []; cl.rings = []; cl.ready = false; cl.selectedId = '';
+          cl.roster = []; cl.savedGroups = []; cl.ready = false; cl.selectedId = '';
           notice.textContent = `Unable to load Competitor Lookup: ${error.message}`;
           notice.className = 'notice visible error';
           clRender();
         } finally {
-          if (token === cl.requestToken && currentView === 'competitors') cl.timer = setTimeout(clLoad, 10000);
+          if (token === cl.requestToken && currentView === 'competitors') {
+            cl.busy = false;
+            clRender();
+            cl.timer = setTimeout(clLoad, 10000);
+          }
         }
       }
-      clSearch.addEventListener('input', clRender);
-      clSearch.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); clRender(); } });
-      document.getElementById('clSearchBtn').addEventListener('click', clRender);
-      document.getElementById('clFiltersBtn').addEventListener('click', () => {
-        const panel = document.getElementById('clFilters');
-        panel.hidden = !panel.hidden;
-        document.getElementById('clFiltersBtn').setAttribute('aria-expanded', String(!panel.hidden));
-      });
-      document.getElementById('clApplyFiltersBtn').addEventListener('click', () => {
+      document.getElementById('clToolbar').addEventListener('submit', (event) => {
+        event.preventDefault();
+        cl.query = clSearch.value.trim().toLowerCase();
+        cl.page = 1;
         cl.filters = {
-          name: document.getElementById('clFilterName').value.trim().toLowerCase(),
-          rank: document.getElementById('clFilterRank').value, studio: document.getElementById('clFilterStudio').value,
-          division: document.getElementById('clFilterDivision').value, ring: document.getElementById('clFilterRing').value,
-          unassigned: document.getElementById('clFilterUnassigned').checked
+          studio: document.getElementById('clFilterStudio').value,
+          gender: document.getElementById('clFilterGender').value,
+          ageMin: document.getElementById('clFilterAgeMin').value,
+          ageMax: document.getElementById('clFilterAgeMax').value
         };
         clRender();
       });
-      document.getElementById('clClearFiltersBtn').addEventListener('click', () => { clClearFilters(); clRender(); });
-      document.getElementById('clSortName').addEventListener('click', () => { cl.descending = !cl.descending; clRender(); });
+      document.getElementById('clPageSize').addEventListener('change', () => {
+        const size = Number(document.getElementById('clPageSize').value);
+        cl.pageSize = [25, 50, 100, 250].includes(size) ? size : 250;
+        cl.page = 1;
+        clRender();
+      });
+      document.getElementById('clPagination').addEventListener('click', (event) => {
+        const button = event.target.closest('[data-cl-page]');
+        if (!button || button.disabled || !cl.ready) return;
+        const page = Number(button.dataset.clPage);
+        if (!Number.isInteger(page) || page < 1) return;
+        cl.page = page;
+        clRender();
+        document.getElementById('clTableWrap').scrollTop = 0;
+        const current = document.getElementById('clPagination').querySelector('[aria-current="page"]');
+        if (current) current.focus();
+      });
+      document.getElementById('clSortName').addEventListener('click', () => { cl.descending = !cl.descending; cl.page = 1; clRender(); });
       document.getElementById('clRefreshBtn').addEventListener('click', clLoad);
+      function openSavedDivision(division) {
+        pendingDivisionSelection = String(division);
+        showView('groups', navById.get('groups'));
+      }
       clResults.addEventListener('click', (event) => {
+        const divisionLink = event.target.closest('[data-cl-division]');
+        if (divisionLink && divisionLink.getAttribute('data-cl-division') != null) {
+          event.preventDefault();
+          openSavedDivision(divisionLink.getAttribute('data-cl-division'));
+          return;
+        }
         const button = event.target.closest('[data-cl-id], [data-cl-row]');
         if (!button || !cl.ready) return;
         cl.selectedId = button.dataset.clId ?? button.dataset.clRow;
@@ -4695,24 +5345,29 @@
         clSearch.focus();
       });
       clDetails.addEventListener('click', (event) => {
+        const divisionLink = event.target.closest('[data-cl-division]');
+        if (divisionLink && divisionLink.getAttribute('data-cl-division') != null) {
+          event.preventDefault();
+          openSavedDivision(divisionLink.getAttribute('data-cl-division'));
+          return;
+        }
         if (!event.target.closest('[data-cl-close]')) return;
         cl.selectedId = '';
         clRender();
         clSearch.focus();
       });
+      document.getElementById('clImportBtn').addEventListener('click', () => showView('import', importNavItem));
 
-      const dayOfLabels = ['Ring Assignment', 'Head Table', 'Competitors', 'Judges & Volunteers', 'Reports & Results'];
       function syncDayOfNav() {
-        const unlocked = Boolean(state.activeEventName) && !state.activeEventError;
         navItems.forEach((item) => {
-          if (!dayOfLabels.includes(navLabel(item))) return;
-          item.classList.toggle('locked', !unlocked);
-          item.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
-          item.title = unlocked ? `Open ${navLabel(item)}.` : 'Activate an event on Event Setup to unlock';
+          if (!dayOfViews.includes(item.getAttribute('data-nav-id'))) return;
+          item.classList.remove('locked');
+          item.setAttribute('aria-disabled', 'false');
+          item.title = `Open ${navLabel(item)} and choose the Active Tournament for live operations.`;
         });
       }
 
-      const groupNavItem = navItems.find((item) => navLabel(item) === 'Group Builder');
+      const groupNavItem = navById.get('groups');
       importNextBtn.addEventListener('click', () => {
         if (!importNextBtn.disabled && groupNavItem) showView('groups', groupNavItem);
       });
@@ -4720,21 +5375,56 @@
       if (sidebar && navItems.length) {
         navItems.forEach((item) => {
           item.addEventListener('click', () => {
-            const label = navLabel(item);
             if (item.getAttribute('aria-disabled') === 'true') return;
-            showView(label === 'Event Setup' ? 'event-setup' : label === 'Import' ? 'import' : label === 'Group Builder' ? 'groups' : label === 'Ring Assignment' ? 'ring-assignment' : label === 'Head Table' ? 'head-table' : label === 'Competitors' ? 'competitors' : 'placeholder', item);
+            showView(item.getAttribute('data-nav-id'), item);
           });
         });
       }
 
+      document.querySelectorAll('[data-nav-external]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+          if (activationBusy) { event.preventDefault(); showNotice('Wait for live activation to finish before leaving.', 'warn'); return; }
+          if (!allowLeavingTournamentForm()) { event.preventDefault(); return; }
+          if (!importBusy) return;
+          event.preventDefault();
+          setImportNotice('Wait for the import to finish before changing pages.', 'warn');
+        });
+      });
+      let restoringHistory = false;
+      window.addEventListener('popstate', (event) => {
+        if (restoringHistory) { restoringHistory = false; return; }
+        const targetIndex = event.state?.tournamentNavIndex;
+        if (activationBusy || importBusy || !allowLeavingTournamentForm()) {
+          if (importBusy) setImportNotice('Wait for the import to finish before changing pages.', 'warn');
+          // Undo in-shell traversal rather than replacing an unrelated history entry.
+          if (Number.isInteger(targetIndex) && targetIndex !== historyIndex) {
+            restoringHistory = true;
+            window.history.go(historyIndex - targetIndex);
+          }
+          else if (!Number.isInteger(targetIndex)) window.history.replaceState(
+            { tournamentNavIndex: historyIndex }, '', currentPageUrl);
+          return;
+        }
+        setMetadataPanelVisible(false);
+        if (Number.isInteger(targetIndex)) historyIndex = targetIndex;
+        const view = new URLSearchParams(window.location.search).get('view');
+        showView(navById.has(view) ? view : 'event-setup', undefined, 'none');
+      });
       initializePage()
         .then(() => {
-          const view = new URLSearchParams(window.location.search).get('view');
-          if (view === 'import') showView('import', importNavItem);
-          if (view === 'groups') showView('groups', groupNavItem);
-          if (view === 'ring-assignment') showView('ring-assignment', navItems.find((item) => navLabel(item) === 'Ring Assignment'));
-          if (view === 'head-table') showView('head-table', navItems.find((item) => navLabel(item) === 'Head Table'));
-          if (view === 'competitors') showView('competitors', navItems.find((item) => navLabel(item) === 'Competitors'));
+          const params = new URLSearchParams(window.location.search);
+          const requestedTournament = findExistingEventName(params.get('eventName'));
+          if (requestedTournament) {
+            eventNameInputEl.value = requestedTournament;
+            return refreshSelectedEventFromInput().then(() => {
+              pendingDivisionSelection = params.get('division') || '';
+              const view = params.get('view');
+              showView(navById.has(view) ? view : 'event-setup', undefined, 'replace');
+            });
+          }
+          pendingDivisionSelection = params.get('division') || '';
+          const view = params.get('view');
+          showView(navById.has(view) ? view : 'event-setup', undefined, 'replace');
         })
         .catch((error) => showNotice(error.message, 'error'));
     }());

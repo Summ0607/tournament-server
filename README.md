@@ -7,6 +7,279 @@ Feature overview for Audience Monitor, Competitor Lookup, and Day-of clocks:
 Rehearsal and developer instructions are maintained separately in the
 [Simulator guide](docs/simulator-guide.md).
 
+Tournament Management uses one shared selected-tournament context for Tournament,
+Competitors, Import, Divisions, and planned tournament pages. Competitors shows the
+selected tournament's full saved roster by default and supports name/TSD ID search,
+studio, gender, and age filters. Saved division links open the corresponding saved
+division without changing the active tournament; Division Assignments and Head Table
+remain explicitly scoped to the active tournament.
+
+## Manual Team Management (first delivery)
+
+Expand **Tournament Management → Team Management** for **Teams** and **Settings**.
+These pages use the shared selected tournament, never implicitly the active/default
+database. Teams are persisted in that event's `tournament.db`.
+
+- Create, edit, or individually delete **Team Sparring (TS)** and **Team Hyung (TH)**
+  teams from any registered competitors, regardless of individual discipline
+  eligibility. Mixed studios, ages and ranks are allowed.
+- Each discipline defaults to **exactly 3 members, single gender**. Tournament-specific
+  Settings independently configure Team Sparring and Team Hyung to require 1–50
+  members and permit single or mixed gender. Saves that invalidate existing teams
+  return an explanation.
+- A competitor may belong to only one team **per discipline**, but can join both.
+  Membership and team updates are transactional with database uniqueness and
+  foreign-key protection. Captain is recomputed from current registration:
+  highest normalized rank (TTLD, G10 through G1, CDB, D1 through D10), then
+  oldest age, then lowest competitor ID. Unknown ranks/genders and invalid ages
+  are explicitly rejected, not guessed. Stale members are reported on load.
+- The full-center member picker searches name, ID, age, gender, rank and studio,
+  paginates 25 per page, and retains selections through filtering. Unsaved team
+  and settings edits are guarded on page/history/tournament navigation.
+- All team and settings writes lock after operational use, using the existing
+  event configuration lock. Stop tablet activity, then use **Reset run / Return
+  to preparation** from Tournament; this preserves teams and team settings.
+  Delete all teams before replacing an imported competitor roster; imports are
+  blocked while teams exist to prevent dangling memberships.
+
+**Not delivered:** automatic building, Unassigned Competitors workflow, team
+divisions, team scoring, simulator integration or bulk deletion. The first two
+buttons are disabled. Division always displays **Unassigned** without a link;
+team data is never assigned to individual saved divisions.
+
+API: `GET/POST /api/teams`, `PUT/DELETE /api/teams/:id`, and
+`PUT /api/teams/settings`, each requiring an explicit `?eventName=…`. Team writes
+accept `{name, discipline: "TS"|"TH", memberIds: [numeric IDs]}`; settings accept
+`{TS: {teamSize, genderPolicy: "single"|"mixed"}, TH: {teamSize, genderPolicy: "single"|"mixed"}}`.
+Settings are independent for each discipline. Existing shared settings are migrated
+to both disciplines without changing their values; subsequent edits are independent.
+Settings are displayed in stacked Team Sparring and Team Hyung cards, each with
+Gender, Team Size, and its own Save button. Each card saves only its discipline
+and preserves unsaved edits in the other card. The settings API also accepts
+just one discipline key for an independent update.
+
+## Visual Definitions
+
+The default navigation width is 220px; navigation font sizes remain unchanged.
+Explicitly saved sidebar widths take precedence over this default.
+
+### Running Results
+
+**Tournament Management → Results** shows read-only category standings for the
+selected tournament. Choose **Live tournament** or a saved simulation in **Result
+source**, then use **Refresh Results** to reload accepted packets. Sources are
+never combined. The latest completed packet per division is counted once.
+The page uses current tournament Competition Types, Medal Points and Grand
+Champion Categories without changing tablet scores or stored results.
+Only individual medals count. Equal point totals are resolved by highest belt
+rank (D3 before D2 before D1, CDB before G1, G1 before G2 through G10), then the
+lowest numeric portion of the G/D association/member number (not the belt number).
+Missing or invalid member numbers follow valid numbers at the same points/rank.
+Competitors still equal share a position, displayed alphabetically;
+the top five ranks include all remaining tied competitors. Eligible counts cover competitors
+in completed packets, not the entire registration roster.
+Simulation demographics come from the saved age-only roster and immutable
+simulation tournament date. Live eligibility uses stored age on the tournament
+date. Missing or stale ages must be corrected rather than defaulted to zero.
+Missing required scoring definitions or invalid data produce explicit errors.
+`GET /api/tournament-results?eventName=...&source=live` returns standings and available
+sources; a simulation run ID selects its isolated results. No results are written.
+
+### Ring Judges
+
+**Tournament Management → Ring Management → Ring Judges** is a selected-tournament
+preparation directory. Add/Edit, search, filtered select-all and confirmed
+**Delete selected** operate only on judges, never on competitor registrations.
+**Populate Judges from Competitors** adds Dan-ranked competitors (D1–D10)
+aged 18+ on the tournament date. Existing linked competitors or matching
+case-insensitive Association IDs are skipped; existing edits are not overwritten.
+Population does not certify a judge or establish availability. Missing or stale tournament ages
+for Dan competitors prevent population and are reported for correction.
+
+Certification is optional free text, initially blank. **Flagged for Review** and
+review notes capture follow-up observations, not automatic assignment exclusions.
+Priority and Manual Only are omitted; **Judge Assignments** remains Planned.
+**Populate Judges from Volunteers** includes primary or secondary Judging
+volunteers aged 18+ on the tournament date with Dan rank, copying certification.
+Linked volunteer IDs and nonblank Association IDs prevent repeated population;
+existing judge edits are not overwritten. Keep a type named **Judging** for this
+workflow; if it is renamed or deleted, population reports the missing type.
+
+Judge data persists atomically in each event's `ring-judges.json`, with revision
+checks rejecting stale writes. Operational use locks every write until Reset Run;
+reading, searching and opening read-only details remain available.
+`GET/POST /api/ring-judges`, `PUT /api/ring-judges/:id`,
+`POST /api/ring-judges/populate` and `POST /api/ring-judges/delete` require an
+explicit `eventName`. Writes include `revision`; saves include `judge`, deletes
+include `ids`. No file is written until the first change. Reset Run preserves
+the directory alongside other preparation settings.
+
+### Volunteer Management
+
+The Tier 2 **Volunteer Management** group, below Competitors, contains Tier 3
+**Volunteers** and **Volunteer Types**. Both support Add/Edit, search, filtered
+select-all, confirmed Delete selected, and Reload Saved. Types initially include
+Setup, Teardown, Judging and Security. A type referenced as primary or secondary
+cannot be deleted until volunteers are reassigned. Primary is required, secondary
+is optional and cannot equal primary.
+
+Manual volunteers require First Name, Last Name, age on the tournament date,
+School and recognized Rank. Assoc ID and Certification may be blank.
+CSV DOB accepts YYYY-MM-DD or MM/DD/YYYY and is converted transiently to
+tournament age; DOB is not retained in the volunteer directory.
+CSV import accepts exactly these headers (order may vary):
+
+```csv
+First Name,Last Name,DOB,Assoc ID,School,Rank,Certification,Primary Volunteer Type,Secondary Volunteer Type
+Jane,Doe,1990-05-12,D12345,Example School,D2,,Judging,Setup
+```
+
+Type names match case-insensitively. Imports validate the entire file before
+saving; any bad row or duplicate nonblank Assoc ID within the file rejects all
+changes. Matching nonblank IDs update existing volunteers, preserving internal
+identity. Blank IDs always add, including on repeated imports. Quoted CSV fields
+are supported. Maximum file size is 2 MB. Errors report row numbers.
+
+Data is tournament-specific and persists atomically in `volunteers.json` with one
+revision covering volunteers and types. Operational use locks every write until
+Reset Run, which preserves the directory. Volunteer changes never update copied
+judges or competitor registrations automatically.
+`GET/POST /api/volunteers`, `PUT /api/volunteers/:id`,
+`POST /api/volunteers/import` (`csv` text), `POST /api/volunteers/delete` (`ids`),
+`POST /api/volunteer-types`, `PUT /api/volunteer-types/:id` (`name`), and
+`POST /api/volunteer-types/delete` (`ids`) require explicit `eventName`; writes
+require `revision`. Volunteer saves include `volunteer`.
+
+### Tournament age and birth-date minimization
+
+Competitor and volunteer imports calculate age on the configured tournament
+date, not today's date. Application records retain only `age` and `ageAsOf`.
+Manual volunteer entry requests that tournament-date age directly. Grouping,
+judge eligibility and results use these saved values; a legitimate age of zero
+is distinct from a missing age. Once age-bearing records exist, `age-context.json`
+locks the event date. Reset Run does not unlock it; create a new tournament and
+import fresh registration data for a different date.
+
+Existing CSV formats remain supported: DOB is input for age calculation, not a
+stored field. For a fresh development start, create a tournament and reimport
+the original CSV. Original CSV files are not deleted automatically.
+Existing browser group drafts containing birth dates are discarded with a notice
+when that browser next opens Tournament Management. Reload previously used
+browsers. Copies outside application-managed storage, browser/OS caches and
+external backups require a separate retention review. Age is still personal
+information; minimization alone is not a legal-compliance guarantee.
+
+### Schools
+
+**Administration → Schools** provides a server-wide school directory, with linked
+school names for editing and an **Add School** overlay. Fields are School Name,
+semicolon-separated Alternate Names, Chief Instructor, and Archived. The initial
+directory contains Vaughns Dojang I - Phoenixville (Master David Painter),
+Vaughns Dojang II - Spring Valley (Mr. Ryan Clark), and Vaughns Dojang IV - Audubon
+(GM Charles Vaughn). Towns are part of School Name, not aliases.
+
+The directory initializes once on first access and persists atomically in the
+ignored runtime file `schools.json`. `GET/POST /api/schools` lists/adds schools;
+`PUT /api/schools/:id` edits them. Duplicate names are rejected case-insensitively.
+Row checkboxes, select-all and **Delete selected** support confirmed permanent
+directory deletion via `POST /api/schools/delete` with `{ids}`.
+Archiving, deletion and alias edits do not change existing registration data or
+stored school names. Automatic alias matching on import is not enabled.
+Cancel/Escape confirms before discarding edits; browser unload guards unsaved
+school drafts. Save failures retain the draft and display an error.
+
+### Ranks
+
+**Administration → Ranks** is a server-wide reference directory using the supplied
+rank names, belt descriptions, alternate names and display weights. **Add Rank**
+and linked names open an Add/Edit overlay; selection checkboxes support confirmed
+bulk deletion. Higher sort weights display first; these weights do not change
+scoring, division eligibility, rank normalization or team captain selection.
+
+The starting order is combined **TTLD** (Tiny Tigers / Little Dragons, weight 120),
+separate **TT** (118) and **LD** (117), then **SD**
+(Special Dragons / Special Needs, 113), followed by G10–G1, CDB and Dan/title entries. `Gx` identifies Gup number
+and `Dx` Dan number. Candidate/Master titles may share the same Dan code. Ko Dan Ja
+and Grandmaster have blank codes because the screenshot does not establish a
+numeric level; no level is guessed. D10 is accepted for manually added entries.
+Separate TT/LD and SD entries do not enable new competitor-import behavior.
+
+The directory initializes once on first access and persists atomically in ignored
+`ranks.json`. APIs: `GET/POST /api/ranks`, `PUT /api/ranks/:id`, and
+`POST /api/ranks/delete` with `{ids}`. Duplicate names are rejected, but shared
+codes are allowed. Cancel/Escape and navigation guard unsaved rank drafts.
+Deleting reference entries does not delete or modify live competitor data.
+
+### Competition Settings
+
+**Tournament Management → Competition Settings** contains **Competition Types**,
+**Grand Champion Categories**, and **Medal Points**, each scoped to the shared
+selected tournament, not the live active pointer. Compact tables provide Add/Edit
+overlays and confirmed selected-entry deletion. Unsaved overlays guard tournament
+switches, navigation and browser unload.
+
+These settings feed the **read-only Results standings**, but do not change tablet
+scoring, import, division assignment or registration. Operational use locks
+writes until Reset Run. Competition Types start with H, W, S, B, TS, CH, D and TH;
+TS and TH are correctly marked as team competitions. Medal points start at
+10 / 8 / 5 / 5 for first, second and the two third-place entries.
+
+Grand Champion defaults include Female/Male Youth (1–17), Adult (18–34) and Senior
+(35–110) categories. Gup ranges include G10 through CDB; Black Belt ranges are
+D1–D3. TTLD, TT, LD and SD are excluded. Code-based ranges replace screenshot
+database IDs; the supported reference range choices currently span G10–G1, CDB,
+and D1–D3.
+
+Before first save the API returns starting reference rows without writing event
+files. Edits persist atomically in the tournament folder as `competition-types.json`,
+`grand-champion-categories.json`, and `medal-points.json`. They survive Reset Run.
+API: `GET/POST /api/competition-settings/:kind`,
+`PUT /api/competition-settings/:kind/:id`, and
+`POST /api/competition-settings/:kind/delete`, all requiring `?eventName=…`.
+Writes include the last-read `revision`; stale writes are rejected. Save bodies
+use `{revision, row}`, and deletion uses `{revision, ids}`. Reload Saved refreshes
+after concurrent-edit errors. Duplicate names (and competition codes) are rejected.
+
+Administration's **Simulator** and **Server Maintenance** navigation entries open
+their existing interfaces inside the shared workspace, retaining the navigation
+tree and browser history. Their standalone `/simulator/` and `/admin/` URLs remain
+available. Embedded copies omit their duplicate banners; leaving the page unloads
+the embedded UI and its polling, but does not stop server-side simulation runs.
+Restart confirmation and reconnect behavior are unchanged.
+The Simulator also adopts the saved font, control, spacing and corner-radius
+definitions in both embedded and standalone use. Run overview metrics use compact
+cards and body-sized values; run controls share a consistent size and baseline.
+Coarse-pointer devices retain at least 44px control targets. Colors and simulator
+behavior are unchanged.
+
+**Administration → Visual Definitions** is an editable reference board for colors,
+font families and sizes, spacing, control heights, corner radii, sidebar/card widths,
+and full-window versus inset layout. Starting values are proposed compact guidelines
+based on the reference design, not a claim that every existing page uses them.
+
+Draft changes preview only inside a sandboxed sample frame. Saved **typography,
+style and dimensions apply on refresh** to the Tournament Management shell and
+its integrated tournament, competitor, division, team and ring-management pages.
+Colors remain page-owned and are not applied from the definitions. The Simulator
+also adopts typography and dimensions; other standalone tools and tablets are
+unchanged. Tournament configuration and operational
+behavior are unaffected. Form/card width limits do not cap roster tables or
+operational boards, which need the available workspace. Existing mobile navigation,
+details panels and division-builder scrolling are preserved.
+Color changes are not automatically contrast-certified; review readability before
+adopting a palette.
+
+Definitions are server-wide and saved atomically in the ignored runtime file
+`visual-definitions.json`. `GET/PUT /api/visual-definitions` exchanges
+`{revision, values}`; stale saves are rejected to avoid overwriting another staff
+member's edits. Reload Saved confirms before discarding edits. Starting Values
+loads a draft only; saving is explicit. Page navigation and browser unload guard
+unsaved edits. Read or save failures are reported rather than replaced by defaults.
+Presentation loading failures explicitly retain the previous presentation rather
+than pretending guidelines were loaded. With no saved file, the API returns the
+starting definitions. This adds no authentication; access uses the application's
+existing network model.
+
 ## Release checkpoint: 2026-10-29
 
 This checkpoint completes the simulator timing and audience-view work before
@@ -115,46 +388,43 @@ are treated as awaiting competitors.
 
 Open **Competitors** in Tournament Management, or use
 `/tournament-management/?view=competitors`. This staff-facing lookup uses the
-**active event's saved roster**, independently of the selected preparation
+**selected tournament's saved roster**, independently of the active operational
 event or unsaved group-builder drafts.
 
-- Enter **at least two characters per term** of first name, last name, or rank.
+- Enter **at least two characters per term** of name, association/TSD ID, or rank.
   Separate multiple terms with commas for **OR matching**: `Anna, G1` finds
   anyone matching Anna or G1. Terms are trimmed and deduplicated; empty and
   single-character terms are ignored. Each competitor appears only once.
-  Case-insensitive literal substring matching displays **all matches**, sorted
+  Case-insensitive literal substring matching finds matches across the roster, sorted
   by last name then first name. Matching characters are highlighted; studio,
   parent name, and phone are not search fields.
-- A styled search toolbar provides Search, collapsible Filters, Refresh, and
-  the actual result count. Live search still runs while typing; Search and
-  Enter explicitly run the same search without new API calls.
-- Advanced filters provide full-name substring, exact rank/studio/division/ring,
-  and **Show only unassigned** controls. Apply combines the advanced conditions
-  with AND within the existing comma-separated OR search. A blank search with
-  applied filters can search the roster through filters alone. Unassigned means
-  no identifiable current/queued/completed ring; unavailable ring data is not
-  treated as unassigned. Closing Filters only hides it; Clear filters removes
-  applied conditions without changing search text. Event changes reset filters.
-- An aligned table shows Competitor, Rank, Studio, Division, and Ring.
-  When the results area is at least 760px wide, advanced filters align with
-  those same columns using shared widths, with more room for Name and Studio.
-  In narrower results areas, filters wrap into a compact grid instead.
-  Base rows are 42px high with 14px text, restrained rank chips, highlighted
+- One always-visible toolbar provides labeled Search, School/Studio and Gender
+  dropdowns (All), compact Min Age/Max Age inputs, Per page, and **Filter**.
+  Controls wrap on smaller screens. **Filter** or **Enter** applies search and
+  filters together with AND; typing alone does not change results or counts.
+  Clear the search/ages and select All, then Filter, to restore the full roster.
+  A blank search browses the roster without requiring filters.
+- **Per page** defaults to **250**, with 25, 50, 100, and 250 choices that
+  take effect immediately without applying pending filter edits. Filtering and
+  surname sorting run before client-side pagination. Above the table, a summary
+  such as **Showing 1–250 of 2,036** accompanies Previous/Next and numbered
+  pages; the current page is distinct and large page counts use a bounded window.
+  Empty results report **Showing 0–0 of 0**. Applying filters, changing page size,
+  sorting, or changing the selected tournament resets to page one. Refresh
+  preserves a valid page and clamps it if the roster shrinks.
+- An aligned table shows TSD ID, Competitor, Age, Gender, Rank, Studio/School,
+  and Division. Base rows are 36px high with 12px text, restrained rank chips, highlighted
   matches, subtle alternating backgrounds, and a blue selected-row accent.
-  The Competitor heading reverses last-name/first-name sorting. All results
-  remain displayed (no result cap or pagination); the footer reports the
-  actual range and total, including `Showing 0-0 of 0 results` when empty.
-  Main-panel results show name, rank, studio, saved group division,
-  and identifiable ring. Select a result with mouse or keyboard to open the
+  The Competitor heading reverses last-name/first-name sorting.
+  Select a result with mouse or keyboard to open the
   details panel containing **first name, last name, parent name, phone, rank,
-  studio, group division, and ring assignment**. Contact fields are not repeated
+  studio, and saved group division**. Contact fields are not repeated
   in the results. Missing contact/registration fields say **Not provided**.
 - The selected detail panel has a prominent name, studio, rank badge, and close
   control, followed by Personal Information, Competition Information /
   Assignments, and Notes sections. Email, an explicit age-range value, and
   notes are shown only from existing data; no age range or notes are inferred.
-  Missing notes are explicitly indicated. A subtle notice identifies an
-  unassigned ring. Close or Escape from the details returns focus to search.
+  Missing notes are explicitly indicated. Close or Escape from the details returns focus to search.
   Standard ten-digit phone numbers display as `xxx-yyy-zzzz` without changing
   saved values; other formats/extensions remain intact. The side panel grows
   from 420px to a 460px maximum, taking 65% of added viewport width above
@@ -168,22 +438,19 @@ event or unsaved group-builder drafts.
   one main column (existing navigation remains); at **600px and below**, table
   cell spacing/type is reduced. Filter controls wrap automatically and long
   values wrap within cells instead of forcing page-wide horizontal scrolling.
-- Ring labels distinguish **current**, **queued**, and **completed** history.
-  Live assignments take precedence over historical completed assignments;
-  multiple conflicting matches say **Ambiguous**, rather than guessing a ring.
-  No division or ring assignment is explicitly reported as **Not assigned**.
 - Data refreshes every ten seconds or using **Refresh**, retaining a selection
-  only while that competitor still matches. Event context is checked again
-  after loading; a changed/unverifiable event or failed roster refresh clears
-  old results and personal details. Ring-only failures leave registration
-  searchable but explicitly mark ring assignments unavailable.
-- Changing pages clears the loaded lookup results/details. A nonempty search
+  only while that competitor still matches, even when on another results page.
+  Paging, sorting, and page-size changes do not discard matching details.
+  Selected tournament context is checked again after loading; a changed/invalid
+  tournament or failed roster refresh clears old results and personal details.
+  Division lookup failures leave registration searchable without division links.
+- Leaving the Competitors view clears loaded lookup results/details. A nonempty search
   without a two-character term clears matches and closes the details panel.
-  An empty search can still show matches when advanced filters are applied.
-  The page-level **?** explains search, privacy, and assignment states.
+  Tournament changes clear search and filters. The page-level **?** explains the
+  toolbar, pagination, and saved division links.
 
 This is a read-only **staff** feature, not a public competitor-contact screen
-or part of Audience Monitor. It uses existing roster/ring APIs and introduces
+or part of Audience Monitor. It uses existing roster/division APIs and introduces
 no editing actions or data migrations. Refresh the browser to load this UI.
 Volunteer Lookup remains future work. Validate with `npm test` and
 `git diff --check`.
@@ -520,13 +787,54 @@ Run `npm test` for help behavior and workflow regressions.
 
 Start the server with `node group-server.js` and open `http://localhost:3000/`,
 which redirects to the integrated interface at `/tournament-management/`.
-Use its sidebar to move between Event Setup, Import, and Group Builder.
-Direct workflow links are available:
-- Event Setup: `/tournament-management/?view=event-setup`
-- Import: `/tournament-management/?view=import`
-- Group Builder (including review and save): `/tournament-management/?view=groups`
-- Ring Assignment: `/tournament-management/?view=ring-assignment`
+The dark, expandable sidebar retains the event banner and existing details panels.
+Its hierarchy is:
+- **Tournament Management**
+  - **Tournament** (existing Event Setup)
+  - **Competitors**: direct link to the selected-tournament roster. **Import
+    Competitors** is a page action, not a separate sidebar entry.
+  - **Volunteer Management** → **Volunteers** / **Volunteer Types**
+  - **Divisions** (existing Group Builder, including review and save)
+  - **Results** — read-only selected-tournament standings with live/simulation source selection
+  - **Team Management** → **Teams** / **Settings** — manual, tournament-scoped
+  - **Ring Management**: **Ring Judges** — selected-tournament preparation directory;
+    **Judge Assignments** — Planned;
+    **Division Assignments** (existing Ring Assignment)
+  - **Head Table**
+  - **Printing** and **CSV Settings** — Planned
+- **Judge Management**, **Clinic Management**, **Event History** — Planned
+- **Administration**: **Server Maintenance** (`/admin/`) and **Simulator** (`/simulator/`)
+- **Your Account** — Planned
+
+Planned destinations only explain their status; they expose no operational tools
+and do not write tournament data. Navigation uses stable IDs, not display labels.
+Section expansion is remembered in browser storage and active-page ancestors
+automatically open. Container headings use smaller, blue-tinted uppercase text,
+a distinct font treatment, and right-aligned disclosure arrows.
+Native disclosure buttons support Tab and Enter/Space;
+the current page is marked for assistive technology. At tablet/mobile widths
+(960px and below), **Menu** toggles the scrollable sidebar. Escape closes it and
+returns focus to Menu; selecting a page closes it and focuses the page heading.
+Desktop navigation also scrolls independently for long menus.
+
+Existing direct workflow URLs and standalone tools remain available:
+- Tournament / Event Setup: `/tournament-management/?view=event-setup`
+- Import (Competitors page action): `/tournament-management/?view=import`
+- Divisions / Group Builder: `/tournament-management/?view=groups`
+- Division Assignments / Ring Assignment: `/tournament-management/?view=ring-assignment`
 - Head Table: `/tournament-management/?view=head-table`
+- Competitors (selected-tournament roster): `/tournament-management/?view=competitors`
+
+In-shell navigation supports browser Back/Forward without reloading. While an
+import is in progress, page changes and Administration links are blocked;
+in-shell history traversal is restored to the importing page until completion.
+This does not prevent browser-level reloads, tab closure, or leaving the document
+through history outside the shell.
+
+The shared tournament selector scopes Competitors, Import, Divisions, and other
+preparation pages. Live pages explicitly reference the active tournament.
+Import retains its direct URL and browser history support; Competitors remains
+highlighted in the sidebar while importing.
 
 On pre-tournament views the banner describes the **selected event**, including its configured event date
 (not today's date) and status: Not active, Active, or Unsaved changes.
@@ -534,10 +842,21 @@ No selection and missing dates are labeled explicitly. The separate Active Event
 indicator identifies the event used by day-of workflows.
 On day-of views the banner switches explicitly to **Active Event** and uses that
 event's configured date. Selecting a different event for preparation does not
-change the day-of context; activation remains explicit. Day-of navigation stays
-locked when no event is active or the active context cannot be loaded. An open
+change the day-of context; activation is available only through the **Active Tournament**
+selector on Division Assignments, Head Table, and Judge Assignments.
+Ring Judges instead uses the selected preparation tournament and never activates it.
+Selecting the current active tournament makes no request and needs no confirmation.
+Selecting another asks “Switch live operations to [name]?” and explains that
+connected tablets will use the new tournament. Cancel or failed activation preserves
+the previous active selection and never changes the preparation selection.
+The selector is disabled while activation runs; successful switches clear stale
+ring data and reload the current live page. Day-of navigation remains available
+without an active tournament so the chooser can be used; no live rings are requested
+until a tournament is active. An open
 day-of view reports No active event or Unavailable rather than falling back to
-the selected event. Ring Assignment and Head Table are integrated; the other day-of sections remain placeholders.
+the selected event. Division Assignments, Head Table, and competitor lookup
+remain integrated; planned Ring Management destinations expose only this activation
+selector, not ring-writing actions.
 Restart the server after backend changes; refreshing the page alone does not reload server code.
 
 ### Integrated Ring Assignment
@@ -566,13 +885,31 @@ Ring Assignment cards use two compact lines: ring name with connection status,
 then assignment status with queue count. Cards wrap into a responsive grid
 without horizontal scrolling and remain distinct click/drag targets.
 
-Event Setup has one **Save Changes** action. Event configuration is authoritative;
+**Tournament** opens a **Tournaments** table (Name, Location, Date, Format, Scope,
+Status) with **Create Tournament**. Click a name to inspect/edit its settings in
+the full center workspace, retaining the banner and navigation; settings do not
+use a modal or side details panel. **Save** persists without activating.
+Create/edit has no activation or registration-import actions. Use Ring Management's
+**Active Tournament** selector for activation and **Import Registration** on
+Competitors for import (the internal import URL remains supported).
+Activation primes the target tournament's database cache before atomically writing
+the active pointer; a priming failure leaves the previous pointer and live cache intact.
+The name is the existing folder identity and cannot be renamed after creation.
+**Cancel / Back**, navigation, browser history, and tournament switching guard
+unsaved edits. Save failures remain visible without discarding the form.
+
+Scope is metadata only: Regional (`regional`), National (`national`), World
+(`world`), and In-House (`in-house`). Older tournaments remain **Unspecified**
+(`""`); blank is allowed and invalid supplied values are rejected. Scope is
+preserved by create/modify/read APIs and archived configuration snapshots; it
+does not change judging rules or simulator execution.
+Event configuration is authoritative;
 operational layout dimensions are derived automatically on creation, saving,
 activation, and reading unused event state, including for inactive events.
 Layouts support up to 26 letter columns and 50 numbered rows. Zero dimensions
 mean no operational rings are configured; no default 1-by-2 layout is substituted.
 
-All event settings (labels, date, format, and layout) become read-only once any
+All event settings (labels, date, scope, format, and layout) become read-only once any
 tablet, current/queued/completed assignment, run progress, or result exists.
 The lock persists across pauses, disconnects, server restarts, and individual or
 full assignment resets. Existing in-use layout mismatches preserve operational
@@ -580,13 +917,15 @@ state and are reported in Event Setup; they are never automatically rebuilt.
 The legacy ring configuration endpoint cannot independently change event layout,
 and submitting identical dimensions preserves all ring state.
 
-To abandon a test run, stop tablet activity, select the event in Event Setup, and
+To abandon a test run, stop tablet activity, open the tournament's edit workspace, and
 choose **Reset run / Return to preparation**. Confirmation archives results,
 assignment state, and event configuration under the event's `run-archives`
 directory, then clears operational state and unlocks all settings. Competitors,
 prepared divisions, saved settings, and the active-event selection are preserved.
-Save the new configuration and start again. **Discard edits** only reloads the
-form; the older destructive `/api/events/reset` endpoint remains separate and
+Save the new configuration and start again. **Cancel / Back** only leaves the
+form; a separate restrained **Delete Tournament** danger zone permanently deletes
+the named folder after confirmation. Delete and reset remain available when
+settings are locked. The older destructive `/api/events/reset` endpoint remains separate and
 still removes the event database and results.
 
 ### Integrated Head Table
@@ -657,10 +996,11 @@ page visit, not as zero. Saved divisions load from the requested event's databas
 even when it is not the active event at server startup.
 
 Group Builder distinguishes saved divisions from unsaved changes. Saved,
-fully assigned groups emphasize **Go to Event Setup to Activate** when the event
+fully assigned groups emphasize **Go to Division Assignments** when the event
 is not already active, rather than highlighting **Save & Finish Setup**.
 Editing groups (including drag-and-drop) highlights Save and hides the activation
-shortcut until the changes are successfully saved. Browser drafts are treated
+shortcut until the changes are successfully saved. This opens the live chooser
+without activating the browsing tournament. Browser drafts are treated
 as unsaved work.
 
 ### Retired pages and bookmark compatibility

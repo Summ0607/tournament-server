@@ -1,11 +1,13 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { assertNoBirthDates } = require('./tournamentAge');
 
 const RETRY_DELAYS_MS = [20, 40, 80, 160, 320];
 const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
 const waitBuffer = new Int32Array(new SharedArrayBuffer(4));
 
 function writeJsonAtomicSync(filePath, value) {
+  assertNoBirthDates(value);
   const temporaryPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
   let temporaryCreated = false;
   try {

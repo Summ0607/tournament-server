@@ -4,6 +4,7 @@ const path = require('path');
 const { compareRunningOrder } = require('../assets/division-rules');
 const { normalizeTournamentDays, isDayBlocked } = require('./tournamentSchedule');
 const { writeJsonAtomicSync } = require('./atomicJsonFile');
+const { storedAge, validDate, assertNoBirthDates } = require('./tournamentAge');
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
@@ -189,6 +190,7 @@ function buildFreshAssignments(sourceAssignments, groups, tournamentDays = 1) {
 }
 
 function writeJson(filePath, value) {
+  assertNoBirthDates(value);
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2), { encoding: 'utf8', flag: 'wx' });
 }
 
@@ -201,7 +203,7 @@ function createSimulatorRunStore({ runsRoot }) {
     return path.join(runsRoot, normalizedRunId);
   }
 
-  function createRun({ eventName: sourceEventName, groups, assignments, tournamentDays = 1, now = () => new Date() }) {
+  function createRun({ eventName: sourceEventName, groups, assignments, tournamentDate, tournamentDays = 1, now = () => new Date() }) {
     const eventName = normalizeEventName(sourceEventName);
     if (!Array.isArray(groups) || groups.length === 0) {
       const error = new Error(`Event has no saved groups to simulate: ${eventName}`);
@@ -220,6 +222,10 @@ function createSimulatorRunStore({ runsRoot }) {
     const temporaryDirectory = path.join(runsRoot, `.creating-${runId}`);
     const freshAssignments = buildFreshAssignments(assignments, groups, tournamentDays);
     const groupSnapshot = JSON.parse(JSON.stringify(groups));
+    const members = groupSnapshot.flatMap((group) => group.competitors || []);
+    tournamentDate = tournamentDate || members[0]?.ageAsOf;
+    validDate(tournamentDate);
+    for (const member of members) storedAge(member, tournamentDate);
     const assignmentSnapshot = JSON.parse(JSON.stringify(freshAssignments));
     const completedGroupNumbers = completedGroupNumbersForAssignments(assignments);
     const eligibleGroupCount = groupSnapshot.filter((group) =>
@@ -237,6 +243,7 @@ function createSimulatorRunStore({ runsRoot }) {
       schemaVersion: 1,
       runId,
       sourceEventName: eventName,
+      tournamentDate,
       createdAt,
       status: 'created',
       speed: 600,

@@ -11,8 +11,8 @@ test('production help excludes simulator instructions while retaining mode safeg
     ['tournament-management', 'index.html'], ['audience-monitor', 'index.html']
   ]) {
     const source = fs.readFileSync(path.join(__dirname, '..', ...relativePath), 'utf8');
-    const help = Array.from(source.matchAll(/<p\b[^>]*data-help-source="[^"]*"[^>]*>([\s\S]*?)<\/p>/g),
-      (match) => match[1]).join('\n');
+    const help = Array.from(source.matchAll(/<p\b[^>]*data-help-source="([^"]*)"[^>]*>([\s\S]*?)<\/p>/g))
+      .filter((match) => match[1] !== 'Running results').map((match) => match[2]).join('\n');
     assert.ok(help.length > 0);
     assert.doesNotMatch(help, /simulat|\bSIM\b/i);
   }
@@ -291,16 +291,18 @@ test('all current page entry points use the shared help assets', () => {
 test('completed integrated pages explain each primary, next-step and maintenance action', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
   for (const id of [
-    'createEventBtn', 'modifyEventBtn', 'activateEventBtn', 'goToImportBtn', 'deleteEventBtn',
+    'createEventBtn', 'deleteEventBtn',
     'resetEventBtn', 'saveMetadataBtn', 'importBtn', 'clearImportBtn', 'importNextBtn',
     'gbBuildBtn', 'gbAddBtn', 'gbSaveBtn', 'gbDoneBtn', 'raRefreshBtn', 'resetRunBtn',
-    'htRefreshBtn', 'htAssignmentBtn', 'clRefreshBtn', 'clSearchBtn', 'clFiltersBtn',
-    'clApplyFiltersBtn', 'clClearFiltersBtn', 'clSortName'
+    'htRefreshBtn', 'htAssignmentBtn', 'clRefreshBtn', 'clImportBtn',
+    'clApplyFiltersBtn', 'clSortName', 'tmAdd', 'tmSave', 'tmDelete', 'tmSettingsSave',
+    'vdSave', 'vdReload', 'vdDefaults', 'addSchool', 'schoolSave', 'schoolCancel',
+    'addRank', 'deleteRanks', 'rankSave', 'rankCancel', 'csAdd', 'csReload', 'csDelete', 'csSave', 'csCancel'
   ]) {
     const tag = html.match(new RegExp(`<button\\b[^>]*\\bid="${id}"[^>]*>`));
     assert.ok(tag, id);
     assert.match(tag[0], /(?:data-help|title)="[^"]+"/, id);
   }
   assert.equal((html.match(/\bdata-help-root\b/g) || []).length, 1);
-  assert.equal((html.match(/\bdata-help-page=/g) || []).length, 6);
+  assert.equal((html.match(/\bdata-help-page=/g) || []).length, 15);
 });

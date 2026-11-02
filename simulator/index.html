@@ -119,8 +119,13 @@
       header { align-items: flex-start; flex-direction: column; }
     }
   </style>
+  <link rel="stylesheet" href="/assets/embedded-administration.css">
+  <link rel="stylesheet" href="/assets/simulator-presentation.css">
+  <script src="/assets/visual-definitions.js"></script>
+  <script src="/assets/tournament-presentation.js" defer></script>
 </head>
-<body>
+<body class="shell">
+  <p id="presentationNotice" role="alert" hidden></p>
   <header>
     <div>
       <h1>Tournament Simulator</h1>
@@ -134,6 +139,7 @@
       </nav>
     </div>
   </header>
+  <script src="/assets/embedded-administration.js"></script>
   <main>
     <section class="panel">
       <div class="panel-heading">
@@ -183,7 +189,7 @@
       </div>
       <div class="actions">
         <button id="startButton" disabled>Start</button>
-        <label style="min-width:180px">Single-step ring
+        <label class="step-ring-control">Single-step ring
           <select id="stepRingSelect" disabled></select>
         </label>
         <button id="stepButton" disabled>Step ring</button>

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { storedAge } = require('./tournamentAge');
 
 function groupNumber(group) {
   const value = Number.parseInt(group.groupDivisionNumber ?? group.id ?? group.groupId, 10);
@@ -38,9 +39,8 @@ function createSimulatorResultPacket({
       studio: String(competitor.studio || ''),
       rankCode: String(competitor.rankCode || competitor.rank || ''),
       rankLabel: String(competitor.rankLabel || competitor.rankCode || competitor.rank || ''),
-      age: Number.isInteger(Number(competitor.age)) && Number(competitor.age) >= 0
-        ? Number(competitor.age)
-        : 0,
+      age: storedAge(competitor, competitor.ageAsOf),
+      ageAsOf: competitor.ageAsOf,
       heightInInches: Number.isInteger(Number(competitor.heightInInches ?? competitor.height))
         ? Number(competitor.heightInInches ?? competitor.height)
         : null,

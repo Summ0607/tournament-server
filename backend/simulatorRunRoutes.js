@@ -541,6 +541,7 @@ function createSimulatorRunRouter({
       const assignments = JSON.parse(fs.readFileSync(actualAssignmentsPath, 'utf8'));
       const groups = await loadGroupsFromDatabase(actualDbPath);
       const run = simulatorRunStore.createRun({ eventName, groups, assignments,
+        tournamentDate: readEventConfig(eventName).date,
         tournamentDays: readEventConfig(eventName).tournamentDays });
       return res.status(201).json(run);
     } catch (error) {

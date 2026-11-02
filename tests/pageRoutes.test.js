@@ -446,7 +446,7 @@ test('integrated tournament management is available directly and through workflo
   assert.doesNotMatch(shellPage.body, /applyEventRingLayoutBtn|raLayoutBtn|Save &amp; apply ring layout/);
   assert.match(shellPage.body, /id="saveMetadataBtn"/);
   assert.match(shellPage.body, /id="resetRunBtn"/);
-  assert.match(shellPage.body, /All settings are locked once tablets, assignments, queues, or progress exist/);
+  assert.match(shellPage.body, /All settings lock after operational use begins, including while paused/);
   assert.doesNotMatch(shellPage.body, /<strong>Winter Tournament<\/strong>/);
 
   const shellHtml = await requestPath('pre', '/tournament-management.html');
