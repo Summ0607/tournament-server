@@ -8,7 +8,7 @@ const { createCompetitorStore } = require('../backend/competitorStore');
 
 async function createFixture(t, rows) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'competitor-save-'));
-  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  t.after(() => fs.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   const dbPath = path.join(directory, 'tournament.db');
   const db = await new Promise((resolve, reject) => {
     const connection = new sqlite3.Database(dbPath, error => {
@@ -70,7 +70,7 @@ test('identity matching takes precedence over a stale ID reused by another compe
     { id: 101, firstName: 'Pat', lastName: 'Smith', dob: '2010-02-03' }
   ]);
   const result = await store.saveDivisionAssignments([group([
-    { id: '1', firstName: ' pat ', lastName: 'SMITH', dobIso: '2010-02-03', rank: 'W' }
+    { id: '1', firstName: ' pat ', lastName: 'SMITH', rank: 'W' }
   ])]);
   assert.equal(result.groups[0].competitors[0].id, '101');
   const rows = await store.loadCompetitors();

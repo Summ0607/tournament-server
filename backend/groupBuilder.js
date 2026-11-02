@@ -2,26 +2,11 @@ const { assignDivisionNumbers, rebalanceGroupsToSoftMax, absorbLoneCdbIntoBlackB
 const { isSpecialNeeds, specialNeedsCategory, validateSpecialNeedsGroups } = require('../assets/division-rules');
 
 function normalizeAge(competitor) {
-  if (Number.isFinite(Number(competitor.age))) {
-    return Number(competitor.age);
+  if (Number.isInteger(competitor.age) && competitor.age >= 0 && competitor.age <= 120) {
+    return competitor.age;
   }
 
-  const dobValue = competitor.dob || competitor.dobIso || competitor.dateOfBirth;
-  if (!dobValue) return 0;
-
-  const dob = new Date(dobValue);
-  if (Number.isNaN(dob.getTime())) return 0;
-
-  const now = new Date();
-  let age = now.getFullYear() - dob.getFullYear();
-  const monthDiff = now.getMonth() - dob.getMonth();
-  const dayDiff = now.getDate() - dob.getDate();
-
-  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-    age -= 1;
-  }
-
-  return age;
+  throw new Error('Stored tournament age is required. Reimport the roster.');
 }
 
 function normalizeDemographicGender(value) {

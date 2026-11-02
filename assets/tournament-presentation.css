@@ -1,0 +1,125 @@
+/* Scoped policy overrides legacy ID selectors; operational colors remain page-owned. */
+.shell.defined-presentation {
+  font-family: var(--vd-font);
+  font-size: var(--vd-body-size);
+  line-height: var(--vd-line-height);
+  max-width: none;
+  padding: 0;
+}
+.defined-presentation[data-visual-layout="inset"] { padding: var(--vd-page-padding); }
+.defined-presentation .frame {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+}
+.defined-presentation[data-visual-layout="inset"] .frame {
+  min-height: calc(100dvh - 2 * var(--vd-page-padding));
+  border-radius: var(--vd-radius);
+}
+.defined-presentation .banner { min-height: 40px; padding: 6px var(--vd-page-padding); gap: 10px; flex-wrap: wrap; }
+.defined-presentation .banner-title { font-size: var(--vd-page-title-size); font-weight: var(--vd-heading-weight); }
+.defined-presentation .banner-meta { font-size: var(--vd-secondary-size); font-weight: var(--vd-nav-weight); }
+.defined-presentation .banner-icon { width: 22px; height: 22px; }
+.defined-presentation .content {
+  flex: 1;
+  gap: var(--vd-section-gap);
+  padding: 0 var(--vd-page-padding) 0 0;
+  align-items: stretch;
+}
+.defined-presentation .content,
+.defined-presentation .content.import-wide { grid-template-columns: var(--vd-sidebar-width) minmax(0, 1fr) 340px; }
+.defined-presentation .content.details-hidden { grid-template-columns: var(--vd-sidebar-width) minmax(0, 1fr); }
+.defined-presentation .sidebar {
+  border-radius: 0;
+  top: 0;
+  align-self: stretch;
+  max-height: 100dvh;
+}
+.defined-presentation .workspace,
+.defined-presentation .details { border-radius: var(--vd-radius); }
+.defined-presentation .sidebar-item,
+.defined-presentation .sidebar-disclosure,
+.defined-presentation .sidebar-tool {
+  padding: 6px 8px;
+  min-height: var(--vd-control-height);
+  font-family: var(--vd-font);
+  font-size: var(--vd-nav-size);
+  font-weight: var(--vd-nav-weight);
+  line-height: var(--vd-line-height);
+}
+.defined-presentation .sidebar > .sidebar-disclosure,
+.defined-presentation .sidebar > .sidebar-item { font-size: var(--vd-secondary-size); }
+.defined-presentation .workspace-head,
+.defined-presentation .panel-head,
+.defined-presentation .workflow-head,
+.defined-presentation .workspace-body,
+.defined-presentation .panel-body,
+.defined-presentation .workflow-body {
+  padding: var(--vd-card-padding);
+  gap: var(--vd-section-gap);
+}
+.defined-presentation .view { gap: var(--vd-section-gap); }
+.defined-presentation .workspace h1,
+.defined-presentation #teamSettingsView h2 { font-size: var(--vd-page-title-size) !important; }
+.defined-presentation .workspace h2,
+.defined-presentation .workspace h3,
+.defined-presentation .details h2,
+.defined-presentation .details h3,
+.defined-presentation .vd-card legend { font-size: var(--vd-section-title-size) !important; }
+.defined-presentation :is(h1, h2, h3, legend) {
+  font-family: var(--vd-font) !important;
+  font-weight: var(--vd-heading-weight) !important;
+  line-height: var(--vd-line-height) !important;
+  letter-spacing: normal !important;
+}
+.defined-presentation :is(.workspace, .details) :is(p, label, li, td, th, input, select, textarea, button, .state-lines, .cl-results-bar, .notice, .summary-value, .selected-summary-value) {
+  font-family: var(--vd-font) !important;
+  font-size: var(--vd-body-size) !important;
+  line-height: var(--vd-line-height) !important;
+}
+.defined-presentation :is(.workspace-head p, .workflow-head p, .ra-meta, .estimate-text, .ra-division-estimate, .cl-page-head p, .tm-settings-intro, .import-meta, .selected-summary-meta, small, .nav-planned) {
+  font-size: var(--vd-secondary-size) !important;
+}
+.defined-presentation :is(.field-stack label, .summary-label, .selected-summary-label, .button-cluster-label, th) {
+  font-weight: var(--vd-heading-weight) !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+.defined-presentation :is(.workspace, .details, .banner) :is(input:not([type="checkbox"]):not([type="radio"]), select, button:not(.ra-card), .next-action, .cta) {
+  min-height: var(--vd-control-height) !important;
+  height: auto;
+  padding: 4px 8px !important;
+  border-radius: var(--vd-radius) !important;
+  font-weight: var(--vd-nav-weight) !important;
+}
+.defined-presentation :is(.field-stack input, .field-stack select, .cl-toolbar input, .cl-toolbar select, .tournament-reference select) {
+  height: var(--vd-control-height) !important;
+}
+.defined-presentation :is(.workflow-panel, .summary-card, .selected-summary, .table-wrap, .cl-table-wrap, .cl-toolbar, .notice, .ra-section, .ra-card, .tournament-reference, .tm-settings-card, .vd-card) {
+  border-radius: var(--vd-radius) !important;
+}
+.defined-presentation :is(.summary-card, .selected-summary, .cl-toolbar, .notice, .ra-list, .ra-card, .tm-settings-card, .vd-card) { padding: var(--vd-card-padding) !important; }
+.defined-presentation :is(.tm-settings-card, #teamSettingsView, #tmForm, #vdForm, #vdFields, .workflow-body) { gap: var(--vd-section-gap) !important; }
+.defined-presentation :is(.tournament-form .field-stack, #teamSettingsView, #tmForm, #importView .field-stack) { max-width: var(--vd-content-width) !important; width: 100%; }
+.defined-presentation .tournament-reference { margin-bottom: 0; padding: 6px var(--vd-card-padding); }
+.defined-presentation :is(.table-wrap, .cl-table) :is(th, td) { padding: 5px 8px !important; }
+.defined-presentation :is(.cl-toolbar, .cl-page-head, .cl-results-bar, .tournament-list-actions) { margin-bottom: var(--vd-section-gap); }
+.defined-presentation :is(.ra-ring-line strong, .ra-division-head strong, .event-timing strong, .gd-name) { font-size: var(--vd-body-size); }
+.defined-presentation :is(.tournament-run-zone, .tournament-danger-zone) { margin-top: var(--vd-section-gap); padding-top: var(--vd-card-padding); }
+.defined-presentation #visualDefinitionsView { font-size: var(--vd-body-size); }
+#presentationNotice { margin: 0; padding: 8px 12px; background: #fff1f4; color: #8c0018; }
+#presentationNotice[hidden] { display: none; }
+@media (min-width: 961px) {
+  .defined-presentation .content.competitor-lookup:not(.details-hidden) { grid-template-columns: var(--vd-sidebar-width) minmax(0, 1fr) 340px; }
+  .defined-presentation .content.group-builder > .sidebar { max-height: none; }
+}
+@media (max-width: 960px) {
+  .defined-presentation .content,
+  .defined-presentation .content.import-wide,
+  .defined-presentation .content.details-hidden,
+  .defined-presentation .content.competitor-lookup:not(.details-hidden) { grid-template-columns: minmax(0, 1fr); padding: var(--vd-card-padding); }
+  .defined-presentation .sidebar { max-height: 65dvh; }
+  .defined-presentation .banner-title { white-space: normal; }
+  .defined-presentation .banner-meta { width: 100%; }
+}

@@ -947,22 +947,8 @@
     function groupSummary(group) {
       var competitors = group && Array.isArray(group.competitors) ? group.competitors : [];
       var ages = competitors.map(function (competitor) {
-        var storedAge = Number.parseInt(competitor.age, 10);
-        if (Number.isFinite(storedAge) && storedAge > 0) return storedAge;
-
-        var dob = String(competitor.dob || '').trim();
-        if (!dob) return NaN;
-
-        var birthDate = new Date(dob);
-        if (!Number.isFinite(birthDate.getTime())) return NaN;
-
-        var today = new Date();
-        var age = today.getFullYear() - birthDate.getFullYear();
-        var monthDiff = today.getMonth() - birthDate.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-          age -= 1;
-        }
-        return age > 0 ? age : NaN;
+        var storedAge = competitor.age;
+        return Number.isInteger(storedAge) && storedAge >= 0 && storedAge <= 120 ? storedAge : NaN;
       }).filter(Number.isFinite);
       var ranks = competitors.map(function (competitor) { return String(competitor.rank || competitor.rankCode || '').trim(); }).filter(Boolean);
       var genders = competitors.map(function (competitor) { return String(competitor.gender || '').trim(); }).filter(Boolean);

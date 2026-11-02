@@ -2,10 +2,58 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const vm = require('node:vm');
 const { test } = require('node:test');
-const { createEventConfigStore, normalizeEventRingConfig, hasOperationalUse } = require('../backend/eventConfig');
+const { createEventConfigStore, normalizeEventRingConfig, normalizeTournamentScope, hasOperationalUse } = require('../backend/eventConfig');
 const DivisionRules = require('../assets/division-rules');
 const { normalizeTournamentDays, scheduleState, isDayBlocked } = require('../backend/tournamentSchedule');
+
+test('activation primes the named cache before atomically publishing and preserves the active pointer on failure', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'group-server.js'), 'utf8');
+  const endpoint = source.match(/app\.post\('\/api\/events\/activate',[\s\S]*?\n\}\);/)[0];
+  for (const failure of ['', 'database', 'pointer']) {
+    let handler;
+    let active = 'Previous Event';
+    const liveGroups = [{ groupDivisionNumber: 1 }];
+    const cache = new Map([[active, liveGroups]]);
+    const calls = [];
+    let release;
+    const priming = new Promise((resolve) => { release = resolve; });
+    vm.runInNewContext(endpoint, {
+      app: { post: (_route, callback) => { handler = callback; } },
+      fs: { existsSync: () => true },
+      path,
+      EVENTS_ROOT: 'mock-events',
+      ACTIVE_EVENT_FILE: 'mock-active',
+      readAssignmentState: (name) => calls.push(['assignments', name]),
+      primeGroupCacheFromDatabase: async (name) => {
+        calls.push(['prime', name]);
+        await priming;
+        if (failure === 'database') throw new Error('Database unavailable');
+        cache.set(name, [{ groupDivisionNumber: 2 }]);
+      },
+      writeJsonAtomicSync: (file, value) => {
+        calls.push(['atomic', file, value.activeEvent]);
+        if (failure === 'pointer') throw new Error('Pointer unavailable');
+        active = value.activeEvent;
+      },
+      console: { error() {} }
+    });
+    let status = 200;
+    let result;
+    const response = { status(code) { status = code; return this; }, json(data) { result = data; return this; } };
+    const activating = handler({ body: { eventName: 'Next Event' } }, response);
+    assert.equal(active, 'Previous Event');
+    assert.deepEqual(calls, [['assignments', 'Next Event'], ['prime', 'Next Event']]);
+    release();
+    await activating;
+    assert.equal(status, failure ? 500 : 200);
+    assert.equal(active, failure ? 'Previous Event' : 'Next Event');
+    assert.equal(cache.get('Previous Event'), liveGroups);
+    assert.equal(calls.some(([operation]) => operation === 'atomic'), failure !== 'database');
+    assert.equal(Boolean(result.ok), !failure);
+  }
+});
 
 test('running order ignores gender, prioritizes BB oldest then TT/SD then Gup youngest, and uses numeric ties', () => {
   const group = (id, rank, ageBracket, gender, extra = {}) => ({
@@ -120,6 +168,31 @@ test('dimensions default to zero and reject invalid input instead of truncating'
   assert.throws(() => normalizeEventRingConfig({ ringConfigY: 51 }), /ringConfigY/);
 });
 
+test('scope metadata persists without inferred defaults and uses the all-settings lock and archive', (t) => {
+  const root = fs.mkdtempSync(path.join(__dirname, 'scope-fixture-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'Event'));
+  const store = createEventConfigStore(root);
+  assert.equal(store.readEventConfig('Event').scope, '');
+  for (const scope of ['', 'regional', 'national', 'world', 'in-house']) {
+    const config = store.writeEventConfig('Event', { scope });
+    assert.equal(store.readEventConfig('Event').scope, scope);
+    assert.equal(config.scope, scope);
+  }
+  for (const scope of ['Regional', 'international', ' ', 1, true, {}, []]) {
+    assert.throws(() => normalizeTournamentScope(scope), (error) => error.statusCode === 400);
+    assert.throws(() => store.writeEventConfig('Event', { scope }), /scope/);
+  }
+  const saved = store.readEventConfig('Event');
+  fs.writeFileSync(path.join(root, 'Event', 'ring-assignments.json'), JSON.stringify({
+    config: { letterCount: 0, numberCount: 0 }, configLockedAt: '2026-01-01', rings: {}
+  }));
+  assert.throws(() => store.writeEventConfig('Event', { ...saved, scope: 'world' }), /locked/);
+  const reset = store.resetRun('Event');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'Event', reset.archive, 'event-config.json'))).scope, 'in-house');
+  assert.equal(store.writeEventConfig('Event', { ...saved, scope: 'world' }).scope, 'world');
+});
+
 function eventFixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'event-lifecycle-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -192,6 +265,7 @@ test('used layout mismatches and results-only events lock without overwriting ex
   writeState(state);
   assert.deepEqual(store.configurationStatus('Event'), {
     configurationLocked: true,
+    ageDateLocked: false,
     configurationLockReason: require('../backend/eventConfig').CONFIG_LOCK_MESSAGE,
     layoutMismatch: true
   });
@@ -344,8 +418,14 @@ test('event APIs synchronize an active event, lock every field, and archive/rese
     });
     return { status: response.status, data: await response.json() };
   };
-  const metadata = { eventName: 'Event', ringConfigX: 4, ringConfigY: 4, tournamentDays: 2, location: 'Venue' };
+  const metadata = { eventName: 'Event', ringConfigX: 4, ringConfigY: 4, tournamentDays: 2, location: 'Venue', scope: 'national' };
+  assert.equal((await request('/events/create', { ...metadata, eventName: 'Invalid', scope: 'Regional' })).status, 400);
+  assert.equal(fs.existsSync(path.join(root, 'events', 'Invalid')), false);
   assert.equal((await request('/events/create', metadata)).status, 200);
+  assert.equal((await request('/events/config?eventName=Event')).data.eventConfig.scope, 'national');
+  assert.deepEqual((await request('/events/list')).data.events, ['Event']);
+  assert.equal((await request('/events/modify', { ...metadata, scope: 'bad' })).status, 400);
+  assert.equal((await request('/events/modify', { eventName: 'Event' })).data.eventConfig.scope, 'national');
   const eventDir = path.join(root, 'events', 'Event');
   const assignmentsFile = path.join(eventDir, 'ring-assignments.json');
   assert.deepEqual(JSON.parse(fs.readFileSync(assignmentsFile)).config, { letterCount: 4, numberCount: 4 });
@@ -366,7 +446,7 @@ test('event APIs synchronize an active event, lock every field, and archive/rese
   assert.equal((await request('/rings/ring-a-1/queue?eventName=Event', { groupDivisionNumber: 1 })).status, 200);
   const settings = await request('/events/config?eventName=Event');
   assert.equal(settings.data.configurationLocked, true);
-  for (const change of [{ location: 'New venue' }, { tournamentDays: 1 }, { ringConfigX: 4 }, {}]) {
+  for (const change of [{ location: 'New venue' }, { tournamentDays: 1 }, { scope: 'world' }, { ringConfigX: 4 }, {}]) {
     const rejected = await request('/events/modify', { ...modified, ...change });
     assert.equal(rejected.status, 409);
     assert.match(rejected.data.error, /locked/);

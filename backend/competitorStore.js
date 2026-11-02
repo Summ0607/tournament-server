@@ -3,6 +3,7 @@ const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const { assignDivisionNumbers, rebalanceGroupsToSoftMax } = require('./groupDivisionAssignments');
 const { validateSpecialNeedsGroups } = require('../assets/division-rules');
+const { assertNoBirthDates } = require('./tournamentAge');
 
 function openDatabase(dbFilePath, mode) {
   const resolvedMode = mode == null ? sqlite3.OPEN_READWRITE : mode;
@@ -79,15 +80,14 @@ function competitorLookupKeys(competitor = {}) {
   const associationNumber = String(competitor.associationNumber || '').trim();
   const firstName = normalizeLookupValue(competitor.firstName);
   const lastName = normalizeLookupValue(competitor.lastName);
-  const dob = String(competitor.dob || competitor.dobIso || '').trim();
   const email = normalizeLookupValue(competitor.email);
 
   if (associationNumber) {
     keys.push(`assoc:${associationNumber.toUpperCase()}`);
   }
 
-  if (firstName || lastName || dob) {
-    keys.push(`name:${firstName}|${lastName}|${dob}`);
+  if (firstName || lastName) {
+    keys.push(`name:${firstName}|${lastName}`);
   }
 
   if (email) {
@@ -181,17 +181,16 @@ function createCompetitorStore(dbFilePath) {
       });
 
       db.all('SELECT * FROM competitors', (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows || []);
-        }
-        db.close();
+        db.close((closeError) => {
+          if (err || closeError) reject(err || closeError);
+          else resolve(rows || []);
+        });
       });
     });
   }
 
   async function saveDivisionAssignments(groups, options = {}) {
+    assertNoBirthDates(groups);
     const assignedGroups = assignDivisionNumbers(
       rebalanceGroupsToSoftMax(groups, options),
       options.startingDivisionNumber ?? 20
@@ -212,7 +211,7 @@ function createCompetitorStore(dbFilePath) {
         ...group,
         competitors: group.competitors.map((competitor) => {
           const row = rosterById.get(resolveCompetitorId(competitor, rosterLookup));
-          return row ? { ...competitor, ...row, age: undefined } : competitor;
+          return row ? { ...competitor, ...row } : competitor;
         })
       })));
       await run(db, 'BEGIN TRANSACTION');

@@ -11,6 +11,14 @@ const { buildGroups, buildGroupsWithReview } = require('./backend/groupBuilder')
 const { createCompetitorStore } = require('./backend/competitorStore');
 const { createGroupStore } = require('./backend/groupStore');
 const { createDivisionRouter } = require('./backend/divisionRoutes');
+const { createTeamRouter } = require('./backend/teamRoutes');
+const { createVisualDefinitionRouter } = require('./backend/visualDefinitionRoutes');
+const { createSchoolRouter } = require('./backend/schoolRoutes');
+const { createRankRouter } = require('./backend/rankRoutes');
+const { createCompetitionSettingRouter } = require('./backend/competitionSettingRoutes');
+const { createTournamentResultRouter } = require('./backend/tournamentResultRoutes');
+const { createRingJudgeRouter } = require('./backend/ringJudgeRoutes');
+const { createVolunteerRouter } = require('./backend/volunteerRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
 const { divisionDurationMs } = require('./backend/ringEstimates');
 const { estimateDivisionTiming } = require('./backend/simulatorTiming');
@@ -21,7 +29,7 @@ const { createSimulatorRunClientFactory } = require('./backend/simulatorRunAdapt
 const { resolveSurfaceName, resolveSurfacePort } = require('./backend/surfacePorts');
 const { registerPageRoutes } = require('./backend/pages');
 const { createServerControl } = require('./backend/serverControl');
-const { createEventConfigStore, normalizeEventRingConfig, hasOperationalUse } = require('./backend/eventConfig');
+const { createEventConfigStore, normalizeEventRingConfig, normalizeTournamentScope, hasOperationalUse } = require('./backend/eventConfig');
 const { writeJsonAtomicSync } = require('./backend/atomicJsonFile');
 const { normalizeTournamentDays } = require('./backend/tournamentSchedule');
 
@@ -142,7 +150,7 @@ function groupRowsToGroups(rows) {
       fullName: [row.firstName, row.lastName].filter(Boolean).join(' ') || '',
       gender: row.gender || 'Unknown',
       rank: row.rank || '',
-      age: Number.isFinite(Number(row.age)) ? Number(row.age) : 0
+      age: row.age
     });
   }
 
@@ -806,7 +814,7 @@ function saveUploadedDivisionPacket(ringId, packet) {
   ensureResultsDir();
   const divisionId = sanitizeFilePart(packet.divisionId || packet.groupId || ringId || 'division-unknown');
   const filePath = path.join(RESULTS_DIR, `${divisionId}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(packet, null, 2));
+  writeJsonAtomicSync(filePath, packet);
 }
 
 registerPageRoutes(app, ROOT_DIR, CONTROL_BOARD_DIR, ACTIVE_SURFACE);
@@ -985,6 +993,14 @@ app.get('/search', (req, res) => {
   });
 });
 
+app.use('/api', createTeamRouter({ eventsRoot: EVENTS_ROOT, configurationStatus }));
+app.use('/api', createVisualDefinitionRouter(path.join(ROOT_DIR, 'visual-definitions.json')));
+app.use('/api', createSchoolRouter(path.join(ROOT_DIR, 'schools.json')));
+app.use('/api', createRankRouter(path.join(ROOT_DIR, 'ranks.json')));
+app.use('/api', createCompetitionSettingRouter({ eventsRoot: EVENTS_ROOT, configurationStatus }));
+app.use('/api', createTournamentResultRouter({ eventsRoot: EVENTS_ROOT, runsRoot: path.join(ROOT_DIR, 'simulator-runs') }));
+app.use('/api', createRingJudgeRouter({ eventsRoot: EVENTS_ROOT, configurationStatus }));
+app.use('/api', createVolunteerRouter({ eventsRoot: EVENTS_ROOT, configurationStatus }));
 app.use('/api', createDivisionRouter({
   competitorStore: (eventName) => createCompetitorStore(resolveEventDbPath(eventName, { strict: !!String(eventName || '').trim() })),
   groupStore,
@@ -1011,9 +1027,8 @@ app.post('/api/events/activate', async (req, res) => {
 
   try {
     readAssignmentState(eventName);
-    currentGroupStore(eventName).clearGroups();
-    fs.writeFileSync(ACTIVE_EVENT_FILE, JSON.stringify({ activeEvent: eventName }, null, 2));
-    await primeGroupCacheFromDatabase();
+    await primeGroupCacheFromDatabase(eventName);
+    writeJsonAtomicSync(ACTIVE_EVENT_FILE, { activeEvent: eventName });
     return res.json({ ok: true, activeEvent: eventName, dbPath: path.join(eventDir, 'tournament.db') });
   } catch (err) {
     console.error('Failed to activate event:', err);
@@ -1061,12 +1076,13 @@ app.post('/api/events/import-csv', async (req, res) => {
       const initializeDatabase = require('./db/init');
       await initializeDatabase(targetDbPath);
     }
-    const result = await importCSV(importPath, targetDbPath, { clearExisting: true });
+    const tournamentDate = targetEventName ? readEventConfig(targetEventName).date : body.tournamentDate;
+    const result = await importCSV(importPath, targetDbPath, { clearExisting: true, tournamentDate });
     currentGroupStore(targetEventName).clearGroups();
     return res.json({ ok: true, eventName: targetEventName || 'default', dbPath: targetDbPath, ...result });
   } catch (err) {
     console.error('Failed to import CSV for active event:', err);
-    return res.status(500).json({ error: err.message || 'Failed to import CSV' });
+    return res.status(err.statusCode || 500).json({ error: err.message || 'Failed to import CSV' });
   } finally {
     if (tempCsvPath && fs.existsSync(tempCsvPath)) {
       try {
@@ -1102,6 +1118,7 @@ app.post('/api/events/create', (req, res) => {
   const body = req.body || {};
   const eventName = String(body.eventName || '').trim();
   const eventConfig = {
+    scope: body.scope,
     name: String(body.name || body.eventName || '').trim(),
     location: String(body.location || '').trim(),
     date: String(body.date || '').trim(),
@@ -1123,6 +1140,7 @@ app.post('/api/events/create', (req, res) => {
 
     Object.assign(eventConfig, normalizeEventRingConfig(eventConfig));
     eventConfig.tournamentDays = normalizeTournamentDays(eventConfig.tournamentDays);
+    eventConfig.scope = normalizeTournamentScope(eventConfig.scope);
     fs.mkdirSync(eventDir, { recursive: true });
     fs.mkdirSync(resultsDir, { recursive: true });
     currentGroupStore(eventName).clearGroups();
@@ -1195,6 +1213,7 @@ app.post('/api/events/modify', (req, res) => {
   try {
     const currentConfig = readEventConfig(eventName);
     const updatedConfig = writeEventConfig(eventName, {
+      scope: Object.hasOwn(body, 'scope') ? normalizeTournamentScope(body.scope) : currentConfig.scope,
       name: String(body.name || eventName).trim() || eventName,
       location: String(body.location || '').trim(),
       date: String(body.date || '').trim(),
@@ -1392,6 +1411,9 @@ startServer();
 
 if (process.argv.includes('--import')) {
   setTimeout(() => {
-    importCSV(path.join(ROOT_DIR, 'competitors.csv'));
+    const name = readActiveEvent();
+    if (!name) { console.error('CSV import requires an active tournament with a configured date.'); return; }
+    importCSV(path.join(ROOT_DIR, 'competitors.csv'), path.join(EVENTS_ROOT, name, 'tournament.db'), { tournamentDate: readEventConfig(name).date })
+      .catch((error) => console.error('CSV import failed:', error.message));
   }, 500);
 }

@@ -3,6 +3,7 @@ const path = require('path');
 const csv = require('csv-parser');
 const sqlite3 = require('sqlite3').verbose();
 const { normalizeRank } = require('./rankNormalization');
+const { ageOnDate, validDate, lockAgeDate } = require('../backend/tournamentAge');
 
 const defaultDbPath = path.join(__dirname, 'tournament.db');
 const weaponsEligibleRanks = new Set(['G2', 'G1', 'CDB', 'D1', 'D2', 'D3']);
@@ -29,43 +30,6 @@ function normalizeGender(value) {
   return 'Unknown';
 }
 
-
-function normalizeDob(value) {
-  const trimmed = normalizeString(value);
-  if (!trimmed) {
-    return { dob: '', age: 0 };
-  }
-
-  const isoMatch = /^\d{4}-\d{2}-\d{2}$/.exec(trimmed);
-  const slashMatch = /^\d{1,2}\/\d{1,2}\/\d{4}$/.exec(trimmed);
-
-  let date;
-  if (isoMatch) {
-    const [year, month, day] = trimmed.split('-').map((part) => Number(part));
-    date = new Date(year, month - 1, day);
-  } else if (slashMatch) {
-    const [month, day, year] = trimmed.split('/').map((part) => Number(part));
-    date = new Date(year, month - 1, day);
-  }
-
-  if (!date || Number.isNaN(date.getTime())) {
-    return { dob: trimmed, age: 0 };
-  }
-
-  const today = new Date();
-  let age = today.getFullYear() - date.getFullYear();
-  const monthDiff = today.getMonth() - date.getMonth();
-  const dayDiff = today.getDate() - date.getDate();
-
-  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-    age -= 1;
-  }
-
-  return {
-    dob: trimmed,
-    age: Math.max(0, age)
-  };
-}
 
 function normalizeHeight(value) {
   const trimmed = normalizeString(value);
@@ -111,7 +75,7 @@ function readRawCompetitorId(rawRow) {
   return '';
 }
 
-function normalizeCompetitorRow(rawRow, generatedSequence = 1) {
+function normalizeCompetitorRow(rawRow, generatedSequence = 1, tournamentDate) {
   const row = rawRow && typeof rawRow === 'object' ? rawRow : {};
   const firstName = normalizeString(row.firstName);
   const lastName = normalizeString(row.lastName);
@@ -119,7 +83,7 @@ function normalizeCompetitorRow(rawRow, generatedSequence = 1) {
   const parentLastName = normalizeString(row.parentLastName);
   const email = normalizeString(row.email);
   const phone = normalizeString(row.phone);
-  const dobInfo = normalizeDob(row.dob);
+  const age = ageOnDate(row.dob, tournamentDate);
   const associationNumber = normalizeString(row.associationNumber) || null;
   const gender = normalizeGender(row.gender);
   const rankResult = normalizeRank(row.rank);
@@ -141,14 +105,14 @@ function normalizeCompetitorRow(rawRow, generatedSequence = 1) {
     parentLastName,
     email,
     phone,
-    dob: dobInfo.dob,
+    ageAsOf: tournamentDate,
     associationNumber,
     gender,
     rank,
     studio,
     specialNeeds,
     height,
-    age: dobInfo.age,
+    age,
     fullName,
     weaponsEligible,
     rankWarning: !rankResult.recognized
@@ -160,7 +124,8 @@ function normalizeCompetitorRow(rawRow, generatedSequence = 1) {
 }
 
 function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
-  const { clearExisting = false } = options;
+  const { clearExisting = false, tournamentDate } = options;
+  try { validDate(tournamentDate); } catch (error) { return Promise.reject(Object.assign(error, { statusCode: 400 })); }
 
   if (!fs.existsSync(csvFilePath)) {
     return Promise.reject(new Error(`CSV file not found: ${csvFilePath}`));
@@ -196,10 +161,12 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
       const runImport = () => {
         const rows = [];
 
-        fs.createReadStream(csvFilePath)
-          .pipe(csv({
+        const parser = csv({
             mapHeaders: ({ header }) => normalizeHeader(header)
-          }))
+          });
+        const source = fs.createReadStream(csvFilePath);
+        source.on('error', (error) => parser.destroy(error));
+        source.pipe(parser)
           .on('data', (row) => {
             const mapped = {
               firstName: row['First Name'],
@@ -218,7 +185,9 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
               id: row['ID'] ?? row['Competitor ID'] ?? row['CompetitorId'] ?? row['Competitor_ID'] ?? row.id ?? row.competitorId
             };
 
-            const normalized = normalizeCompetitorRow(mapped, generatedSequence);
+            let normalized;
+            try { normalized = normalizeCompetitorRow(mapped, generatedSequence, tournamentDate); }
+            catch (error) { parser.destroy(Object.assign(new Error(`CSV row ${csvLineNumber + 1}: ${error.message}`), { statusCode: 400 })); return; }
             if (!readRawCompetitorId(mapped)) {
               generatedSequence += 1;
             }
@@ -245,7 +214,8 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
               normalized.parentLastName,
               normalized.email,
               normalized.phone,
-              normalized.dob,
+              normalized.age,
+              normalized.ageAsOf,
               normalized.associationNumber,
               normalized.gender,
               normalized.rank,
@@ -255,45 +225,36 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
             ]);
           })
           .on('error', (err) => {
-            db.close();
-            reject(err);
+            source.destroy();
+            db.close((closeError) => reject(closeError || err));
           })
-          .on('end', () => {
-            if (clearExisting) {
-              db.run('DELETE FROM competitors', (deleteErr) => {
-                if (deleteErr) {
-                  db.close();
-                  reject(deleteErr);
-                  return;
+          .on('end', async () => {
+            const run = (sql, params = []) => new Promise((resolve, reject) => db.run(sql, params, (error) => error ? reject(error) : resolve()));
+            const get = (sql) => new Promise((resolve, reject) => db.get(sql, (error, row) => error ? reject(error) : resolve(row)));
+            let transaction = false;
+            try {
+              await run('BEGIN IMMEDIATE'); transaction = true;
+              if (clearExisting) {
+                const table = await get("SELECT name FROM sqlite_master WHERE type='table' AND name='teams'");
+                if (table && (await get('SELECT COUNT(*) AS count FROM teams')).count) {
+                  throw Object.assign(new Error('Teams exist. Delete all teams before replacing the competitor roster.'), { statusCode: 409 });
                 }
-                insertRows(normalizedCompetitors);
-              });
-              return;
-            }
-
-            insertRows(normalizedCompetitors);
-          });
-
-        const insertRows = () => {
-          if (!rows.length) {
-            finish();
-            return;
-          }
-
-          db.serialize(() => {
-            rows.forEach((values) => {
-              db.run(`
+                await run('DELETE FROM competitors');
+              }
+              for (const values of rows) await run(`
                 INSERT INTO competitors (
                   firstName, lastName, parentFirstName, parentLastName,
-                  email, phone, dob, associationNumber, gender, rank,
+                  email, phone, age, ageAsOf, associationNumber, gender, rank,
                   studio, specialNeeds, height
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               `, values);
-            });
+              if (rows.length) lockAgeDate(path.dirname(targetDbPath), tournamentDate);
+              await run('COMMIT'); transaction = false; finish();
+            } catch (error) {
+              if (transaction) await run('ROLLBACK');
+              db.close((closeError) => reject(closeError || error));
+            }
           });
-
-          finish();
-        };
       };
 
       runImport();

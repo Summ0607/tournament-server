@@ -50,7 +50,7 @@ async function fixture(t) {
   const store = createSimulatorRunStore({ runsRoot: path.join(root, 'runs') });
   const groups = [1, 2, 10, 3, 4].map((number) => ({
     groupDivisionNumber: number, name: `Saved division ${number}`,
-    competitors: [{ id: `competitor-${number}` }]
+    competitors: [{ id: `competitor-${number}`, age: 18, ageAsOf: '2027-01-09' }]
   }));
   const run = store.createRun({
     eventName: 'Saved Tournament', groups,
@@ -107,7 +107,7 @@ test('simulator assignment GET is isolated, read-only and uses the board identit
   assert.equal(board.status, 200);
   const other = context.store.createRun({
     eventName: 'Unrelated Run',
-    groups: [{ groupDivisionNumber: 99, competitors: [{ id: 'other' }] }],
+    groups: [{ groupDivisionNumber: 99, competitors: [{ id: 'other', age: 18, ageAsOf: '2027-01-09' }] }],
     assignments: { config: { letterCount: 1, numberCount: 1 }, rings: {} }
   });
   context.start(2);

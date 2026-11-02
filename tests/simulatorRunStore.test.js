@@ -64,7 +64,7 @@ function fixture(t, { buildResultPacket, assignments: savedAssignments, groups: 
   fs.writeFileSync(path.join(activeEventDir, 'results', 'active-result.json'), '{"sentinel":"active"}');
   fs.writeFileSync(path.join(activeEventDir, 'ring-assignments.json'), '{"sentinel":"active assignments"}');
   fs.writeFileSync(path.join(eventDir, 'tournament.db'), 'db placeholder');
-  fs.writeFileSync(path.join(eventDir, 'event-config.json'), JSON.stringify({ tournamentDays }));
+  fs.writeFileSync(path.join(eventDir, 'event-config.json'), JSON.stringify({ tournamentDays, date: '2027-01-09' }));
   const sourceAssignments = {
     config: { letterCount: 1, numberCount: 2 },
     eventStartedAt: '2026-10-26T12:00:00.000Z',
@@ -93,6 +93,9 @@ function fixture(t, { buildResultPacket, assignments: savedAssignments, groups: 
     { groupDivisionNumber: 11, name: 'Queued group', competitors: [{ id: 'b' }] },
     { groupDivisionNumber: 12, name: 'Second ring group', competitors: [{ id: 'c' }] }
   ];
+  for (const group of groups) {
+    group.competitors = group.competitors.map((person) => ({ age: 18, ageAsOf: '2027-01-09', ...person }));
+  }
   const store = createSimulatorRunStore({ runsRoot });
   const createRunClient = createSimulatorRunClientFactory({ simulatorRunStore: store });
   const app = express();

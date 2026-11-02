@@ -13,7 +13,7 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management',
 const winter = 'Winter Tournament 2027';
 const spring = 'Spring Tournament 2027';
 const draftKey = 'tournamentSetup.groupReviewDraft';
-const savedCompetitor = { id: 1, firstName: 'Saved', lastName: 'Competitor', rank: 'G1', gender: 'Male', dob: '01/01/2010' };
+const savedCompetitor = { id: 1, firstName: 'Saved', lastName: 'Competitor', rank: 'G1', gender: 'Male', age: 16, ageAsOf: '2027-01-16' };
 const newCompetitor = { ...savedCompetitor, id: 2, firstName: 'New' };
 const settle = () => new Promise(setImmediate);
 
@@ -51,20 +51,39 @@ function element(text = '') {
     querySelector() { return null; },
     checkValidity() { return true; },
     reportValidity() {},
-    focus() {}
+    focus() { this.focused = true; },
+    showModal() { this.open = true; },
+    close() { this.open = false; },
+    contains(target) { return this.children.includes(target); }
   };
 }
 
 async function loadPage(options = {}) {
   const elements = new Map();
+  for (const id of ['csAll', 'cs-name', 'cs-code', 'cs-description', 'cs-isTeam', 'cs-gender', 'cs-minAge', 'cs-maxAge', 'cs-minRank', 'cs-maxRank', 'cs-points']) elements.set(id, element());
+  for (const field of require('../assets/visual-definitions').fields) {
+    elements.set(`vd-${field.key}`, element());
+    if (field.type === 'color') elements.set(`vd-${field.key}-picker`, element());
+  }
   for (const match of html.matchAll(/<[^>]+\bid="([^"]+)"[^>]*>/g)) {
     elements.set(match[1], element(html.slice(match.index + match[0].length).split('<')[0]));
   }
-  const nav = ['Event Setup', 'Import', 'Group Builder', 'Ring Assignment', 'Head Table', 'Competitors', 'Judges & Volunteers', 'Reports & Results'].map(element);
+  const parseElements = (pattern) => [...html.matchAll(pattern)].map((match) => {
+    const id = match[0].match(/\sid="([^"]+)"/);
+    const node = id ? elements.get(id[1]) : element();
+    for (const attr of match[0].matchAll(/([\w-]+)="([^"]*)"/g)) node.setAttribute(attr[1], attr[2]);
+    node.textContent = html.slice(match.index + match[0].length).split('<')[0];
+    return node;
+  });
+  const nav = parseElements(/<button\b[^>]*data-nav-id="[^"]+"[^>]*>/g);
+  const navGroups = parseElements(/<button\b[^>]*data-nav-group="[^"]+"[^>]*>/g);
+  const externalLinks = parseElements(/<a\b[^>]*data-nav-external[^>]*>/g);
+  const navById = new Map(nav.map((node) => [node.getAttribute('data-nav-id'), node]));
   let activeEvent = options.activeEvent || '';
   let activeFailure = false;
   let ringFailure = Boolean(options.failRings);
   const storage = new Map([['eventAdmin.lastSelectedEvent', options.selectedEvent ?? winter]]);
+  if (options.expanded !== undefined) storage.set('tournamentManagement.navigation.expanded', options.expanded);
   if (options.draft) storage.set(draftKey, JSON.stringify(options.draft));
   const rosters = new Map([[winter, options.competitors || []], [spring, []]]);
   const configs = new Map([
@@ -72,6 +91,31 @@ async function loadPage(options = {}) {
     [spring, { name: spring, date: '2027-04-10', ringConfigX: 2, ringConfigY: 3 }]
   ]);
   const location = { protocol: 'http:', origin: 'http://localhost:3000', href: `http://localhost:3000/tournament-management/${options.search || ''}`, search: options.search || '' };
+  const windowHandlers = {};
+  const media = { matches: Boolean(options.mobile), addEventListener: (_name, handler) => { media.change = handler; } };
+  const entries = [{ url: location.href, state: null }];
+  let historyPosition = 0;
+  const setLocation = (url) => {
+    location.href = String(url);
+    location.search = new URL(url).search;
+  };
+  const history = {
+    get state() { return entries[historyPosition].state; },
+    replaceState: (state, _title, url) => {
+      entries[historyPosition] = { state, url: String(url) };
+      setLocation(url);
+    },
+    pushState: (state, _title, url) => {
+      entries.splice(++historyPosition, entries.length, { state, url: String(url) });
+      setLocation(url);
+    },
+    go: (delta) => {
+      if (!entries[historyPosition + delta]) return;
+      historyPosition += delta;
+      setLocation(entries[historyPosition].url);
+      windowHandlers.popstate({ state: history.state });
+    }
+  };
   let groups = options.groups || [];
   let rings = options.rings || [];
   let ringConfig = { letterCount: 1, numberCount: 2 };
@@ -85,6 +129,14 @@ async function loadPage(options = {}) {
   const timers = new Map();
   let timerId = 0;
   const context = vm.createContext({
+    TeamWorkspace: require('../tournament-management/team-management'),
+    VisualDefinitions: require('../tournament-management/visual-definitions'),
+    SchoolsWorkspace: require('../tournament-management/schools'),
+    RanksWorkspace: require('../tournament-management/ranks'),
+    CompetitionSettingsWorkspace: require('../tournament-management/competition-settings'),
+    TournamentResultsWorkspace: require('../tournament-management/results'),
+    RingJudgesWorkspace: require('../tournament-management/ring-judges'),
+    VolunteersWorkspace: require('../tournament-management/volunteers'),
     DivisionRules: require('../assets/division-rules'),
     Date: class extends Date {
       static now() { return Date.now() + clockOffset; }
@@ -99,17 +151,15 @@ async function loadPage(options = {}) {
     console: { warn: (...args) => errors.push(args), error: (...args) => errors.push(args) },
     window: {
       location,
-      history: {
-        replaceState: (_state, _title, url) => {
-          location.href = String(url);
-          location.search = new URL(url).search;
-        }
-      },
+      history,
+      matchMedia: () => media,
+      addEventListener: (name, handler) => { windowHandlers[name] = handler; },
       localStorage: {
-        getItem: (key) => storage.get(key) || null,
-        setItem: (key, value) => storage.set(key, value),
+        getItem: (key) => { if (options.storageUnavailable) throw new Error('Storage unavailable'); return storage.get(key) || null; },
+        setItem: (key, value) => { if (options.storageUnavailable) throw new Error('Storage unavailable'); storage.set(key, value); },
         removeItem: (key) => storage.delete(key)
       },
+      alert: (message) => { confirmations.push(message); },
       confirm: (message) => { confirmations.push(message); return options.confirm === true; }
     },
     document: {
@@ -119,6 +169,8 @@ async function loadPage(options = {}) {
       },
       querySelector: () => element(),
       querySelectorAll: (selector) => selector === '.sidebar-item' ? nav
+        : selector === '[data-nav-group]' ? navGroups
+        : selector === '[data-nav-external]' ? externalLinks
         : (options.estimateNodes || []).filter((node) => node.hasAttribute(selector.slice(1, -1))),
       createElement: () => element(),
       elementFromPoint: () => pointerTarget
@@ -129,17 +181,53 @@ async function loadPage(options = {}) {
       requests.push({ path: request.pathname, name, init });
       let data;
       switch (request.pathname) {
+        case '/api/volunteers':
+          data = { revision: null, types: [{ id: 'judging', name: 'Judging' }], volunteers: [], configurationLocked: false };
+          break;
+        case '/api/ring-judges':
+          data = { eventName: name, revision: null, judges: [], configurationLocked: false };
+          break;
+        case '/api/tournament-results':
+          data = { eventName: name, source: { id: 'live', simulation: false },
+            sources: [{ id: 'live', label: 'Live tournament' }], divisionCount: 0, competitorCount: 0,
+            medals: { first: 0, second: 0, third: 0 }, disciplines: [], correctedAges: 0, categories: [] };
+          break;
+        case '/api/ranks':
+          data = { ranks: require('../backend/rankRoutes').initialRanks };
+          break;
+        case '/api/schools':
+          data = { schools: require('../backend/schoolRoutes').initialSchools };
+          break;
+        case '/api/visual-definitions':
+          data = { revision: null, values: require('../assets/visual-definitions').defaults() };
+          break;
+        case '/api/teams':
+          if (options.teamRequest) return options.teamRequest(name, init);
+          data = { eventName: name, teams: [], roster: options.teamRoster || [],
+            settings: { TS: { teamSize: 3, genderPolicy: 'single' }, TH: { teamSize: 3, genderPolicy: 'single' } }, configurationLocked: Boolean(options.teamLocked) };
+          break;
         case '/api/simulator/runs':
           if (options.failSimulatorList) return { ok: false, json: async () => ({ error: 'Simulator list unavailable' }) };
           data = { runs: options.simulatorRuns || [] };
           break;
-        case '/api/events/list': data = { events: Array.from(configs.keys()) }; break;
+        case '/api/events/list':
+          if (options.failEventList) return { ok: false, json: async () => ({ error: 'Tournament list unavailable' }) };
+          data = { events: Array.from(configs.keys()) }; break;
         case '/api/events/active':
-          if (activeFailure) return { ok: false, json: async () => ({ error: 'Active event unavailable' }) };
           data = { activeEvent };
+          if (options.waitForActive) await options.waitForActive(requests.filter((item) => item.path === '/api/events/active').length);
+          if (activeFailure) return { ok: false, json: async () => ({ error: 'Active event unavailable' }) };
+          break;
+        case '/api/events/activate':
+          if (options.waitForActivation) await options.waitForActivation;
+          if (options.failActivation) return { ok: false, json: async () => ({ error: 'Activation unavailable' }) };
+          activeEvent = JSON.parse(init.body).eventName;
+          data = { ok: true, activeEvent };
           break;
         case '/api/events/config':
+          if (options.failEventMetadata === name) return { ok: false, json: async () => ({ error: 'Metadata unavailable' }) };
           data = { eventConfig: configs.get(name), dbExists: name === winter ? dbExists : false,
+            ageDateLocked: Boolean(options.ageDateLocked),
             configurationLocked: Boolean(options.configurationLocked),
             configurationLockReason: options.configurationLocked ? 'Event configuration is locked. Reset the run to return to preparation.' : '' };
           break;
@@ -150,6 +238,7 @@ async function loadPage(options = {}) {
           break;
         case '/api/events/create':
         case '/api/events/modify': {
+          if (options.failEventSave) return { ok: false, json: async () => ({ error: 'Save unavailable' }) };
           const body = JSON.parse(init.body);
           configs.set(body.eventName, body);
           data = { ok: true };
@@ -161,7 +250,7 @@ async function loadPage(options = {}) {
           data = options.rostersByEvent ? options.rostersByEvent[name] || [] : rosters.get(name);
           break;
         case '/api/groups':
-          if (options.waitForGroups) await options.waitForGroups;
+          if (options.waitForGroups) await (typeof options.waitForGroups === 'function' ? options.waitForGroups(name) : options.waitForGroups);
           data = { groups: options.groupsByEvent ? options.groupsByEvent[name] || [] : groups };
           break;
         case '/api/rings': {
@@ -205,6 +294,10 @@ async function loadPage(options = {}) {
           data = { normalizedCompetitors: [newCompetitor], rankWarnings: [], eventName: winter };
           break;
         default: {
+          if (request.pathname.startsWith('/api/competition-settings/')) {
+            data = { revision: null, rows: require('../assets/competition-settings').defaults(request.pathname.split('/').at(-1)), configurationLocked: false };
+            break;
+          }
           if (/^\/api\/simulator\/runs\/[^/]+\/ring-assignment$/.test(request.pathname)) {
             if (options.waitForSimulation) await options.waitForSimulation;
             if (options.failSimulation) return { ok: false, json: async () => ({ error: 'Simulation unavailable' }) };
@@ -244,17 +337,44 @@ async function loadPage(options = {}) {
   });
   vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
   await settle();
-  const dispatch = async (target, name = 'click') => {
-    await target.handlers[name]();
+  const dispatch = async (target, name = 'click', event = {}) => {
+    await target.handlers[name](event);
     await settle();
   };
   return {
     element: (id) => elements.get(id),
+    openTournament: () => dispatch(elements.get('tournamentListBody'), 'click', {
+      target: { closest: () => ({ getAttribute: () => elements.get('eventNameInput').value }) }
+    }),
     click: (id) => dispatch(elements.get(id)),
     input: (id, name) => dispatch(elements.get(id), name),
-    openImport: () => dispatch(nav[1]),
-    openGroups: () => dispatch(nav[2]),
-    openDayOf: (index = 3) => dispatch(nav[index]),
+    submitLookup: () => dispatch(elements.get('clToolbar'), 'submit', { preventDefault() {} }),
+    openImport: () => dispatch(elements.get('clImportBtn')),
+    openGroups: () => dispatch(navById.get('groups')),
+    openDayOf: (id = 'ring-assignment') => dispatch(navById.get(id)),
+    navigate: (id) => dispatch(navById.get(id)),
+    selectTournament: async (name) => {
+      elements.get('tournamentReferenceSelect').value = name;
+      await dispatch(elements.get('tournamentReferenceSelect'), 'change');
+      await settle();
+      await settle();
+    },
+    clickDivision: async (number) => {
+      const link = { getAttribute: (name) => name === 'data-cl-division' ? String(number) : null };
+      await elements.get('clResults').handlers.click({
+        target: { closest: (selector) => selector === '[data-cl-division]' ? link : null },
+        preventDefault() {}
+      });
+      await settle();
+      await settle();
+    },
+    activeEvent: () => activeEvent,
+    nav: (id) => navById.get(id),
+    navGroups, externalLinks,
+    history: async (delta) => { history.go(delta); await settle(); },
+    historyLength: () => entries.length,
+    key: (id, key) => dispatch(elements.get(id), 'keydown', { key, preventDefault() {} }),
+    resize: (mobile) => { media.matches = mobile; media.change(); },
     ringAction: async (id, dataset, extra = {}) => {
       const button = { ...element(), dataset, hasAttribute: (name) =>
         name === 'data-ra-reset' && Boolean(extra.reset) || name === 'data-ht-close' && Boolean(extra.close) || name === 'data-ht-clear' && Boolean(extra.clear) };
@@ -292,13 +412,17 @@ async function loadPage(options = {}) {
     },
     refreshDayOf: async () => {
       // An open day-of view refreshes when it is selected again.
-      nav[3].setAttribute('aria-disabled', 'false');
-      await dispatch(nav[3]);
+      navById.get('ring-assignment').setAttribute('aria-disabled', 'false');
+      await dispatch(navById.get('ring-assignment'));
     },
     location,
     select: async (name) => {
-      elements.get('eventSelect').value = name;
-      await dispatch(elements.get('eventSelect'), 'change');
+      if (name === '__new__') {
+        await dispatch(elements.get('createEventBtn'));
+      } else {
+        elements.get('tournamentReferenceSelect').value = name;
+        await dispatch(elements.get('tournamentReferenceSelect'), 'change');
+      }
     },
     failSnapshot: () => { failSnapshot = true; },
     requests, confirmations, storage, errors
@@ -368,6 +492,26 @@ test('missing database or an empty saved roster defaults to Import CSV', async (
     assertNextDefault(page);
     assert.equal(page.confirmations.length, 0);
   }
+});
+
+test('age-bound tournament dates stay locked while other preparation settings remain editable', async () => {
+  const page = await loadPage({ ageDateLocked: true });
+  await page.openTournament();
+  assert.equal(page.element('dateInput').disabled, true);
+  assert.equal(page.element('locationInput').disabled, false);
+  assert.equal(page.element('saveMetadataBtn').disabled, false);
+  assert.match(page.element('eventConfigurationHelp').textContent, /date is fixed/);
+});
+
+test('legacy birth-date drafts are removed on page load without deleting saved groups', async () => {
+  const page = await loadPage({
+    competitors: [savedCompetitor],
+    draft: { eventName: winter, groups: [{ id: 'legacy', competitors: [{ ...savedCompetitor, dob: '2010-01-01' }] }] }
+  });
+  assert.equal(page.storage.has(draftKey), false);
+  assert.match(page.confirmations[0], /birth dates.*removed/);
+  await page.openGroups();
+  assert.doesNotMatch(page.element('gbBanners').innerHTML, /legacy/);
 });
 
 test('canceling replacement preserves saved groups, draft and pending input', async () => {
@@ -473,17 +617,340 @@ test('imports cannot be double-submitted and navigation waits until completion',
   let release;
   const waitForImport = new Promise((resolve) => { release = resolve; });
   const page = await loadPage({ waitForImport });
+  await page.openGroups();
   await page.openImport();
   page.element('csvTextInput').value = 'First Name\nNew';
   const importing = page.click('importBtn');
   await settle();
+  await page.selectTournament(spring);
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
   await page.click('importBtn');
   await page.openGroups();
+  await page.navigate('results');
+  await page.history(-1);
+  assert.equal(new URLSearchParams(page.location.search).get('view'), 'import');
+  assert.equal(page.element('importView').hidden, false);
+  assert.equal(page.historyLength(), 3);
+  for (const link of page.externalLinks) {
+    let prevented = false;
+    link.handlers.click({ preventDefault() { prevented = true; } });
+    assert.equal(prevented, true);
+  }
   assert.equal(page.element('groupsView').hidden, true);
   assert.equal(page.requests.filter((request) => request.init).length, 1);
   release();
   await importing;
   assertNextDefault(page);
+  await page.history(-1);
+  assert.equal(page.element('groupsView').hidden, false);
+  await page.history(1);
+  assert.equal(page.element('importView').hidden, false);
+});
+
+test('navigation destinations have stable IDs, approved labels and native Administration links', async () => {
+  const page = await loadPage({ activeEvent: spring });
+  const expected = {
+    'event-setup': 'Tournament', competitors: 'Competitors', volunteers: 'Volunteers', 'volunteer-types': 'Volunteer Types', groups: 'Divisions',
+    results: 'Results', 'team-management': 'Teams', 'team-settings': 'Settings', 'ring-judges': 'Ring Judges',
+    'judge-assignments': 'Judge Assignments', 'ring-assignment': 'Division Assignments',
+    'head-table': 'Head Table', printing: 'Printing', 'csv-settings': 'CSV Settings',
+    'judge-management': 'Judge Management', 'clinic-management': 'Clinic Management',
+    'event-history': 'Event History', 'your-account': 'Your Account', 'visual-definitions': 'Visual Definitions',
+    'server-maintenance': 'Server Maintenance', simulator: 'Simulator', schools: 'Schools', ranks: 'Ranks',
+    'competition-types': 'Competition Types', 'grand-champion-categories': 'Grand Champion Categories', 'medal-points': 'Medal Points'
+  };
+  assert.equal([...html.matchAll(/data-nav-id="/g)].length, Object.keys(expected).length);
+  for (const [id, label] of Object.entries(expected)) assert.equal(page.nav(id).getAttribute('data-nav-label'), label);
+  assert.equal(page.externalLinks.length, 0);
+  assert.equal(page.nav('import'), undefined);
+  assert.equal(page.nav('competitors').getAttribute('data-nav-parents'), 'tournament');
+  assert.doesNotMatch(html, /id="navCompetitors"|id="navCompetitorsChildren"/);
+  assert.equal(page.nav('ring-assignment').getAttribute('data-nav-parents'), 'tournament rings');
+  assert.equal(page.nav('head-table').getAttribute('data-nav-parents'), 'tournament rings');
+  assert.ok(html.indexOf('id="navVolunteers"') < html.indexOf('id="navCompetitionSettings"'));
+  assert.doesNotMatch(html, /id="navSelectedEvent"|id="navActiveEvent"/);
+  page.nav('groups').textContent = 'A translated display label';
+  await page.openGroups();
+  assert.equal(page.element('workspaceTitle').textContent, 'Divisions');
+  assert.equal(page.element('workspacePanel').getAttribute('aria-label'), 'Divisions workspace');
+  assert.equal(page.nav('groups').getAttribute('aria-current'), 'page');
+  assert.equal(page.nav('event-setup').hasAttribute('aria-current'), false);
+});
+
+test('Administration tools stay in the shell, unload on exit, and obey unsaved draft guards', async () => {
+  const page = await loadPage({ activeEvent: spring, search: '?view=simulator' });
+  assert.equal(page.element('administrationToolView').hidden, false);
+  assert.equal(page.element('administrationToolFrame').getAttribute('src'), '/simulator/?embedded=1');
+  assert.equal(page.element('tournamentReference').hidden, true);
+  assert.equal(page.element('navAdministration').getAttribute('aria-expanded'), 'true');
+  assert.equal(page.nav('simulator').getAttribute('aria-current'), 'page');
+  await page.navigate('server-maintenance');
+  assert.equal(page.element('administrationToolFrame').getAttribute('src'), '/admin/?embedded=1');
+  assert.equal(page.element('administrationToolFrame').getAttribute('title'), 'Server Maintenance');
+  await page.navigate('competitors');
+  assert.equal(page.element('administrationToolView').hidden, true);
+  assert.equal(page.element('administrationToolFrame').hasAttribute('src'), false);
+  await page.navigate('team-settings');
+  page.element('tmSize').value = '4';
+  await page.input('tmSize', 'input');
+  await page.navigate('simulator');
+  assert.equal(page.element('teamSettingsView').hidden, false);
+  assert.match(page.confirmations.at(-1), /unsaved team/);
+});
+
+test('schools navigation remains Administration-scoped with an add/edit overlay', async () => {
+  const page = await loadPage({ activeEvent: spring, search: '?view=schools' });
+  assert.equal(page.element('schoolsView').hidden, false);
+  assert.equal(page.element('tournamentReference').hidden, true);
+  assert.equal(page.nav('schools').getAttribute('aria-current'), 'page');
+  assert.equal(page.element('navAdministration').getAttribute('aria-expanded'), 'true');
+  assert.match(page.element('schoolsBody').innerHTML, /Vaughns Dojang IV - Audubon.*GM Charles Vaughn/);
+  await page.click('addSchool');
+  assert.equal(page.element('schoolDialog').open, true);
+  assert.equal(page.element('schoolDialogTitle').textContent, 'Add School');
+  await page.click('schoolCancel');
+  assert.equal(page.element('schoolDialog').open, false);
+  assert.equal(page.activeEvent(), spring);
+});
+
+test('ranks navigation is Administration-scoped, displays abbreviations and guards unsaved overlays', async () => {
+  const page = await loadPage({ activeEvent: spring, search: '?view=ranks' });
+  assert.equal(page.element('ranksView').hidden, false);
+  assert.equal(page.element('tournamentReference').hidden, true);
+  assert.equal(page.nav('ranks').getAttribute('aria-current'), 'page');
+  assert.equal(page.element('navAdministration').getAttribute('aria-expanded'), 'true');
+  assert.match(page.element('ranksBody').innerHTML, /Tiny Tigers \/ Little Dragons.*TTLD.*Special Dragons.*SD/);
+  await page.click('addRank');
+  page.element('rank-name').value = 'Draft';
+  await page.navigate('competitors');
+  assert.equal(page.element('ranksView').hidden, false);
+  assert.match(page.confirmations.at(-1), /unsaved rank/);
+  assert.equal(page.element('rank-name').value, 'Draft');
+  assert.equal(page.activeEvent(), spring);
+});
+
+test('competition settings pages share selected tournament, expand tiers and guard unsaved category edits', async () => {
+  const page = await loadPage({ activeEvent: spring, search: '?view=grand-champion-categories' });
+  assert.equal(page.element('competitionSettingsView').hidden, false);
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  assert.equal(page.element('navCompetitionSettings').getAttribute('aria-expanded'), 'true');
+  assert.match(page.element('csBody').innerHTML, /Adult Female Black Belt Champion/);
+  await page.click('csAdd');
+  page.element('cs-name').value = 'Draft category';
+  await page.selectTournament(spring);
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  assert.match(page.confirmations.at(-1), /unsaved competition settings/);
+  await page.navigate('medal-points');
+  assert.equal(page.nav('grand-champion-categories').getAttribute('aria-current'), 'page');
+  assert.equal(page.element('cs-name').value, 'Draft category');
+  const medals = await loadPage({ search: '?view=medal-points' });
+  assert.match(medals.element('csBody').innerHTML, /1st Place.*10.*2nd Place.*8.*3rd Place.*5/);
+  assert.equal(medals.element('csAdd').textContent, 'Add Medal');
+  const types = await loadPage({ search: '?view=competition-types' });
+  assert.match(types.element('csBody').innerHTML, /Team Sparring.*TS.*Yes/);
+  assert.equal(types.activeEvent(), '');
+});
+
+test('navigation restores disclosure preferences and opens every active ancestor', async () => {
+  const storageKey = 'tournamentManagement.navigation.expanded';
+  const page = await loadPage({ expanded: JSON.stringify({ tournament: false, competitors: true, rings: true, administration: true }) });
+  assert.equal(page.element('navTournament').getAttribute('aria-expanded'), 'true');
+  assert.equal(page.element('navRingsChildren').hidden, false);
+  assert.equal(page.element('navAdministrationChildren').hidden, false);
+  await page.click('navRings');
+  assert.equal(page.element('navRingsChildren').hidden, true);
+  const reloaded = await loadPage({ expanded: page.storage.get(storageKey), search: '?view=import' });
+  assert.equal(reloaded.element('navRingsChildren').hidden, true);
+  assert.equal(reloaded.element('navAdministrationChildren').hidden, false);
+  assert.equal(reloaded.nav('competitors').getAttribute('aria-current'), 'page');
+  assert.equal(reloaded.element('importView').hidden, false);
+  for (const button of reloaded.navGroups) {
+    assert.equal(button.getAttribute('type'), 'button');
+    assert.equal(reloaded.element(button.getAttribute('aria-controls')).hidden, button.getAttribute('aria-expanded') !== 'true');
+  }
+});
+
+test('manual team navigation opens both tiers, stays selected-scoped and protects unsaved team/settings edits', async () => {
+  const page = await loadPage({ activeEvent: spring, teamRoster: [savedCompetitor, newCompetitor] });
+  await page.navigate('team-management');
+  assert.equal(page.element('teamsView').hidden, false);
+  assert.equal(page.element('placeholderView').hidden, true);
+  assert.equal(page.element('detailsPanel').hidden, true);
+  assert.equal(page.element('navTeams').getAttribute('aria-expanded'), 'true');
+  assert.equal(page.element('navTournament').getAttribute('aria-expanded'), 'true');
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  assert.equal(page.requests.filter((request) => request.path === '/api/teams').at(-1).name, winter);
+  await page.click('tmAdd');
+  page.element('tmName').value = 'Unsaved';
+  await page.input('tmName', 'input');
+  await page.navigate('team-management');
+  assert.equal(page.element('tmName').value, 'Unsaved');
+  await page.navigate('team-settings');
+  assert.equal(page.element('teamsView').hidden, false);
+  assert.match(page.confirmations.at(-1), /unsaved team/);
+  await page.selectTournament(spring);
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  await page.history(-1);
+  assert.equal(page.element('teamsView').hidden, false);
+  assert.equal(page.nav('team-management').getAttribute('aria-current'), 'page');
+  const settings = await loadPage({ activeEvent: spring, search: '?view=team-settings', confirm: true });
+  assert.equal(settings.element('teamSettingsView').hidden, false);
+  settings.element('tmSize').value = '4';
+  await settings.input('tmSize', 'input');
+  await settings.selectTournament(spring);
+  assert.match(settings.confirmations.at(-1), /unsaved team or team settings/);
+  assert.equal(settings.element('tmSize').value, 3);
+  assert.equal(settings.requests.filter((request) => request.path === '/api/teams').at(-1).name, spring);
+  assert.equal(settings.activeEvent(), spring);
+  const noSelection = await loadPage({ selectedEvent: '', search: '?view=team-management' });
+  assert.equal(noSelection.requests.some((request) => request.path === '/api/teams'), false);
+  assert.equal(noSelection.element('tmAdd').disabled, true);
+});
+
+test('visual definitions are Administration-scoped and guard draft navigation without changing live selection', async () => {
+  const page = await loadPage({ activeEvent: spring, search: '?view=visual-definitions' });
+  assert.equal(page.element('visualDefinitionsView').hidden, false);
+  assert.equal(page.element('tournamentReference').hidden, true);
+  assert.equal(page.element('detailsPanel').hidden, true);
+  assert.equal(page.element('navAdministration').getAttribute('aria-expanded'), 'true');
+  assert.equal(page.nav('visual-definitions').getAttribute('aria-current'), 'page');
+  assert.equal(page.requests.filter((request) => request.path === '/api/visual-definitions').length, 1);
+  page.element('vd-bodySize').value = '13';
+  await page.input('vd-bodySize', 'input');
+  await page.navigate('competitors');
+  assert.equal(page.element('visualDefinitionsView').hidden, false);
+  assert.match(page.confirmations.at(-1), /unsaved visual definitions/);
+  assert.equal(page.element('vd-bodySize').value, '13');
+  assert.equal(page.activeEvent(), spring);
+  const confirmed = await loadPage({ activeEvent: spring, search: '?view=visual-definitions', confirm: true });
+  confirmed.element('vd-bodySize').value = '13';
+  await confirmed.input('vd-bodySize', 'input');
+  await confirmed.navigate('competitors');
+  assert.equal(confirmed.element('visualDefinitionsView').hidden, true);
+  assert.equal(confirmed.element('competitorLookupView').hidden, false);
+});
+
+test('Head Table links open under Ring Management and tolerate storage failures', async () => {
+  for (const expanded of ['not json', '[]', 'null', '{"rings":"false"}']) {
+    const page = await loadPage({ expanded, search: '?view=head-table', activeEvent: winter });
+    assert.equal(page.element('navRings').getAttribute('aria-expanded'), 'true');
+    assert.equal(page.nav('head-table').getAttribute('data-nav-parents'), 'tournament rings');
+    assert.equal(page.element('navTournamentChildren').hidden, false);
+    assert.equal(page.nav('head-table').getAttribute('aria-current'), 'page');
+  }
+  const unavailable = await loadPage({ storageUnavailable: true });
+  await unavailable.click('navAdministration');
+  assert.equal(unavailable.element('navAdministrationChildren').hidden, false);
+  await unavailable.navigate('your-account');
+  assert.equal(unavailable.nav('your-account').getAttribute('data-nav-planned'), 'true');
+  assert.equal(unavailable.element('placeholderTitle').textContent, 'Your Account');
+});
+
+test('Results is tournament-scoped, read-only and independent of active ring controls', async () => {
+  const page = await loadPage({ activeEvent: spring });
+  await page.navigate('results');
+  assert.equal(page.nav('results').getAttribute('data-nav-planned'), undefined);
+  assert.equal(page.element('resultsView').hidden, false);
+  assert.equal(page.element('placeholderView').hidden, true);
+  assert.equal(page.element('workspaceTitle').textContent, 'Running Results');
+  await page.selectTournament(winter);
+  assert.ok(page.requests.some((request) => request.path === '/api/tournament-results' && request.name === winter));
+  assert.match(page.element('resultSummary').textContent, /0 completed divisions/);
+  assert.equal(page.element('resultSource').disabled, false);
+  await page.navigate('schools');
+  assert.equal(page.element('resultsView').hidden, true);
+});
+
+test('Ring Judges and Volunteer Management use selected-tournament preparation', async () => {
+  const page = await loadPage({ activeEvent: spring, selectedEvent: winter, confirm: false });
+  await page.navigate('ring-judges');
+  assert.equal(page.element('ringJudgesView').hidden, false);
+  assert.equal(page.nav('ring-judges').getAttribute('data-nav-planned'), undefined);
+  assert.equal(page.element('tournamentReferenceLabel').textContent, 'Tournament for this page');
+  assert.equal(page.element('bannerEventName').textContent, winter);
+  assert.ok(page.requests.some((request) => request.path === '/api/ring-judges' && request.name === winter));
+  await page.click('rjAdd');
+  page.element('rj-name').value = 'Unsaved judge';
+  await page.navigate('volunteers');
+  assert.equal(page.element('ringJudgesView').hidden, false);
+  await page.selectTournament(spring);
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  page.element('rj-name').value = '';
+  await page.click('rjCancel');
+  await page.navigate('volunteers');
+  assert.equal(page.element('ringJudgesView').hidden, true);
+  assert.equal(page.element('volunteersView').hidden, false);
+  assert.equal(page.nav('volunteers').getAttribute('data-nav-parents'), 'tournament volunteer-management');
+  assert.equal(page.nav('volunteers').getAttribute('data-nav-planned'), undefined);
+  assert.equal(page.activeEvent(), spring);
+  assert.equal(page.requests.some((request) => request.path === '/api/events/activate'), false);
+});
+
+test('Planned destinations are explicit, independently addressable and never load or write live tools', async () => {
+  const page = await loadPage({ activeEvent: spring });
+  const before = page.requests.length;
+  for (const id of ['judge-assignments', 'printing',
+    'csv-settings', 'judge-management', 'clinic-management', 'event-history', 'your-account']) {
+    assert.equal(page.nav(id).getAttribute('data-nav-planned'), 'true');
+    await page.navigate(id);
+    assert.equal(page.element('placeholderView').hidden, false);
+    assert.equal(page.element('placeholderTitle').textContent, page.nav(id).getAttribute('data-nav-label'));
+    assert.equal(page.element('placeholderMessage').textContent, 'Planned.');
+    assert.equal(page.nav(id).getAttribute('aria-current'), 'page');
+    assert.equal(new URLSearchParams(page.location.search).get('view'), id);
+    for (const view of ['eventSetupView', 'importView', 'groupsView', 'ringAssignmentView', 'headTableView', 'competitorLookupView', 'detailsPanel']) {
+      assert.equal(page.element(view).hidden, true);
+    }
+  }
+  assert.equal(page.requests.slice(before).some((request) => request.init || request.path.startsWith('/api/rings')), false);
+  const direct = await loadPage({ search: '?view=judge-assignments' });
+  assert.equal(direct.element('placeholderTitle').textContent, 'Judge Assignments');
+  assert.match(direct.element('placeholderMessage').textContent, /No active tournament/);
+  assert.equal(direct.element('navRingsChildren').hidden, false);
+  assert.equal(direct.requests.some((request) => request.init), false);
+});
+
+test('browser Back and Forward restore URLs, current markers, active ancestors and saved-only source', async () => {
+  const page = await loadPage({ search: '?view=groups&source=saved', activeEvent: winter });
+  await page.openImport();
+  await page.openDayOf();
+  assert.equal(page.element('workspaceTitle').textContent, 'Division Assignments');
+  assert.equal(page.historyLength(), 3);
+  await page.history(-1);
+  assert.equal(page.element('importView').hidden, false);
+  assert.equal(page.nav('competitors').getAttribute('aria-current'), 'page');
+  await page.history(-1);
+  assert.equal(page.element('groupsView').hidden, false);
+  assert.equal(new URLSearchParams(page.location.search).get('source'), 'saved');
+  await page.history(1);
+  assert.equal(page.element('importView').hidden, false);
+  await page.history(1);
+  assert.equal(page.element('ringAssignmentView').hidden, false);
+  assert.equal(page.nav('ring-assignment').getAttribute('aria-current'), 'page');
+  await page.openDayOf();
+  assert.equal(page.historyLength(), 3, 'Selecting the current page refreshes without adding history');
+});
+
+test('mobile Menu and Escape use native controls and return focus; page selection focuses the heading', async () => {
+  const page = await loadPage({ mobile: true });
+  assert.equal(page.element('primaryNavigation').classList.contains('mobile-closed'), true);
+  assert.equal(page.element('navToggle').getAttribute('aria-expanded'), 'false');
+  await page.click('navToggle');
+  assert.equal(page.element('navToggle').getAttribute('aria-expanded'), 'true');
+  assert.equal(page.element('primaryNavigation').classList.contains('mobile-closed'), false);
+  await page.key('primaryNavigation', 'Escape');
+  assert.equal(page.element('navToggle').getAttribute('aria-expanded'), 'false');
+  assert.equal(page.element('navToggle').focused, true);
+  await page.click('navToggle');
+  await page.navigate('printing');
+  assert.equal(page.element('primaryNavigation').classList.contains('mobile-closed'), true);
+  assert.equal(page.element('workspaceTitle').focused, true);
+  page.resize(false);
+  assert.equal(page.element('navToggle').getAttribute('aria-expanded'), 'true');
+  page.resize(true);
+  assert.equal(page.element('navToggle').getAttribute('aria-expanded'), 'false');
+  assert.match(html, /<button id="navToggle"[^>]+type="button"[^>]+aria-controls="primaryNavigation"/);
+  assert.match(html, /\.sidebar\.mobile-closed\s*\{\s*display: none;/);
 });
 
 test('a missing database can be initialized, imported and used to persist group assignments', async (t) => {
@@ -494,7 +961,7 @@ test('a missing database can be initialized, imported and used to persist group 
   fs.writeFileSync(csvPath, 'First Name,Last Name,DOB,Gender,Current Rank\nNew,Competitor,01/01/2010,Male,G1\n');
   assert.equal(fs.existsSync(dbPath), false);
   await initializeDatabase(dbPath);
-  await importCSV(csvPath, dbPath, { clearExisting: true });
+  await importCSV(csvPath, dbPath, { clearExisting: true, tournamentDate: '2027-01-16' });
   const store = createCompetitorStore(dbPath);
   const competitors = await store.loadCompetitors();
   assert.equal(competitors.length, 1);
@@ -520,7 +987,7 @@ for (const header of ['Special Needs', 'Special Needs (Y|N)']) {
       `Six,Test,01/01/${year - 14},Male,G10,N`
     ].join('\n'));
     await initializeDatabase(dbPath);
-    const imported = await importCSV(csvPath, dbPath, { clearExisting: true });
+    const imported = await importCSV(csvPath, dbPath, { clearExisting: true, tournamentDate: '2027-01-16' });
     assert.equal(imported.normalizedCompetitors.filter((c) => c.specialNeeds === 1).length, 5);
     const store = createCompetitorStore(dbPath);
     const competitors = await store.loadCompetitors();
@@ -556,7 +1023,7 @@ test('Special Needs move restrictions and labels apply in Group Builder', async 
 
   test('manual Special Needs drag accepts different ages and ranks but rejects other genders', async () => {
     const special = { ...savedCompetitor, specialNeeds: 1, dob: '01/01/2010' };
-    const adult = { ...newCompetitor, specialNeeds: 1, rank: 'D1', dob: '01/01/2000' };
+    const adult = { ...newCompetitor, specialNeeds: 1, rank: 'D1', age: 26, ageAsOf: '2027-01-16' };
     const female = { ...adult, id: 3, gender: 'Female' };
     const page = await loadPage({
       competitors: [special, adult, female],
@@ -711,7 +1178,7 @@ test('workflow URLs open the requested view and navigation keeps the URL in sync
     assert.equal(new URLSearchParams(page.location.search).get('view'), 'import');
   }
   const fallback = await loadPage({ search: '?view=unknown' });
-  assert.equal(fallback.element('workspaceTitle').textContent, 'Event Setup');
+  assert.equal(fallback.element('workspaceTitle').textContent, 'Tournaments');
 });
 
 test('saved-only compatibility URL bypasses browser draft without deleting it', async () => {
@@ -739,15 +1206,15 @@ test('banner follows the selected event and its configured date, independently o
   assert.equal(page.element('bannerEventName').textContent, winter);
   assert.equal(page.element('bannerEventDate').textContent, '2027-01-16');
   assert.equal(page.element('bannerEventStatus').textContent, 'Not active');
-  assert.equal(page.element('activeEventChip').textContent, spring);
+  assert.match(page.element('tournamentListBody').innerHTML, /Active/);
   await page.select(spring);
   assert.equal(page.element('bannerEventName').textContent, spring);
   assert.equal(page.element('bannerEventDate').textContent, '2027-04-10');
   assert.equal(page.element('bannerEventStatus').textContent, 'Active');
   await page.click('resetEventBtn');
-  assert.equal(page.element('bannerEventName').textContent, 'None selected');
-  assert.equal(page.element('bannerEventDate').textContent, 'Not set');
-  assert.equal(page.element('bannerEventStatus').textContent, 'No event selected');
+  assert.equal(page.element('bannerEventName').textContent, spring);
+  assert.equal(page.element('bannerEventDate').textContent, '2027-04-10');
+  assert.equal(page.element('bannerEventStatus').textContent, 'Active');
 });
 
 test('day-of banner uses active event and date across all day-of sections, not selected drafts', async () => {
@@ -756,14 +1223,18 @@ test('day-of banner uses active event and date across all day-of sections, not s
     draft: { eventName: winter, groups: [] }
   });
   assert.equal(page.element('bannerEventStatus').textContent, 'Unsaved changes');
-  for (let index = 3; index < 8; index++) {
-    await page.openDayOf(index);
+  for (const id of ['ring-assignment', 'head-table', 'judge-assignments']) {
+    await page.openDayOf(id);
     assert.equal(page.element('bannerEventLabel').textContent, 'Active Event:');
     assert.equal(page.element('bannerEventName').textContent, spring);
     assert.equal(page.element('bannerEventDate').textContent, '2027-04-10');
     assert.equal(page.element('bannerEventStatus').textContent, 'Active');
     assert.equal(page.element('bannerMetadata').getAttribute('aria-label'), 'Active event metadata');
   }
+  await page.openDayOf('competitors');
+  assert.equal(page.element('bannerEventLabel').textContent, 'Selected Event:');
+  assert.equal(page.element('bannerEventName').textContent, winter);
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
   await page.openImport();
   assert.equal(page.element('bannerEventLabel').textContent, 'Selected Event:');
   assert.equal(page.element('bannerEventName').textContent, winter);
@@ -778,23 +1249,26 @@ test('day-of context refreshes and never falls back to selection when active eve
   await page.openDayOf();
   assert.equal(page.element('bannerEventName').textContent, 'No active event');
   assert.equal(page.element('bannerEventDate').textContent, 'Not set');
-  assert.match(page.element('placeholderMessage').textContent, /No active event/);
+  assert.match(page.element('placeholderMessage').textContent, /No active tournament/);
   page.setActiveEvent(spring);
   await page.refreshDayOf();
   assert.equal(page.element('bannerEventName').textContent, spring);
   page.failActiveEvent();
   await page.openDayOf();
   assert.equal(page.element('bannerEventStatus').textContent, 'Unavailable');
-  assert.equal(page.element('bannerEventDate').textContent, 'Not set');
+  assert.equal(page.element('bannerEventDate').textContent, '2027-04-10');
   assert.match(page.element('placeholderMessage').textContent, /Unable to load active event/);
   const noActive = await loadPage();
   await noActive.openDayOf();
-  assert.equal(noActive.element('workspaceTitle').textContent, 'Event Setup');
+  assert.equal(noActive.element('workspaceTitle').textContent, 'Division Assignments');
+  assert.equal(noActive.nav('ring-assignment').getAttribute('aria-disabled'), 'false');
+  assert.equal(noActive.element('tournamentReferenceSelect').hidden, false);
+  assert.equal(noActive.requests.some((request) => request.path === '/api/rings'), false);
 });
 
 test('integrated event metadata sends numeric dimensions, displays zero and blocks invalid input', async () => {
   const page = await loadPage();
-  await page.click('modifyEventBtn');
+  await page.openTournament();
   assert.equal(page.element('ringConfigXInput').value, '0');
   page.element('ringConfigXInput').value = '2';
   page.element('ringConfigYInput').value = '3';
@@ -812,7 +1286,6 @@ test('integrated event metadata sends numeric dimensions, displays zero and bloc
   await page.select('__new__');
   page.element('eventNameInput').value = 'New Event';
   await page.input('eventNameInput', 'input');
-  await page.click('createEventBtn');
   page.element('ringConfigXInput').value = '4';
   page.element('ringConfigYInput').value = '5';
   await page.click('saveMetadataBtn');
@@ -823,7 +1296,7 @@ test('integrated event metadata sends numeric dimensions, displays zero and bloc
   assert.equal(page.element('bannerEventName').textContent, 'New Event');
   assert.equal(page.element('bannerEventDate').textContent, 'Not set');
 
-  await page.click('modifyEventBtn');
+  await page.openTournament();
   const beforeInvalidSave = page.requests.filter((request) => request.init).length;
   page.element('ringConfigXInput').checkValidity = () => false;
   await page.click('saveMetadataBtn');
@@ -833,7 +1306,7 @@ test('integrated event metadata sends numeric dimensions, displays zero and bloc
 
 test('event format is saved, loaded and counted as an unsaved change', async () => {
   const page = await loadPage();
-  await page.click('modifyEventBtn');
+  await page.openTournament();
   assert.equal(page.element('tournamentDaysInput').value, '1');
   page.element('tournamentDaysInput').value = '2';
   await page.input('tournamentDaysInput', 'change');
@@ -842,20 +1315,92 @@ test('event format is saved, loaded and counted as an unsaved change', async () 
   const post = page.requests.filter((request) => request.init).at(-1);
   assert.equal(post.path, '/api/events/modify');
   assert.equal(JSON.parse(post.init.body).tournamentDays, 2);
-  await page.click('modifyEventBtn');
+  await page.openTournament();
   assert.equal(page.element('tournamentDaysInput').value, '2');
   assert.notEqual(page.element('bannerEventStatus').textContent, 'Unsaved changes');
 });
 
-const dobFor = (age) => `01/01/${new Date().getFullYear() - age}`;
+test('tournament list opens a center-workspace form with honest scope and live ring count', async () => {
+  const page = await loadPage({ activeEvent: winter });
+  assert.equal(page.element('workspaceTitle').textContent, 'Tournaments');
+  assert.match(page.element('tournamentListBody').innerHTML, /data-edit-tournament=/);
+  assert.match(page.element('tournamentListBody').innerHTML, /Unspecified/);
+  assert.doesNotMatch(html, /id="eventSelect"|id="modifyEventBtn"|id="activeEventChip"/);
+  await page.openTournament();
+  assert.equal(page.element('tournamentList').hidden, true);
+  assert.equal(page.element('detailsPanel').hidden, true);
+  assert.equal(page.element('metadataPanel').hidden, false);
+  assert.equal(page.element('scopeInput').value, '');
+  assert.equal(page.element('eventNameInput').disabled, true);
+  page.element('scopeInput').value = 'in-house';
+  page.element('ringConfigXInput').value = '4';
+  page.element('ringConfigYInput').value = '4';
+  await page.input('ringConfigXInput', 'input');
+  assert.equal(page.element('ringCountSummary').textContent, '4 × 4 = 16 rings');
+  assert.equal(page.element('bannerEventStatus').textContent, 'Unsaved changes');
+  await page.navigate('results');
+  assert.equal(page.element('eventSetupView').hidden, false);
+  assert.match(page.confirmations.at(-1), /Discard unsaved tournament details/);
+  await page.click('resetEventBtn');
+  assert.equal(page.element('metadataPanel').hidden, false);
+  await page.click('saveMetadataBtn');
+  const save = page.requests.find((request) => request.path === '/api/events/modify');
+  assert.equal(JSON.parse(save.init.body).scope, 'in-house');
+  assert.equal(page.element('tournamentList').hidden, false);
+  assert.match(page.element('tournamentListBody').innerHTML, /In-House/);
+  assert.equal(page.requests.some((request) => request.path === '/api/events/activate'), false);
+});
+
+test('new tournament opens an empty workspace and failed save retains scope and edits', async () => {
+  const page = await loadPage({ failEventSave: true });
+  await page.click('createEventBtn');
+  assert.equal(page.element('workspaceTitle').textContent, 'Create Tournament');
+  assert.equal(page.element('eventNameInput').value, '');
+  assert.equal(page.element('eventNameInput').disabled, false);
+  assert.equal(page.element('tournamentSavedActions').hidden, true);
+  assert.match(page.element('ringCountSummary').textContent, /0 × 0 = 0 rings \(Unconfigured\)/);
+  page.element('eventNameInput').value = 'New Scope Event';
+  await page.input('eventNameInput', 'input');
+  page.element('scopeInput').value = 'world';
+  page.element('locationInput').value = 'New venue';
+  await page.click('saveMetadataBtn');
+  assert.equal(page.element('scopeInput').value, 'world');
+  assert.equal(page.element('locationInput').value, 'New venue');
+  assert.equal(page.element('metadataPanel').hidden, false);
+  assert.match(page.element('notice').textContent, /Save unavailable/);
+  assert.equal(JSON.parse(page.requests.find((request) => request.path === '/api/events/create').init.body).scope, 'world');
+});
+
+test('tournament list and per-row metadata loading failures are explicit', async () => {
+  const failed = await loadPage({ failEventList: true });
+  assert.match(failed.element('tournamentListBody').innerHTML, /Unable to load tournaments: Tournament list unavailable/);
+  const partial = await loadPage({ failEventMetadata: spring });
+  assert.match(partial.element('tournamentListBody').innerHTML, /Unable to load metadata: Metadata unavailable/);
+  assert.match(partial.element('tournamentListBody').innerHTML, /Winter Tournament 2027/);
+});
+
+test('browser history cancellation preserves tournament edits without repeated prompts', async () => {
+  const page = await loadPage();
+  await page.navigate('results');
+  await page.navigate('event-setup');
+  await page.openTournament();
+  page.element('scopeInput').value = 'regional';
+  const current = page.location.href;
+  await page.history(-1);
+  assert.equal(page.location.href, current);
+  assert.equal(page.element('scopeInput').value, 'regional');
+  assert.equal(page.element('metadataPanel').hidden, false);
+  assert.equal(page.confirmations.length, 1);
+});
+
 const orderedGroups = [
-  { groupDivisionNumber: 51, name: 'Gup older', competitors: [{ ...savedCompetitor, rank: 'G1', dob: dobFor(9), gender: 'Female' }] },
-  { groupDivisionNumber: 42, name: 'TT older', competitors: [{ ...savedCompetitor, rank: 'TTLD', dob: dobFor(7) }] },
-  { groupDivisionNumber: 31, name: 'BB younger', competitors: [{ ...savedCompetitor, rank: 'D1', dob: dobFor(14) }] },
-  { groupDivisionNumber: 50, name: 'Gup younger', competitors: [{ ...savedCompetitor, rank: 'G1', dob: dobFor(8) }] },
-  { groupDivisionNumber: 41, name: 'Special Needs', specialNeeds: true, competitors: [{ ...savedCompetitor, specialNeeds: 1, dob: dobFor(6), gender: 'Female' }] },
-  { groupDivisionNumber: 40, name: 'TT younger', competitors: [{ ...savedCompetitor, rank: 'TTLD', dob: dobFor(5) }] },
-  { groupDivisionNumber: 30, name: 'BB older', competitors: [{ ...savedCompetitor, rank: 'D1', dob: dobFor(17) }, { ...savedCompetitor, rank: 'D1', dob: dobFor(12) }] }
+  { groupDivisionNumber: 51, name: 'Gup older', competitors: [{ ...savedCompetitor, rank: 'G1', age: 9, gender: 'Female' }] },
+  { groupDivisionNumber: 42, name: 'TT older', competitors: [{ ...savedCompetitor, rank: 'TTLD', age: 7 }] },
+  { groupDivisionNumber: 31, name: 'BB younger', competitors: [{ ...savedCompetitor, rank: 'D1', age: 14 }] },
+  { groupDivisionNumber: 50, name: 'Gup younger', competitors: [{ ...savedCompetitor, rank: 'G1', age: 8 }] },
+  { groupDivisionNumber: 41, name: 'Special Needs', specialNeeds: true, competitors: [{ ...savedCompetitor, specialNeeds: 1, age: 6, gender: 'Female' }] },
+  { groupDivisionNumber: 40, name: 'TT younger', competitors: [{ ...savedCompetitor, rank: 'TTLD', age: 5 }] },
+  { groupDivisionNumber: 30, name: 'BB older', competitors: [{ ...savedCompetitor, rank: 'D1', age: 17 }, { ...savedCompetitor, rank: 'D1', age: 12 }] }
 ];
 const shownDivisions = (page) => [...page.element('raDivisions').innerHTML.matchAll(/data-ra-division="(\d+)"/g)].map((match) => match[1]);
 
@@ -1172,7 +1717,7 @@ test('ring assignment direct link, search, empty state, errors and event switchi
   assert.match(page.element('raDivisions').innerHTML, /No saved divisions/);
   page.setActiveEvent('');
   await page.click('raRefreshBtn');
-  assert.match(page.element('raNotice').textContent, /No active event/);
+  assert.match(page.element('raNotice').textContent, /No active tournament/);
   assert.doesNotMatch(page.element('raRings').innerHTML, /data-ra-ring/);
   const failed = await loadPage({ activeEvent: winter, failRings: true });
   await failed.openDayOf();
@@ -1201,7 +1746,7 @@ test('opening Ring Assignment never applies a destructive layout and Event Setup
   assert.equal(page.requests.some((request) => request.path === '/api/rings/config'), false);
   assert.doesNotMatch(html, /id="raLayoutBtn"|id="applyEventRingLayoutBtn"/);
   await page.select(spring);
-  await page.click('modifyEventBtn');
+  await page.openTournament();
   page.element('ringConfigXInput').value = '4';
   await page.click('saveMetadataBtn');
   const save = page.requests.find((request) => request.path === '/api/events/modify');
@@ -1211,17 +1756,20 @@ test('opening Ring Assignment never applies a destructive layout and Event Setup
 
 test('all event settings lock together and confirmed reset run unlocks them', async () => {
   const page = await loadPage({ activeEvent: winter, selectedEvent: spring, configurationLocked: true, confirm: true });
-  await page.click('modifyEventBtn');
-  for (const id of ['locationInput', 'dateInput', 'tournamentDaysInput', 'ringConfigXInput', 'ringConfigYInput', 'saveMetadataBtn']) {
+  await page.openTournament();
+  for (const id of ['locationInput', 'scopeInput', 'dateInput', 'tournamentDaysInput', 'ringConfigXInput', 'ringConfigYInput', 'saveMetadataBtn']) {
     assert.equal(page.element(id).disabled, true, id);
   }
   assert.match(page.element('eventConfigurationHelp').textContent, /locked/);
+  assert.equal(page.element('deleteEventBtn').disabled, false);
+  assert.equal(page.element('resetRunBtn').disabled, false);
+  assert.equal(page.element('eventNameInput').disabled, true);
   await page.click('resetRunBtn');
   assert.match(page.confirmations.at(-1), /Stop all tablet activity/);
   assert.match(page.confirmations.at(-1), /Results and ring state will be archived/);
   const reset = page.requests.find((request) => request.path === '/api/events/reset-run');
   assert.deepEqual(JSON.parse(reset.init.body), { eventName: spring, confirm: true });
-  for (const id of ['locationInput', 'dateInput', 'tournamentDaysInput', 'ringConfigXInput', 'ringConfigYInput', 'saveMetadataBtn']) {
+  for (const id of ['locationInput', 'scopeInput', 'dateInput', 'tournamentDaysInput', 'ringConfigXInput', 'ringConfigYInput', 'saveMetadataBtn']) {
     assert.equal(page.element(id).disabled, false, id);
   }
   assert.match(page.element('notice').textContent, /run-archives\/test-run/);
@@ -1229,7 +1777,7 @@ test('all event settings lock together and confirmed reset run unlocks them', as
 
 test('cancelled reset run makes no request and leaves configuration locked', async () => {
   const page = await loadPage({ selectedEvent: spring, configurationLocked: true });
-  await page.click('modifyEventBtn');
+  await page.openTournament();
   await page.click('resetRunBtn');
   assert.equal(page.requests.some((request) => request.path === '/api/events/reset-run'), false);
   assert.equal(page.element('saveMetadataBtn').disabled, true);
@@ -1245,7 +1793,7 @@ test('Head Table integrates active-event totals, preserves disconnected division
       { ...ringA1, ringId: 'ring-a-2', ringLabel: 'A2', tabletLabel: 'Online', lastHeartbeatAt: new Date().toISOString(), completedGroupDivisionNumbers: ['22'] }
     ]
   });
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   assert.equal(page.element('headTableView').hidden, false);
   assert.equal(page.element('placeholderView').hidden, true);
   assert.equal(page.element('workspaceTitle').textContent, 'Head Table');
@@ -1289,7 +1837,7 @@ test('Head Table priority ranks attention, freezes selected positions and suppor
     { ...ringA1, ringId: 'ring-a-6', ringLabel: 'A6', ...online, groupDivisionNumber: '22', ringElapsed: '20:00', ringEstimated: '10:00', ringPacePercent: 100, assignmentStartedAt: started }
   ];
   const page = await loadPage({ activeEvent: winter, rings });
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   const order = () => [...page.element('htRings').innerHTML.matchAll(/data-ht-ring="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(order(), ['ring-a-4', 'ring-a-3', 'ring-a-5', 'ring-a-2', 'ring-a-6', 'ring-a-1']);
   assert.match(page.element('htRings').innerHTML, /medical assistance - waiting/);
@@ -1349,7 +1897,7 @@ test('Head Table does not fabricate estimates, pace or progress when timing is m
       { ...ringA1, ringId: 'ring-a-3', ringLabel: 'A3', groupDivisionNumber: '24', ringEstimated: '10:00', ringElapsed: '5:00', ringPacePercent: 0 }
     ]
   });
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   assert.match(page.element('htRings').innerHTML, /Phase progress unavailable/);
   assert.doesNotMatch(page.element('htRings').innerHTML, /Within estimate|Ahead of estimate|<progress/);
   await page.ringAction('htRings', { htRing: 'ring-a-1' });
@@ -1366,7 +1914,7 @@ test('Head Table segmented pill follows reported applicable phases and updates w
     { key: 'awards', label: 'Awards', state: 'upcoming', progress: 0 }
   ] } };
   const page = await loadPage({ activeEvent: winter, rings: [ring] });
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   assert.match(page.element('htRings').innerHTML, /--ht-fill: 25%/);
   assert.doesNotMatch(page.element('htRings').innerHTML, /Weapons|Sparring/);
   ring.phasePlan.phases[0] = { key: 'setup', label: 'Setup', state: 'complete', progress: 100 };
@@ -1393,7 +1941,7 @@ test('Head Table previews only the next queued division with unfilled phase segm
     ]
   } };
   const page = await loadPage({ activeEvent: winter, rings: [ring] });
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   const overview = page.element('htRings').innerHTML;
   assert.match(overview, /Division 20.*queued, not started/);
   assert.equal((overview.match(/ht-segment upcoming" style="--ht-fill: 0%"/g) || []).length, 4);
@@ -1415,7 +1963,7 @@ test('Head Table stale data is explicit, recovers, and never falls back to selec
     activeEvent: spring, groupsByEvent: { [spring]: [division20], [winter]: [] },
     rings: [{ ...ringA1, groupDivisionNumber: '20' }]
   });
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   assert.match(page.element('htFreshness').textContent, /Last successful refresh/);
   page.failRings();
   await page.click('htRefreshBtn');
@@ -1433,10 +1981,10 @@ test('Head Table stale data is explicit, recovers, and never falls back to selec
   assert.match(page.element('htSummary').innerHTML, /<strong>0 of 0<\/strong> completed/);
   page.setActiveEvent('');
   await page.click('htRefreshBtn');
-  assert.match(page.element('htNotice').textContent, /No active event/);
+  assert.match(page.element('htNotice').textContent, /No active tournament/);
   assert.doesNotMatch(page.element('htRings').innerHTML, /data-ht-ring/);
   const unavailable = await loadPage({ activeEvent: spring });
-  await unavailable.openDayOf(4);
+  await unavailable.openDayOf('head-table');
   unavailable.failActiveEvent();
   await unavailable.click('htRefreshBtn');
   assert.equal(unavailable.element('bannerEventStatus').textContent, 'Unavailable');
@@ -1447,7 +1995,7 @@ test('Head Table clears assistance only after confirmation, scopes requests and 
   for (const confirm of [false, true]) {
     const now = new Date().toISOString();
     const page = await loadPage({ activeEvent: winter, confirm, rings: [{ ...ringA1, assistanceType: 'medical', assistanceRequestedAt: now }] });
-    await page.openDayOf(4);
+    await page.openDayOf('head-table');
     assert.match(page.element('htSummary').innerHTML, /class="ht-count warning">Assistance <strong>1/);
     assert.match(page.element('htSummary').innerHTML, /class="ht-count">Disconnected <strong>0/);
     await page.ringAction('htRings', { htRing: 'ring-a-1' });
@@ -1462,7 +2010,7 @@ test('Head Table clears assistance only after confirmation, scopes requests and 
     }
   }
   const failed = await loadPage({ activeEvent: winter, confirm: true, failClear: true, rings: [{ ...ringA1, assistanceType: 'medical', assistanceRequestedAt: 'request-1' }] });
-  await failed.openDayOf(4);
+  await failed.openDayOf('head-table');
   await failed.ringAction('htRings', { htRing: 'ring-a-1' });
   await failed.ringAction('headTableDetails', {}, { clear: true });
   assert.match(failed.element('htNotice').textContent, /Unable to clear assistance: Clear failed/);
@@ -1473,7 +2021,7 @@ test('leaving Head Table ignores late board responses and cancels its polling', 
   let release;
   const waiting = new Promise((resolve) => { release = resolve; });
   const page = await loadPage({ activeEvent: winter, waitForGroups: waiting, rings: [{ ...ringA1 }] });
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   await page.openImport();
   release();
   await settle();
@@ -1488,7 +2036,7 @@ test('Head Table flags data older than thirty seconds and blocks stale assistanc
     activeEvent: winter, confirm: true,
     rings: [{ ...ringA1, assistanceType: 'general', assistanceRequestedAt: new Date().toISOString() }]
   });
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   await page.ringAction('htRings', { htRing: 'ring-a-1' });
   await page.advanceTime(31000);
   assert.match(page.element('htFreshness').textContent, /STALE DATA/);
@@ -1504,7 +2052,7 @@ test('Head Table clearing rejects stale event and replaced assistance requests',
   for (const change of ['event', 'request']) {
     const ring = { ...ringA1, assistanceType: 'general', assistanceRequestedAt: 'original-request' };
     const page = await loadPage({ activeEvent: winter, confirm: true, rings: [ring] });
-    await page.openDayOf(4);
+    await page.openDayOf('head-table');
     await page.ringAction('htRings', { htRing: 'ring-a-1' });
     if (change === 'event') page.setActiveEvent(spring);
     else ring.assistanceRequestedAt = 'replacement-request';
@@ -1639,7 +2187,7 @@ test('Ring Assignment and Head Table show the same queue start and completion wi
   assert.match(page.element('raDivisions').innerHTML, /Ring ~25 min/);
   assert.doesNotMatch(page.element('raDivisions').innerHTML, /\btitle=|\bdata-help=|data-estimate-help-expiry/);
   assert.match(page.element('raEstimateSummary').innerHTML, /Next ring free after queue: A1/);
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   await page.ringAction('htRings', { htRing: 'ring-a-1' });
   const headTable = page.element('headTableDetails').innerHTML;
   assert.match(headTable, /Current completion: .+ \(approx\.\)/);
@@ -1669,7 +2217,7 @@ test('Ring Assignment and Head Table show event start and a held all-division co
   await page.advanceTime(61000);
   await page.refreshTimer();
   assert.notEqual(page.element('raEventTiming').innerHTML.match(/~[^<]+/)[0], first.match(/~[^<]+/)[0]);
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   assert.match(page.element('htEventTiming').innerHTML, /Est\. completion <strong>~/);
   fixture.rings[0].tabletLabel = '';
   await page.refreshTimer();
@@ -1697,13 +2245,13 @@ test('predictions reject missing, stale, wrong-event and malformed snapshots and
     if (invalid === 'window') fixture.estimates.rings[0].availability.window.expectedAt = 'invalid';
     if (invalid === 'future') fixture.estimates.generatedAt = new Date(Date.now() + 60000).toISOString();
     const page = await loadPage(fixture);
-    await page.openDayOf(4);
+    await page.openDayOf('head-table');
     await page.ringAction('htRings', { htRing: 'ring-a-1' });
     assert.match(page.element('headTableDetails').innerHTML, /Ring free after queue unavailable:/, invalid);
     assert.match(page.element('htEstimateSummary').innerHTML, /unavailable/i, invalid);
   }
   const page = await loadPage(estimationFixture());
-  await page.openDayOf(4);
+  await page.openDayOf('head-table');
   await page.ringAction('htRings', { htRing: 'ring-a-1' });
   page.failRings();
   await page.click('htRefreshBtn');
@@ -1791,93 +2339,86 @@ const lookupPerson = {
 };
 async function searchLookup(page, query) {
   page.element('clSearch').value = query;
-  await page.input('clSearch', 'input');
+  await page.submitLookup();
 }
 
-test('Competitor main panel searches active saved roster at two characters and reveals private details only on selection', async () => {
+test('Competitors browse the selected inactive tournament roster and keep private details behind selection', async () => {
+  const savedGroups = [{ groupDivisionNumber: 20, name: 'Saved division', competitors: [lookupPerson] }];
   const page = await loadPage({
     activeEvent: winter, selectedEvent: spring,
-    competitors: [lookupPerson, { ...lookupPerson, id: 2, firstName: 'Annabel', phone: '555-0200' }],
-    rings: [{ ...ringA1, queuedGroupDivisionNumbers: ['20'] }]
+    rostersByEvent: { [spring]: [
+      { ...lookupPerson, associationNumber: 'TSD-100' },
+      { ...lookupPerson, id: 2, firstName: 'Beth', lastName: 'Brown', associationNumber: 'TSD-200', groupDivisionNumber: null }
+    ] },
+    groupsByEvent: { [spring]: savedGroups }
   });
-  await page.openDayOf(5);
+  await page.openDayOf('competitors');
   assert.equal(page.element('workspaceTitle').textContent, 'Competitors');
   assert.equal(page.element('competitorLookupView').hidden, false);
   assert.equal(page.element('detailsPanel').hidden, true);
-  await searchLookup(page, 'a');
-  assert.equal(page.element('clResults').innerHTML, '');
-  await searchLookup(page, 'AN');
-  assert.match(page.element('clStatus').textContent, /2 matches/);
-  assert.match(page.element('clResults').innerHTML, /<mark>An<\/mark>na/);
-  assert.match(page.element('clResults').innerHTML, /H<mark>an<\/mark>nah/);
+  assert.match(page.element('clStatus').textContent, /2 competitors.*Spring Tournament 2027/);
+  assert.match(page.element('clResults').innerHTML, /TSD-100/);
   assert.match(page.element('clResults').innerHTML, /Division 20/);
-  assert.match(page.element('clResults').innerHTML, /Ring A1 - queued/);
+  assert.match(page.element('clResults').innerHTML, /Gender|Male/);
+  await searchLookup(page, 'TSD-200');
+  assert.match(page.element('clResults').innerHTML, /Beth Brown/);
+  assert.doesNotMatch(page.element('clResults').innerHTML, /Anna Hannah/);
+  await searchLookup(page, '');
+  await searchLookup(page, 'AN');
+  assert.match(page.element('clResults').innerHTML, /<mark>An<\/mark>na/);
   assert.doesNotMatch(page.element('clResults').innerHTML, /555-0100|Guardian|Pat/);
   await page.ringAction('clResults', { clRow: '1' });
   assert.equal(page.element('detailsPanel').hidden, false);
   assert.equal(page.element('detailsTitle').textContent, 'Competitor Details');
-  for (const value of ['Anna', 'Hannah', 'Pat Guardian', '555-0100', 'G1', 'North Studio', 'Saved division', 'Ring A1 - queued']) {
+  for (const value of ['Anna', 'Hannah', 'Pat Guardian', '555-0100', 'G1', 'North Studio', 'Saved division', 'TSD-100']) {
     assert.ok(page.element('competitorLookupDetails').innerHTML.includes(value), value);
   }
-  await searchLookup(page, 'g1');
-  assert.match(page.element('clResults').innerHTML, /<mark>G1<\/mark>/);
-  await searchLookup(page, 'North');
-  assert.match(page.element('clStatus').textContent, /0 matches/);
+  await searchLookup(page, 'No matching name');
+  assert.match(page.element('clStatus').textContent, /0 competitors/);
   assert.equal(page.element('detailsPanel').hidden, true);
   assert.equal(page.element('competitorLookupDetails').innerHTML, '');
-  assert.ok(page.requests.filter((request) => request.path === '/api/competitors').every((request) => request.name === winter));
+  assert.ok(page.requests.filter((request) => request.path === '/api/competitors').every((request) => request.name === spring));
+  assert.equal(page.requests.some((request) => request.path === '/api/rings'), false);
+  assert.equal(page.activeEvent(), winter);
   assert.equal(page.requests.some((request) => request.init), false);
+  await page.click('clImportBtn');
+  assert.equal(page.element('importView').hidden, false);
+  assert.equal(page.element('importEventChip').textContent, spring);
 });
 
-test('lookup escapes literal highlights, displays all matches and handles missing fields, completed history and ambiguity', async () => {
+test('Competitors show a saved roster within the default page size and safely highlight literal search text', async () => {
   const competitors = Array.from({ length: 125 }, (_, id) => ({
     id, firstName: 'A[<script>', lastName: 'Same', rank: 'G1', groupDivisionNumber: 20
   }));
-  const rings = [
-    { ...ringA1, completedGroupDivisionNumbers: ['20'] },
-    { ...ringA1, ringId: 'ring-b-1', ringLabel: 'B1', queuedGroupDivisionNumbers: ['20'] }
-  ];
-  const page = await loadPage({ activeEvent: winter, competitors, rings, search: '?view=competitors' });
+  const page = await loadPage({ activeEvent: winter, competitors, search: '?view=competitors' });
   await settle();
   await settle();
-  await searchLookup(page, '[<');
-  assert.match(page.element('clStatus').textContent, /125 matches/);
+  assert.match(page.element('clStatus').textContent, /125 competitors/);
   assert.equal((page.element('clResults').innerHTML.match(/data-cl-id=/g) || []).length, 125);
+  await searchLookup(page, '[<');
+  assert.match(page.element('clStatus').textContent, /125 competitors/);
   assert.match(page.element('clResults').innerHTML, /<mark>\[&lt;<\/mark>script&gt;/);
   assert.doesNotMatch(page.element('clResults').innerHTML, /<script>/);
   await page.ringAction('clResults', { clId: '0' });
   assert.match(page.element('competitorLookupDetails').innerHTML, /Not provided/);
-  assert.match(page.element('competitorLookupDetails').innerHTML, /Ring B1 - queued/);
-  rings[1].queuedGroupDivisionNumbers = [];
-  await page.click('clRefreshBtn');
-  assert.match(page.element('competitorLookupDetails').innerHTML, /Ring A1 - completed/);
-  rings[1].groupDivisionNumber = '20';
-  rings[0].groupDivisionNumber = '20';
-  await page.click('clRefreshBtn');
-  assert.match(page.element('competitorLookupDetails').innerHTML, /Ambiguous:/);
 });
 
-test('lookup refreshes active event, clears departed personal data and makes ring failures explicit', async () => {
+test('changing selected tournament refreshes the roster and clears stale details without following active-event changes', async () => {
   const page = await loadPage({
     activeEvent: winter, rostersByEvent: { [winter]: [lookupPerson], [spring]: [{ ...lookupPerson, id: 2, firstName: 'SpringOnly' }] },
-    rings: [{ ...ringA1, groupDivisionNumber: '20' }]
+    groupsByEvent: { [winter]: [], [spring]: [] }
   });
-  await page.openDayOf(5);
+  await page.openDayOf('competitors');
   await searchLookup(page, 'an');
   await page.ringAction('clResults', { clId: '1' });
-  page.failRings();
-  await page.click('clRefreshBtn');
-  assert.match(page.element('clNotice').textContent, /Ring assignments unavailable/);
-  assert.match(page.element('competitorLookupDetails').innerHTML, /Unavailable - ring data/);
-  assert.doesNotMatch(page.element('competitorLookupDetails').innerHTML, /Ring A1/);
-  page.failRings(false);
   page.setActiveEvent(spring);
   await page.refreshTimer();
-  assert.doesNotMatch(page.element('clResults').innerHTML, />Anna/);
+  assert.match(page.element('clResults').innerHTML, /<mark>An<\/mark>na/);
+  assert.equal(page.activeEvent(), spring);
+  await page.selectTournament(spring);
+  assert.match(page.element('clResults').innerHTML, /SpringOnly/);
   assert.equal(page.element('competitorLookupDetails').innerHTML, '');
   assert.equal(page.element('detailsPanel').hidden, true);
-  await searchLookup(page, 'spring');
-  assert.match(page.element('clResults').innerHTML, /<mark>Spring<\/mark>Only/);
   await page.openImport();
   assert.equal(page.element('clResults').innerHTML, '');
   assert.equal(page.element('competitorLookupDetails').innerHTML, '');
@@ -1885,18 +2426,18 @@ test('lookup refreshes active event, clears departed personal data and makes rin
 
 test('lookup roster failure clears details and late responses cannot reopen a departed view', async () => {
   const page = await loadPage({ activeEvent: winter, competitors: [lookupPerson] });
-  await page.openDayOf(5);
+  await page.openDayOf('competitors');
   await searchLookup(page, 'an');
   await page.ringAction('clResults', { clId: '1' });
   page.failSnapshot();
   await page.click('clRefreshBtn');
   assert.match(page.element('clNotice').textContent, /Database unavailable/);
   assert.equal(page.element('competitorLookupDetails').innerHTML, '');
-  assert.equal(page.element('clResults').innerHTML, '');
+  assert.match(page.element('clResults').innerHTML, /Competitor roster unavailable/);
   let release;
   const waitForRoster = new Promise((resolve) => { release = resolve; });
   const late = await loadPage({ activeEvent: winter, competitors: [lookupPerson], waitForRoster });
-  await late.openDayOf(5);
+  await late.openDayOf('competitors');
   await late.openGroups();
   release();
   await settle();
@@ -1905,159 +2446,465 @@ test('lookup roster failure clears details and late responses cannot reopen a de
   assert.equal(late.element('competitorLookupDetails').innerHTML, '');
 });
 
-test('lookup rejects a mid-load event switch and clears results when no event or active-event verification is available', async () => {
+test('roster loading is race-guarded when selected tournament changes and reports missing selection', async () => {
   let release;
   const waitForRoster = new Promise((resolve) => { release = resolve; });
-  const page = await loadPage({ activeEvent: winter, competitors: [lookupPerson], waitForRoster });
-  await page.openDayOf(5);
-  await searchLookup(page, 'an');
-  page.setActiveEvent(spring);
+  const page = await loadPage({ activeEvent: winter, rostersByEvent: {
+    [winter]: [lookupPerson], [spring]: [{ ...lookupPerson, id: 2, firstName: 'SpringOnly' }]
+  }, waitForRoster });
+  await page.openDayOf('competitors');
+  await page.selectTournament(spring);
   release();
   await settle();
   await settle();
-  assert.match(page.element('clNotice').textContent, /active event changed/);
-  assert.equal(page.element('clResults').innerHTML, '');
+  assert.match(page.element('clResults').innerHTML, /SpringOnly/);
+  assert.doesNotMatch(page.element('clResults').innerHTML, /Anna Hannah/);
+  assert.equal(page.activeEvent(), winter);
   const missing = await loadPage({ activeEvent: winter, competitors: [lookupPerson] });
-  await missing.openDayOf(5);
-  await searchLookup(missing, 'an');
-  await missing.ringAction('clResults', { clId: '1' });
-  missing.setActiveEvent('');
-  await missing.click('clRefreshBtn');
-  assert.match(missing.element('clNotice').textContent, /No active event/);
-  assert.equal(missing.element('competitorLookupDetails').innerHTML, '');
-  missing.failActiveEvent();
-  await missing.click('clRefreshBtn');
-  assert.match(missing.element('clNotice').textContent, /Active event unavailable/);
-  assert.equal(missing.element('clResults').innerHTML, '');
+  await missing.openDayOf('competitors');
+  await missing.selectTournament('');
+  assert.match(missing.element('clNotice').textContent, /Select a tournament/);
+  assert.match(missing.element('clResults').innerHTML, /Select a tournament/);
 });
 
-test('comma-separated lookup uses OR matching with trimmed distinct terms and highlights overlapping literal matches', async () => {
+test('division loads are race-guarded when the shared tournament changes mid-request', async () => {
+  let release;
+  const waitForGroups = new Promise((resolve) => { release = resolve; });
+  const page = await loadPage({
+    selectedEvent: winter,
+    groupsByEvent: {
+      [winter]: [{ id: 'winter-20', groupDivisionNumber: 20, name: 'Winter division', competitors: [savedCompetitor] }],
+      [spring]: [{ id: 'spring-22', groupDivisionNumber: 22, name: 'Spring division', competitors: [newCompetitor] }]
+    },
+    waitForGroups
+  });
+  await page.openGroups();
+  await page.selectTournament(spring);
+  release();
+  await settle();
+  await settle();
+  assert.match(page.element('gbBanners').innerHTML, /data-id="spring-22"/);
+  assert.doesNotMatch(page.element('gbBanners').innerHTML, /data-id="winter-20"/);
+  assert.ok(page.requests.some((request) => request.path === '/api/groups' && request.name === winter));
+  assert.ok(page.requests.some((request) => request.path === '/api/groups' && request.name === spring));
+});
+
+test('competitor search matches names and association IDs literally and safely', async () => {
   const page = await loadPage({
     activeEvent: winter,
     competitors: [
-      lookupPerson,
-      { ...lookupPerson, id: 2, firstName: 'Bob', lastName: 'Smith', rank: 'D2' },
+      { ...lookupPerson, associationNumber: 'TSD-100' },
+      { ...lookupPerson, id: 2, firstName: 'Bob', lastName: 'Smith', rank: 'D2', associationNumber: 'TSD-200' },
       { ...lookupPerson, id: 3, firstName: 'Cara', lastName: 'Jones', rank: 'G3' },
       { ...lookupPerson, id: 4, firstName: 'A[<script>', lastName: 'Other', rank: 'D1' }
     ]
   });
-  await page.openDayOf(5);
-  await searchLookup(page, ' AN , d2, an, ,x ');
+  await page.openDayOf('competitors');
+  assert.match(page.element('clStatus').textContent, /4 competitors/);
+  await searchLookup(page, 'AN');
   const markup = page.element('clResults').innerHTML;
-  assert.match(page.element('clStatus').textContent, /2 matches.*matching any term.*single-character terms ignored/);
-  assert.equal((markup.match(/data-cl-id=/g) || []).length, 2);
+  assert.match(page.element('clStatus').textContent, /1 competitor/);
+  assert.equal((markup.match(/data-cl-id=/g) || []).length, 1);
   assert.match(markup, /<mark>An<\/mark>na/);
-  assert.match(markup, /<mark>D2<\/mark>/);
-  assert.doesNotMatch(markup, /Cara|A\[/);
-  await searchLookup(page, 'an, ann, nna');
-  assert.match(page.element('clResults').innerHTML, /<mark>Anna<\/mark>/);
-  assert.doesNotMatch(page.element('clResults').innerHTML, /<mark>[^<]*<mark>/);
-  await searchLookup(page, '[<, script');
-  assert.match(page.element('clResults').innerHTML, /A<mark>\[&lt;script<\/mark>&gt;/);
+  await searchLookup(page, 'TSD-200');
+  assert.match(page.element('clResults').innerHTML, /TSD-200/);
+  assert.match(page.element('clResults').innerHTML, /Bob Smith/);
+  await searchLookup(page, '[<');
+  assert.match(page.element('clResults').innerHTML, /A<mark>\[&lt;<\/mark>script&gt;/);
   assert.doesNotMatch(page.element('clResults').innerHTML, /<script>/);
-  await searchLookup(page, ',a, ,g,');
-  assert.equal(page.element('clResults').innerHTML, '');
-  assert.match(page.element('clStatus').textContent, /at least 2 characters per search term/);
-  assert.match(html, /\.cl-table td \{ height: 42px;/);
+  assert.match(html, /\.cl-table td \{ height: 36px;/);
   assert.match(html, /max-width: 1380px/);
 });
 
-test('lookup filters share table column widths when the results area has room and wrap otherwise', () => {
-  assert.match(html, /#competitorLookupView \{ container-type: inline-size;/);
-  assert.match(html, /<colgroup><col><col><col><col><col><\/colgroup>/);
-  const columns = ['name', 'rank', 'studio', 'division', 'ring'];
-  for (const [index, column] of columns.entries()) {
-    assert.ok(html.includes(`.cl-table col:nth-child(${index + 1}) { width: var(--cl-${column}-width); }`));
+test('competitor table keeps the requested compact seven-column layout and responsive detail panel', () => {
+  assert.match(html, /<colgroup><col><col><col><col><col><col><col><\/colgroup>/);
+  for (const heading of ['TSD ID', 'Competitor', 'Age', 'Gender', 'Rank', 'Studio \/ School', 'Division']) {
+    assert.ok(html.includes(heading), heading);
   }
-  assert.ok(html.includes(`grid-template-columns: ${columns.map((column) => `var(--cl-${column}-width)`).join(' ')}; gap: 0; padding: 0;`));
-  assert.match(html, /@container \(min-width: 760px\)/);
-  assert.match(html, /\.cl-filter-grid \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(130px, 1fr\)\)/);
-  assert.match(html, /\.cl-filters\[hidden\] \{ display: none; \}/);
+  assert.match(html, /cl-division-link/);
+  assert.match(html, /\.cl-toolbar \{ display: flex; flex-wrap: wrap;/);
+  assert.match(html, /<form id="clToolbar"[^>]*aria-label="Filter competitors"/);
+  assert.doesNotMatch(html, /id="clFilters|id="clSearchBtn|id="clClearFiltersBtn|type="checkbox"[^>]*data-cl/);
+  assert.match(html, /id="clApplyFiltersBtn"[^>]*type="submit"/);
+  assert.match(html, /<option>25<\/option><option>50<\/option><option>100<\/option><option selected>250<\/option>/);
+  assert.ok(html.indexOf('id="clResultCount"') < html.indexOf('<table class="cl-table"'));
+  assert.ok(html.indexOf('id="clPagination"') < html.indexOf('<table class="cl-table"'));
 });
 
-test('polished lookup renders aligned table with exact totals, name sorting and complete sectioned details', async () => {
+test('competitor roster renders compact rows, sorting and complete sectioned personal details', async () => {
   const page = await loadPage({ activeEvent: winter, competitors: [
-    { ...lookupPerson, email: 'guardian@example.test', ageRange: '12-14', notes: '<Keep safe>' },
+    { ...lookupPerson, email: 'guardian@example.test', age: 14, notes: '<Keep safe>' },
     { ...lookupPerson, id: 2, firstName: 'Beth', lastName: 'Zulu' }
   ] });
-  await page.openDayOf(5);
-  await searchLookup(page, 'g1');
+  await page.openDayOf('competitors');
   const results = page.element('clResults').innerHTML;
   assert.equal((results.match(/<tr /g) || []).length, 2);
-  assert.equal((results.match(/<td[ >]/g) || []).length, 10);
+  assert.equal((results.match(/<td[ >]/g) || []).length, 14);
   assert.doesNotMatch(results, /Rank:/);
   assert.match(results, /class="cl-rank"/);
-  assert.equal(page.element('clResultCount').textContent, '2 results');
-  assert.equal(page.element('clResultsFooter').textContent, 'Showing 1-2 of 2 results');
+  assert.equal(page.element('clResultCount').textContent, 'Showing 1–2 of 2');
   await page.click('clSortName');
   assert.equal(page.element('clNameHeading').getAttribute('aria-sort'), 'descending');
   assert.ok(page.element('clResults').innerHTML.indexOf('Beth') < page.element('clResults').innerHTML.indexOf('Anna'));
-  await page.click('clSearchBtn');
+  await page.submitLookup();
   await page.ringAction('clResults', { clId: '1' });
   const details = page.element('competitorLookupDetails').innerHTML;
-  for (const value of ['Personal Information', 'Parent/Guardian', 'Competition Information / Assignments', 'guardian@example.test', '12-14', 'Notes', '&lt;Keep safe&gt;', 'has not been assigned to a ring yet']) assert.ok(details.includes(value), value);
+  for (const value of ['Personal Information', 'Parent/Guardian', 'Competition Information', 'guardian@example.test', '>14<', 'Notes', '&lt;Keep safe&gt;']) assert.ok(details.includes(value), value);
   assert.equal(page.element('pageContent').classList.contains('competitor-lookup'), true);
   await searchLookup(page, 'nomatch');
-  assert.equal(page.element('clResultsFooter').textContent, 'Showing 0-0 of 0 results');
+  assert.equal(page.element('clResultCount').textContent, 'Showing 0–0 of 0');
 });
 
-test('advanced lookup filters apply together, collapse without clearing, clear independently and reset on event changes', async () => {
+test('studio, gender and age filters combine and reset when the selected tournament changes', async () => {
   const people = [
-    lookupPerson,
-    { ...lookupPerson, id: 2, firstName: 'Bob', rank: 'D2', studio: 'South Studio', groupDivisionNumber: 22 },
-    { ...lookupPerson, id: 3, firstName: 'Cara', groupDivisionNumber: null }
+    { ...lookupPerson, age: 15, gender: 'Female' },
+    { ...lookupPerson, id: 2, firstName: 'Bob', rank: 'D2', studio: 'South Studio', age: 10, gender: 'Male', groupDivisionNumber: 22 },
+    { ...lookupPerson, id: 3, firstName: 'Cara', studio: 'North Studio', age: 20, gender: 'Female', groupDivisionNumber: null }
   ];
-  const page = await loadPage({ activeEvent: winter, competitors: people, rings: [{ ...ringA1, queuedGroupDivisionNumbers: ['20'] }] });
-  await page.openDayOf(5);
-  page.element('clFilters').hidden = true;
-  await page.click('clFiltersBtn');
-  assert.equal(page.element('clFiltersBtn').getAttribute('aria-expanded'), 'true');
-  assert.match(page.element('clFilterRank').innerHTML, /D2/);
+  const page = await loadPage({ activeEvent: winter, competitors: people });
+  await page.openDayOf('competitors');
   assert.match(page.element('clFilterStudio').innerHTML, /South Studio/);
-  assert.match(page.element('clFilterDivision').innerHTML, /22/);
-  assert.match(page.element('clFilterRing').innerHTML, /Ring A1/);
-  page.element('clFilterName').value = 'anna';
-  page.element('clFilterRank').value = 'G1';
   page.element('clFilterStudio').value = 'North Studio';
-  page.element('clFilterDivision').value = '20';
-  page.element('clFilterRing').value = 'ring-a-1';
-  await page.click('clApplyFiltersBtn');
-  assert.match(page.element('clStatus').textContent, /1 match.*filters applied/);
+  page.element('clFilterGender').value = 'Female';
+  page.element('clFilterAgeMin').value = '10';
+  page.element('clFilterAgeMax').value = '18';
+  await page.submitLookup();
+  assert.match(page.element('clStatus').textContent, /1 competitor.*filters applied/);
   assert.match(page.element('clResults').innerHTML, /Anna/);
-  await page.click('clFiltersBtn');
-  assert.equal(page.element('clFilters').hidden, true);
   assert.match(page.element('clResults').innerHTML, /Anna/);
-  await searchLookup(page, 'bob');
-  assert.equal(page.element('clResults').innerHTML, '');
-  await page.click('clClearFiltersBtn');
+  await searchLookup(page, 'Bob');
+  assert.match(page.element('clResults').innerHTML, /No matching competitors found/);
+  for (const id of ['clFilterStudio', 'clFilterGender', 'clFilterAgeMin', 'clFilterAgeMax']) page.element(id).value = '';
+  await page.submitLookup();
   assert.match(page.element('clResults').innerHTML, /Bob/);
-  await searchLookup(page, '');
-  page.element('clFilterUnassigned').checked = true;
-  await page.click('clApplyFiltersBtn');
-  assert.match(page.element('clStatus').textContent, /2 matches/);
+  page.element('clFilterAgeMin').value = '0';
+  page.element('clFilterAgeMax').value = '12';
+  await page.submitLookup();
+  assert.match(page.element('clStatus').textContent, /1 competitor/);
   assert.doesNotMatch(page.element('clResults').innerHTML, /Anna/);
-  page.failRings();
-  await page.click('clRefreshBtn');
-  assert.equal(page.element('clResults').innerHTML, '', 'Unknown assignments must not count as unassigned');
-  page.setActiveEvent(spring);
-  page.failRings(false);
-  await page.click('clRefreshBtn');
-  assert.equal(page.element('clFilterUnassigned').checked, false);
-  assert.equal(page.element('clFilterRank').value, '');
+  await page.selectTournament(spring);
+  assert.equal(page.element('clFilterAgeMin').value, '');
+  assert.equal(page.element('clFilterAgeMax').value, '');
+  assert.equal(page.element('clFilterStudio').value, '');
 });
 
-test('ring filter follows current assignment precedence over completed ring history', async () => {
-  const page = await loadPage({ activeEvent: winter, competitors: [lookupPerson], rings: [
-    { ...ringA1, completedGroupDivisionNumbers: ['20'] },
-    { ...ringA1, ringId: 'ring-b-1', ringLabel: 'B1', groupDivisionNumber: '20' }
-  ] });
-  await page.openDayOf(5);
-  page.element('clFilterRing').value = 'ring-a-1';
-  await page.click('clApplyFiltersBtn');
-  assert.equal(page.element('clResults').innerHTML, '');
-  page.element('clFilterRing').value = 'ring-b-1';
-  await page.click('clApplyFiltersBtn');
-  assert.match(page.element('clResults').innerHTML, /Ring B1 - current/);
+const pagedRoster = (length = 2036) => Array.from({ length }, (_, index) => ({
+  ...lookupPerson, id: index + 1, firstName: 'Person', lastName: String(index + 1).padStart(4, '0'),
+  associationNumber: `TSD-${index + 1}`, studio: index % 2 ? 'South Studio' : 'North Studio',
+  gender: index % 2 ? 'Male' : 'Female', age: 10 + index % 20
+}));
+const resultIds = (page) => [...page.element('clResults').innerHTML.matchAll(/data-cl-id="(\d+)"/g)].map((match) => Number(match[1]));
+const resultSummary = (page) => page.element('clResultCount').textContent;
+const goLookupPage = (page, number) => page.ringAction('clPagination', { clPage: String(number) });
+
+test('competitor pagination bounds rows and numbered windows across more than 2,000 records', async () => {
+  const page = await loadPage({ competitors: pagedRoster() });
+  await page.openDayOf('competitors');
+  assert.equal(resultSummary(page), 'Showing 1–250 of 2,036');
+  assert.deepEqual(resultIds(page), Array.from({ length: 250 }, (_, index) => index + 1));
+  assert.match(page.element('clPagination').innerHTML, /aria-label="Previous page" disabled/);
+  assert.match(page.element('clPagination').innerHTML, /aria-current="page">1<\/button>/);
+  await goLookupPage(page, 2);
+  assert.equal(resultSummary(page), 'Showing 251–500 of 2,036');
+  assert.equal(resultIds(page)[0], 251);
+  assert.equal(resultIds(page).at(-1), 500);
+  await page.ringAction('clResults', { clId: '251' });
+  assert.match(page.element('competitorLookupDetails').innerHTML, /0251/);
+  await goLookupPage(page, 9);
+  assert.equal(resultSummary(page), 'Showing 2,001–2,036 of 2,036');
+  assert.equal(resultIds(page).length, 36);
+  assert.match(page.element('clPagination').innerHTML, /aria-label="Next page" disabled/);
+  // Details follow the full filtered roster, not just the visible slice.
+  assert.match(page.element('competitorLookupDetails').innerHTML, /0251/);
+  page.element('clPageSize').value = '25';
+  await page.input('clPageSize', 'change');
+  assert.equal(resultSummary(page), 'Showing 1–25 of 2,036');
+  await goLookupPage(page, 40);
+  const pager = page.element('clPagination').innerHTML;
+  assert.equal(resultSummary(page), 'Showing 976–1,000 of 2,036');
+  assert.match(pager, /aria-current="page">40<\/button>/);
+  assert.match(pager, /…/);
+  assert.ok((pager.match(/<button /g) || []).length <= 9);
+  for (const size of [50, 100, 250]) {
+    page.element('clPageSize').value = String(size);
+    await page.input('clPageSize', 'change');
+    assert.equal(resultIds(page).length, size);
+    assert.equal(resultIds(page)[0], 1);
+    assert.equal(resultSummary(page), `Showing 1–${size} of 2,036`);
+  }
+});
+
+test('competitor filters apply atomically on submit, preserve comma OR semantics, and reset pagination', async () => {
+  const page = await loadPage({ competitors: pagedRoster(601) });
+  await page.openDayOf('competitors');
+  await goLookupPage(page, 3);
+  page.element('clSearch').value = 'tsd-1, TSD-2, tsd-1, x, ';
+  page.element('clFilterStudio').value = 'North Studio';
+  page.element('clFilterGender').value = 'Female';
+  page.element('clFilterAgeMin').value = '14';
+  page.element('clFilterAgeMax').value = '20';
+  assert.equal(resultSummary(page), 'Showing 501–601 of 601');
+  await page.refreshTimer();
+  assert.equal(resultSummary(page), 'Showing 501–601 of 601');
+  await page.submitLookup();
+  const expected = pagedRoster(601).filter((person) =>
+    (person.associationNumber.toLowerCase().includes('tsd-1') || person.associationNumber.toLowerCase().includes('tsd-2'))
+    && person.studio === 'North Studio' && person.gender === 'Female' && person.age >= 14 && person.age <= 20);
+  assert.deepEqual(resultIds(page), expected.map((person) => person.id));
+  assert.equal(resultSummary(page), `Showing 1–${expected.length} of ${expected.length}`);
+  assert.equal(page.element('competitorLookupDetails').innerHTML, '');
+  await searchLookup(page, 'x');
+  assert.equal(resultSummary(page), 'Showing 0–0 of 0');
+  assert.deepEqual(resultIds(page), []);
+  assert.match(page.element('clPagination').innerHTML, /aria-label="Next page" disabled/);
+});
+
+test('competitor page resets on sorting and tournament changes, refresh preserves or clamps pages', async () => {
+  const rostersByEvent = { [winter]: pagedRoster(601), [spring]: pagedRoster(301) };
+  const page = await loadPage({ rostersByEvent });
+  await page.openDayOf('competitors');
+  await goLookupPage(page, 3);
+  await page.refreshTimer();
+  assert.equal(resultSummary(page), 'Showing 501–601 of 601');
+  rostersByEvent[winter] = pagedRoster(280);
+  await page.refreshTimer();
+  assert.equal(resultSummary(page), 'Showing 251–280 of 280');
+  assert.equal(resultIds(page).length, 30);
+  await page.click('clSortName');
+  assert.equal(resultSummary(page), 'Showing 1–250 of 280');
+  assert.equal(resultIds(page)[0], 280);
+  assert.equal(resultIds(page).at(-1), 31);
+  await goLookupPage(page, 2);
+  await page.selectTournament(spring);
+  assert.equal(resultSummary(page), 'Showing 1–250 of 301');
+  assert.equal(resultIds(page)[0], 301);
+  assert.equal(page.element('competitorLookupDetails').innerHTML, '');
+  rostersByEvent[spring] = [];
+  await page.refreshTimer();
+  assert.equal(resultSummary(page), 'Showing 0–0 of 0');
+  assert.deepEqual(resultIds(page), []);
+  page.failSnapshot();
+  await page.click('clRefreshBtn');
+  assert.equal(resultSummary(page), 'Showing 0–0 of 0');
+  assert.equal(page.element('clRefreshBtn').disabled, false);
+  assert.equal(page.element('clTableWrap').getAttribute('aria-busy'), 'false');
+  assert.match(page.element('clNotice').textContent, /Database unavailable/);
+});
+
+test('saved division link opens the saved division for the same selected inactive tournament', async () => {
+  const savedCompetitor = { ...lookupPerson, associationNumber: 'TSD-20' };
+  const page = await loadPage({
+    activeEvent: winter, selectedEvent: spring,
+    rostersByEvent: { [spring]: [savedCompetitor] },
+    groupsByEvent: { [spring]: [{ id: 'saved-division', groupDivisionNumber: 20, name: 'Spring division', competitors: [savedCompetitor] }] },
+    draft: { eventName: spring, groups: [{ id: 'draft-only', groupDivisionNumber: 99, competitors: [savedCompetitor] }] }
+  });
+  await page.openDayOf('competitors');
+  assert.match(page.element('clResults').innerHTML, /data-cl-division="20"/);
+  await page.clickDivision(20);
+  assert.equal(page.element('groupsView').hidden, false);
+  assert.equal(page.element('gdName').textContent, 'Division 20');
+  assert.doesNotMatch(page.element('gdName').textContent, /draft/i);
+  assert.equal(new URLSearchParams(page.location.search).get('source'), 'saved');
+  assert.equal(new URLSearchParams(page.location.search).get('eventName'), spring);
+  assert.ok(page.requests.some((request) => request.path === '/api/groups' && request.name === spring));
+  assert.equal(page.activeEvent(), winter);
+});
+
+test('each tournament workspace shows the shared selection while live ring pages stay active-scoped', async () => {
+  const page = await loadPage({ activeEvent: winter, selectedEvent: spring });
+  assert.equal(page.element('tournamentReference').hidden, true);
+  await page.openImport();
+  assert.equal(page.element('tournamentReferenceSelect').hidden, false);
+  assert.equal(page.element('tournamentReferenceSelect').value, spring);
+  await page.openGroups();
+  assert.equal(page.element('tournamentReferenceSelect').value, spring);
+  await page.openDayOf('head-table');
+  assert.equal(page.element('tournamentReferenceSelect').hidden, false);
+  assert.equal(page.element('tournamentReferenceLabel').textContent, 'Active Tournament');
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  await page.navigate('judge-management');
+  assert.equal(page.element('tournamentReference').hidden, true);
+  assert.equal(page.activeEvent(), winter);
+  assert.equal(page.requests.some((request) => request.path.includes('/activate')), false);
+});
+
+test('all Ring Management selectors activate only after confirmation and preserve preparation context', async () => {
+  for (const view of ['ring-assignment', 'head-table', 'judge-assignments']) {
+    const page = await loadPage({ activeEvent: winter, selectedEvent: spring, confirm: true });
+    await page.navigate(view);
+    assert.equal(page.element('tournamentReferenceLabel').textContent, 'Active Tournament');
+    assert.equal(page.element('tournamentReferenceSelect').hidden, false);
+    await page.selectTournament(winter);
+    assert.equal(page.confirmations.length, 0);
+    assert.equal(page.requests.some((request) => request.path === '/api/events/activate'), false);
+    const start = page.requests.length;
+    await page.selectTournament(spring);
+    assert.equal(page.confirmations.length, 1);
+    assert.equal(page.confirmations[0], `Switch live operations to ${spring}? Connected tablets will use this tournament instead of the current active tournament.`);
+    const posts = page.requests.slice(start).filter((request) => request.init?.method === 'POST');
+    assert.deepEqual(posts.map((request) => request.path), ['/api/events/activate']);
+    assert.equal(JSON.parse(posts[0].init.body).eventName, spring);
+    assert.equal(page.activeEvent(), spring);
+    assert.equal(page.element('tournamentReferenceSelect').value, spring);
+    assert.equal(page.element('eventNameInput').value, spring);
+    assert.equal(page.element('bannerEventName').textContent, spring);
+    if (view === 'judge-assignments') {
+      assert.equal(page.requests.slice(start).some((request) => request.path.startsWith('/api/rings')), false);
+    } else {
+      assert.ok(page.requests.slice(start).some((request) => request.path === '/api/rings' && request.name === spring));
+    }
+    await page.navigate('competitors');
+    assert.equal(page.element('tournamentReferenceSelect').value, spring);
+  }
+});
+
+test('cancelled and failed live activation retain the previous active tournament and browsing selection', async () => {
+  for (const failActivation of [false, true]) {
+    const page = await loadPage({ activeEvent: winter, selectedEvent: spring, confirm: failActivation, failActivation });
+    await page.navigate('head-table');
+    await page.selectTournament(spring);
+    assert.equal(page.activeEvent(), winter);
+    assert.equal(page.element('tournamentReferenceSelect').value, winter);
+    assert.equal(page.element('bannerEventName').textContent, winter);
+    assert.equal(page.element('eventNameInput').value, spring);
+    assert.equal(page.requests.filter((request) => request.path === '/api/events/activate').length, failActivation ? 1 : 0);
+    if (failActivation) assert.match(page.element('notice').textContent, /Unable to switch live operations: Activation unavailable/);
+    await page.navigate('competitors');
+    assert.equal(page.element('tournamentReferenceSelect').value, spring);
+  }
+});
+
+test('no active tournament allows every Ring Management chooser and activation never changes browsing selection', async () => {
+  for (const view of ['ring-assignment', 'head-table', 'judge-assignments']) {
+    const page = await loadPage({ selectedEvent: winter, confirm: true });
+    await page.navigate(view);
+    assert.equal(page.nav(view).getAttribute('aria-disabled'), 'false');
+    assert.equal(page.element('tournamentReferenceSelect').value, '');
+    assert.equal(page.requests.some((request) => request.path === '/api/rings'), false);
+    assert.match(page.element('placeholderMessage').textContent, /No active tournament/);
+    await page.selectTournament(spring);
+    assert.equal(page.activeEvent(), spring);
+    assert.equal(page.element('eventNameInput').value, winter);
+    await page.navigate('competitors');
+    assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  }
+});
+
+test('busy activation disables chooser, blocks repeat activation and navigation, and resets ring details', async () => {
+  let release;
+  const waitForActivation = new Promise((resolve) => { release = resolve; });
+  const page = await loadPage({ activeEvent: winter, selectedEvent: winter, confirm: true, waitForActivation,
+    rings: [{ ringId: 'ring-a-1', ringLabel: 'A1', queuedGroupDivisionNumbers: [] }] });
+  await page.navigate('head-table');
+  await page.ringAction('htRings', { htRing: 'ring-a-1' });
+  const switching = page.selectTournament(spring);
+  await settle();
+  assert.equal(page.element('tournamentReferenceSelect').disabled, true);
+  await page.navigate('ring-judges');
+  assert.equal(page.element('workspaceTitle').textContent, 'Head Table');
+  await page.selectTournament(spring);
+  assert.equal(page.requests.filter((request) => request.path === '/api/events/activate').length, 1);
+  release();
+  await switching;
+  assert.equal(page.element('tournamentReferenceSelect').disabled, false);
+  assert.equal(page.element('detailsPanel').hidden, true);
+  assert.equal(page.element('eventNameInput').value, winter);
+});
+
+test('late active reads cannot overwrite a confirmed switch or cross-page active context', async () => {
+  let release;
+  let hold = false;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const page = await loadPage({ activeEvent: winter, selectedEvent: winter, confirm: true,
+    waitForActive: () => hold ? pending : undefined });
+  await page.navigate('ring-assignment');
+  hold = true;
+  const oldRead = page.refreshDayOf();
+  await settle();
+  hold = false;
+  await page.selectTournament(spring);
+  release();
+  await oldRead;
+  await settle();
+  assert.equal(page.element('bannerEventName').textContent, spring);
+  assert.equal(page.element('tournamentReferenceSelect').value, spring);
+  assert.equal(page.element('eventNameInput').value, winter);
+});
+
+test('stale active responses from a departed live page cannot replace the new page context', async () => {
+  let release;
+  let hold = false;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const page = await loadPage({ activeEvent: winter, selectedEvent: winter,
+    waitForActive: () => hold ? pending : undefined });
+  hold = true;
+  await page.navigate('ring-assignment');
+  page.setActiveEvent(spring);
+  hold = false;
+  await page.navigate('head-table');
+  release();
+  await settle();
+  await settle();
+  assert.equal(page.element('bannerEventName').textContent, spring);
+  assert.equal(page.element('tournamentReferenceSelect').value, spring);
+  assert.equal(page.requests.some((request) => request.path === '/api/rings' && request.name === winter), false);
+});
+
+test('late division reads during activation do not request stale rings or restore old ring details', async () => {
+  for (const view of ['ring-assignment', 'head-table']) {
+    let release;
+    let hold = false;
+    const pending = new Promise((resolve) => { release = resolve; });
+    const page = await loadPage({ activeEvent: winter, selectedEvent: winter, confirm: true,
+      waitForGroups: (name) => hold && name === winter ? pending : undefined });
+    hold = true;
+    await page.navigate(view);
+    await page.selectTournament(spring);
+    release();
+    await settle();
+    await settle();
+    assert.equal(page.element('bannerEventName').textContent, spring);
+    assert.equal(page.element('tournamentReferenceSelect').value, spring);
+    assert.equal(page.requests.some((request) => request.path === '/api/rings' && request.name === winter), false);
+    assert.equal(page.element('detailsPanel').hidden, true);
+  }
+});
+
+test('create and edit omit activation and import actions while competitor import remains available', async () => {
+  assert.doesNotMatch(html, /id="(?:activateEventBtn|goToImportBtn)"|function activateEvent\(/);
+  assert.ok(html.indexOf('id="notice"') < html.indexOf('id="eventSetupView"'), 'activation errors must be outside the hidden tournament view');
+  const page = await loadPage({ selectedEvent: winter });
+  await page.openTournament();
+  await page.navigate('competitors');
+  await page.openImport();
+  assert.equal(page.element('importView').hidden, false);
+  assert.equal(page.requests.some((request) => request.path === '/api/events/activate'), false);
+});
+
+test('tournament switching protects unsaved division drafts and does not alter active tournament', async () => {
+  const draft = { eventName: winter, groups: [{ id: 'draft', groupDivisionNumber: 99, competitors: [lookupPerson] }] };
+  const page = await loadPage({ activeEvent: winter, selectedEvent: winter, draft, competitors: [lookupPerson] });
+  await page.openGroups();
+  await page.selectTournament(spring);
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  assert.equal(page.activeEvent(), winter);
+  assert.match(page.confirmations[0], /unsaved division draft/);
+  const confirmed = await loadPage({ activeEvent: winter, selectedEvent: winter, draft, confirm: true, competitors: [lookupPerson] });
+  await confirmed.openGroups();
+  await confirmed.selectTournament(spring);
+  assert.equal(confirmed.element('tournamentReferenceSelect').value, spring);
+  assert.equal(confirmed.activeEvent(), winter);
+});
+
+test('tournament selection warns before discarding unsaved event metadata edits', async () => {
+  const page = await loadPage({ activeEvent: winter, selectedEvent: winter });
+  await page.openTournament();
+  page.element('locationInput').value = 'Unsaved venue';
+  await page.selectTournament(spring);
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  assert.equal(page.element('locationInput').value, 'Unsaved venue');
+  assert.match(page.confirmations[0], /unsaved tournament details/);
 });
 
 test('lookup formats ten-digit phone display without changing stored values or nonstandard numbers', async () => {
@@ -2072,7 +2919,7 @@ test('lookup formats ten-digit phone display without changing stored values or n
   ]) {
     const person = { ...lookupPerson, phone };
     const page = await loadPage({ activeEvent: winter, competitors: [person] });
-    await page.openDayOf(5);
+    await page.openDayOf('competitors');
     await searchLookup(page, 'anna');
     await page.ringAction('clResults', { clId: '1' });
     assert.ok(page.element('competitorLookupDetails').innerHTML.includes(`<dt>Phone</dt><dd>${expected}</dd>`), phone);

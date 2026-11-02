@@ -1,0 +1,5 @@
+html.embedded-administration body { min-height: 0; }
+html.embedded-administration body > header { display: none; }
+html.embedded-administration body > header:has(#systemClock) { display: flex; padding: 8px 12px; margin-bottom: 12px; }
+html.embedded-administration body > header:has(#systemClock) > div:first-child { display: none; }
+html.embedded-administration main { max-width: none; margin: 0; padding: 0; }

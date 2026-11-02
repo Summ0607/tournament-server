@@ -15,6 +15,8 @@ function ensureCompetitorColumns(db) {
 
       const existingColumns = new Set((rows || []).map((row) => row.name));
       const columnsToAdd = [
+        ['age', 'INTEGER'],
+        ['ageAsOf', 'TEXT'],
         ['groupDivisionId', 'TEXT'],
         ['groupDivisionName', 'TEXT'],
         ['groupDivisionNumber', 'INTEGER'],
@@ -136,7 +138,8 @@ function initializeDatabase(targetDbPath = DEFAULT_DB_PATH) {
             parentLastName TEXT,
             email TEXT,
             phone TEXT,
-            dob TEXT,
+            age INTEGER,
+            ageAsOf TEXT,
             associationNumber TEXT,
             gender TEXT,
             rank TEXT,
