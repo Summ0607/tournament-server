@@ -90,17 +90,39 @@ sources; a simulation run ID selects its isolated results. No results are writte
 **Tournament Management → Ring Management → Ring Judges** is a selected-tournament
 preparation directory. Add/Edit, search, filtered select-all and confirmed
 **Delete selected** operate only on judges, never on competitor registrations.
-**Populate Judges from Competitors** adds Dan-ranked competitors (D1–D10)
-aged 18+ on the tournament date. Existing linked competitors or matching
-case-insensitive Association IDs are skipped; existing edits are not overwritten.
-Population does not certify a judge or establish availability. Missing or stale tournament ages
-for Dan competitors prevent population and are reported for correction.
+Click a judge's name to open Edit Judge directly in the main workspace,
+keeping the navigation panel visible and usable. Add Judge uses the same workspace.
+When preparation is locked, clicking opens read-only details instead.
+Both use a two-column form (one column on narrow screens), with separate First
+and Last Name, TSD ID, School and Rank dropdowns, Certification, Judging Notes
+and Flagged for Review. School choices come from the shared active school
+directory; an existing judge's school is retained even if absent or archived.
+Rank choices display names from **5th Gup** through **Pal Dan**, including
+**Cho Dan Bo**, while storing canonical codes. Existing combined names remain
+readable and are separated for editing; new saves retain both name fields.
+Certification uses the shared levels defined in `db/judgeCertification.js`:
+Unknown, Uncertified, SK/TK, Corner, Regional (Center) and International.
+Judge ranks span G5–D8, and each level from SK/TK up enforces a minimum rank
+(SK/TK: G5, Corner and Regional: D1, International: D2). **Clear Review Flag**, beside
+Delete, clears selected judges' flags after confirmation and preserves notes.
+**Populate Judges from Competitors** adds Dan-ranked competitors (D1–D8)
+aged 18+ as judge candidates, and competitors eligible for SK/TK: G5 or higher
+at age 16+, or Cho Dan Bo at age 14+, on the tournament date. Their certification
+remains Unknown; SK/TK eligibility is noted for verification. Existing linked
+competitors or matching case-insensitive Association IDs are skipped; existing
+edits are not overwritten. Population does not certify a judge or establish
+availability. Missing or stale tournament ages for eligible ranks prevent
+population and are reported for correction.
 
-Certification is optional free text, initially blank. **Flagged for Review** and
+Certification defaults to Unknown. Saved directories with legacy free-text
+certification are normalized on load; unrecognized values or rank/certification
+mismatches reset to Unknown or flag the judge for review with an explanatory
+note. **Flagged for Review** and
 review notes capture follow-up observations, not automatic assignment exclusions.
 Priority and Manual Only are omitted; **Judge Assignments** remains Planned.
 **Populate Judges from Volunteers** includes primary or secondary Judging
-volunteers aged 18+ on the tournament date with Dan rank, copying certification.
+volunteers aged 18+ with Dan rank, and SK/TK-certified volunteers meeting the
+rank and age rules above. Supplied certification is copied.
 Linked volunteer IDs and nonblank Association IDs prevent repeated population;
 existing judge edits are not overwritten. Keep a type named **Judging** for this
 workflow; if it is renamed or deleted, population reports the missing type.
@@ -109,9 +131,10 @@ Judge data persists atomically in each event's `ring-judges.json`, with revision
 checks rejecting stale writes. Operational use locks every write until Reset Run;
 reading, searching and opening read-only details remain available.
 `GET/POST /api/ring-judges`, `PUT /api/ring-judges/:id`,
-`POST /api/ring-judges/populate` and `POST /api/ring-judges/delete` require an
+`POST /api/ring-judges/populate`, `POST /api/ring-judges/delete` and
+`POST /api/ring-judges/clear-review` require an
 explicit `eventName`. Writes include `revision`; saves include `judge`, deletes
-include `ids`. No file is written until the first change. Reset Run preserves
+and clear-review include `ids`. No file is written until the first change. Reset Run preserves
 the directory alongside other preparation settings.
 
 ### Volunteer Management
@@ -124,15 +147,41 @@ cannot be deleted until volunteers are reassigned. Primary is required, secondar
 is optional and cannot equal primary.
 
 Manual volunteers require First Name, Last Name, age on the tournament date,
-School and recognized Rank. Assoc ID and Certification may be blank.
+School and recognized Rank. Assoc ID may be blank. Certification uses the shared
+levels (Unknown, Uncertified, SK/TK, Corner, Regional (Center), International);
+unrecognized CSV values are stored as Unknown and reported, and saves enforce
+each level's minimum rank.
+SK/TK certification additionally requires age 16+ at G5 or higher, or age
+14+ at Cho Dan Bo, on the tournament date. Judging volunteers with SK/TK
+certification can be included in Ring Judges at lower ranks when they meet
+those rules.
 CSV DOB accepts YYYY-MM-DD or MM/DD/YYYY and is converted transiently to
 tournament age; DOB is not retained in the volunteer directory.
-CSV import accepts exactly these headers (order may vary):
+Contact number accepts international formats and extensions. Parent/guardian name
+is required when saving or importing a volunteer under 18; older records without
+these fields remain readable and can be completed in Add/Edit.
+CSV import requires these headers (order may vary):
 
 ```csv
 First Name,Last Name,DOB,Assoc ID,School,Rank,Certification,Primary Volunteer Type,Secondary Volunteer Type
 Jane,Doe,1990-05-12,D12345,Example School,D2,,Judging,Setup
 ```
+
+Optional CSV columns: `Parent/Guardian Name`, `Contact Number`. Omitted optional
+columns preserve those values on matching existing records; a supplied blank
+clears the value (guardian validation still applies for minors).
+
+The volunteer list has a compact filter bar for studio, rank, first/second
+choices and certification. Search matches names, membership numbers and contact
+numbers. Changing a filter clears row selections. Age remains in the editor,
+not the list. Contact number and volunteer choices appear first in the table.
+**Clear filters** resets all filters and search; Reload Saved preserves them.
+Changing tournament or switching to Volunteer Types resets them.
+**Print filtered list** prints all matching volunteers, not just selected rows,
+with tournament name, filter summary, count, name, contact number, both choices
+and certification. Guardian details are not printed. Browser printing also
+supports Save as PDF. Printing and filtering remain available when preparation
+is locked; Volunteer Types has no volunteer report.
 
 Type names match case-insensitively. Imports validate the entire file before
 saving; any bad row or duplicate nonblank Assoc ID within the file rejects all
