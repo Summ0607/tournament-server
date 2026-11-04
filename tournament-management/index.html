@@ -240,15 +240,47 @@
     #resultNotice[data-state="error"] { color: #a02020; }
     #ringJudgesView .table-wrap { max-height: none; }
     #ringJudgesView .actions, #rjSearchForm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-    #rjDialog { width: min(650px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--line); border-radius: var(--vd-radius, 5px); padding: var(--vd-card-padding, 12px); font-family: var(--vd-font, "Segoe UI", sans-serif); font-size: var(--vd-body-size, 12px); }
-    #rjDialogTitle { margin: 0 0 12px; font-size: var(--vd-section-title-size, 14px); }
-    #rjForm { display: grid; gap: var(--vd-section-gap, 12px); }
+    #ringJudgesView thead tr:first-child th { vertical-align: top; }
+    #ringJudgesView thead tr:nth-child(2) th { padding: 4px; }
+    #ringJudgesView thead tr:nth-child(2) input, #ringJudgesView thead tr:nth-child(2) select { width: 100%; min-width: 90px; min-height: 28px; padding: 3px 5px; font: inherit; text-transform: none; letter-spacing: normal; }
+    #rjDialog, #rjDetailsDialog { position: fixed; inset: 0; margin: 0; width: 100%; height: 100dvh; max-width: none; max-height: none; box-sizing: border-box; overflow: auto; border: 0; border-radius: 0; padding: var(--vd-card-padding, 12px); font-family: var(--vd-font, "Segoe UI", sans-serif); font-size: var(--vd-body-size, 12px); }
+    #rjDialogTitle, #rjDetailsTitle { margin: 0 0 12px; font-size: var(--vd-section-title-size, 14px); }
+    #rjDetailsContent { display: grid; gap: 6px; }
+    #rjDetailsContent dt { font-weight: 600; }
+    #rjDetailsContent dd { margin: 0 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #ringJudgesView:has(#rjDialog[open]) > :not(#rjDialog) { display: none; }
+    #rjDialog { position: static; inset: auto; height: auto; min-height: 65dvh; background: #f3f4f6; padding: 28px 32px; }
+    #rjDialogTitle { font-size: 1.6em; margin-bottom: 20px; }
+    #rjForm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; max-width: 1250px; padding: 20px; border: 1px solid var(--line); border-radius: var(--vd-radius, 5px); background: #fff; }
     #rjForm label { display: grid; gap: 4px; }
-    #rjForm input:not([type="checkbox"]), #rjForm textarea, #rjForm button { padding: 4px 8px; min-height: var(--vd-control-height, 28px); border-radius: var(--vd-radius, 5px); font: inherit; }
+    #rjForm input:not([type="checkbox"]), #rjForm select, #rjForm textarea, #rjForm button { padding: 4px 8px; min-height: var(--vd-control-height, 28px); border-radius: var(--vd-radius, 5px); font: inherit; }
+    #rjForm input:not([type="checkbox"]), #rjForm select, #rjForm textarea { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid var(--line); }
+    #rjForm .rj-wide, #rjError, #rjForm .actions { grid-column: 1 / -1; }
     #rjForm .rj-flag { display: flex; align-items: center; }
+    @media (max-width: 640px) {
+      #rjDialog { padding: 16px; }
+      #rjForm { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+    }
     #rjAdd, #rjPopulate, #rjPopulateVolunteers, #rjSave, #vmAdd, #vmImport, #vmSave { background: #45698b; color: #fff; border: 1px solid #45698b; }
     #volunteersView .table-wrap { max-height: none; }
     #volunteersView .actions, #vmSearchForm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    #volunteersView .table-wrap th { position: static; }
+    #vmColumnFilters:not([hidden]) { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+    #vmColumnFilters label { display: grid; gap: 4px; flex: 1 1 140px; }
+    #vmColumnFilters select, #vmSearch { min-height: var(--vd-control-height, 28px); padding: 4px 8px; font: inherit; border: 1px solid var(--line); border-radius: var(--vd-radius, 5px); }
+    #vmSearch { flex: 1 1 260px; }
+    #vmCount { margin: 0; }
+    #vmPrintReport { display: none; }
+    @media print {
+      body.vm-printing > :not(#vmPrintReport) { display: none !important; }
+      body.vm-printing { background: white; color: black; font: 11pt Arial, sans-serif; }
+      body.vm-printing #vmPrintReport { display: block; }
+      #vmPrintReport table { width: 100%; border-collapse: collapse; }
+      #vmPrintReport th, #vmPrintReport td { border: 1px solid #888; padding: 6px; text-align: left; overflow-wrap: anywhere; }
+      #vmPrintReport thead { display: table-header-group; }
+      #vmPrintReport tr { break-inside: avoid; }
+      #vmPrintReport h1 { font-size: 16pt; }
+    }
     #vmDialog { width: min(650px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--line); border-radius: var(--vd-radius, 5px); padding: var(--vd-card-padding, 12px); font-family: var(--vd-font, "Segoe UI", sans-serif); font-size: var(--vd-body-size, 12px); }
     #vmDialogTitle { margin: 0 0 12px; font-size: var(--vd-section-title-size, 14px); }
     #vmForm, #vmVolunteerFields:not([hidden]) { display: grid; gap: 8px; }
@@ -1424,6 +1456,7 @@
   <script src="/assets/division-rules.js"></script>
 </head>
 <body>
+  <section id="vmPrintReport" aria-label="Volunteer print report"></section>
   <main class="shell">
     <p id="presentationNotice" role="alert" hidden></p>
     <section class="frame" aria-label="Tournament management shell">
@@ -1822,39 +1855,51 @@
               </dialog>
             </div>
             <div class="view" id="volunteersView" data-help-page="volunteers" data-help-title="Volunteer Management" hidden>
-              <div class="actions"><button id="vmAdd" type="button" data-help="Add a volunteer or volunteer type to this tournament.">Add Volunteer</button><button id="vmReload" type="button" data-help="Reload saved volunteers, types and operational lock status.">Reload Saved</button></div>
-              <div id="vmImportArea"><label for="vmCsv">Volunteer CSV (max 2 MB)</label><input id="vmCsv" type="file" accept=".csv,text/csv"><button id="vmImport" type="button" data-help="Validate the entire CSV, then add or update volunteers by Assoc ID. Blank IDs always add.">Import CSV</button><p>Headers: First Name, Last Name, DOB, Assoc ID, School, Rank, Certification, Primary Volunteer Type, Secondary Volunteer Type. DOB: YYYY-MM-DD or MM/DD/YYYY, converted to age on the tournament date and not stored. Certification and Secondary may be blank; Assoc ID may be blank (add-only).</p></div>
-              <form id="vmSearchForm"><label for="vmSearch">Search</label><input id="vmSearch" type="search"><button type="submit" data-help="Filter this list. Selection is cleared when filtering.">Filter</button></form>
-              <p id="vmNotice" role="status"></p><p id="vmCount"></p>
-              <div class="table-wrap"><table aria-label="Volunteer management"><thead><tr><th><input id="vmAll" type="checkbox" aria-label="Select all filtered entries"></th><th>Name</th><th id="vmCol0">Age</th><th id="vmCol1">Assoc ID</th><th id="vmCol2">School</th><th id="vmCol3">Rank</th><th id="vmCol4">Certification</th><th id="vmCol5">Primary Type</th><th id="vmCol6">Secondary Type</th></tr></thead><tbody id="vmBody"></tbody></table></div>
+              <div class="actions"><button id="vmAdd" type="button" data-help="Add a volunteer or volunteer type to this tournament.">Add Volunteer</button><button id="vmReload" type="button" data-help="Reload saved volunteers, types and operational lock status without clearing filters.">Reload Saved</button></div>
+              <div id="vmImportArea"><label for="vmCsv">Volunteer CSV (max 2 MB)</label><input id="vmCsv" type="file" accept=".csv,text/csv"><button id="vmImport" type="button" data-help="Validate the entire CSV, then add or update volunteers by Assoc ID. Blank IDs always add.">Import CSV</button><p>Headers: First Name, Last Name, DOB, Assoc ID, School, Rank, Certification, Primary Volunteer Type, Secondary Volunteer Type. Optional columns: Parent/Guardian Name, Contact Number. Guardian name is required under 18. Omitted optional columns preserve existing values. DOB: YYYY-MM-DD or MM/DD/YYYY, converted to age on the tournament date and not stored. Certification maps to the shared levels (Unknown, Uncertified, SK/TK, Corner, Regional (Center), International); SK/TK requires age 16+ at G5 or higher, or age 14+ at CDB. Unrecognized values are stored as Unknown. Certification and Secondary may be blank; Assoc ID may be blank (add-only).</p></div>
+              <form id="vmSearchForm"><label for="vmSearch">Search</label><input id="vmSearch" type="search"><button type="submit" data-help="Search names, membership numbers and contact numbers.">Search</button><button id="vmClearFilters" type="button" data-help="Clear search and all dropdown filters.">Clear filters</button></form>
+              <div id="vmColumnFilters" role="group" aria-label="Volunteer filters">
+                <label>Studio<select id="vmFilter-school"></select></label><label>Rank<select id="vmFilter-rank"></select></label>
+                <label>Certification<select id="vmFilter-certification"></select></label>
+                <label>First choice<select id="vmFilter-primaryType"></select></label><label>Second choice<select id="vmFilter-secondaryType"></select></label>
+              </div>
+              <p id="vmNotice" role="status"></p>
+              <div class="actions"><p id="vmCount" aria-live="polite"></p><button id="vmPrint" type="button" data-help="Print every matching volunteer, regardless of row selection.">Print filtered list</button></div>
+              <p data-help-source="Volunteer filters and printing">Search matches names, membership numbers and contact numbers. The five dropdown filters combine with Search and remain applied on Reload Saved. Clear filters resets them; changing tournament or switching to Volunteer Types also resets them. Print filtered list includes every matching volunteer, regardless of selection. Age and guardian details remain in the editor and are not printed. Printing and filtering remain available when preparation is locked.</p>
+              <div class="table-wrap"><table aria-label="Volunteer management"><thead><tr><th><input id="vmAll" type="checkbox" aria-label="Select all filtered entries"></th><th>Name</th><th id="vmCol0">Contact number</th><th id="vmCol1">First choice</th><th id="vmCol2">Second choice</th><th id="vmCol3">Studio</th><th id="vmCol4">Rank</th><th id="vmCol5">Certification</th><th id="vmCol6">Membership number</th></tr></thead><tbody id="vmBody"></tbody></table></div>
               <div class="actions"><button id="vmDelete" type="button" disabled data-help="Delete selected entries after confirmation. Types in use cannot be deleted.">Delete selected</button></div>
-              <p data-help-source="Volunteer preparation">Volunteers and editable types belong to the selected tournament. Operational use locks changes until Reset Run. CSV imports validate completely before saving; duplicate nonblank Assoc IDs within a file are rejected. Existing nonblank IDs update; blank IDs always add. Primary type is required; secondary is optional and must differ. Type names in CSV must match existing types (case-insensitive). Judging volunteers can be copied into Ring Judges if Dan-ranked and aged 18+ on the tournament date. Population does not certify judges or confirm availability; later volunteer edits or deletion do not change copied judges.</p>
+              <p data-help-source="Volunteer preparation">Volunteers and editable types belong to the selected tournament. Operational use locks changes until Reset Run. CSV imports validate completely before saving; duplicate nonblank Assoc IDs within a file are rejected. Existing nonblank IDs update; blank IDs always add. Primary type is required; secondary is optional and must differ. Type names in CSV must match existing types (case-insensitive). SK/TK certification requires G5 or higher at age 16+, or CDB at age 14+, on the tournament date. The Ring Judges directory can include lower-ranked SK/TK volunteers when they are assigned the Judging type; Dan-ranked volunteers aged 18+ remain eligible as judge candidates. Population copies supplied certification and does not confirm availability; later volunteer edits or deletion do not change copied entries.</p>
               <dialog id="vmDialog" aria-labelledby="vmDialogTitle"><h2 id="vmDialogTitle">Add Volunteer</h2><form id="vmForm">
                 <div id="vmTypeFields" hidden><label>Type Name<input id="vm-typeName" maxlength="100"></label></div>
                 <div id="vmVolunteerFields">
                   <label>First Name<input id="vm-firstName" required maxlength="100"></label><label>Last Name<input id="vm-lastName" required maxlength="100"></label>
+                  <label>Parent/guardian name (required under 18)<input id="vm-parentName" maxlength="200"></label>
+                  <label>Contact number<input id="vm-contactNumber" type="tel" maxlength="100"></label>
                   <label>Age<input id="vm-age" type="number" required min="0" max="120" step="1"></label><label>Assoc ID<input id="vm-associationNumber" maxlength="100"></label>
                   <label>School<input id="vm-school" required maxlength="200"></label><label>Rank<input id="vm-rank" required maxlength="100" placeholder="D1"></label>
-                  <label>Certification<input id="vm-certification" maxlength="200"></label><label>Primary Volunteer Type<select id="vm-primaryType" required></select></label>
+                  <label>Certification<select id="vm-certification"></select></label><label>Primary Volunteer Type<select id="vm-primaryType" required></select></label>
                   <label>Secondary Volunteer Type<select id="vm-secondaryType"></select></label>
                 </div><p id="vmError" role="alert"></p><div class="actions"><button id="vmSave" type="submit" data-help="Save this volunteer management entry.">Save</button><button id="vmCancel" type="button" data-help="Close the overlay, confirming before discarding changes.">Cancel</button></div>
               </form></dialog>
             </div>
             <div class="view" id="ringJudgesView" data-help-page="ring-judges" data-help-title="Ring Judges" hidden>
-              <div class="actions"><button id="rjAdd" type="button" data-help="Add a judge to the selected tournament's preparation directory.">Add Judge</button><button id="rjPopulate" type="button" data-help="Add adult Dan-ranked competitors using age on the tournament date. Existing judges are not overwritten.">Populate Judges from Competitors</button><button id="rjPopulateVolunteers" type="button" data-help="Add adult Dan-ranked primary or secondary Judging volunteers, copying supplied certification without overwriting existing judges.">Populate Judges from Volunteers</button><button id="rjReload" type="button" data-help="Reload the saved judges and operational lock status.">Reload Saved</button></div>
-              <form id="rjSearchForm"><label for="rjSearch">Search</label><input id="rjSearch" type="search" maxlength="200"><button type="submit" data-help="Filter judges by name, Association ID, school, rank, certification or review notes.">Filter</button></form>
+              <div class="actions"><button id="rjAdd" type="button" data-help="Add a judge or SK/TK candidate to the selected tournament's preparation directory.">Add Judge</button><button id="rjPopulate" type="button" data-help="Add adult Dan-ranked competitors and competitors meeting SK/TK age and rank requirements. Certification stays Unknown; eligible SK/TK candidates are noted.">Populate Judges from Competitors</button><button id="rjPopulateVolunteers" type="button" data-help="Add Dan-ranked adult Judging volunteers or SK/TK-certified Judging volunteers meeting the age and rank rules. Supplied certification is copied.">Populate Judges from Volunteers</button><button id="rjReload" type="button" data-help="Reload the saved judges and operational lock status.">Reload Saved</button></div>
+              <form id="rjSearchForm"><label for="rjSearch">Search</label><input id="rjSearch" type="search" maxlength="200"><button type="submit" data-help="Search across judge names, IDs, schools, ranks, certification and review notes.">Search</button><button id="rjClearFilters" type="button" data-help="Clear the search and all column filters.">Clear filters</button></form>
               <p id="rjNotice" role="status"></p><p id="rjCount"></p>
-              <div class="table-wrap"><table aria-label="Ring Judges"><thead><tr><th><input id="rjAll" type="checkbox" aria-label="Select all filtered judges"></th><th>Name</th><th>Association ID</th><th>School</th><th>Rank</th><th>Certification</th><th>Flagged for Review</th><th>Review Notes</th><th>Source</th></tr></thead><tbody id="rjBody"></tbody></table></div>
-              <div class="actions"><button id="rjDelete" type="button" disabled data-help="Delete selected judges after confirmation, without deleting their competitor registrations.">Delete selected</button></div>
-              <p data-help-source="Ring Judges preparation">Judges belong to the selected tournament, not necessarily the active tournament. Operational use locks edits until Reset Run. Populate adds competitors or primary/secondary Judging volunteers aged 18+ on the tournament date with Dan rank, without duplicating linked identities or Association IDs. Competitor certification starts blank; volunteer certification is copied. Certification and availability must be verified. Review flags and notes record observations for follow-up, not automatic exclusion. Judge assignments, Priority and Manual Only are not implemented. Deletion affects only this directory.</p>
+              <div class="table-wrap"><table aria-label="Ring Judges"><thead><tr><th><input id="rjAll" type="checkbox" aria-label="Select all filtered judges"></th><th>Name</th><th>TSD ID</th><th>School</th><th>Rank</th><th>Certification</th><th>Flagged for Review</th><th>Source</th></tr><tr aria-label="Column filters"><th></th><th><input id="rjFilter-name" type="search" aria-label="Filter by name" placeholder="Filter name"></th><th><input id="rjFilter-associationNumber" type="search" aria-label="Filter by TSD ID" placeholder="Filter TSD ID"></th><th><select id="rjFilter-school" aria-label="Filter by school"><option value="">All</option></select></th><th><select id="rjFilter-rank" aria-label="Filter by rank"><option value="">All</option></select></th><th><select id="rjFilter-certification" aria-label="Filter by certification"><option value="">All</option></select></th><th><select id="rjFilter-flaggedForReview" aria-label="Filter by review flag"><option value="">All</option><option value="true">Flagged</option><option value="false">Not flagged</option></select></th><th><select id="rjFilter-source" aria-label="Filter by source"><option value="">All</option></select></th></tr></thead><tbody id="rjBody"></tbody></table></div>
+              <div class="actions"><button id="rjDelete" type="button" disabled data-help="Delete selected judges after confirmation, without deleting their competitor registrations.">Delete selected</button><button id="rjClearReview" type="button" disabled data-help="Clear review flags for selected judges, keeping their notes.">Clear Review Flag</button></div>
+              <p data-help-source="Judge details">Click a judge's name to open Edit Judge directly in the main workspace, keeping navigation visible. Add Judge uses the same workspace. Locked preparation opens read-only details instead. Certification uses the shared levels Unknown, Uncertified, SK/TK, Corner, Regional (Center) and International; each level from SK/TK up requires a minimum rank (G5, D1, D1 and D2 respectively) and judge ranks span G5 through D8. Clear Review Flag keeps existing notes.</p>
+              <dialog id="rjDetailsDialog" aria-labelledby="rjDetailsTitle"><h2 id="rjDetailsTitle">Judge Details</h2><dl id="rjDetailsContent"></dl><div class="actions"><button id="rjDetailsEdit" type="button">Edit Judge</button><button id="rjDetailsClose" type="button">Close</button></div></dialog>
+              <p data-help-source="Ring Judges preparation">Ring Judges contains judge and SK/TK candidates for the selected tournament, not necessarily the active tournament. Operational use locks edits until Reset Run. Competitor population adds Dan-ranked competitors aged 18+ as judge candidates and adds competitors meeting SK/TK rank and age rules (G5 or higher at age 16+, CDB at age 14+). Their certification remains Unknown, and SK/TK eligibility is noted for verification. Volunteer population adds primary/secondary Judging volunteers who are Dan-ranked and 18+, or who have SK/TK certification and meet its rank and age requirements; supplied certification is copied. Existing linked identities and Association IDs are not duplicated; existing entries are not overwritten. Certification and availability must be verified. Judge assignments, Priority and Manual Only are not implemented. Deletion affects only this directory.</p>
               <dialog id="rjDialog" aria-labelledby="rjDialogTitle"><h2 id="rjDialogTitle">Add Judge</h2><form id="rjForm">
-                <label>Name<input id="rj-name" required maxlength="200"></label>
-                <label>Association ID<input id="rj-associationNumber" maxlength="100"></label>
-                <label>School<input id="rj-school" maxlength="200"></label>
-                <label>Rank code<input id="rj-rank" required maxlength="100" placeholder="D1"></label>
-                <label>Certification<input id="rj-certification" maxlength="200"></label>
-                <label class="rj-flag"><input id="rj-flaggedForReview" type="checkbox">Flagged for Review</label>
-                <label>Review Notes<textarea id="rj-reviewNotes" maxlength="2000" rows="3"></textarea></label>
+                <label>First Name<input id="rj-firstName" required maxlength="100"></label>
+                <label>Last Name<input id="rj-lastName" required maxlength="100"></label>
+                <label>TSD ID<input id="rj-associationNumber" maxlength="100"></label>
+                <label>School<select id="rj-school"></select></label>
+                <label>Rank<select id="rj-rank" required></select></label>
+                <label>Certification<select id="rj-certification"></select></label>
+                <label class="rj-wide">Judging Notes (admin use only)<textarea id="rj-reviewNotes" maxlength="2000" rows="3"></textarea></label>
+                <label class="rj-flag rj-wide"><input id="rj-flaggedForReview" type="checkbox">Flagged for Review</label>
                 <p id="rjError" role="alert"></p>
                 <div class="actions"><button id="rjSave" type="submit" data-help="Save this judge without changing competitor registration.">Save</button><button id="rjCancel" type="button" data-help="Close the overlay, confirming before discarding edits.">Cancel</button></div>
               </form></dialog>

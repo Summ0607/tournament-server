@@ -5,13 +5,18 @@ const crypto = require('crypto');
 const { Readable } = require('stream');
 const csv = require('csv-parser');
 const { normalizeRank } = require('../db/rankNormalization');
+const { normalizeCertification, certificationLevels, certificationRankIssue, certificationAgeIssue } = require('../db/judgeCertification');
 const { ageOnDate, storedAge, lockAgeDate } = require('./tournamentAge');
 const { writeJsonAtomicSync } = require('./atomicJsonFile');
 
 const headers = { 'First Name': 'firstName', 'Last Name': 'lastName', 'DOB': 'dob', 'Assoc ID': 'associationNumber',
   'School': 'school', 'Rank': 'rank', 'Certification': 'certification', 'Primary Volunteer Type': 'primaryType', 'Secondary Volunteer Type': 'secondaryType' };
+const optionalHeaders = { 'Parent/Guardian Name': 'parentName', 'Contact Number': 'contactNumber' };
 const initialTypes = ['Setup', 'Teardown', 'Judging', 'Security'].map((name) => ({ id: name.toLowerCase(), name }));
-function validateVolunteer(input, types, date) {
+// Strict validation rejects qualification problems; lenient validation
+// (saved data migration) resets unrecognized certification text to Unknown
+// and keeps the row instead.
+function validateVolunteer(input, types, date, lenient = false) {
   if (!input || typeof input !== 'object') throw new Error('Volunteer details are required.');
   const row = {};
   for (const [key, required, max] of [['firstName', true, 100], ['lastName', true, 100],
@@ -22,9 +27,22 @@ function validateVolunteer(input, types, date) {
   }
   const ageAsOf = date || input.ageAsOf;
   const age = input.dob ? ageOnDate(input.dob, ageAsOf) : storedAge({ age: input.age, ageAsOf: input.ageAsOf }, ageAsOf);
+  for (const [key, label, max] of [['parentName', 'Parent/guardian name', 200], ['contactNumber', 'Contact number', 100]]) {
+    const value = input[key] === undefined ? '' : input[key];
+    if (typeof value !== 'string' || value.trim().length > max) throw new Error(`Invalid ${label.toLowerCase()}.`);
+    row[key] = value.trim();
+  }
   const rank = normalizeRank(row.rank);
   if (!rank.recognized) throw new Error('Rank must be a recognized rank code.');
   row.rank = rank.code;
+  const certification = normalizeCertification(row.certification);
+  if (!certification.recognized && !lenient) throw new Error(`Certification must be one of: ${certificationLevels().map((level) => level.label).join(', ')}.`);
+  row.certification = certification.code;
+  const mismatch = certificationRankIssue(row.certification, row.rank);
+  if (mismatch && !lenient) throw new Error(mismatch);
+  const ageMismatch = certificationAgeIssue(row.certification, row.rank, age);
+  if (ageMismatch && !lenient) throw new Error(ageMismatch);
+  if (age < 18 && !row.parentName && !lenient) throw new Error('Parent/guardian name is required for volunteers under 18.');
   for (const key of ['primaryType', 'secondaryType']) if (row[key] && !types.some((type) => type.id === row[key])) throw new Error(`Unknown ${key}.`);
   if (row.primaryType === row.secondaryType) throw new Error('Primary and secondary types must differ.');
   return { ...row, age, ageAsOf };
@@ -43,7 +61,7 @@ function readVolunteers(file) {
   data.volunteers = data.volunteers.map((row) => {
     if (typeof row.id !== 'string' || !row.id || ids.has(row.id)) throw new Error('Invalid volunteer identity.');
     ids.add(row.id);
-    const value = validateVolunteer(row, data.types), key = value.associationNumber.toUpperCase();
+    const value = validateVolunteer(row, data.types, undefined, true), key = value.associationNumber.toUpperCase();
     if (key && associations.has(key)) throw new Error('Duplicate volunteer Association ID.');
     if (key) associations.add(key);
     return { id: row.id, ...value };
@@ -55,8 +73,9 @@ function parseCsv(text) {
     const rows = [];
     const parser = csv({ strict: true, maxRowBytes: 10000, mapHeaders: ({ header }) => header.replace(/^\uFEFF/, '').trim() });
     parser.on('headers', (values) => {
-      if (new Set(values).size !== values.length || values.length !== Object.keys(headers).length || Object.keys(headers).some((key) => !values.includes(key))) {
-        parser.destroy(new Error(`CSV headers must be: ${Object.keys(headers).join(', ')}`));
+      if (new Set(values).size !== values.length || values.some((key) => !Object.hasOwn(headers, key) && !Object.hasOwn(optionalHeaders, key)) ||
+          Object.keys(headers).some((key) => !values.includes(key))) {
+        parser.destroy(new Error(`CSV headers must include: ${Object.keys(headers).join(', ')}. Optional: ${Object.keys(optionalHeaders).join(', ')}.`));
       }
     });
     parser.on('data', (row) => rows.push(row));
@@ -83,7 +102,7 @@ function createVolunteerRouter({ eventsRoot, configurationStatus }) {
           if (readVolunteers(file).revision !== data.revision) fail('Volunteer data changed. Reload before saving.', 409);
           if (data.volunteers.length) lockAgeDate(dir, date);
           data.revision = crypto.randomUUID(); writeJsonAtomicSync(file, data);
-          return { ...data, eventName: name, tournamentDate: date, ...configurationStatus(name), ...extra };
+          return { ...data, certificationLevels: certificationLevels(), eventName: name, tournamentDate: date, ...configurationStatus(name), ...extra };
         };
         const date = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8')).date;
         res.json(await callback(req, { data, commit, name, date, fail }));
@@ -93,12 +112,12 @@ function createVolunteerRouter({ eventsRoot, configurationStatus }) {
       }
     };
   }
-  router.get('/volunteers', handle((_req, { data, name, date }) => ({ ...data, eventName: name, tournamentDate: date, ...configurationStatus(name) })));
+  router.get('/volunteers', handle((_req, { data, name, date }) => ({ ...data, certificationLevels: certificationLevels(), eventName: name, tournamentDate: date, ...configurationStatus(name) })));
   const save = handle((req, { data, commit, date }) => {
-    let row;
-    try { row = validateVolunteer(req.body.volunteer, data.types, date); } catch (error) { fail(error.message); }
     const existing = req.params.id ? data.volunteers.find((r) => r.id === req.params.id) : null;
     if (req.params.id && !existing) fail('Volunteer not found.', 404);
+    let row;
+    try { row = validateVolunteer(req.body.volunteer, data.types, date); } catch (error) { fail(error.message); }
     if (row.associationNumber && data.volunteers.some((r) => r.id !== req.params.id && r.associationNumber.toUpperCase() === row.associationNumber.toUpperCase())) fail('Association ID already exists.', 409);
     if (existing) Object.assign(existing, row); else data.volunteers.push({ id: crypto.randomUUID(), ...row });
     return commit();
@@ -130,10 +149,16 @@ function createVolunteerRouter({ eventsRoot, configurationStatus }) {
     let records;
     try { records = await parseCsv(req.body.csv); } catch (error) { fail(error.message); }
     if (!records.length) fail('CSV has no volunteer rows.');
-    const seen = new Set(); let added = 0, updated = 0;
+    const seen = new Set(); let added = 0, updated = 0, unrecognizedCertifications = 0;
     for (const [index, raw] of records.entries()) {
       try {
         const input = Object.fromEntries(Object.entries(headers).map(([header, key]) => [key, raw[header]]));
+        for (const [header, key] of Object.entries(optionalHeaders)) {
+          if (Object.hasOwn(raw, header)) input[key] = raw[header];
+        }
+        const certification = normalizeCertification(input.certification);
+        if (!certification.recognized) unrecognizedCertifications++;
+        input.certification = certification.code;
         for (const key of ['primaryType', 'secondaryType']) {
           if (input[key].trim()) {
             const type = data.types.find((r) => r.name.toLowerCase() === input[key].trim().toLowerCase());
@@ -141,14 +166,15 @@ function createVolunteerRouter({ eventsRoot, configurationStatus }) {
             input[key] = type.id;
           }
         }
-        const row = validateVolunteer(input, data.types, date), key = row.associationNumber.toUpperCase();
+        const key = input.associationNumber.trim().toUpperCase();
+        const existing = key && data.volunteers.find((r) => r.associationNumber.toUpperCase() === key);
+        const row = validateVolunteer({ parentName: existing?.parentName, contactNumber: existing?.contactNumber, ...input }, data.types, date);
         if (key && seen.has(key)) throw new Error('Duplicate Assoc ID within CSV.');
         if (key) seen.add(key);
-        const existing = key && data.volunteers.find((r) => r.associationNumber.toUpperCase() === key);
         if (existing) { Object.assign(existing, row); updated++; } else { data.volunteers.push({ id: crypto.randomUUID(), ...row }); added++; }
       } catch (error) { fail(`CSV row ${index + 2}: ${error.message}`); }
     }
-    return commit({ added, updated });
+    return commit({ added, updated, unrecognizedCertifications });
   }, true));
   return router;
 }

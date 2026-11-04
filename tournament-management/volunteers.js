@@ -1,22 +1,46 @@
 (function (root) {
-  function create({ document, request, selectedEvent, confirm }) {
+  function create({ document, request, selectedEvent, confirm, print = () => root.print() }) {
     const node = (id) => document.getElementById(id);
     const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const fields = ['firstName', 'lastName', 'age', 'associationNumber', 'school', 'rank', 'certification', 'primaryType', 'secondaryType'];
+    const fields = ['firstName', 'lastName', 'age', 'associationNumber', 'school', 'rank', 'certification', 'primaryType', 'secondaryType', 'parentName', 'contactNumber'];
+    const certLabel = (code) => (data && data.certificationLevels || []).find((level) => level.code === code)?.label || code || 'Unknown';
+    const typeName = (id) => data?.types.find((row) => row.id === id)?.name || '';
+    const filterLabels = { school: 'Studio', rank: 'Rank', certification: 'Certification', primaryType: 'First choice', secondaryType: 'Second choice' };
+    const dropdowns = ['school', 'rank', 'primaryType', 'secondaryType', 'certification'];
+    const filters = Object.fromEntries(Object.keys(filterLabels).map((key) => [key, '']));
+    const fullName = (row) => `${row.lastName}, ${row.firstName}`;
+    const contains = (value, text) => String(value ?? '').toLowerCase().includes(text.toLowerCase());
     let data = null, scope = '', kind = 'volunteers', token = 0, writing = false, reading = false, editing = false, id = '', baseline = '', query = '';
     const selected = new Set();
     const draft = () => kind === 'volunteer-types' ? { name: node('vm-typeName').value } : {
       ...Object.fromEntries(fields.map((key) => [key, key === 'age' ? Number(node(`vm-${key}`).value) : node(`vm-${key}`).value])), ageAsOf: data.tournamentDate };
     const dirty = () => editing && JSON.stringify(draft()) !== baseline;
     const locked = () => !data || writing || reading || data.configurationLocked || scope !== selectedEvent();
-    const rows = () => data ? (kind === 'volunteer-types' ? data.types : data.volunteers).filter((row) => [
-      ...Object.values(row), ...data.types.filter((type) => type.id === row.primaryType || type.id === row.secondaryType).map((type) => type.name)
-    ].some((v) => String(v).toLowerCase().includes(query))) : [];
+    const rows = () => data ? (kind === 'volunteer-types' ? data.types : data.volunteers).filter((row) =>
+      (kind === 'volunteer-types' ? [row.name] : [fullName(row), `${row.firstName} ${row.lastName}`, row.associationNumber, row.contactNumber])
+        .some((value) => contains(value, query)) && (kind === 'volunteer-types' ||
+      dropdowns.every((key) => !filters[key] || (row[key] || (key === 'certification' ? 'UNKNOWN' : '')) === filters[key]))) : [];
+    function renderFilters() {
+      for (const key of dropdowns) {
+        const values = [...new Set((data?.volunteers || []).map((row) => row[key] || (key === 'certification' ? 'UNKNOWN' : '')).filter(Boolean))].sort();
+        if (filters[key] && !values.includes(filters[key])) values.push(filters[key]);
+        const label = (value) => key === 'certification' ? certLabel(value) : key.endsWith('Type') ? typeName(value) : value;
+        node(`vmFilter-${key}`).innerHTML = '<option value="">All</option>' +
+          values.map((value) => `<option value="${esc(value)}">${esc(label(value))}</option>`).join('');
+        node(`vmFilter-${key}`).value = filters[key];
+      }
+    }
+    function resetFilters() {
+      query = ''; node('vmSearch').value = '';
+      for (const key of Object.keys(filters)) { filters[key] = ''; node(`vmFilter-${key}`).value = ''; }
+      selected.clear();
+    }
     function notice(text, error = false) { node('vmNotice').textContent = text; node('vmNotice').setAttribute('data-state', error ? 'error' : 'info'); }
     function controls() {
       ['vmAdd', 'vmSave', 'vmImport', 'vmCsv'].forEach((key) => { node(key).disabled = locked(); });
       node('vmDelete').disabled = locked() || !selected.size; node('vmCancel').disabled = writing;
       node('vmReload').disabled = writing || reading;
+      node('vmPrint').disabled = !data || writing || reading || scope !== selectedEvent() || !rows().length;
       fields.forEach((key) => { node(`vm-${key}`).disabled = kind === 'volunteer-types' || locked(); });
       node('vm-typeName').disabled = kind !== 'volunteer-types' || locked();
       const visible = rows(), count = visible.filter((row) => selected.has(row.id)).length;
@@ -28,11 +52,14 @@
       const types = kind === 'volunteer-types';
       node('vmAdd').textContent = types ? 'Add Volunteer Type' : 'Add Volunteer';
       node('vmImportArea').hidden = types;
+      node('vmPrint').hidden = types;
+      node('vmColumnFilters').hidden = types;
+      node('vmSearch').placeholder = types ? 'Volunteer type name' : 'Name, membership number or contact';
       for (let i = 0; i < 7; i++) node(`vmCol${i}`).hidden = types;
-      const typeName = (id) => data.types.find((row) => row.id === id)?.name || '';
-      node('vmBody').innerHTML = rows().map((row) => `<tr><td><input type="checkbox" data-vm-select="${esc(row.id)}" aria-label="Select ${esc(types ? row.name : `${row.lastName}, ${row.firstName}`)}" ${selected.has(row.id) ? 'checked' : ''} ${locked() ? 'disabled' : ''}></td><td><button class="tournament-name" type="button" data-vm-edit="${esc(row.id)}">${esc(types ? row.name : `${row.lastName}, ${row.firstName}`)}</button></td>${types ? '' : [row.age, row.associationNumber, row.school, row.rank, row.certification, typeName(row.primaryType), typeName(row.secondaryType)].map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') ||
+      renderFilters();
+      node('vmBody').innerHTML = rows().map((row) => `<tr><td><input type="checkbox" data-vm-select="${esc(row.id)}" aria-label="Select ${esc(types ? row.name : fullName(row))}" ${selected.has(row.id) ? 'checked' : ''} ${locked() ? 'disabled' : ''}></td><td><button class="tournament-name" type="button" data-vm-edit="${esc(row.id)}">${esc(types ? row.name : fullName(row))}</button></td>${types ? '' : [row.contactNumber || '', typeName(row.primaryType), typeName(row.secondaryType), row.school, row.rank, certLabel(row.certification), row.associationNumber].map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') ||
         `<tr><td colspan="${types ? 2 : 9}">${data ? 'No matching entries.' : 'Select a tournament above.'}</td></tr>`;
-      node('vmCount').textContent = `${rows().length} shown · ${selected.size} selected`; controls();
+      node('vmCount').textContent = `${rows().length} of ${data ? (types ? data.types : data.volunteers).length : 0} ${types ? 'types' : 'volunteers'} · ${selected.size} selected`; controls();
     }
     function close() {
       if (writing || dirty() && !confirm('Discard unsaved volunteer changes?')) return false;
@@ -46,15 +73,20 @@
       fields.forEach((key) => { node(`vm-${key}`).disabled = types || locked(); });
       const options = data.types.map((type) => `<option value="${esc(type.id)}">${esc(type.name)}</option>`).join('');
       node('vm-primaryType').innerHTML = options; node('vm-secondaryType').innerHTML = '<option value="">None</option>' + options;
-      fields.forEach((key) => { node(`vm-${key}`).value = row && !types ? row[key] : key === 'primaryType' ? data.types[0]?.id || '' : ''; });
+      node('vm-certification').innerHTML = (data.certificationLevels || []).map((level) => `<option value="${esc(level.code)}">${esc(level.label)}</option>`).join('');
+      fields.forEach((key) => { node(`vm-${key}`).value = row && !types ? row[key] ?? '' : key === 'primaryType' ? data.types[0]?.id || '' : key === 'certification' ? 'UNKNOWN' : ''; });
+      node('vm-parentName').required = !types && node('vm-age').value !== '' && Number(node('vm-age').value) < 18;
       node('vm-typeName').value = types && row ? row.name : '';
       node('vmDialogTitle').textContent = `${row ? 'Edit' : 'Add'} ${types ? 'Volunteer Type' : 'Volunteer'}`;
       node('vmError').textContent = data.configurationLocked ? 'Read only. Reset Run before editing.' : '';
       editing = true; baseline = JSON.stringify(draft()); node('vmDialog').showModal(); node('vmCancel').focus();
     }
     async function load(nextKind = kind) {
+      const reset = scope !== selectedEvent() || kind !== nextKind;
       kind = nextKind; const current = ++token;
-      scope = selectedEvent(); data = null; query = ''; node('vmSearch').value = ''; node('vmCsv').value = ''; selected.clear(); render();
+      scope = selectedEvent(); data = null;
+      if (reset) resetFilters();
+      selected.clear(); node('vmCsv').value = ''; render();
       if (!scope) { notice('Select a tournament above.'); return; }
       notice('Loading volunteer management...');
       try {
@@ -72,7 +104,7 @@
         if (current !== token || event !== selectedEvent()) return;
         data = result; selected.clear();
         if (form) { editing = false; node('vmDialog').close(); }
-        notice(url.endsWith('/import') ? `Imported: ${result.added} added, ${result.updated} updated.` : 'Volunteer management saved.');
+        notice(url.endsWith('/import') ? `Imported: ${result.added} added, ${result.updated} updated.${result.unrecognizedCertifications ? ` ${result.unrecognizedCertifications} unrecognized certification value(s) stored as Unknown.` : ''}` : 'Volunteer management saved.');
       } catch (error) { if (current === token) { if (form) node('vmError').textContent = error.message; else notice(error.message, true); } }
       finally { writing = false; if (current === token) render(); }
     }
@@ -92,6 +124,31 @@
       const checked = node('vmAll').checked; selected.clear(); if (checked) rows().forEach((row) => selected.add(row.id)); render();
     });
     node('vmSearchForm').addEventListener('submit', (event) => { event.preventDefault(); query = node('vmSearch').value.trim().toLowerCase(); selected.clear(); render(); });
+    for (const key of Object.keys(filters)) {
+      node(`vmFilter-${key}`).addEventListener(dropdowns.includes(key) ? 'change' : 'input', () => {
+        filters[key] = node(`vmFilter-${key}`).value.trim();
+        selected.clear(); render();
+      });
+    }
+    node('vmClearFilters').addEventListener('click', () => { resetFilters(); render(); });
+    node('vm-age').addEventListener('input', () => {
+      node('vm-parentName').required = node('vm-age').value !== '' && Number(node('vm-age').value) < 18;
+    });
+    node('vmPrint').addEventListener('click', () => {
+      if (!data || kind !== 'volunteers' || writing || reading || scope !== selectedEvent() || !rows().length) return;
+      const activeFilters = Object.entries(filters).filter(([, value]) => value).map(([key, value]) =>
+        `${filterLabels[key]}: ${key === 'certification' ? certLabel(value) : key.endsWith('Type') ? typeName(value) : value}`);
+      if (query) activeFilters.unshift(`Search: ${query}`);
+      const report = node('vmPrintReport');
+      report.innerHTML = `<h1>${esc(scope)} - Volunteers</h1><p>${rows().length} volunteer${rows().length === 1 ? '' : 's'}</p><p>${esc(activeFilters.join('; ') || 'All volunteers')}</p>` +
+        '<table><thead><tr><th>Name</th><th>Contact number</th><th>First choice</th><th>Second choice</th><th>Certification</th></tr></thead><tbody>' +
+        rows().map((row) => `<tr>${[fullName(row), row.contactNumber || '', typeName(row.primaryType), typeName(row.secondaryType), certLabel(row.certification)]
+          .map((value) => `<td>${esc(value)}</td>`).join('')}</tr>`).join('') + '</tbody></table>';
+      document.body.classList.add('vm-printing');
+      try { print(); }
+      catch (error) { notice(`Unable to print volunteers: ${error.message}`, true); }
+      finally { document.body.classList.remove('vm-printing'); report.innerHTML = ''; }
+    });
     node('vmForm').addEventListener('submit', (event) => { event.preventDefault(); return write(`/api/${kind}${id ? `/${encodeURIComponent(id)}` : ''}`, kind === 'volunteer-types' ? draft() : { volunteer: draft() }, id ? 'PUT' : 'POST', true); });
     node('vmDelete').addEventListener('click', () => {
       if (!locked() && selected.size && confirm(`Delete ${selected.size} selected ${kind === 'volunteer-types' ? 'volunteer types' : 'volunteers'}? Types in use cannot be deleted. Existing judges are not changed.`)) return write(`/api/${kind}/delete`, { ids: [...selected] });

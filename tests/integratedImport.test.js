@@ -53,6 +53,7 @@ function element(text = '') {
     reportValidity() {},
     focus() { this.focused = true; },
     showModal() { this.open = true; },
+    show() { this.open = true; },
     close() { this.open = false; },
     contains(target) { return this.children.includes(target); }
   };
@@ -870,12 +871,12 @@ test('Ring Judges and Volunteer Management use selected-tournament preparation',
   assert.equal(page.element('bannerEventName').textContent, winter);
   assert.ok(page.requests.some((request) => request.path === '/api/ring-judges' && request.name === winter));
   await page.click('rjAdd');
-  page.element('rj-name').value = 'Unsaved judge';
+  page.element('rj-firstName').value = 'Unsaved judge';
   await page.navigate('volunteers');
   assert.equal(page.element('ringJudgesView').hidden, false);
   await page.selectTournament(spring);
   assert.equal(page.element('tournamentReferenceSelect').value, winter);
-  page.element('rj-name').value = '';
+  page.element('rj-firstName').value = '';
   await page.click('rjCancel');
   await page.navigate('volunteers');
   assert.equal(page.element('ringJudgesView').hidden, true);

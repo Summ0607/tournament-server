@@ -5,12 +5,25 @@ const crypto = require('crypto');
 const sqlite3 = require('sqlite3');
 const { writeJsonAtomicSync } = require('./atomicJsonFile');
 const { normalizeRank } = require('../db/rankNormalization');
+const { normalizeCertification, certificationLevels, certificationRankIssue, certificationAgeIssue, isJudgeRank, judgeRankOptions } = require('../db/judgeCertification');
 const { storedAge } = require('./tournamentAge');
 const { readVolunteers } = require('./volunteerRoutes');
 
-function validateJudge(input) {
+// Strict validation rejects qualification problems; lenient validation (saved
+// data migration and population) keeps the row, resets unrecognized
+// certification text to Unknown and flags the judge for review instead.
+function validateJudge(input, lenient = false) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Judge details are required.');
   const row = {};
+  if (input.firstName !== undefined || input.lastName !== undefined) {
+    for (const [key, label] of [['firstName', 'First Name'], ['lastName', 'Last Name']]) {
+      if (typeof input[key] !== 'string' || !input[key].trim() || input[key].trim().length > 100) {
+        throw new Error(`${label} must be nonempty text of at most 100 characters.`);
+      }
+      row[key] = input[key].trim();
+    }
+    input = { ...input, name: `${row.lastName}, ${row.firstName}` };
+  }
   for (const [key, label, max, required] of [
     ['name', 'Name', 200, true], ['associationNumber', 'Association ID', 100, false],
     ['school', 'School', 200, false], ['rank', 'Rank', 100, true],
@@ -22,10 +35,27 @@ function validateJudge(input) {
     row[key] = input[key].trim();
   }
   const rank = normalizeRank(row.rank);
-  if (!rank.recognized) throw new Error('Enter a recognized rank code, such as D1, D4, CDB or G1.');
+  if (!rank.recognized) throw new Error('Enter a recognized rank code, such as D1, D4, CDB or G5.');
   row.rank = rank.code;
+  const certification = normalizeCertification(row.certification);
+  if (!certification.recognized && !lenient) {
+    throw new Error(`Certification must be one of: ${certificationLevels().map((level) => level.label).join(', ')}.`);
+  }
+  row.certification = certification.code;
   if (typeof input.flaggedForReview !== 'boolean') throw new Error('Flagged for Review must be true or false.');
-  return { ...row, flaggedForReview: input.flaggedForReview };
+  const issues = [];
+  if (!certification.recognized) issues.push(`Certification "${certification.raw}" was not recognized and was reset to Unknown.`);
+  if (!isJudgeRank(row.rank)) issues.push('Judge rank must be between G5 and D8.');
+  else {
+    const mismatch = certificationRankIssue(row.certification, row.rank);
+    if (mismatch) issues.push(mismatch);
+  }
+  if (issues.length && !lenient) throw new Error(issues[0]);
+  if (issues.length) {
+    row.reviewNotes = [row.reviewNotes, ...issues.filter((issue) => !row.reviewNotes.includes(issue))]
+      .filter(Boolean).join(' ').slice(0, 2000);
+  }
+  return { ...row, flaggedForReview: input.flaggedForReview || issues.length > 0 };
 }
 function readRoster(file) {
   return new Promise((resolve, reject) => {
@@ -49,7 +79,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
           row.competitorId !== null && typeof row.competitorId !== 'string') throw new Error('Invalid saved judge identity.');
       ids.add(row.id);
       if (row.volunteerId !== undefined && row.volunteerId !== null && typeof row.volunteerId !== 'string') throw new Error('Invalid volunteer judge identity.');
-      return { id: row.id, competitorId: row.competitorId, volunteerId: row.volunteerId || null, ...validateJudge(row) };
+      return { id: row.id, competitorId: row.competitorId, volunteerId: row.volunteerId || null, ...validateJudge(row, true) };
     });
     return data;
   }
@@ -74,7 +104,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
           if (read(file).revision !== data.revision) fail('Judge directory changed. Reload before saving.', 409);
           data.revision = crypto.randomUUID();
           writeJsonAtomicSync(file, data);
-          return { ...data, eventName: name, ...configurationStatus(name), ...extra };
+          return { ...data, certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name), ...extra };
         };
         res.json(await callback(req, { name, dir, dbFile, data, commit }));
       } catch (error) {
@@ -83,7 +113,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
       }
     };
   }
-  router.get('/ring-judges', handle((_req, { name, data }) => ({ ...data, eventName: name, ...configurationStatus(name) })));
+  router.get('/ring-judges', handle((_req, { name, data }) => ({ ...data, certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name) })));
   const save = handle((req, { data, commit }) => {
     let row;
     try { row = validateJudge(req.body.judge); } catch (error) { fail(error.message, 400); }
@@ -97,10 +127,19 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
   }, true);
   router.post('/ring-judges', save);
   router.put('/ring-judges/:id', save);
-  router.post('/ring-judges/delete', handle((req, { data, commit }) => {
+  function selectedIds(req, data, action) {
     const ids = req.body.ids;
     if (!Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length ||
-        ids.some((id) => !data.judges.some((judge) => judge.id === id))) fail('Select distinct existing judges to delete.', 400);
+        ids.some((id) => !data.judges.some((judge) => judge.id === id))) fail(`Select distinct existing judges to ${action}.`, 400);
+    return ids;
+  }
+  router.post('/ring-judges/clear-review', handle((req, { data, commit }) => {
+    const ids = selectedIds(req, data, 'clear review flags');
+    data.judges.forEach((judge) => { if (ids.includes(judge.id)) judge.flaggedForReview = false; });
+    return commit();
+  }, true));
+  router.post('/ring-judges/delete', handle((req, { data, commit }) => {
+    const ids = selectedIds(req, data, 'delete');
     data.judges = data.judges.filter((judge) => !ids.includes(judge.id));
     return commit();
   }, true));
@@ -114,16 +153,21 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
     let added = 0, skipped = 0;
     for (const member of roster) {
       const rank = normalizeRank(member.rank);
-      if (!rank.recognized || !/^D(?:[1-9]|10)$/.test(rank.code)) continue;
+      const hasSktkCertification = volunteers && member.certification === 'SK_TK';
+      if (!rank.recognized || !isJudgeRank(rank.code) ||
+          volunteers && !/^D[1-8]$/.test(rank.code) && !hasSktkCertification) continue;
       let age;
       try { age = storedAge(member, config.date); }
       catch (error) { fail(`Cannot determine eligibility for ${member.firstName} ${member.lastName}: ${error.message}`, 400); }
-      if (age < 18) continue;
+      const judgeEligible = /^D[1-8]$/.test(rank.code) && age >= 18;
+      const sktkEligible = (!volunteers || hasSktkCertification) && !certificationAgeIssue('SK_TK', rank.code, age);
+      if (!judgeEligible && !sktkEligible) continue;
       const associationNumber = String(member.associationNumber || '').trim();
       if (data.judges.some((judge) => (volunteers ? judge.volunteerId : judge.competitorId) === String(member.id) || associationNumber &&
           judge.associationNumber.toUpperCase() === associationNumber.toUpperCase())) { skipped++; continue; }
-      const row = validateJudge({ name: `${member.lastName}, ${member.firstName}`, associationNumber,
-        school: member.studio || '', rank: rank.code, certification: volunteers ? member.certification : '', flaggedForReview: false, reviewNotes: '' });
+      const row = validateJudge({ firstName: member.firstName, lastName: member.lastName, associationNumber,
+        school: member.studio || '', rank: rank.code, certification: volunteers ? member.certification : '', flaggedForReview: false,
+        reviewNotes: !volunteers && sktkEligible ? 'Meets SK/TK age and rank criteria; certification is unverified.' : '' }, true);
       data.judges.push({ id: crypto.randomUUID(), competitorId: volunteers ? null : String(member.id), volunteerId: volunteers ? String(member.id) : null, ...row }); added++;
     }
     return commit({ added, skipped });
