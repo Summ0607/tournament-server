@@ -1,6 +1,37 @@
 # tournament-server
 Tournament Management Server Source
 
+## Local security foundation (in progress)
+
+The account/session storage module is the first delivery of the local security
+foundation. It is not yet mounted into the running server: existing pages and APIs
+are **not yet protected**, and login must not be exposed before HTTPS, login
+throttling, request protections and route authorization are integrated.
+
+`backend/accountSessions.js` stores accounts and browser sessions in SQLite at an
+explicit absolute path **outside this repository**, which is currently web-served.
+OS access controls must restrict this database and its containing directory to the
+server/setup account; the file-mode hints do not replace Windows ACLs.
+Passwords are salted and hashed with scrypt (N=131072, r=8, p=1), accept 15–128
+characters including spaces, and are never returned in account responses. Session
+tokens are random and only their SHA-256 digests are persisted.
+
+Browser sessions expire after 30 minutes without explicit user activity, or
+12 hours absolutely. Merely checking a session does not refresh it. Sessions
+survive server restarts; concurrent logins are independent and logout revokes only
+the selected session. Account disabling, password resets and role changes revoke
+all sessions transactionally. Administrator/coordinator/operator roles are stored;
+route-level permissions, browser UI, local setup/recovery commands, device
+enrollment and HTTPS remain subsequent work. Trusted local account mutations
+record an audit actor and reject stale account revisions.
+
+Per-account login throttling persists across restarts: five failures in fifteen
+minutes trigger a five-minute cooldown, including attempts for unknown user IDs.
+Source-based request limits remain part of the pending HTTP integration.
+
+Validate this delivery with `npm run test:accounts`. Tests use isolated temporary
+databases and do not create real accounts or modify tournament data.
+
 Feature overview for Audience Monitor, Competitor Lookup, and Day-of clocks:
 [docs/audience-monitor-lookup.md](docs/audience-monitor-lookup.md).
 
