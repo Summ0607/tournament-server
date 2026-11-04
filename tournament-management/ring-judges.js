@@ -2,14 +2,16 @@
   function create({ document, request, selectedEvent, confirm }) {
     const node = (id) => document.getElementById(id);
     const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const fields = ['firstName', 'lastName', 'associationNumber', 'school', 'rank', 'certification', 'reviewNotes'];
+    const fields = ['firstName', 'lastName', 'associationNumber', 'school', 'rank', 'certification', 'priority', 'reviewNotes'];
     const certLabel = (code) => (data && data.certificationLevels || []).find((level) => level.code === code)?.label || code || 'Unknown';
     const rankLabel = (code) => (data && data.judgeRanks || []).find((rank) => rank.code === code)?.label || code;
-    const filterFields = ['name', 'associationNumber', 'school', 'rank', 'certification', 'flaggedForReview', 'source'];
+    const filterFields = ['name', 'associationNumber', 'school', 'rank', 'certification', 'priority', 'flaggedForReview', 'source'];
     const filters = Object.fromEntries(filterFields.map((key) => [key, '']));
     let data = null, schools = [], scope = '', token = 0, writing = false, editing = false, id = '', baseline = '', query = '', detailsId = '';
     const selected = new Set();
-    const draft = () => ({ ...Object.fromEntries(fields.map((key) => [key, node(`rj-${key}`).value])), flaggedForReview: node('rj-flaggedForReview').checked });
+    const draft = () => ({ ...Object.fromEntries(fields.map((key) => [key,
+      key === 'priority' ? Number(node('rj-priority').value) : node(`rj-${key}`).value
+    ])), flaggedForReview: node('rj-flaggedForReview').checked });
     const dirty = () => editing && JSON.stringify(draft()) !== baseline;
     const locked = () => !data || writing || data.configurationLocked || scope !== selectedEvent();
     const source = (row) => row.volunteerId ? 'Volunteer' : row.competitorId === null ? 'Manual' : 'Competitor';
@@ -23,6 +25,7 @@
         (!filters.school || row.school.toLowerCase() === filters.school.toLowerCase()) &&
         (!filters.rank || row.rank === filters.rank) &&
         (!filters.certification || row.certification === filters.certification) &&
+        (!filters.priority || String(row.priority ?? 4) === filters.priority) &&
         (!filters.flaggedForReview || String(row.flaggedForReview) === filters.flaggedForReview) &&
         (!filters.source || sourceValue === filters.source);
     }) : [];
@@ -31,18 +34,20 @@
         if (key === 'school') return row.school;
         if (key === 'rank') return row.rank;
         if (key === 'certification') return row.certification || 'UNKNOWN';
+        if (key === 'priority') return row.priority ?? 4;
         if (key === 'source') return source(row);
         return '';
-      }).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      }).filter((value) => value !== '' && value !== null && value !== undefined))]
+        .sort((a, b) => key === 'priority' ? a - b : a.localeCompare(b));
       if (key === 'rank') return values.map((value) => [value, rankLabel(value)]);
       if (key === 'certification') return values.map((value) => [value, certLabel(value)]);
-      return values.map((value) => [value, value]);
+      return values.map((value) => [String(value), String(value)]);
     }
     function renderFilters() {
       for (const key of filterFields) {
         const filter = node(`rjFilter-${key}`);
         if (!filter) continue;
-        if (['school', 'rank', 'certification', 'source'].includes(key)) {
+        if (['school', 'rank', 'certification', 'priority', 'source'].includes(key)) {
           const options = filterOptions(key);
           if (filters[key] && !options.some(([value]) => value === filters[key])) filters[key] = '';
           filter.innerHTML = '<option value="">All</option>' + options.map(([value, label]) =>
@@ -70,8 +75,8 @@
     }
     function render() {
       renderFilters();
-      node('rjBody').innerHTML = visible().map((row) => `<tr><td><input type="checkbox" data-rj-select="${esc(row.id)}" aria-label="Select ${esc(row.name)}" ${locked() ? 'disabled' : ''} ${selected.has(row.id) ? 'checked' : ''}></td><td><a class="tournament-name" href="${locked() ? '#rjDetailsDialog' : '#rjDialog'}" data-rj-name="${esc(row.id)}" title="${locked() ? 'View judge details' : 'Edit Judge'}">${esc(row.name)}</a></td><td>${esc(row.associationNumber)}</td><td>${esc(row.school)}</td><td>${esc(rankLabel(row.rank))}</td><td>${esc(certLabel(row.certification))}</td><td>${row.flaggedForReview ? 'Yes' : 'No'}</td><td>${row.volunteerId ? 'Volunteer' : row.competitorId === null ? 'Manual' : 'Competitor'}</td></tr>`).join('') ||
-        `<tr><td colspan="8">${data ? 'No matching judges.' : 'Select a tournament to view judges.'}</td></tr>`;
+      node('rjBody').innerHTML = visible().map((row) => `<tr><td><input type="checkbox" data-rj-select="${esc(row.id)}" aria-label="Select ${esc(row.name)}" ${locked() ? 'disabled' : ''} ${selected.has(row.id) ? 'checked' : ''}></td><td><a class="tournament-name" href="${locked() ? '#rjDetailsDialog' : '#rjDialog'}" data-rj-name="${esc(row.id)}" title="${locked() ? 'View judge details' : 'Edit Judge'}">${esc(row.name)}</a></td><td>${esc(row.associationNumber)}</td><td>${esc(row.school)}</td><td>${esc(rankLabel(row.rank))}</td><td>${esc(certLabel(row.certification))}</td><td class="rj-priority-column">${row.priority ?? 4}</td><td>${row.flaggedForReview ? 'Yes' : 'No'}</td><td>${row.volunteerId ? 'Volunteer' : row.competitorId === null ? 'Manual' : 'Competitor'}</td></tr>`).join('') ||
+        `<tr><td colspan="9">${data ? 'No matching judges.' : 'Select a tournament to view judges.'}</td></tr>`;
       node('rjCount').textContent = data ? `${visible().length} of ${data.judges.length} judges · ${selected.size} selected` : '';
       controls();
     }
@@ -85,7 +90,8 @@
       node('rjDetailsTitle').textContent = row.name;
       node('rjDetailsContent').innerHTML = [
         ['TSD ID', row.associationNumber], ['School', row.school], ['Rank', rankLabel(row.rank)],
-        ['Certification', certLabel(row.certification)], ['Flagged for Review', row.flaggedForReview ? 'Yes' : 'No'],
+        ['Certification', certLabel(row.certification)], ['Priority', row.priority ?? 4],
+        ['Flagged for Review', row.flaggedForReview ? 'Yes' : 'No'],
         ['Source', row.volunteerId ? 'Volunteer' : row.competitorId === null ? 'Manual' : 'Competitor'],
         ['Review Notes', row.reviewNotes]
       ].map(([label, value]) => `<dt>${label}</dt><dd>${esc(value)}</dd>`).join('');
@@ -103,7 +109,7 @@
       node('rj-school').innerHTML = '<option value="">--</option>' + [...schoolNames].sort((a, b) => a.localeCompare(b))
         .map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
       node('rj-certification').innerHTML = (data.certificationLevels || []).map((level) => `<option value="${esc(level.code)}">${esc(level.label)}</option>`).join('');
-      fields.forEach((key) => { node(`rj-${key}`).value = row ? row[key] || '' : key === 'certification' ? 'UNKNOWN' : ''; });
+      fields.forEach((key) => { node(`rj-${key}`).value = row ? row[key] ?? (key === 'priority' ? 4 : '') : key === 'certification' ? 'UNKNOWN' : key === 'priority' ? 4 : ''; });
       if (row && row.firstName === undefined && row.lastName === undefined) {
         // Legacy judges stored only a display name; populated names use "Last, First".
         const comma = row.name.indexOf(',');

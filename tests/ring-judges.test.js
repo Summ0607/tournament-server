@@ -12,8 +12,13 @@ const judge = { name: 'Judge One', associationNumber: 'D100', school: 'School', 
   certification: '', flaggedForReview: false, reviewNotes: '' };
 test('judge validation preserves optional certification and review observations', () => {
   assert.equal(validateJudge({ ...judge, rank: 'Cho Dan' }).rank, 'D1');
+  assert.equal(validateJudge(judge).priority, 4);
+  assert.equal(validateJudge({ ...judge, priority: 99 }).priority, 99);
   for (const change of [{ name: '' }, { rank: 'unknown' }, { flaggedForReview: 'false' }, { reviewNotes: 'x'.repeat(2001) }, { certification: null }]) {
     assert.throws(() => validateJudge({ ...judge, ...change }));
+  }
+  for (const priority of [-1, 100, 1.5, '4']) {
+    assert.throws(() => validateJudge({ ...judge, priority }), /Priority must be a whole number from 0 to 99/);
   }
   assert.equal(validateJudge({ ...judge, flaggedForReview: true, reviewNotes: 'Follow up' }).reviewNotes, 'Follow up');
   const named = validateJudge({ ...judge, firstName: ' Jane Ann ', lastName: ' van Doe ' });
@@ -78,11 +83,12 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   assert.equal((await fetch(`${url}?eventName=missing`)).status, 404);
   assert.deepEqual((await get()).judges, []);
   assert.equal(fs.existsSync(path.join(root, 'A', 'ring-judges.json')), false);
-  let response = await write('', { revision: null, judge: { ...judge, firstName: 'Jane Ann', lastName: 'Doe', associationNumber: 'D101' } });
+  let response = await write('', { revision: null, judge: { ...judge, firstName: 'Jane Ann', lastName: 'Doe', associationNumber: 'D101', priority: 4 } });
   assert.equal(response.status, 200);
   let data = await response.json();
   assert.deepEqual(data.judgeRanks, judgeRankOptions());
   assert.equal(data.judges[0].firstName, 'Jane Ann');
+  assert.equal(data.judges[0].priority, 4);
   assert.equal((await get()).judges[0].lastName, 'Doe');
   const manualId = data.judges[0].id;
   assert.equal((await write('', { revision: null, judge })).status, 409);
@@ -213,15 +219,15 @@ test('judge workspace ignores late responses after tournament changes or navigat
 test('Ring Judges column filters work together and clear without changing the saved directory', async () => {
   const rows = [
     { id: 'one', competitorId: null, name: 'Alex Doe', associationNumber: 'A101', school: 'East', rank: 'D3',
-      certification: 'SK_TK', flaggedForReview: true, reviewNotes: '' },
+      certification: 'SK_TK', priority: 4, flaggedForReview: true, reviewNotes: '' },
     { id: 'two', competitorId: 2, name: 'Jordan Smith', associationNumber: 'B202', school: 'West', rank: 'D1',
-      certification: 'REGIONAL', flaggedForReview: false, reviewNotes: '' },
+      certification: 'REGIONAL', priority: 12, flaggedForReview: false, reviewNotes: '' },
     { id: 'three', competitorId: null, volunteerId: 'v3', name: 'Alex Jones', associationNumber: 'A303', school: 'East',
-      rank: 'D3', certification: 'SK_TK', flaggedForReview: false, reviewNotes: '' }
+      rank: 'D3', certification: 'SK_TK', priority: 4, flaggedForReview: false, reviewNotes: '' }
   ];
   const p = frontend({}, rows), n = p.node;
   await p.workspace.load();
-  for (const id of ['name', 'associationNumber', 'school', 'rank', 'certification', 'flaggedForReview', 'source']) {
+  for (const id of ['name', 'associationNumber', 'school', 'rank', 'certification', 'priority', 'flaggedForReview', 'source']) {
     assert.ok(n(`rjFilter-${id}`), `expected filter for ${id}`);
   }
   n('rjFilter-name').value = 'alex';
@@ -230,6 +236,11 @@ test('Ring Judges column filters work together and clear without changing the sa
   assert.match(n('rjBody').innerHTML, /Alex Jones/);
   assert.doesNotMatch(n('rjBody').innerHTML, /Jordan Smith/);
 
+  n('rjFilter-priority').value = '4';
+  n('rjFilter-priority').handlers.change({ target: n('rjFilter-priority') });
+  assert.match(n('rjBody').innerHTML, /Alex Doe/);
+  assert.match(n('rjBody').innerHTML, /Alex Jones/);
+  assert.doesNotMatch(n('rjBody').innerHTML, /Jordan Smith/);
   n('rjFilter-school').value = 'East';
   n('rjFilter-school').handlers.change({ target: n('rjFilter-school') });
   n('rjFilter-rank').value = 'D3';
@@ -258,6 +269,7 @@ test('Ring Judges column filters work together and clear without changing the sa
   assert.equal(n('rjSearch').value, '');
   assert.equal(n('rjFilter-name').value, '');
   assert.equal(n('rjFilter-school').value, '');
+  assert.equal(n('rjFilter-priority').value, '');
 });
 test('Add and Edit use named rank and school dropdowns, retain selections and submit separate names with rank codes', async () => {
   const p = frontend({ name: 'van Doe, Jane Ann', school: 'Former <School>', rank: 'D8' }), n = p.node;
@@ -281,14 +293,17 @@ test('Add and Edit use named rank and school dropdowns, retain selections and su
   assert.equal(n('rj-school').value, 'Former <School>');
   assert.match(n('rj-school').innerHTML, /Former &lt;School&gt;/);
   assert.equal(n('rj-rank').value, 'D8');
+  assert.equal(n('rj-priority').value, 4);
   assert.equal(p.workspace.dirty(), false);
   n('rj-firstName').value = 'Janet';
   n('rj-rank').value = 'D7';
+  n('rj-priority').value = '7';
   await n('rjForm').handlers.submit({ preventDefault() {} });
   const saved = JSON.parse(p.requests.at(-1).options.body).judge;
   assert.equal(saved.firstName, 'Janet');
   assert.equal(saved.lastName, 'van Doe');
   assert.equal(saved.rank, 'D7');
+  assert.equal(saved.priority, 7);
   n('rjBody').handlers.dblclick(nameEvent(2));
   assert.equal(n('rj-firstName').value, 'Janet');
   assert.equal(n('rj-rank').value, 'D7');

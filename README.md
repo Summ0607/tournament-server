@@ -119,7 +119,9 @@ certification are normalized on load; unrecognized values or rank/certification
 mismatches reset to Unknown or flag the judge for review with an explanatory
 note. **Flagged for Review** and
 review notes capture follow-up observations, not automatic assignment exclusions.
-Priority and Manual Only are omitted; **Judge Assignments** remains Planned.
+Judges have an editable Priority from 0 to 99, defaulting to 4; the directory can
+be filtered by priority. Manual Only is omitted; **Judge Assignments** remains
+Planned.
 **Populate Judges from Volunteers** includes primary or secondary Judging
 volunteers aged 18+ with Dan rank, and SK/TK-certified volunteers meeting the
 rank and age rules above. Supplied certification is copied.

@@ -42,6 +42,11 @@ function validateJudge(input, lenient = false) {
     throw new Error(`Certification must be one of: ${certificationLevels().map((level) => level.label).join(', ')}.`);
   }
   row.certification = certification.code;
+  const priority = input.priority === undefined ? 4 : input.priority;
+  if (!Number.isSafeInteger(priority) || priority < 0 || priority > 99) {
+    throw new Error('Priority must be a whole number from 0 to 99.');
+  }
+  row.priority = priority;
   if (typeof input.flaggedForReview !== 'boolean') throw new Error('Flagged for Review must be true or false.');
   const issues = [];
   if (!certification.recognized) issues.push(`Certification "${certification.raw}" was not recognized and was reset to Unknown.`);
