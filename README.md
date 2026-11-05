@@ -3,34 +3,112 @@ Tournament Management Server Source
 
 ## Local security foundation (in progress)
 
-The account/session storage module is the first delivery of the local security
-foundation. It is not yet mounted into the running server: existing pages and APIs
-are **not yet protected**, and login must not be exposed before HTTPS, login
-throttling, request protections and route authorization are integrated.
+Account/session storage and the protected account API router are implemented but
+are not mounted into the running server: existing pages and APIs are **not yet
+protected**. Do not expose login before HTTPS and authorization across the live
+server are integrated.
 
 `backend/accountSessions.js` stores accounts and browser sessions in SQLite at an
 explicit absolute path **outside this repository**, which is currently web-served.
 OS access controls must restrict this database and its containing directory to the
 server/setup account; the file-mode hints do not replace Windows ACLs.
-Passwords are salted and hashed with scrypt (N=131072, r=8, p=1), accept 15–128
+Passwords are salted and hashed with scrypt (N=131072, r=8, p=1), default to 15–128
 characters including spaces, and are never returned in account responses. Session
 tokens are random and only their SHA-256 digests are persisted.
 
-Browser sessions expire after 30 minutes without explicit user activity, or
+By default, browser sessions expire after 30 minutes without explicit user activity, or
 12 hours absolutely. Merely checking a session does not refresh it. Sessions
 survive server restarts; concurrent logins are independent and logout revokes only
-the selected session. Account disabling, password resets and role changes revoke
-all sessions transactionally. Administrator/coordinator/operator roles are stored;
+the selected session. Account disabling always revokes all sessions; password
+resets and role changes do so by default. Administrator/coordinator/operator roles are stored;
 route-level permissions, browser UI, local setup/recovery commands, device
 enrollment and HTTPS remain subsequent work. Trusted local account mutations
 record an audit actor and reject stale account revisions.
 
-Per-account login throttling persists across restarts: five failures in fifteen
+Per-account login throttling persists across restarts: by default, five failures in fifteen
 minutes trigger a five-minute cooldown, including attempts for unknown user IDs.
-Source-based request limits remain part of the pending HTTP integration.
+The account router also applies a source-based limit to login attempts; its
+production threshold/window must be explicitly configured before integration.
+
+Account policy is persisted in the same private SQLite database. Trusted setup
+code can read it with `getPolicy()` and change it with
+`changePolicy({revision, policy, actor})`. Saves require the full policy and its
+current revision, reject unknown/missing settings, and record the actor. A changed
+policy atomically revokes **all browser sessions**, including the saving user's,
+and clears previous login counters so the new throttling policy starts consistently.
+An unchanged save does neither. Direct store methods are for trusted local code. The account router supplies a
+session authorization token, rechecked inside each administration transaction,
+and derives the audit actor from that authenticated account.
+
+The editable settings and validation limits are:
+
+| Setting | Default | Allowed |
+| --- | --- | --- |
+| User ID minimum / maximum | 3 / 64 characters | 3–64; minimum ≤ maximum |
+| Password minimum / maximum | 15 / 128 characters | Minimum 15–128, maximum 64–128; minimum ≤ maximum |
+| Browser idle timeout | 30 minutes | 5–120 minutes |
+| Absolute session duration | 12 hours | 1–24 hours; at least the idle timeout |
+| Failed-login threshold | 5 | 3–10 |
+| Failure window | 15 minutes | 1–60 minutes |
+| Cooldown | 5 minutes | 1–60 minutes; throttling cannot be disabled |
+| Concurrent sessions | Allowed | Allowed or single-session |
+| Logout all sessions | Off | On or off |
+| Revoke on password reset / role change | On / on | On or off |
+
+Updated identifier bounds apply to new accounts; password bounds apply to new
+accounts and password resets. Existing accounts can still log in with their
+existing identifiers/passwords. Keeping sessions on a role change does not retain
+old roles: session resolution reads current account permissions. Disabling an
+account blocks it regardless of revocation settings.
+
+The planned UI destinations are **Administration → Users** (add, roles,
+enable/disable, password reset; no deletion) and **Administration → User Account
+Settings**. Neither screen is delivered by this backend checkpoint. Device
+authorization and certificate policies are separate from these account settings.
+
+### Protected account API (not mounted)
+
+`createAccountRouter({store, allowedOrigins, sourceLimit})` in
+`backend/accountRoutes.js` is intended for a future `/api/account` mount.
+Mount it before global body parsers, permissive CORS, and static-file middleware
+so its request-size and origin checks run before those handlers.
+`allowedOrigins` must explicitly list canonical HTTPS origins (including ports).
+`sourceLimit` requires `{maxAttempts, windowMs}`; no production threshold is
+assumed. It counts login attempts across user IDs by the direct socket source,
+ignores forwarding headers, and is process-local (reset on server restart).
+Per-account cooldowns remain persistent. Reverse-proxy trust is not implemented:
+the router requires an actually encrypted socket, not `X-Forwarded-Proto`.
+
+| Method / relative path | Purpose |
+| --- | --- |
+| `POST /login` | `{userId, password}`; establish a browser session |
+| `GET /session` | Current account, deadlines, and CSRF token; no idle refresh |
+| `POST /activity` | Explicit user activity with `{}`; refresh idle time only |
+| `POST /logout` | `{}`; revoke according to the logout policy |
+| `GET /users` | Administrator-only account list |
+| `POST /users` | Administrator-only `{userId, password, roles}` |
+| `PUT /users/:userId` | Administrator-only `{revision, roles?, enabled?, password?}` |
+| `GET /policy` | Administrator-only policy and revision |
+| `PUT /policy` | Administrator-only `{revision, policy}` |
+
+The cookie is `__Host-tournament-session`, Secure, HttpOnly, SameSite=Strict,
+Path=/, with no Domain and no Remember Me extension beyond the session deadline.
+Raw session tokens are not returned in JSON. Fetch session details to obtain a
+session-bound CSRF token; send it as `X-CSRF-Token` on authenticated mutations.
+Every mutation (including login) requires JSON and an exact same-origin `Origin`
+header. The router rejects unexpected hosts/cross-origin requests, does not grant
+CORS access, limits request bodies to 8 KB, and rejects unknown body fields.
+Treat `/activity` as explicit user interaction, never background polling.
+After policy revocation, log in again; after restart, refresh session details to
+obtain the current CSRF token. Cookie/session expiration does not itself implement
+the planned browser edit-preservation UI.
 
 Validate this delivery with `npm run test:accounts`. Tests use isolated temporary
-databases and do not create real accounts or modify tournament data.
+databases and do not create real accounts or modify tournament data. HTTPS API
+tests generate temporary test certificates using OpenSSL (Git for Windows'
+`C:\Program Files\Git\usr\bin\openssl.exe` by default on Windows, or `openssl`
+elsewhere; override with `OPENSSL_PATH`). These certificates are trusted only by
+the test client and are deleted afterward; they do not install a CA on any device.
 
 Feature overview for Audience Monitor, Competitor Lookup, and Day-of clocks:
 [docs/audience-monitor-lookup.md](docs/audience-monitor-lookup.md).

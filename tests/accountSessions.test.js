@@ -5,6 +5,7 @@ const path = require('node:path');
 const os = require('node:os');
 const sqlite3 = require('sqlite3');
 const { createAccountSessions, IDLE_MS, ABSOLUTE_MS } = require('../backend/accountSessions');
+const { DEFAULT_ACCOUNT_POLICY, validateAccountPolicy } = require('../backend/accountPolicy');
 
 const password = 'a long demo passphrase';
 async function setup(t) {
@@ -209,4 +210,119 @@ test('account storage rejects paths inside the web-served repository', async () 
   await assert.rejects(createAccountSessions({ file: path.join(__dirname, '..', 'security.db') }),
     /outside the web-served repository/);
   await assert.rejects(createAccountSessions({ file: 'relative.db' }), /absolute account database path/);
+});
+
+test('policy validates all settings and cross-field safety limits', () => {
+  assert.deepEqual(validateAccountPolicy(DEFAULT_ACCOUNT_POLICY), DEFAULT_ACCOUNT_POLICY);
+  for (const change of [
+    { passwordMinLength: 14 }, { passwordMaxLength: 63 }, { passwordMaxLength: 129 },
+    { userIdMinLength: 2 }, { userIdMaxLength: 65 }, { userIdMinLength: 20, userIdMaxLength: 10 },
+    { passwordMinLength: 100, passwordMaxLength: 64 }, { idleTimeoutMinutes: 4 },
+    { idleTimeoutMinutes: 121 }, { absoluteTimeoutHours: 0 }, { absoluteTimeoutHours: 25 },
+    { idleTimeoutMinutes: 120, absoluteTimeoutHours: 1 }, { failureThreshold: 2 },
+    { failureThreshold: 11 }, { failureWindowMinutes: 0 }, { cooldownMinutes: 61 },
+    { cooldownMinutes: 1.5 }, { allowConcurrentSessions: 'true' }, { unknown: 1 }
+  ]) {
+    assert.throws(() => validateAccountPolicy({ ...DEFAULT_ACCOUNT_POLICY, ...change }), { statusCode: 400 });
+  }
+  const missing = { ...DEFAULT_ACCOUNT_POLICY };
+  delete missing.logoutAllSessions;
+  assert.throws(() => validateAccountPolicy(missing), { statusCode: 400 });
+});
+
+test('policy persists across restarts and revokes every browser session only when changed', async (t) => {
+  const p = await setup(t);
+  await p.create('coordinator');
+  const first = await p.store.login({ userId: 'coordinator', password });
+  const second = await p.store.login({ userId: 'coordinator', password });
+  const initial = await p.store.getPolicy();
+  assert.deepEqual(initial, { revision: 1, policy: DEFAULT_ACCOUNT_POLICY });
+  assert.deepEqual(await p.store.changePolicy({ ...initial, actor: 'admin' }), initial);
+  assert.ok(await p.store.resolveSession(first.token));
+  const policy = { ...initial.policy, idleTimeoutMinutes: 5, absoluteTimeoutHours: 1 };
+  await assert.rejects(p.store.changePolicy({ revision: 0, policy, actor: 'admin' }), { statusCode: 409 });
+  await assert.rejects(p.store.changePolicy({ revision: 1, policy, actor: '' }), { statusCode: 400 });
+  assert.deepEqual(await p.store.getPolicy(), initial);
+  assert.ok(await p.store.resolveSession(first.token));
+  const saved = await p.store.changePolicy({ revision: 1, policy, actor: 'admin' });
+  assert.deepEqual(saved, { revision: 2, policy });
+  await p.reopen();
+  assert.deepEqual(await p.store.getPolicy(), saved);
+  assert.equal(await p.store.resolveSession(first.token), null);
+  assert.equal(await p.store.resolveSession(second.token), null);
+  const login = await p.store.login({ userId: 'coordinator', password });
+  assert.equal(login.expiresAt, 1000000 + 60 * 60 * 1000);
+  p.advance(5 * 60 * 1000);
+  assert.equal(await p.store.resolveSession(login.token), null);
+});
+
+test('new identifier/password bounds apply to creation and reset, not existing logins', async (t) => {
+  const p = await setup(t);
+  const account = await p.create('short');
+  await p.store.changePolicy({ revision: 1, actor: 'admin', policy: {
+    ...DEFAULT_ACCOUNT_POLICY, userIdMinLength: 8, userIdMaxLength: 12,
+    passwordMinLength: 30, passwordMaxLength: 64
+  } });
+  assert.ok((await p.store.login({ userId: 'short', password })).token);
+  await assert.rejects(p.create('new'), /User ID must/);
+  await assert.rejects(p.create('a'.repeat(13)), /User ID must/);
+  await assert.rejects(p.create('new-person'), /Password must contain 30 to 64/);
+  await assert.rejects(p.store.changeAccount({ userId: 'short', revision: account.revision,
+    password, actor: 'admin' }), /Password must contain 30 to 64/);
+  await p.store.createAccount({ userId: 'new-person', password: 'x'.repeat(30),
+    roles: ['administrator'], actor: 'admin' });
+  await assert.rejects(p.store.createAccount({ userId: 'too-long', password: 'x'.repeat(65),
+    roles: ['administrator'], actor: 'admin' }), /Password must/);
+});
+
+test('concurrency and logout policies control the expected sessions', async (t) => {
+  const p = await setup(t);
+  await p.create('coordinator');
+  let saved = await p.store.changePolicy({ revision: 1, actor: 'admin',
+    policy: { ...DEFAULT_ACCOUNT_POLICY, allowConcurrentSessions: false } });
+  const first = await p.store.login({ userId: 'coordinator', password });
+  const second = await p.store.login({ userId: 'coordinator', password });
+  assert.equal(await p.store.resolveSession(first.token), null);
+  assert.ok(await p.store.resolveSession(second.token));
+  saved = await p.store.changePolicy({ revision: saved.revision, actor: 'admin',
+    policy: { ...saved.policy, allowConcurrentSessions: true, logoutAllSessions: true } });
+  const third = await p.store.login({ userId: 'coordinator', password });
+  const fourth = await p.store.login({ userId: 'coordinator', password });
+  await p.store.logout(third.token);
+  assert.equal(await p.store.resolveSession(third.token), null);
+  assert.equal(await p.store.resolveSession(fourth.token), null);
+});
+
+test('optional account-change revocation keeps sessions current but disabling always blocks access', async (t) => {
+  const p = await setup(t);
+  await p.create('coordinator');
+  await p.store.changePolicy({ revision: 1, actor: 'admin',
+    policy: { ...DEFAULT_ACCOUNT_POLICY, revokeOnRoleChange: false, revokeOnPasswordReset: false } });
+  const { token } = await p.store.login({ userId: 'coordinator', password });
+  let account = await p.store.changeAccount({ userId: 'coordinator', revision: 1,
+    roles: ['tournament-operator'], actor: 'admin' });
+  assert.deepEqual((await p.store.resolveSession(token)).account.roles, ['tournament-operator']);
+  account = await p.store.changeAccount({ userId: 'coordinator', revision: account.revision,
+    password: 'replacement password phrase', actor: 'admin' });
+  await p.reopen();
+  assert.ok(await p.store.resolveSession(token));
+  await p.store.changeAccount({ userId: 'coordinator', revision: account.revision, enabled: false, actor: 'admin' });
+  assert.equal(await p.store.resolveSession(token), null);
+});
+
+test('configurable failed-login threshold, window and cooldown use exact boundaries', async (t) => {
+  const p = await setup(t);
+  await p.create('coordinator');
+  await p.store.changePolicy({ revision: 1, actor: 'admin',
+    policy: { ...DEFAULT_ACCOUNT_POLICY, failureThreshold: 3, failureWindowMinutes: 1, cooldownMinutes: 1 } });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await assert.rejects(p.store.login({ userId: 'coordinator', password: 'wrong' }), { statusCode: 401 });
+  }
+  p.advance(60 * 1000);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await assert.rejects(p.store.login({ userId: 'coordinator', password: 'wrong' }), { statusCode: 401 });
+  }
+  await assert.rejects(p.store.login({ userId: 'coordinator', password }), { statusCode: 429, retryAfterSeconds: 60 });
+  p.advance(60 * 1000);
+  assert.ok((await p.store.login({ userId: 'coordinator', password })).token);
 });
