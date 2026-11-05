@@ -21,7 +21,7 @@ By default, browser sessions expire after 30 minutes without explicit user activ
 survive server restarts; concurrent logins are independent and logout revokes only
 the selected session. Account disabling always revokes all sessions; password
 resets and role changes do so by default. Administrator/coordinator/operator roles are stored;
-route-level permissions, browser UI, local setup/recovery commands, device
+route-level permissions, browser UI, device
 enrollment and HTTPS remain subsequent work. Trusted local account mutations
 record an audit actor and reject stale account revisions.
 
@@ -65,6 +65,47 @@ The planned UI destinations are **Administration → Users** (add, roles,
 enable/disable, password reset; no deletion) and **Administration → User Account
 Settings**. Neither screen is delivered by this backend checkpoint. Device
 authorization and certificate policies are separate from these account settings.
+
+### Local account setup and administrator recovery
+
+Run these commands from an interactive terminal using the OS account authorized
+to manage the private account database. **First restrict the database directory's
+Windows ACLs** to the server/setup account and authorized OS administrators.
+The commands rely on those OS permissions; they do not require a browser login
+or grant OS privileges. Anyone who can modify the database can administer accounts.
+Use the exact same external database path for setup, recovery, and future server
+integration. There is no default path or password.
+
+Example commands (replace the database path and user IDs for your installation):
+
+```powershell
+npm run accounts -- create --database "C:\TournamentPrivate\accounts.db" --user admin --roles administrator
+npm run accounts -- create --database "C:\TournamentPrivate\accounts.db" --user coordinator --roles judging-coordinator
+npm run accounts -- create --database "C:\TournamentPrivate\accounts.db" --user operator --roles tournament-operator
+npm run accounts -- recover-admin --database "C:\TournamentPrivate\accounts.db" --user admin
+```
+
+Create the administrator first. Multiple roles can be supplied as a comma-separated
+list. Creation initializes the private database if absent; duplicate IDs are
+rejected, never overwritten. Passwords are prompted twice without echo (no stars),
+preserve spaces, and must satisfy the current saved account policy. Password
+arguments, redirected input, and noninteractive terminals are rejected. Ctrl+C
+or Ctrl+D cancels password entry; mismatch/cancellation makes no account change.
+Passwords are never printed or recorded in audits. Do not place them in command
+arguments, scripts, environment variables, or files.
+
+Recovery requires an **existing administrator** and an existing database; it does
+not promote another role or silently bootstrap a missing database. It atomically
+resets the password, enables the selected administrator, increments its revision,
+revokes **all of that account's sessions even if ordinary reset revocation is off**,
+clears its login cooldown, and records `administrator-recovered-sessions-revoked`
+with the local OS username as actor (`local:<username>`). Other accounts and
+sessions remain unchanged. Concurrent account edits abort recovery rather than
+overwrite newer changes. Creation records `account-created` with the same actor.
+Failures exit nonzero with an explicit error; no recovery web endpoint exists.
+
+These commands do not install certificates, activate live authorization, or
+change tournament data. Setup alone therefore does not secure the running server.
 
 ### Protected account API (not mounted)
 

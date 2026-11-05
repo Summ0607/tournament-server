@@ -260,6 +260,29 @@ async function createAccountSessions({ file, now = Date.now }) {
         return publicAccount(await get('SELECT * FROM accounts WHERE user_id = ?', [userId]));
       });
     },
+    // Local OS-authorized recovery only; never expose this through a web route.
+    recoverAdministrator({ userId, revision, password, actor }) {
+      return transaction(async () => {
+        userId = normalizeUserId(userId);
+        const account = await get('SELECT * FROM accounts WHERE user_id = ?', [userId]);
+        if (!account) throw Object.assign(new Error('Account not found.'), { statusCode: 404 });
+        if (!JSON.parse(account.roles).includes('administrator')) {
+          throw Object.assign(new Error('Selected account is not an administrator.'), { statusCode: 403 });
+        }
+        if (revision !== account.revision) {
+          throw Object.assign(new Error('Account changed. Reload before recovering.'), { statusCode: 409 });
+        }
+        const { policy } = await readPolicy();
+        validatePassword(password, policy);
+        const passwordData = await hashPassword(password);
+        await run(`UPDATE accounts SET password_salt = ?, password_hash = ?, enabled = 1,
+          revision = revision + 1 WHERE user_id = ?`, [passwordData.salt, passwordData.hash, userId]);
+        await run('DELETE FROM browser_sessions WHERE user_id = ?', [userId]);
+        await run('DELETE FROM login_attempts WHERE account_key = ?', [sessionDigest(userId)]);
+        await audit('administrator-recovered-sessions-revoked', actor, userId);
+        return publicAccount(await get('SELECT * FROM accounts WHERE user_id = ?', [userId]));
+      });
+    },
     async login({ userId, password }) {
       const result = await transaction(async () => {
         const { policy } = await readPolicy();
