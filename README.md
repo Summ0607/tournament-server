@@ -3,10 +3,102 @@ Tournament Management Server Source
 
 ## Local security foundation (in progress)
 
-Account/session storage and the protected account API router are implemented but
-are not mounted into the running server: existing pages and APIs are **not yet
-protected**. Do not expose login before HTTPS and authorization across the live
-server are integrated.
+The staged HTTPS listener mounts the protected account API and browser account UI.
+**Only account administration is authorized at this checkpoint. Existing tournament
+pages/APIs remain unauthenticated on both transports, and transitional tablet HTTP
+remains unencrypted. This is not a completed security rollout.** Use only on the
+trusted tournament network; do not expose this installation to untrusted networks.
+Tablet HTTPS/trust/device authorization and tournament-wide role enforcement are
+required before removing legacy HTTP and declaring the rollout complete.
+
+### Private Root CA and staged HTTPS setup
+
+From PowerShell in this repository:
+
+```powershell
+.\setup-https.ps1
+```
+
+This creates `C:\TournamentPrivate` with inheritance disabled and full control only
+for the current Windows account, SYSTEM, and local Administrators. Run the server
+under that same account. It refuses to modify an existing installation. Inspect
+any partial installation after failure; do not delete or overwrite existing keys.
+The directory must remain outside the web-served repository.
+
+| Private installation file | Purpose |
+| --- | --- |
+| `root-ca\root-ca-key.pem` | Root CA signing key; never distribute or load in the server |
+| `root-ca\root-ca.pem` | Self-signed Root CA certificate, valid for 10 years |
+| `https\root-ca.pem` | Public CA certificate copy for client trust and verification |
+| `https\server-key.pem` | Server private key |
+| `https\server.pem` | CA-signed server certificate, valid for 397 days |
+| `https\server.json` | Explicit listener/account configuration |
+| `accounts.db` | Account/session database, created by account setup or HTTPS startup |
+
+The server certificate's SAN covers **DNS `tourn-svr.home.arpa` and IP
+`192.168.4.42`**. OpenSSL creates a self-signed CA, then a separate server certificate
+signed by that CA, and verifies both names. Setup uses Git for Windows' OpenSSL;
+override `-OpenSslPath` if necessary. Private keys are unencrypted on disk and
+protected by Windows ACLs; securely back up the CA key offline, not in Git or a
+shared folder. The running server uses only the files in `https`, not the CA key.
+Setup creates no user/password and **does not install trust, change DNS/firewall
+settings, or start a server**.
+
+After certificates exist, create the first administrator from an interactive
+terminal (password entry is hidden):
+
+```powershell
+npm run accounts -- create --database "C:\TournamentPrivate\accounts.db" --user admin --roles administrator
+```
+
+Start one surface, or all three existing desktop surfaces:
+
+```powershell
+$env:TOURNAMENT_HTTPS_CONFIG = "C:\TournamentPrivate\https\server.json"
+node server-launcher.js
+# Or, in a fresh terminal:
+.\launch-surfaces.ps1 -OpenBrowser
+```
+
+| Surface | Secure entry | Temporary unsecured port |
+| --- | --- | --- |
+| Tournament Management | `https://tourn-svr.home.arpa:3443/tournament-management/` | 3000 |
+| Monitoring | `https://tourn-svr.home.arpa:3445/event-progress/` | 3002 |
+| Administration Progress | `https://tourn-svr.home.arpa:3447/administration-progress/` | 3004 |
+
+Other named surfaces use their existing HTTP port plus 443 for HTTPS. Restart and
+shutdown drain both listeners. Invalid/missing configured keys, SANs, CA, expired
+certificates, account paths, or occupied ports fail startup; there is no silent
+HTTP-only fallback. HTTPS requires TLS 1.2 or newer. The configured source login
+limit is 50 attempts per direct source per 15 minutes, per surface process, in
+addition to persistent per-account throttling. Change it explicitly in the private
+configuration if needed.
+
+No trust store is changed automatically. Before using a browser, install **only
+the public Root CA certificate** in the appropriate client trusted-root store.
+Trust installation is intentionally deferred for this delivery. Do not bypass
+certificate warnings, disable validation, or distribute either private key.
+`localhost` is not a certificate SAN: use the DNS name or fixed IP for HTTPS.
+Existing local-only Server Maintenance remains available through
+`http://localhost:3000/admin/`; HTTPS access by DNS/IP does not bypass its separate
+localhost-only restriction.
+
+Direct startup without `TOURNAMENT_HTTPS_CONFIG` retains the legacy HTTP-only
+behavior, emits an unsecured warning, and blocks account UI/API access.
+`launch-surfaces.ps1 -HttpOnly` explicitly selects that legacy mode; the default
+launcher requires the private HTTPS configuration. HTTP account pages explain how
+to open the canonical HTTPS interface; login and account API calls are rejected
+on HTTP. Existing tablet endpoints remain unchanged during this migration.
+
+Certificate renewal must retain the trusted CA, not create a replacement CA on
+every renewal. Before the server certificate expires, use the protected CA key
+to sign a new server CSR with the same DNS/IP SANs and `serverAuth` usage, verify
+the new certificate and matching key, replace the server files during a planned
+break, and restart all surface processes. Clients do not need a new trust root
+when the same CA signs the renewed certificate.
+
+Validate with `npm run test:https`; tests generate isolated certificates/accounts,
+do not install trust, and do not modify tournament data.
 
 `backend/accountSessions.js` stores accounts and browser sessions in SQLite at an
 explicit absolute path **outside this repository**, which is currently web-served.
@@ -21,14 +113,14 @@ By default, browser sessions expire after 30 minutes without explicit user activ
 survive server restarts; concurrent logins are independent and logout revokes only
 the selected session. Account disabling always revokes all sessions; password
 resets and role changes do so by default. Administrator/coordinator/operator roles are stored;
-route-level permissions, browser UI, device
-enrollment and HTTPS remain subsequent work. Trusted local account mutations
+tournament-wide route permissions and device
+enrollment remain subsequent work. Trusted local account mutations
 record an audit actor and reject stale account revisions.
 
 Per-account login throttling persists across restarts: by default, five failures in fifteen
 minutes trigger a five-minute cooldown, including attempts for unknown user IDs.
 The account router also applies a source-based limit to login attempts; its
-production threshold/window must be explicitly configured before integration.
+threshold/window is explicitly set in the private HTTPS configuration.
 
 Account policy is persisted in the same private SQLite database. Trusted setup
 code can read it with `getPolicy()` and change it with
@@ -61,9 +153,17 @@ existing identifiers/passwords. Keeping sessions on a role change does not retai
 old roles: session resolution reads current account permissions. Disabling an
 account blocks it regardless of revocation settings.
 
-The planned UI destinations are **Administration → Users** (add, roles,
+The UI destinations are **Administration → Users** (add, roles,
 enable/disable, password reset; no deletion) and **Administration → User Account
-Settings**. Neither screen is delivered by this backend checkpoint. Device
+Settings**. They require HTTPS and an administrator session. Sign-in is also
+available at `/account/login`. Session polling does not extend idle time;
+trusted pointer/keyboard activity on account screens does, at most once per minute.
+On session expiry/revocation, the inline sign-in form preserves unsaved account
+edits in memory but clears password fields. Navigation warns before discarding
+unsaved edits. Drafts/passwords are never saved in browser storage. Stale writes
+show an error and retain the draft until the user explicitly reloads.
+These guarantees apply to account screens; edit preservation for existing
+tournament screens during future authentication enforcement remains subsequent work. Device
 authorization and certificate policies are separate from these account settings.
 
 ### Local account setup and administrator recovery
@@ -107,12 +207,12 @@ Failures exit nonzero with an explicit error; no recovery web endpoint exists.
 These commands do not install certificates, activate live authorization, or
 change tournament data. Setup alone therefore does not secure the running server.
 
-### Protected account API (not mounted)
+### Protected account API (HTTPS only)
 
 `createAccountRouter({store, allowedOrigins, sourceLimit})` in
-`backend/accountRoutes.js` is intended for a future `/api/account` mount.
-Mount it before global body parsers, permissive CORS, and static-file middleware
-so its request-size and origin checks run before those handlers.
+`backend/accountRoutes.js` is mounted at `/api/account` before global body parsers,
+permissive legacy HTTP CORS, and static-file middleware, so its request-size and
+origin checks run first. HTTPS tournament responses do not enable permissive CORS.
 `allowedOrigins` must explicitly list canonical HTTPS origins (including ports).
 `sourceLimit` requires `{maxAttempts, windowMs}`; no production threshold is
 assumed. It counts login attempts across user IDs by the direct socket source,
@@ -141,8 +241,7 @@ header. The router rejects unexpected hosts/cross-origin requests, does not gran
 CORS access, limits request bodies to 8 KB, and rejects unknown body fields.
 Treat `/activity` as explicit user interaction, never background polling.
 After policy revocation, log in again; after restart, refresh session details to
-obtain the current CSRF token. Cookie/session expiration does not itself implement
-the planned browser edit-preservation UI.
+obtain the current CSRF token. The account UI handles cookie/session expiration without persisting form drafts.
 
 Validate this delivery with `npm run test:accounts`. Tests use isolated temporary
 databases and do not create real accounts or modify tournament data. HTTPS API

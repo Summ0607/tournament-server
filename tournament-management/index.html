@@ -1532,6 +1532,8 @@
             <button class="sidebar-item" type="button" data-nav-id="ranks" data-nav-label="Ranks" data-nav-parents="administration">Ranks</button>
             <button class="sidebar-item" type="button" data-nav-id="visual-definitions" data-nav-label="Visual Definitions" data-nav-parents="administration">Visual Definitions</button>
             <button class="sidebar-item" type="button" data-nav-id="server-maintenance" data-nav-label="Server Maintenance" data-nav-parents="administration">Server Maintenance</button>
+            <button class="sidebar-item" type="button" data-nav-id="users" data-nav-label="Users" data-nav-parents="administration">Users</button>
+            <button class="sidebar-item" type="button" data-nav-id="user-account-settings" data-nav-label="User Account Settings" data-nav-parents="administration">User Account Settings</button>
             <button class="sidebar-item" type="button" data-nav-id="simulator" data-nav-label="Simulator" data-nav-parents="administration">Simulator</button>
           </div>
           <button class="sidebar-item" type="button" data-nav-id="your-account" data-nav-label="Your Account" data-nav-planned="true">Your Account <span class="nav-planned">Planned</span></button>
@@ -2950,6 +2952,10 @@
         input.addEventListener('change', () => { renderBanner(); updateRingSummary(); });
       });
       function allowLeavingTournamentForm() {
+        const accountFrame = document.getElementById('administrationToolFrame');
+        if (['users', 'user-account-settings'].includes(currentView) &&
+            accountFrame.contentWindow?.canLeaveAccountPage &&
+            !accountFrame.contentWindow.canLeaveAccountPage()) return false;
         if (volunteersWorkspace.busy() || !volunteersWorkspace.canLeave()) return false;
         if (competitionSettings.busy() || !competitionSettings.canLeave()) return false;
         if (ranksWorkspace.busy() || !ranksWorkspace.canLeave()) return false;
@@ -3059,7 +3065,8 @@
         document.getElementById('resultsView').hidden = view !== 'results';
         document.getElementById('ringJudgesView').hidden = view !== 'ring-judges';
         document.getElementById('volunteersView').hidden = !['volunteers', 'volunteer-types'].includes(view);
-        const toolPaths = { 'server-maintenance': '/admin/?embedded=1', simulator: '/simulator/?embedded=1' };
+        const toolPaths = { 'server-maintenance': '/admin/?embedded=1', simulator: '/simulator/?embedded=1',
+          users: '/account/users?embedded=1', 'user-account-settings': '/account/settings?embedded=1' };
         const toolFrame = document.getElementById('administrationToolFrame');
         document.getElementById('administrationToolView').hidden = !toolPaths[view];
         if (toolPaths[view]) {
