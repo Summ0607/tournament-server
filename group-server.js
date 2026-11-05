@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const https = require('node:https');
 const sqlite3 = require('sqlite3').verbose();
 
 require('./db/init');
@@ -32,9 +33,16 @@ const { createServerControl } = require('./backend/serverControl');
 const { createEventConfigStore, normalizeEventRingConfig, normalizeTournamentScope, hasOperationalUse } = require('./backend/eventConfig');
 const { writeJsonAtomicSync } = require('./backend/atomicJsonFile');
 const { normalizeTournamentDays } = require('./backend/tournamentSchedule');
+const { loadHttpsConfig, HTTPS_PORTS, httpsOrigins } = require('./backend/httpsConfig');
+const { createAccountSessions } = require('./backend/accountSessions');
+const { createAccountWeb } = require('./backend/accountWeb');
 
 const app = express();
 let httpServer;
+let httpsServer;
+let accountStore;
+let accountWeb;
+const httpsConfig = loadHttpsConfig(process.env.TOURNAMENT_HTTPS_CONFIG);
 let shuttingDown = false;
 const ACTIVE_SURFACE = resolveSurfaceName(process.env.TOURNAMENT_SURFACE);
 const PORT = resolveSurfacePort(ACTIVE_SURFACE);
@@ -193,16 +201,21 @@ const db = new sqlite3.Database(TOURNAMENT_DB_PATH);
 // ─────────────────────────────────────────────
 // GLOBAL MIDDLEWARE
 // ─────────────────────────────────────────────
-app.use(express.json({ limit: '50mb' }));
 app.use((_req, res, next) => {
   if (shuttingDown) return res.status(503).json({ error: 'Server is shutting down. Reconnect shortly.' });
   next();
 });
+app.use((req, res, next) => {
+  if (!accountWeb) return res.status(503).json({ error: 'Server account setup is not ready.' });
+  return accountWeb(req, res, next);
+});
+app.use(express.json({ limit: '50mb' }));
 app.use('/api/server-control', createServerControl({
   enabled: process.env.TOURNAMENT_MANAGED_SERVER === '1' && typeof process.send === 'function',
   requestRestart: () => { shutdownServer(true); }
 }));
 app.use((req, res, next) => {
+  if (req.socket.encrypted) return next();
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -1357,18 +1370,45 @@ app.use('/api', createRingRouter({
 }));
 
 async function startServer() {
+  if (httpsConfig) {
+    accountStore = await createAccountSessions({ file: httpsConfig.accountDatabase });
+  }
+  accountWeb = createAccountWeb({ store: accountStore, config: httpsConfig, surface: ACTIVE_SURFACE });
   try {
     await primeGroupCacheFromDatabase();
   } catch (err) {
     console.error('Failed to prime group cache from database:', err);
   }
 
-  httpServer = app.listen(PORT, () => {
-    console.log(`Group server running on ${ACTIVE_SURFACE} at http://localhost:${PORT}${SURFACE_ENTRY_PATH}`);
-    console.log(`Entry page: http://localhost:${PORT}${SURFACE_ENTRY_PATH}`);
-    console.log(`Group example: http://localhost:${PORT}/api/groups/group-1`);
-    console.log(`Ring request-group example: http://localhost:${PORT}/api/rings/ring-a-1/request-group`);
-  });
+  function listen(server, port) {
+    return new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, () => {
+        server.removeListener('error', reject);
+        server.on('error', (error) => {
+          console.error('Server listener failed:', error);
+          shutdownServer();
+        });
+        resolve();
+      });
+    });
+  }
+  try {
+    if (httpsConfig) {
+      httpsServer = https.createServer(httpsConfig.options, app);
+      await listen(httpsServer, HTTPS_PORTS[ACTIVE_SURFACE]);
+      console.log(`HTTPS entry: ${httpsOrigins(httpsConfig, ACTIVE_SURFACE)[0]}${SURFACE_ENTRY_PATH}`);
+      console.log(`Server certificate expires: ${httpsConfig.certificateExpiresAt}`);
+    }
+    httpServer = require('node:http').createServer(app);
+    await listen(httpServer, PORT);
+    console.warn(`UNSECURED transitional HTTP: http://localhost:${PORT}${SURFACE_ENTRY_PATH}`);
+    console.warn('Tournament pages/APIs are not yet authorized. Account administration requires configured HTTPS. Do not expose this staged installation to untrusted networks.');
+  } catch (error) {
+    await Promise.all([httpServer, httpsServer].filter((server) => server?.listening)
+      .map((server) => new Promise((resolve) => server.close(resolve))));
+    throw error;
+  }
 }
 
 async function shutdownServer(restart = false) {
@@ -1376,14 +1416,15 @@ async function shutdownServer(restart = false) {
   shuttingDown = true;
   console.log(restart ? 'Restart requested: draining requests and saving simulator state...' : 'Shutting down tournament server...');
   try {
-    const drained = new Promise((resolve, reject) => {
-      if (!httpServer) return resolve();
-      httpServer.close((error) => error ? reject(error) : resolve());
-      httpServer.closeIdleConnections();
-    });
+    const drained = Promise.all([httpServer, httpsServer].filter((server) => server?.listening)
+      .map((server) => new Promise((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+        server.closeIdleConnections();
+      })));
     await Promise.all([drained, simulatorRouter.shutdown()]);
     await simulatorRouter.shutdown();
     await new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
+    if (accountStore) await accountStore.close();
     if (restart && process.connected) {
       process.send({ type: 'restart-ready' }, (error) => {
         if (error) {
@@ -1407,7 +1448,13 @@ process.on('message', (message) => {
   if (message && message.type === 'shutdown') shutdownServer();
 });
 
-startServer();
+startServer().catch(async (error) => {
+  console.error('Unable to start tournament server; no HTTP-only fallback will be used:', error);
+  process.exitCode = 1;
+  if (accountStore) await accountStore.close();
+  await simulatorRouter.shutdown();
+  await new Promise((resolve) => db.close(resolve));
+});
 
 if (process.argv.includes('--import')) {
   setTimeout(() => {
