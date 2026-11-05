@@ -153,6 +153,7 @@ vite.config.ts.timestamp-*
 # Runtime data
 /events/
 /simulator-runs/
+/app-releases/
 /Results/
 /groups/
 tournament.db

@@ -36,6 +36,7 @@ const { normalizeTournamentDays } = require('./backend/tournamentSchedule');
 const { loadHttpsConfig, HTTPS_PORTS, httpsOrigins } = require('./backend/httpsConfig');
 const { createAccountSessions } = require('./backend/accountSessions');
 const { createAccountWeb } = require('./backend/accountWeb');
+const { createAppReleaseRouter } = require('./backend/appRelease');
 
 const app = express();
 let httpServer;
@@ -784,30 +785,6 @@ function findGroupUsageAcrossRings(state, targetGroupId, excludedRingId = '') {
   return null;
 }
 
-function readAndroidVersionInfo() {
-  const candidates = [
-    path.join(ROOT_DIR, 'app', 'build.gradle.kts'),
-    path.join(ROOT_DIR, 'build.gradle.kts')
-  ];
-
-  for (const candidate of candidates) {
-    if (!fs.existsSync(candidate)) continue;
-
-    const gradleText = fs.readFileSync(candidate, 'utf8');
-    const versionCodeMatch = gradleText.match(/versionCode\s*=\s*(\d+)/);
-    const versionNameMatch = gradleText.match(/versionName\s*=\s*["']([^"']+)["']/);
-
-    if (versionCodeMatch && versionNameMatch) {
-      return {
-        versionCode: Number.parseInt(versionCodeMatch[1], 10),
-        versionName: versionNameMatch[1]
-      };
-    }
-  }
-
-  return { versionCode: 0, versionName: '0.0' };
-}
-
 function ensureResultsDir() {
   if (!fs.existsSync(RESULTS_DIR)) {
     fs.mkdirSync(RESULTS_DIR, { recursive: true });
@@ -830,15 +807,9 @@ function saveUploadedDivisionPacket(ringId, packet) {
   writeJsonAtomicSync(filePath, packet);
 }
 
+app.use(createAppReleaseRouter());
+app.use('/app-releases', (_req, res) => res.status(404).json({ error: 'Use the app update endpoints.' }));
 registerPageRoutes(app, ROOT_DIR, CONTROL_BOARD_DIR, ACTIVE_SURFACE);
-
-app.get('/api/version', (req, res) => {
-  const versionInfo = readAndroidVersionInfo();
-  res.json({
-    versionCode: versionInfo.versionCode,
-    versionName: versionInfo.versionName
-  });
-});
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'Group server is running' });
@@ -937,16 +908,6 @@ app.get('/api/competitors/table', (req, res) => {
     const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
     return res.json({ headers, rows });
   });
-});
-
-app.get('/download-app', (req, res) => {
-  const apkPath = path.join(ROOT_DIR, 'app-debug.apk');
-  if (!fs.existsSync(apkPath)) {
-    return res.status(404).send('APK not found. Build the app first and place app-debug.apk in the server folder.');
-  }
-  res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-  res.setHeader('Content-Disposition', 'attachment; filename="tournament-scoring.apk"');
-  return res.sendFile(apkPath);
 });
 
 app.get('/search', (req, res) => {

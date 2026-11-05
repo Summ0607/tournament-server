@@ -51,7 +51,7 @@ Write-Host 'Entry URL: $($Surface.Url)'
 & $nodeExe $serverScript
 "@
 
-  Start-Process -FilePath "powershell.exe" -WorkingDirectory $repoRoot -ArgumentList @(
+  Start-Process -FilePath "powershell.exe" -WindowStyle Minimized -WorkingDirectory $repoRoot -ArgumentList @(
     "-NoProfile",
     "-ExecutionPolicy", "Bypass",
     "-Command",
@@ -65,7 +65,5 @@ foreach ($surface in $surfaces) {
 
 if ($OpenBrowser) {
   Start-Sleep -Seconds 2
-  foreach ($surface in $surfaces) {
-    Start-Process $surface.Url | Out-Null
-  }
+  Start-Process $surfaces[0].Url | Out-Null
 }

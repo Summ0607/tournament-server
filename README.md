@@ -1,6 +1,69 @@
 # tournament-server
 Tournament Management Server Source
 
+## Publishing Android app updates
+
+The Android app and this server remain separate repositories. The server does
+**not** read either repository's Gradle files for update versions. Instead, publish
+a built APK explicitly; the command extracts its application ID, version name,
+and version code using Android SDK `aapt2`, then computes its size and SHA-256.
+Only APKs for `com.summ0.tournamentscoringapp` are accepted. No version number is
+maintained manually on the server.
+
+1. Build/test the app in `C:\Karate4\tournament-app`. Increment the app version
+   before building an update. Keep the same signing key as the installed app;
+   Android rejects incompatible signatures. A successful metadata publication
+   does not itself verify signing-key compatibility with a tablet.
+2. From `C:\Karate4\tournament-server`, publish the resulting APK:
+
+   ```powershell
+   npm run publish:app -- --apk "C:\Karate4\tournament-app\app\build\outputs\apk\debug\app-debug.apk" --aapt2 "$env:LOCALAPPDATA\Android\Sdk\build-tools\36.0.0\aapt2.exe"
+   ```
+
+   Adjust the SDK build-tools version/path for the machine. The command copies
+   the APK to staging **before** extracting its version, so a later rebuild
+   cannot change the published bytes. Missing tools, invalid APKs, and incorrect
+   application IDs fail explicitly without replacing the active release.
+3. The command writes ignored runtime data under `app-releases`: immutable
+   `<sha256>\tournament-scoring.apk` artifacts and one generated `current.json`
+   manifest. The manifest contains schema version, application ID, version name/code,
+   filename, byte size, and SHA-256. It switches atomically only after the APK
+   is ready. Earlier artifacts remain for in-flight downloads; do not edit the
+   manifest or APKs manually. Failed publication leaves the previous active release
+   intact. Republish the same valid APK safely if necessary.
+4. Restart already-running server processes **once** after installing this server
+   code. Subsequent publication changes are picked up without restarting.
+   `GET /api/version` and `GET /download-app` both read the current manifest and
+   verify the stored APK's size/checksum. The download returns those verified
+   bytes, with `X-App-Version-Code` and `X-App-SHA256` headers. Both endpoints
+   use `Cache-Control: no-store`; missing/incomplete/corrupted releases return
+   **503 with an explicit error**, never version zero or the old root APK.
+5. To test the Wi-Fi update, leave tablet **1.44 (45)** installed, publish
+   **1.45 (46)**, restart the server processes as above, and check:
+
+   `https://tourn-svr.home.arpa:3443/api/version`
+
+   It should report version code 46/name 1.45. Restart the tablet app without USB,
+   accept the update, complete Android's installer prompts, reopen the app, and
+   verify **Version 1.45 (46)** on its startup/Server Configuration screen.
+   The installed app only offers an update when the published code is higher.
+
+The server does not rebuild or publish on app startup or on every source edit.
+The old repository-root `app-debug.apk` is no longer used by `/download-app`.
+The app's existing endpoint names and version fields remain compatible.
+Publishing while a user checks then downloads can offer a newer release than
+the initial check; each response resolves a complete, verified active release.
+
+For a different deployment folder, set the same absolute
+`TOURNAMENT_APP_RELEASE_DIR` for both publishing and every server process (or use
+publisher `--directory` and configure the server to match). The deployment host
+needs only this release folder and Node dependencies; Android SDK tooling and
+the app repository are required only on the publishing machine. Copy the complete
+release folder when transferring deployments. Keep it OS-write-restricted to
+authorized publishers. APKs/manifests are deployment data, not Git source.
+
+Validate with `npm run test:app-release`.
+
 ## Local security foundation (in progress)
 
 The staged HTTPS listener mounts the protected account API and browser account UI.
@@ -59,6 +122,11 @@ node server-launcher.js
 # Or, in a fresh terminal:
 .\launch-surfaces.ps1 -OpenBrowser
 ```
+
+The launcher starts all three server PowerShell windows minimized.
+`-OpenBrowser` opens only Tournament Management, not the two progress pages.
+Omit it to start the servers without opening a browser. Do not append
+`-WindowStyle`; minimization is handled inside the launcher.
 
 | Surface | Secure entry | Temporary unsecured port |
 | --- | --- | --- |
