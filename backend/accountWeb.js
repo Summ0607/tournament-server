@@ -2,14 +2,18 @@ const express = require('express');
 const path = require('node:path');
 const { createAccountRouter } = require('./accountRoutes');
 const { httpsOrigins } = require('./httpsConfig');
+const { createBrowserSecurity } = require('./browserSecurity');
+const { createBrowserAuthorization } = require('./browserAuthorization');
 
 function createAccountWeb({ store, config, surface, rootDir = path.resolve(__dirname, '..') }) {
   const router = express.Router();
   const origins = config ? httpsOrigins(config, surface) : [];
+  const security = config ? createBrowserSecurity({ store, allowedOrigins: origins }) : null;
   router.get('/api/https-status', (_req, res) => {
     res.set('Cache-Control', 'no-store').json({
       enabled: Boolean(config), origin: origins[0] || null,
-      legacyHttpEnabled: true, tournamentAuthorizationEnforced: false
+      legacyHttpEnabled: true, browserAuthorizationEnforced: true,
+      tabletAuthorizationEnforced: false, tournamentAuthorizationEnforced: false
     });
   });
   router.use(['/account', '/api/account'], (req, res, next) => {
@@ -31,14 +35,30 @@ function createAccountWeb({ store, config, surface, rootDir = path.resolve(__dir
     next();
   });
   if (config) {
-    router.use('/api/account', createAccountRouter({ store, allowedOrigins: origins, sourceLimit: config.sourceLimit }));
-    router.get(['/account', '/account/', '/account/login', '/account/users', '/account/settings'], (_req, res) => {
+    router.use('/api/account', createAccountRouter({ store, allowedOrigins: origins, sourceLimit: config.sourceLimit, security }));
+    router.get(['/account', '/account/', '/account/login', '/account/profile', '/account/users', '/account/settings'], async (req, res) => {
+      try {
+        security.verifyRequest(req);
+        if (req.path !== '/account/login') {
+          const session = await security.authenticate(req, res);
+          if (req.path !== '/account/profile' && !session.account.roles.includes('administrator')) {
+            return res.status(403).type('html').send('<h1>Administrator permission required</h1><a href="/">Home</a>');
+          }
+        }
+      } catch (error) {
+        if (error.statusCode === 401) return res.redirect(`/account/login?returnTo=${encodeURIComponent(req.originalUrl)}`);
+        if (!error.statusCode) console.error('Account page authorization failed:', error);
+        return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Unable to verify account page access. Check the server log.' });
+      }
       res.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'self'; form-action 'self'; base-uri 'none'");
       res.sendFile(path.join(rootDir, 'account', 'index.html'));
     });
-    router.use('/account', express.static(path.join(rootDir, 'account'), { index: false, redirect: false }));
+    router.get(['/account/account.js', '/account/style.css'], (req, res) => {
+      res.sendFile(path.join(rootDir, 'account', path.basename(req.path)));
+    });
     router.use('/account', (_req, res) => res.status(404).json({ error: 'Account page not found.' }));
   }
+  router.use(createBrowserAuthorization({ config, security }));
   return router;
 }
 

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="/assets/browser-session.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tournament Management System</title>
@@ -1523,8 +1524,9 @@
             <button class="sidebar-item" type="button" data-nav-id="printing" data-nav-label="Printing" data-nav-parents="tournament" data-nav-planned="true">Printing <span class="nav-planned">Planned</span></button>
             <button class="sidebar-item" type="button" data-nav-id="csv-settings" data-nav-label="CSV Settings" data-nav-parents="tournament" data-nav-planned="true">CSV Settings <span class="nav-planned">Planned</span></button>
           </div>
-          <button class="sidebar-item" type="button" data-nav-id="judge-management" data-nav-label="Judge Management" data-nav-planned="true">Judge Management <span class="nav-planned">Planned</span></button>
-          <button class="sidebar-item" type="button" data-nav-id="clinic-management" data-nav-label="Clinic Management" data-nav-planned="true">Clinic Management <span class="nav-planned">Planned</span></button>
+          <button class="sidebar-item" type="button" data-nav-id="audience-viewer" data-nav-label="Audience Viewer">Audience Viewer</button>
+          <button class="sidebar-item" type="button" data-nav-id="judge-management" data-nav-label="Judging Management" data-nav-planned="true">Judging Management <span class="nav-planned">Under Development</span></button>
+          <button class="sidebar-item" type="button" data-nav-id="clinic-management" data-nav-label="Clinic Management" data-nav-planned="true">Clinic Management <span class="nav-planned">Under Development</span></button>
           <button class="sidebar-item" type="button" data-nav-id="event-history" data-nav-label="Event History" data-nav-planned="true">Event History <span class="nav-planned">Planned</span></button>
           <button id="navAdministration" class="sidebar-disclosure" type="button" data-nav-group="administration" aria-expanded="false" aria-controls="navAdministrationChildren">Administration</button>
           <div id="navAdministrationChildren" class="sidebar-children" hidden>
@@ -1536,7 +1538,7 @@
             <button class="sidebar-item" type="button" data-nav-id="user-account-settings" data-nav-label="User Account Settings" data-nav-parents="administration">User Account Settings</button>
             <button class="sidebar-item" type="button" data-nav-id="simulator" data-nav-label="Simulator" data-nav-parents="administration">Simulator</button>
           </div>
-          <button class="sidebar-item" type="button" data-nav-id="your-account" data-nav-label="Your Account" data-nav-planned="true">Your Account <span class="nav-planned">Planned</span></button>
+          <button class="sidebar-item" type="button" data-nav-id="your-account" data-nav-label="Your Account">Your Account</button>
         </nav>
 
         <section class="workspace" id="workspacePanel" aria-label="Tournament workspace">
@@ -2190,6 +2192,15 @@
       let importSnapshot = { eventName: '', status: 'idle', dbExists: false, competitors: [] };
       let importSnapshotToken = 0;
       let currentView = 'event-setup';
+      let viewInitialized = false;
+      window.addEventListener('browser-permissions-changed', () => {
+        if (!viewInitialized) return;
+        syncTournamentReference();
+        const forbidden = !window.BrowserSession.canView(currentView);
+        document.getElementById('workspacePanel').inert = forbidden;
+        document.getElementById('detailsPanel').inert = forbidden;
+        if (forbidden) showNotice('Your roles no longer permit this workspace. Edits are retained, but access is blocked. Select a permitted page.', 'error');
+      });
       let pendingDivisionSelection = '';
       let importInputEvent = '';
       let importBusy = false;
@@ -2500,12 +2511,14 @@
           || (selectedViewItem && (selectedViewItem.getAttribute('data-nav-parents') || '').split(' ').includes('tournament')));
         tournamentReferenceEl.hidden = !isLivePage && !tournamentScoped;
         tournamentReferenceSelectEl.hidden = !isLivePage && !tournamentScoped;
-        tournamentReferenceSelectEl.disabled = activationBusy || importBusy;
+        const mayActivate = !window.BrowserSession || window.BrowserSession.canView('event-setup');
+        tournamentReferenceSelectEl.disabled = activationBusy || importBusy || isLivePage && !mayActivate;
         if (!isLivePage && !tournamentScoped) return;
         tournamentReferenceLabelEl.textContent = isLivePage ? 'Active Tournament' : 'Tournament for this page';
         tournamentReferenceSelectEl.setAttribute('aria-label', tournamentReferenceLabelEl.textContent);
         tournamentReferenceSelectEl.setAttribute('data-help', isLivePage
-          ? 'Switch the tournament used by live operations and connected tablets after confirmation. Browsing preparation tournaments does not activate them.'
+          ? mayActivate ? 'Switch the tournament used by live operations and connected tablets after confirmation. Browsing preparation tournaments does not activate them.'
+            : 'Only an Event Coordinator or Administrator can change the active tournament.'
           : 'Select a tournament for preparation without changing the active tournament.');
         const names = state.activeEventName && !state.events.includes(state.activeEventName)
           ? [...state.events, state.activeEventName] : state.events;
@@ -2995,6 +3008,10 @@
       const importNavItem = navById.get('import');
 
       function showView(view, item = navById.get(view), historyMode = 'push') {
+        if (window.BrowserSession && !window.BrowserSession.canView(view)) {
+          showNotice('Your role does not permit this workspace.', 'error');
+          return;
+        }
         if (activationBusy) { showNotice('Wait for live activation to finish before changing pages.', 'warn'); return; }
         if ((view !== currentView || view === 'event-setup' && state.metadataOpen || teamWorkspace.dirty() || visualDefinitions.dirty()) && !allowLeavingTournamentForm()) return;
         if (view === 'event-setup' && state.metadataOpen) setMetadataPanelVisible(false);
@@ -3003,6 +3020,9 @@
           return;
         }
         currentView = view;
+        viewInitialized = true;
+        document.getElementById('workspacePanel').inert = false;
+        document.getElementById('detailsPanel').inert = false;
         teamWorkspace.leave();
         visualDefinitions.leave();
         schoolsWorkspace.leave();
@@ -3066,7 +3086,8 @@
         document.getElementById('ringJudgesView').hidden = view !== 'ring-judges';
         document.getElementById('volunteersView').hidden = !['volunteers', 'volunteer-types'].includes(view);
         const toolPaths = { 'server-maintenance': '/admin/?embedded=1', simulator: '/simulator/?embedded=1',
-          users: '/account/users?embedded=1', 'user-account-settings': '/account/settings?embedded=1' };
+          users: '/account/users?embedded=1', 'user-account-settings': '/account/settings?embedded=1',
+          'audience-viewer': '/audience-monitor/?embedded=1', 'your-account': '/account/profile?embedded=1' };
         const toolFrame = document.getElementById('administrationToolFrame');
         document.getElementById('administrationToolView').hidden = !toolPaths[view];
         if (toolPaths[view]) {
@@ -3083,7 +3104,7 @@
         workspaceSubtitle.hidden = !viewSubtitles[view];
         if (planned) {
           placeholderTitle.textContent = title;
-          placeholderMessage.textContent = 'Planned.';
+          placeholderMessage.textContent = ['judge-management', 'clinic-management'].includes(view) ? 'Under Development.' : 'Planned.';
         }
         if (view !== 'event-setup' && state.metadataOpen) {
           setMetadataPanelVisible(false);
@@ -4327,6 +4348,8 @@
         const live = !ra.simulatorRunId;
         const formatNote = !live ? '<span class="ra-format-lock">Format is fixed by the simulation run.</span>'
           : ra.startedAt ? '<span class="ra-format-lock">Format locked: competition has started.</span>'
+          : window.BrowserSession && !window.BrowserSession.canView('event-setup')
+            ? '<span class="ra-format-lock">Format changes require an Event Coordinator or Administrator.</span>'
           : '<button type="button" data-ra-event-setup data-help="Open Tournament to change the event format. The format is locked once competition starts.">Change in Tournament</button>';
         if (schedule.days === 1) {
           raScheduleSummaryEl.innerHTML = `<span class="ra-format-badge" data-day="1">One-day event</span>
@@ -5471,9 +5494,9 @@
         setMetadataPanelVisible(false);
         if (Number.isInteger(targetIndex)) historyIndex = targetIndex;
         const view = new URLSearchParams(window.location.search).get('view');
-        showView(navById.has(view) ? view : 'event-setup', undefined, 'none');
+        showView(initialPermittedView(view), undefined, 'none');
       });
-      initializePage()
+      (window.BrowserSession ? window.BrowserSession.ready : Promise.resolve()).then(initializePage)
         .then(() => {
           const params = new URLSearchParams(window.location.search);
           const requestedTournament = findExistingEventName(params.get('eventName'));
@@ -5482,14 +5505,19 @@
             return refreshSelectedEventFromInput().then(() => {
               pendingDivisionSelection = params.get('division') || '';
               const view = params.get('view');
-              showView(navById.has(view) ? view : 'event-setup', undefined, 'replace');
+              showView(initialPermittedView(view), undefined, 'replace');
             });
           }
           pendingDivisionSelection = params.get('division') || '';
           const view = params.get('view');
-          showView(navById.has(view) ? view : 'event-setup', undefined, 'replace');
+          showView(initialPermittedView(view), undefined, 'replace');
         })
         .catch((error) => showNotice(error.message, 'error'));
+      function initialPermittedView(view) {
+        if (!window.BrowserSession) return navById.has(view) ? view : 'event-setup';
+        if (navById.has(view) && window.BrowserSession.canView(view)) return view;
+        return [...navById.keys()].find((candidate) => window.BrowserSession.canView(candidate));
+      }
     }());
   </script>
 </body>

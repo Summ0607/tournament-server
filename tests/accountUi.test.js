@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { DEFAULT_ACCOUNT_POLICY } = require('../backend/accountPolicy');
 
-async function harness({ view = 'users', initialSession = false, role = 'administrator' } = {}) {
+async function harness({ view = 'users', initialSession = false, role = 'administrator', returnTo = '' } = {}) {
   const nodes = new Map(), intervals = [], requests = [], documentHandlers = {}, windowHandlers = {};
   class Node {
     constructor(tag = 'input') {
@@ -33,7 +33,7 @@ async function harness({ view = 'users', initialSession = false, role = 'adminis
   for (const [, tag, id] of html.matchAll(/<(\w+)[^>]*\bid="([^"]+)"/g)) {
     const node = new Node(tag); node.id = id; nodes.set(id, node);
   }
-  for (const value of ['administrator', 'judging-coordinator', 'tournament-operator']) {
+  for (const value of ['administrator', 'judging-coordinator', 'tournament-operator', 'event-coordinator', 'viewer']) {
     const input = new Node(); input.value = value; nodes.get('roles').append(input);
   }
   let loggedIn = initialSession, rejectLogin = false, rejectUserSave = false, revokeSavedSession = false, timestamp = 0;
@@ -48,7 +48,13 @@ async function harness({ view = 'users', initialSession = false, role = 'adminis
       addEventListener: (name, callback) => { documentHandlers[name] = callback; }
     },
     window: { confirm: () => true, addEventListener: (name, callback) => { windowHandlers[name] = callback; } },
-    location: { pathname: `/account/${view}` },
+    location: { pathname: `/account/${view}`, origin: 'https://tourn-svr.home.arpa:3443',
+      search: `?returnTo=${encodeURIComponent(returnTo)}`, replace: (value) => {
+        context.navigationBlocked = false;
+        windowHandlers.beforeunload?.({ preventDefault() { context.navigationBlocked = true; } });
+        context.destination = value;
+      } },
+    URL, URLSearchParams,
     setInterval: (callback) => { intervals.push(callback); },
     Date: { now: () => timestamp },
     fetch: async (url, options) => {
@@ -60,7 +66,8 @@ async function harness({ view = 'users', initialSession = false, role = 'adminis
         if (rejectLogin) { status = 401; data = { error: 'Invalid user ID or password.' }; }
         else { loggedIn = true; data = { account, csrfToken: 'login-csrf' }; }
       } else if (!loggedIn) { status = 401; data = { error: 'Sign in to continue.' }; }
-      else if (endpoint === '/session') data = { account, csrfToken: 'session-csrf' };
+      else if (endpoint === '/session') data = { account, csrfToken: 'session-csrf',
+        homePath: role === 'viewer' ? '/audience-monitor/' : '/tournament-management/?view=event-setup' };
       else if (endpoint === '/logout') { loggedIn = false; status = 204; }
       else if (endpoint === '/activity') data = { account };
       else if (endpoint === '/policy' && options.method === 'GET') data = policy;
@@ -94,9 +101,42 @@ async function harness({ view = 'users', initialSession = false, role = 'adminis
   }
   return { nodes, intervals, requests, documentHandlers, windowHandlers, context, fire, login, flush,
     expire: () => { loggedIn = false; }, rejectLogin: () => { rejectLogin = true; },
+    switchAccount: (userId) => { account.userId = userId; loggedIn = true; },
     revokeOnSave: () => { revokeSavedSession = true; },
     rejectSave: () => { rejectUserSave = true; }, advance: () => { timestamp += 60001; } };
 }
+
+test('login returns to a local workspace or role home without fetching administration data', async () => {
+  const h = await harness({ view: 'login', role: 'viewer', returnTo: '/audience-monitor/?source=active' });
+  await h.login();
+  assert.equal(h.context.destination, '/audience-monitor/?source=active');
+  assert.equal(h.context.navigationBlocked, false);
+  assert.equal(h.requests.some((request) => ['/policy', '/users'].includes(request.endpoint)), false);
+  for (const returnTo of ['https://evil.example', '//evil.example', '/\\evil.example', '/\t/evil.example',
+    '/account/login', '/account/settings', '']) {
+    const rejected = await harness({ view: 'login', role: 'viewer', returnTo });
+    await rejected.login();
+    assert.equal(rejected.context.destination, '/audience-monitor/', returnTo);
+  }
+});
+
+test('unsaved administration drafts can only be resumed by the original account', async () => {
+  const h = await harness({ initialSession: true });
+  h.nodes.get('userId').value = 'unsaved-account';
+  await h.fire('userForm', 'input');
+  h.switchAccount('other-admin');
+  await h.intervals[0]();
+  assert.equal(h.nodes.get('usersPanel').hidden, true);
+  assert.equal(h.nodes.get('loginUser').value, 'admin');
+  assert.equal(h.nodes.get('loginUser').readOnly, true);
+  assert.match(h.nodes.get('status').textContent, /original user/);
+  assert.equal(h.nodes.get('userId').value, 'unsaved-account');
+  h.switchAccount('admin');
+  await h.login();
+  assert.equal(h.nodes.get('usersPanel').hidden, false);
+  assert.match(h.nodes.get('passwordHelp').textContent, /10-128 characters.*uppercase.*lowercase.*number.*special/);
+  assert.equal(h.nodes.get('userId').value, 'unsaved-account');
+});
 
 test('account UI shows login errors explicitly, clears passwords, and does not expose admin panels before login', async () => {
   const h = await harness();
@@ -114,8 +154,8 @@ test('administrator can create/edit users, keeps stale drafts and reauthenticate
   assert.equal(h.nodes.get('usersPanel').hidden, false);
   h.nodes.get('userId').value = 'new-user';
   h.nodes.get('roles').children[2].checked = true;
-  h.nodes.get('userPassword').value = 'a sufficiently long phrase';
-  h.nodes.get('confirmPassword').value = 'a sufficiently long phrase';
+  h.nodes.get('userPassword').value = 'A sufficiently long phrase1!';
+  h.nodes.get('confirmPassword').value = 'A sufficiently long phrase1!';
   await h.fire('userForm', 'input');
   await h.fire('userForm', 'submit');
   const creation = h.requests.find((r) => r.endpoint === '/users' && r.method === 'POST');
@@ -143,6 +183,8 @@ test('administrator can create/edit users, keeps stale drafts and reauthenticate
 test('settings render every policy field and changed saves require reauthentication while unchanged saves do not', async () => {
   const h = await harness({ view: 'settings', initialSession: true });
   for (const key of Object.keys(DEFAULT_ACCOUNT_POLICY)) assert.ok(h.nodes.has(`policy-${key}`));
+  assert.equal(h.nodes.get('policy-passwordMinLength').min, '10');
+  assert.equal(h.nodes.get('policy-passwordMinLength').value, 10);
   await h.fire('policyForm', 'submit');
   assert.match(h.nodes.get('status').textContent, /unchanged/);
   assert.equal(h.nodes.get('loginPanel').hidden, true);

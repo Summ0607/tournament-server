@@ -66,13 +66,12 @@ Validate with `npm run test:app-release`.
 
 ## Local security foundation (in progress)
 
-The staged HTTPS listener mounts the protected account API and browser account UI.
-**Only account administration is authorized at this checkpoint. Existing tournament
-pages/APIs remain unauthenticated on both transports, and transitional tablet HTTP
-remains unencrypted. This is not a completed security rollout.** Use only on the
-trusted tournament network; do not expose this installation to untrusted networks.
-Tablet HTTPS/trust/device authorization and tournament-wide role enforcement are
-required before removing legacy HTTP and declaring the rollout complete.
+Browser pages and tournament APIs now require HTTPS, sign-in and role permissions.
+**Exact native-tablet calls retain a temporary unauthenticated exception, and
+transitional tablet HTTP remains unencrypted. This is not a completed security
+rollout.** The app already supports HTTPS with the public CA. Device enrollment
+and removal of legacy HTTP are still required. Use only on the trusted tournament
+network; do not expose this installation to untrusted networks.
 
 ### Private Root CA and staged HTTPS setup
 
@@ -120,13 +119,35 @@ Start one surface, or all three existing desktop surfaces:
 $env:TOURNAMENT_HTTPS_CONFIG = "C:\TournamentPrivate\https\server.json"
 node server-launcher.js
 # Or, in a fresh terminal:
-.\launch-surfaces.ps1 -OpenBrowser
+.\launch-surfaces.ps1
 ```
 
-The launcher starts all three server PowerShell windows minimized.
-`-OpenBrowser` opens only Tournament Management, not the two progress pages.
-Omit it to start the servers without opening a browser. Do not append
+The launcher starts all three server PowerShell windows minimized and opens
+**only Tournament Management home** once all three report ready, not the two
+progress pages. `-OpenBrowser` remains accepted and is now on by default;
+use `-OpenBrowser:$false` to suppress the initial browser launch. Do not append
 `-WindowStyle`; minimization is handled inside the launcher.
+
+**Administration → Server Maintenance → Restart all three services** now drains
+and restarts the Tournament Management, Monitoring and Administration Progress
+services together. Their existing console windows are minimized, and Tournament
+Management home opens in the default browser only after all three replacement
+processes are ready. Simulations stop and are saved; they do not resume
+automatically. Restart remains protected by Administrator authorization, a local
+socket source, a restart token and typed `RESTART` confirmation.
+
+The launcher's supervisors coordinate through a per-launch local named pipe with
+a random token. A missing/disconnected service disables coordinated restart;
+timeouts and browser-launch failures are reported explicitly. Occupied service
+ports are checked before any windows launch, to avoid duplicate groups.
+Running `node server-launcher.js` alone retains **single-service restart**, clearly
+identified in the UI.
+
+**One-time migration:** stop the three old services with Ctrl+C, then run
+`.\launch-surfaces.ps1` once. Existing independent launchers cannot acquire a shared
+coordinator merely by refreshing the browser or restarting their child server.
+After that, use the Administration restart button. Validate with
+`npm run test:services` (uses isolated processes, not the live tournament services).
 
 | Surface | Secure entry | Temporary unsecured port |
 | --- | --- | --- |
@@ -147,16 +168,65 @@ the public Root CA certificate** in the appropriate client trusted-root store.
 Trust installation is intentionally deferred for this delivery. Do not bypass
 certificate warnings, disable validation, or distribute either private key.
 `localhost` is not a certificate SAN: use the DNS name or fixed IP for HTTPS.
-Existing local-only Server Maintenance remains available through
-`http://localhost:3000/admin/`; HTTPS access by DNS/IP does not bypass its separate
-localhost-only restriction.
+Server Maintenance requires an Administrator session over the configured HTTPS
+DNS/IP address **on the server computer**. The socket source must be loopback or
+one of this computer's interface addresses; another LAN computer is still denied.
+The restart token and typed confirmation remain required for coordinated restart.
 
-Direct startup without `TOURNAMENT_HTTPS_CONFIG` retains the legacy HTTP-only
-behavior, emits an unsecured warning, and blocks account UI/API access.
-`launch-surfaces.ps1 -HttpOnly` explicitly selects that legacy mode; the default
-launcher requires the private HTTPS configuration. HTTP account pages explain how
-to open the canonical HTTPS interface; login and account API calls are rejected
-on HTTP. Existing tablet endpoints remain unchanged during this migration.
+Direct startup without `TOURNAMENT_HTTPS_CONFIG` and the explicit
+`launch-surfaces.ps1 -HttpOnly` mode retain **native-tablet compatibility only**,
+not the old unauthenticated browser interface. Browser pages/APIs are blocked on
+HTTP (426), and login/password submission is rejected. The default launcher
+requires the private HTTPS configuration. Restart all three surfaces after this
+update so they consistently apply the new authorization policy.
+
+### Browser roles and sign-in
+
+Roles apply to **all tournaments** for now. Multiple roles combine permissions;
+existing accounts keep their existing roles, and no accounts are automatically
+created or promoted.
+
+| Role | Access |
+| --- | --- |
+| Administrator | All functions, users/settings, global definitions, simulator and local Server Maintenance |
+| Event Coordinator | Tournament preparation and day-of functions; Clinic Management (Under Development) |
+| Judging Coordinator | Volunteers/types, Ring Judges and judge assignments; Judging Management (Under Development) |
+| Tournament Operator | Ring Assignment, Head Table and Audience Viewer only |
+| Viewer | Read-only Audience Viewer only; not Head Table |
+
+Use **Administration → Users** to assign Event Coordinator or Viewer explicitly;
+Event Coordinator is an additional role, not a rename of Tournament Operator.
+Under Development pages are placeholders, not newly implemented clinic/judging
+management workflows. Global Schools, Ranks and Visual Definitions editing remains
+Administrator-only.
+
+Opening a protected page while signed out redirects to `/account/login`, then
+returns to a local destination (or the role's home). APIs return 401 when signed
+out and 403 when a role is insufficient. Server-side method/path permissions
+apply even when a hidden control or URL is invoked directly. Unknown API routes
+and raw repository files cannot bypass the page/API policy.
+
+Tournament pages show the current identity, Home and Sign out. When a session
+expires, a modal reauthentication form keeps the page and its edits in memory,
+clears password fields, and requires the original user to resume. Reads may retry
+once after sign-in; mutations are **never replayed automatically**. Review and
+save again after an expired save. Role changes are reflected in navigation;
+revoked workspaces are blocked without discarding drafts. Existing division-draft
+storage is unchanged; authentication does not newly persist form drafts/passwords.
+
+Viewer accounts on smart TVs need a compatible HTTPS browser and trust for the
+public CA. They follow the same idle/absolute session limits as other users:
+background display refresh is **not** activity, and there is no Remember Me or
+always-on exemption. Verify CA installation and sign-in on each actual display.
+
+The temporary native exception is limited to `GET /api/version`, `/download-app`,
+`/api/events/active`, `/api/rings/config`, `/api/rings/:id/current`, and
+`POST /api/rings/:id/{request-group,heartbeat,complete,assistance,assistance/clear}`.
+It requires the Android `Dalvik/` user agent and no Origin, Cookie or Fetch
+Metadata headers. **These headers are spoofable by non-browser clients; this is
+not device authentication.** Device enrollment must replace this exception.
+`GET /api/health` and `/api/https-status` are public diagnostics. Public frontend
+assets contain no credentials; other repository files are blocked.
 
 Certificate renewal must retain the trusted CA, not create a replacement CA on
 every renewal. Before the server certificate expires, use the protected CA key
@@ -169,20 +239,33 @@ Validate with `npm run test:https`; tests generate isolated certificates/account
 do not install trust, and do not modify tournament data.
 
 `backend/accountSessions.js` stores accounts and browser sessions in SQLite at an
-explicit absolute path **outside this repository**, which is currently web-served.
+explicit absolute path **outside this repository**. Browser access is allowlisted,
+but private account/certificate material must still never be placed in the repository.
 OS access controls must restrict this database and its containing directory to the
 server/setup account; the file-mode hints do not replace Windows ACLs.
-Passwords are salted and hashed with scrypt (N=131072, r=8, p=1), default to 15–128
-characters including spaces, and are never returned in account responses. Session
+Passwords are salted and hashed with scrypt (N=131072, r=8, p=1), default to 10–128
+characters, and are never returned in account responses. New accounts, password
+resets and local administrator recovery require at least one uppercase letter
+(A-Z), lowercase letter (a-z), number (0-9), and special character (punctuation or
+symbol). Spaces are allowed but do not count as special characters. Existing
+passwords remain valid for sign-in without meeting the new composition rules.
+
+On the first updated startup, the external account database is upgraded once:
+the previous default minimum of 15 becomes 10; other saved minimums and all
+other settings are retained. The policy revision increases, browser sessions and
+login-failure counters are cleared, and the upgrade is audited. Password hashes
+and accounts are unchanged. Subsequent startups preserve administrator-selected
+minimums, including 15. Restart all services after updating, then sign in again.
+
+Session
 tokens are random and only their SHA-256 digests are persisted.
 
 By default, browser sessions expire after 30 minutes without explicit user activity, or
 12 hours absolutely. Merely checking a session does not refresh it. Sessions
 survive server restarts; concurrent logins are independent and logout revokes only
 the selected session. Account disabling always revokes all sessions; password
-resets and role changes do so by default. Administrator/coordinator/operator roles are stored;
-tournament-wide route permissions and device
-enrollment remain subsequent work. Trusted local account mutations
+resets and role changes do so by default. Browser route permissions use current
+account roles on every request; device enrollment remains subsequent work. Trusted local account mutations
 record an audit actor and reject stale account revisions.
 
 Per-account login throttling persists across restarts: by default, five failures in fifteen
@@ -205,7 +288,7 @@ The editable settings and validation limits are:
 | Setting | Default | Allowed |
 | --- | --- | --- |
 | User ID minimum / maximum | 3 / 64 characters | 3–64; minimum ≤ maximum |
-| Password minimum / maximum | 15 / 128 characters | Minimum 15–128, maximum 64–128; minimum ≤ maximum |
+| Password minimum / maximum | 10 / 128 characters | Minimum 10–128, maximum 64–128; minimum ≤ maximum; uppercase, lowercase, number and special character always required for new/reset passwords |
 | Browser idle timeout | 30 minutes | 5–120 minutes |
 | Absolute session duration | 12 hours | 1–24 hours; at least the idle timeout |
 | Failed-login threshold | 5 | 3–10 |
@@ -225,14 +308,16 @@ The UI destinations are **Administration → Users** (add, roles,
 enable/disable, password reset; no deletion) and **Administration → User Account
 Settings**. They require HTTPS and an administrator session. Sign-in is also
 available at `/account/login`. Session polling does not extend idle time;
-trusted pointer/keyboard activity on account screens does, at most once per minute.
+trusted pointer/keyboard activity on account and tournament screens does, at most once per minute.
 On session expiry/revocation, the inline sign-in form preserves unsaved account
 edits in memory but clears password fields. Navigation warns before discarding
 unsaved edits. Drafts/passwords are never saved in browser storage. Stale writes
 show an error and retain the draft until the user explicitly reloads.
-These guarantees apply to account screens; edit preservation for existing
-tournament screens during future authentication enforcement remains subsequent work. Device
-authorization and certificate policies are separate from these account settings.
+Account drafts must also be resumed by the original user after an account switch
+in another tab. The settings page groups identifier/password rules, session
+limits, failed-sign-in protection and revocation options. Email, personal contact
+fields, deletion and Remember Me are not implemented. Device authorization and
+certificate policies are separate from these account settings.
 
 ### Local account setup and administrator recovery
 
@@ -825,9 +910,9 @@ Volunteer Lookup remains future work. Validate with `npm test` and
 
 ## Audience Monitor
 
-On `feature/audience-monitor-lookup`, the standalone audience display is available
-at **`http://localhost:3000/audience-monitor/`** (or the same path on the
-monitoring server at port 3002). Head Table includes an **Audience Monitor**
+The standalone audience display is available
+at **`https://tourn-svr.home.arpa:3443/audience-monitor/`** (or the same path on the
+monitoring server at port 3445), with a permitted browser account. Head Table includes an **Audience Monitor**
 link that opens a separate tab. Restart the server and refresh to load the
 new routes and API. Existing Event Progress routes and surface entry points
 remain unchanged.
@@ -1153,7 +1238,7 @@ Run `npm test` for help behavior and workflow regressions.
 
 ## Pre-tournament management
 
-Start the server with `node group-server.js` and open `http://localhost:3000/`,
+Start the server with the private HTTPS configuration and open `https://tourn-svr.home.arpa:3443/`,
 which redirects to the integrated interface at `/tournament-management/`.
 The dark, expandable sidebar retains the event banner and existing details panels.
 Its hierarchy is:
@@ -1418,11 +1503,11 @@ backend and data model.
 
 The active surface can be selected with the `TOURNAMENT_SURFACE` environment
 variable. If unset, the server defaults to `pre`.
-Use `monitoring` for the public Event Progress view and `adminProgress` for the
+Use `monitoring` for the authenticated Head Table/Event Progress view and `adminProgress` for the
 Administration Progress View.
 Exact entry points:
-- `http://localhost:3002/event-progress/` for the public Event Progress view
-- `http://localhost:3004/administration-progress/` for the Administration Progress view
+- `https://tourn-svr.home.arpa:3445/event-progress/` for the authenticated Event Progress view
+- `https://tourn-svr.home.arpa:3447/administration-progress/` for the authenticated Administration Progress view
 Launcher: [launch-surfaces.ps1](./launch-surfaces.ps1)
 
 Ring layout dimensions are saved in each event's `event-config.json` as numeric

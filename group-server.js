@@ -43,6 +43,8 @@ let httpServer;
 let httpsServer;
 let accountStore;
 let accountWeb;
+let serviceGroupState = { restartAvailable: false, restarting: false,
+  message: 'Waiting for the three-service launcher. Start using launch-surfaces.ps1.' };
 const httpsConfig = loadHttpsConfig(process.env.TOURNAMENT_HTTPS_CONFIG);
 let shuttingDown = false;
 const ACTIVE_SURFACE = resolveSurfaceName(process.env.TOURNAMENT_SURFACE);
@@ -212,8 +214,15 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '50mb' }));
 app.use('/api/server-control', createServerControl({
+  allowedHosts: httpsConfig ? httpsOrigins(httpsConfig, ACTIVE_SURFACE).map((origin) => new URL(origin).host) : [],
   enabled: process.env.TOURNAMENT_MANAGED_SERVER === '1' && typeof process.send === 'function',
-  requestRestart: () => { shutdownServer(true); }
+  getGroupState: process.env.TOURNAMENT_SERVICE_GROUP ? () => serviceGroupState : undefined,
+  requestRestart: () => {
+    if (process.env.TOURNAMENT_SERVICE_GROUP) process.send({ type: 'restart-services' }, (error) => {
+      if (error) console.error('Unable to request service-group restart:', error);
+    });
+    else shutdownServer(true);
+  }
 }));
 app.use((req, res, next) => {
   if (req.socket.encrypted) return next();
@@ -1364,7 +1373,8 @@ async function startServer() {
     httpServer = require('node:http').createServer(app);
     await listen(httpServer, PORT);
     console.warn(`UNSECURED transitional HTTP: http://localhost:${PORT}${SURFACE_ENTRY_PATH}`);
-    console.warn('Tournament pages/APIs are not yet authorized. Account administration requires configured HTTPS. Do not expose this staged installation to untrusted networks.');
+    console.warn('Browser access requires configured HTTPS and role authorization. Exact native-tablet endpoints remain temporarily unauthenticated. Do not expose this staged installation to untrusted networks.');
+    if (process.connected) process.send({ type: 'server-ready' });
   } catch (error) {
     await Promise.all([httpServer, httpsServer].filter((server) => server?.listening)
       .map((server) => new Promise((resolve) => server.close(resolve))));
@@ -1407,6 +1417,8 @@ process.on('SIGINT', () => { shutdownServer(); });
 process.on('SIGTERM', () => { shutdownServer(); });
 process.on('message', (message) => {
   if (message && message.type === 'shutdown') shutdownServer();
+  if (message && message.type === 'restart') shutdownServer(true);
+  if (message && message.type === 'services-state') serviceGroupState = message.state;
 });
 
 startServer().catch(async (error) => {

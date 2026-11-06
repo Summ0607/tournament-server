@@ -4,7 +4,7 @@
   const policyDefinitions = [
     ['userIdMinLength', 'User ID minimum length', 3, 64],
     ['userIdMaxLength', 'User ID maximum length', 3, 64],
-    ['passwordMinLength', 'Password minimum length', 15, 128],
+    ['passwordMinLength', 'Password minimum length', 10, 128],
     ['passwordMaxLength', 'Password maximum length', 64, 128],
     ['idleTimeoutMinutes', 'Idle timeout (minutes)', 5, 120],
     ['absoluteTimeoutHours', 'Absolute session duration (hours)', 1, 24],
@@ -16,8 +16,10 @@
     ['revokeOnPasswordReset', 'Revoke sessions on password reset'],
     ['revokeOnRoleChange', 'Revoke sessions on role change']
   ];
-  const view = location.pathname === '/account/settings' ? 'settings' : 'users';
-  let session = null, csrfToken = '', accounts = [], selected = null, savedPolicy = null;
+  const view = location.pathname === '/account/login' ? 'login'
+    : location.pathname === '/account/profile' ? 'profile'
+      : location.pathname === '/account/settings' ? 'settings' : 'users';
+  let session = null, csrfToken = '', accounts = [], selected = null, savedPolicy = null, editorUserId = '';
   let userDirty = false, policyDirty = false, busy = false, lastActivity = 0;
   let usersLoaded = false, policyLoaded = false;
   function status(message, error = false) {
@@ -34,13 +36,19 @@
     $('usersPanel').hidden = !admin || view !== 'users';
     $('policyPanel').hidden = !admin || view !== 'settings';
     $('sessionDetails').textContent = session
-      ? `Signed in as ${session.account.userId} (${session.account.roles.join(', ')}).`
+      ? `Signed in as ${session.account.userId} (${session.account.roles.map((role) => session.roleLabels?.[role] || role).join(', ')}).`
       : '';
+    document.querySelectorAll('[data-admin-link]').forEach((link) => { link.hidden = !admin; });
+    if (session) $('accountHome').href = session.homePath;
   }
   function signedOut(message) {
     session = null;
     csrfToken = '';
     clearPasswords();
+    if ((userDirty || policyDirty) && editorUserId) {
+      $('loginUser').value = editorUserId;
+      $('loginUser').readOnly = true;
+    }
     renderSession();
     status(message, true);
   }
@@ -53,7 +61,9 @@
     const data = response.status === 204 ? null : await response.json();
     if (!response.ok) {
       if (response.status === 401 && endpoint !== '/login') {
-        signedOut('Your session expired or was revoked. Unsaved edits are retained on this page; sign in again. Password fields were cleared.');
+        signedOut(session || editorUserId
+          ? 'Your session expired or was revoked. Unsaved edits are retained on this page; sign in again. Password fields were cleared.'
+          : 'Sign in to continue. Use an account provided by your administrator.');
       }
       const error = new Error(data?.error || `Account request failed (${response.status}).`);
       error.status = response.status;
@@ -77,7 +87,13 @@
   }
   async function checkSession() {
     const next = await request('/session');
+    if ((userDirty || policyDirty) && editorUserId && next.account.userId !== editorUserId) {
+      signedOut('A different account signed in in another tab. Sign in as the original user to resume these unsaved edits.');
+      throw Object.assign(new Error('Sign in as the original user to resume these edits.'), { status: 401, sessionExpired: true });
+    }
     session = next;
+    editorUserId = next.account.userId;
+    $('loginUser').readOnly = false;
     csrfToken = next.csrfToken;
     renderSession();
     return next;
@@ -87,6 +103,7 @@
   }
   window.canLeaveAccountPage = () => canDiscard(userDirty || policyDirty);
   window.addEventListener('beforeunload', (event) => {
+    if (view === 'login') return;
     if (!userDirty && !policyDirty && !busy) return;
     event.preventDefault();
     event.returnValue = '';
@@ -95,6 +112,21 @@
     if (!window.canLeaveAccountPage()) event.preventDefault();
     else { userDirty = false; policyDirty = false; }
   }));
+  const policyGroups = [
+    ['Identifiers and passwords', 'New/reset passwords require uppercase (A-Z), lowercase (a-z), a number (0-9), and a special character. Spaces do not count as special characters. Existing passwords still work. Email delivery and self-service recovery are not enabled.', ['userIdMinLength', 'userIdMaxLength', 'passwordMinLength', 'passwordMaxLength']],
+    ['Browser sessions', 'Background refreshes do not count as activity. An unattended Audience Viewer signs out at the same idle deadline as other browser sessions.', ['idleTimeoutMinutes', 'absoluteTimeoutHours', 'allowConcurrentSessions', 'logoutAllSessions']],
+    ['Failed sign-in protection', 'Repeated failures cause a cooldown. A separate per-source limit is configured in the private HTTPS configuration.', ['failureThreshold', 'failureWindowMinutes', 'cooldownMinutes']],
+    ['Revoking existing sessions', 'Disabled accounts always lose access. When role-change revocation is off, each request still checks current permissions.', ['revokeOnPasswordReset', 'revokeOnRoleChange']]
+  ];
+  const policyContainers = new Map();
+  for (const [title, help, keys] of policyGroups) {
+    const fieldset = document.createElement('fieldset');
+    const legend = document.createElement('legend'); legend.textContent = title;
+    const description = document.createElement('p'); description.textContent = help;
+    fieldset.append(legend, description);
+    $('policyFields').append(fieldset);
+    for (const key of keys) policyContainers.set(key, fieldset);
+  }
   for (const [key, title, min, max] of policyDefinitions) {
     const label = document.createElement('label');
     const input = document.createElement('input');
@@ -104,7 +136,7 @@
       input.min = String(min); input.max = String(max); input.step = '1'; input.required = true;
     }
     label.append(document.createTextNode(title), input);
-    $('policyFields').append(label);
+    policyContainers.get(key).append(label);
   }
   function renderPolicy() {
     for (const [key, , min] of policyDefinitions) {
@@ -113,7 +145,7 @@
       else input.value = savedPolicy.policy[key];
     }
     policyDirty = false;
-    $('passwordHelp').textContent = `Passwords: ${savedPolicy.policy.passwordMinLength}-${savedPolicy.policy.passwordMaxLength} characters; spaces allowed. User IDs: ${savedPolicy.policy.userIdMinLength}-${savedPolicy.policy.userIdMaxLength} characters.`;
+    $('passwordHelp').textContent = `Passwords: ${savedPolicy.policy.passwordMinLength}-${savedPolicy.policy.passwordMaxLength} characters, including uppercase (A-Z), lowercase (a-z), number (0-9), and a special character. Spaces are allowed but do not count as special characters. User IDs: ${savedPolicy.policy.userIdMinLength}-${savedPolicy.policy.userIdMaxLength} characters.`;
   }
   async function loadPolicy() {
     savedPolicy = await request('/policy');
@@ -147,7 +179,7 @@
     $('users').replaceChildren();
     for (const account of accounts) {
       const row = document.createElement('tr');
-      for (const text of [account.userId, account.roles.join(', '), account.enabled ? 'Enabled' : 'Disabled']) {
+      for (const text of [account.userId, account.roles.map((role) => session.roleLabels?.[role] || role).join(', '), account.enabled ? 'Enabled' : 'Disabled']) {
         const cell = document.createElement('td');
         cell.textContent = text;
         row.append(cell);
@@ -160,13 +192,22 @@
     }
   }
   async function loadAdministration() {
+    if (view === 'login') {
+      const requested = new URLSearchParams(location.search).get('returnTo') || '';
+      const local = /^\/(?!\/)/.test(requested) && !/[\\\x00-\x20]/.test(requested);
+      const target = new URL(local ? requested : session.homePath, location.origin);
+      location.replace(target.origin === location.origin && !target.pathname.startsWith('/account')
+        ? `${target.pathname}${target.search}${target.hash}` : session.homePath);
+      return;
+    }
+    if (view === 'profile') { status('Signed in. Use Home to open your permitted workspace.'); return; }
     if (!session.account.roles.includes('administrator')) {
       status('Signed in. Administrator permission is required for Users and User Account Settings.', true);
       return;
     }
     if (!policyLoaded) await loadPolicy();
     if (!usersLoaded && view === 'users') await loadUsers();
-    status('Account administration ready. Tournament authorization is not yet enforced.');
+    status('Account administration ready. Browser role permissions apply to all tournaments.');
   }
   $('loginForm').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -184,6 +225,8 @@
     run(async () => {
       await request('/logout', { method: 'POST', body: {} });
       resetUser(); policyDirty = false; policyLoaded = false; usersLoaded = false;
+      editorUserId = '';
+      $('loginUser').readOnly = false;
       signedOut('Signed out.');
     });
   });
@@ -255,7 +298,8 @@
     try { await checkSession(); }
     catch (error) { if (error.status !== 401) status(`Unable to check session: ${error.message}`, true); }
   }, 30000);
-  $('pageTitle').textContent = view === 'settings' ? 'User Account Settings' : 'Users';
+  $('pageTitle').textContent = view === 'settings' ? 'User Account Settings'
+    : view === 'login' ? 'Sign in' : view === 'profile' ? 'Your Account' : 'Users';
   resetUser();
   run(async () => { await checkSession(); await loadAdministration(); });
 })();

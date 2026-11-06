@@ -397,27 +397,46 @@ test('event APIs synchronize an active event, lock every field, and archive/rese
   fs.mkdirSync(path.join(root, 'db'));
   await initializeDatabase(path.join(root, 'db', 'tournament.db'));
   const filename = path.join(__dirname, '..', 'group-server.js');
+  const { configFile, config } = require('./helpers/httpsFixture').createHttpsFixture(root);
+  const tlsConfig = require('../backend/httpsConfig').loadHttpsConfig(configFile);
+  const accounts = await require('../backend/accountSessions').createAccountSessions({ file: config.accountDatabase });
+  await accounts.createAccount({ userId: 'admin', password: 'A long isolated test password1!', roles: ['administrator'], actor: 'test' });
   // Run the real routes against an isolated event root without starting fixed-port listeners.
-  const source = fs.readFileSync(filename, 'utf8').replace(/^startServer\(\);$/m, '') +
-    '\nreturn { app, db, simulatorRouter };';
+  const source = fs.readFileSync(filename, 'utf8').replace(/\nstartServer\(\)\.catch\(async \(error\) => \{[\s\S]*?\n\}\);/, '') +
+    '\nreturn { app, db, simulatorRouter, authorize: (store, config) => { accountWeb = createAccountWeb({store, config, surface: "pre"}); } };';
   const loadServer = vm.compileFunction(source, ['require', '__dirname', 'console', 'process'], { filename });
-  const { app, db, simulatorRouter } = loadServer(createRequire(filename), root,
+  const { app, db, simulatorRouter, authorize } = loadServer(createRequire(filename), root,
     { log() {}, warn() {}, error() {} }, { env: {}, argv: [], on() {} });
+  authorize(accounts, tlsConfig);
+  const https = require('node:https');
   const server = await new Promise((resolve) => {
-    const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    const listening = https.createServer(tlsConfig.options, app).listen(0, '127.0.0.1', () => resolve(listening));
   });
   t.after(async () => {
     await new Promise((resolve) => server.close(resolve));
     await simulatorRouter.shutdown();
     await new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
+    await accounts.close();
     fs.rmSync(root, { recursive: true, force: true });
   });
-  const request = async (route, body) => {
-    const response = await fetch(`http://127.0.0.1:${server.address().port}/api${route}`, body === undefined ? {} : {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  let cookie = '', csrfToken = '';
+  const request = (route, body) => new Promise((resolve, reject) => {
+    const req = https.request({ hostname: '127.0.0.1', port: server.address().port, path: `/api${route}`,
+      servername: config.hostname, ca: fs.readFileSync(config.caFile), method: body === undefined ? 'GET' : 'POST',
+      headers: { Host: 'tourn-svr.home.arpa:3443', Origin: 'https://tourn-svr.home.arpa:3443',
+        Cookie: cookie, 'X-CSRF-Token': csrfToken, 'Content-Type': 'application/json' }
+    }, (res) => {
+      let raw = '';
+      res.on('data', (data) => { raw += data; });
+      res.on('end', () => resolve({ status: res.statusCode, data: JSON.parse(raw), headers: res.headers }));
     });
-    return { status: response.status, data: await response.json() };
-  };
+    req.on('error', reject);
+    req.end(body === undefined ? undefined : JSON.stringify(body));
+  });
+  const login = await request('/account/login', { userId: 'admin', password: 'A long isolated test password1!' });
+  assert.equal(login.status, 200);
+  cookie = login.headers['set-cookie'][0].split(';')[0];
+  csrfToken = login.data.csrfToken;
   const metadata = { eventName: 'Event', ringConfigX: 4, ringConfigY: 4, tournamentDays: 2, location: 'Venue', scope: 'national' };
   assert.equal((await request('/events/create', { ...metadata, eventName: 'Invalid', scope: 'Regional' })).status, 400);
   assert.equal(fs.existsSync(path.join(root, 'events', 'Invalid')), false);

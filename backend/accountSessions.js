@@ -8,7 +8,7 @@ const { DEFAULT_ACCOUNT_POLICY, validateAccountPolicy } = require('./accountPoli
 const scrypt = promisify(crypto.scrypt);
 const IDLE_MS = 30 * 60 * 1000;
 const ABSOLUTE_MS = 12 * 60 * 60 * 1000;
-const ROLES = ['administrator', 'judging-coordinator', 'tournament-operator'];
+const ROLES = Object.keys(require('./browserPermissions').ROLE_LABELS);
 const HASH_OPTIONS = { N: 131072, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 
@@ -40,6 +40,10 @@ function validatePassword(password, policy) {
   if (typeof password !== 'string' || Array.from(password).length < policy.passwordMinLength ||
       Array.from(password).length > policy.passwordMaxLength) {
     invalid(`Password must contain ${policy.passwordMinLength} to ${policy.passwordMaxLength} characters. Spaces are allowed.`);
+  }
+  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) ||
+      !/[\p{P}\p{S}]/u.test(password)) {
+    invalid('Password must include at least one uppercase letter (A-Z), lowercase letter (a-z), number (0-9), and special character. Spaces do not count as special characters.');
   }
 }
 
@@ -102,8 +106,36 @@ async function createAccountSessions({ file, now = Date.now }) {
     await run(`CREATE TABLE IF NOT EXISTS account_policy (
       id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL, settings TEXT NOT NULL
     )`);
-    await run('INSERT OR IGNORE INTO account_policy(id, revision, settings) VALUES (1, 1, ?)',
-      [JSON.stringify(DEFAULT_ACCOUNT_POLICY)]);
+    await run('BEGIN IMMEDIATE');
+    try {
+      let upgradedMinimum;
+      const saved = await get('SELECT revision, settings FROM account_policy WHERE id = 1');
+      const { user_version: version } = await get('PRAGMA user_version');
+      if (version > 1) throw new Error('Account database requires a newer server version.');
+      if (!saved) {
+        await run('INSERT INTO account_policy(id, revision, settings) VALUES (1, 1, ?)',
+          [JSON.stringify(DEFAULT_ACCOUNT_POLICY)]);
+      } else if (version === 0) {
+        const policy = validateAccountPolicy(JSON.parse(saved.settings));
+        if (policy.passwordMinLength === 15) policy.passwordMinLength = 10;
+        await run('UPDATE account_policy SET revision = revision + 1, settings = ? WHERE id = 1',
+          [JSON.stringify(policy)]);
+        await run('DELETE FROM browser_sessions');
+        await run('DELETE FROM login_attempts');
+        await run('INSERT INTO account_audit(timestamp, action, actor, user_id) VALUES (?, ?, ?, ?)',
+          [now(), 'password-rules-updated-sessions-revoked', 'system:password-policy-upgrade', '*']);
+        upgradedMinimum = policy.passwordMinLength;
+      }
+      await run('PRAGMA user_version = 1');
+      await run('COMMIT');
+      if (upgradedMinimum !== undefined) {
+        console.warn(`Password rules updated: minimum ${upgradedMinimum} characters with uppercase, lowercase, number and special character for new/reset passwords. Browser sessions revoked; existing passwords still work.`);
+      }
+    } catch (error) {
+      try { await run('ROLLBACK'); }
+      catch (rollbackError) { console.error('Unable to roll back account policy upgrade:', rollbackError); }
+      throw error;
+    }
     fs.chmodSync(file, 0o600);
   } catch (error) {
     await closeDatabase();

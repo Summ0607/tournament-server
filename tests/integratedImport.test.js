@@ -151,6 +151,7 @@ async function loadPage(options = {}) {
     clearTimeout(id) { timers.delete(id); },
     console: { warn: (...args) => errors.push(args), error: (...args) => errors.push(args) },
     window: {
+      BrowserSession: options.browserSession,
       location,
       history,
       matchMedia: () => media,
@@ -373,6 +374,7 @@ async function loadPage(options = {}) {
     nav: (id) => navById.get(id),
     navGroups, externalLinks,
     history: async (delta) => { history.go(delta); await settle(); },
+    permissionsChanged: () => windowHandlers['browser-permissions-changed'](),
     historyLength: () => entries.length,
     key: (id, key) => dispatch(elements.get(id), 'keydown', { key, preventDefault() {} }),
     resize: (mobile) => { media.matches = mobile; media.change(); },
@@ -654,11 +656,12 @@ test('navigation destinations have stable IDs, approved labels and native Admini
     'event-setup': 'Tournament', competitors: 'Competitors', volunteers: 'Volunteers', 'volunteer-types': 'Volunteer Types', groups: 'Divisions',
     results: 'Results', 'team-management': 'Teams', 'team-settings': 'Settings', 'ring-judges': 'Ring Judges',
     'judge-assignments': 'Judge Assignments', 'ring-assignment': 'Division Assignments',
-    'head-table': 'Head Table', printing: 'Printing', 'csv-settings': 'CSV Settings',
-    'judge-management': 'Judge Management', 'clinic-management': 'Clinic Management',
+    'head-table': 'Head Table', 'audience-viewer': 'Audience Viewer', printing: 'Printing', 'csv-settings': 'CSV Settings',
+    'judge-management': 'Judging Management', 'clinic-management': 'Clinic Management',
     'event-history': 'Event History', 'your-account': 'Your Account', 'visual-definitions': 'Visual Definitions',
     'server-maintenance': 'Server Maintenance', simulator: 'Simulator', schools: 'Schools', ranks: 'Ranks',
-    'competition-types': 'Competition Types', 'grand-champion-categories': 'Grand Champion Categories', 'medal-points': 'Medal Points'
+    'competition-types': 'Competition Types', 'grand-champion-categories': 'Grand Champion Categories', 'medal-points': 'Medal Points',
+    users: 'Users', 'user-account-settings': 'User Account Settings'
   };
   assert.equal([...html.matchAll(/data-nav-id="/g)].length, Object.keys(expected).length);
   for (const [id, label] of Object.entries(expected)) assert.equal(page.nav(id).getAttribute('data-nav-label'), label);
@@ -676,6 +679,36 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   assert.equal(page.element('workspacePanel').getAttribute('aria-label'), 'Divisions workspace');
   assert.equal(page.nav('groups').getAttribute('aria-current'), 'page');
   assert.equal(page.nav('event-setup').hasAttribute('aria-current'), false);
+});
+
+test('role-limited shell selects an allowed initial workspace and rejects programmatic forbidden navigation', async () => {
+  const views = new Set(['ring-assignment', 'head-table', 'audience-viewer', 'your-account']);
+  const page = await loadPage({ activeEvent: spring,
+    browserSession: { ready: Promise.resolve(), canView: (view) => views.has(view) } });
+  assert.equal(page.element('ringAssignmentView').hidden, false);
+  assert.equal(page.element('tournamentReferenceSelect').disabled, true);
+  await page.navigate('users');
+  assert.equal(page.element('ringAssignmentView').hidden, false);
+  assert.match(page.element('notice').textContent, /role does not permit/);
+  await page.navigate('head-table');
+  assert.equal(page.element('headTableView').hidden, false);
+});
+
+test('revoked workspaces retain edits and block controls without disabling permitted navigation', async () => {
+  const views = new Set(['event-setup', 'ring-assignment']);
+  const page = await loadPage({ browserSession: { ready: Promise.resolve(), canView: (view) => views.has(view) } });
+  await page.click('createEventBtn');
+  page.element('eventNameInput').value = 'Retained tournament draft';
+  views.delete('event-setup');
+  page.permissionsChanged();
+  assert.equal(page.element('workspacePanel').inert, true);
+  assert.equal(page.element('detailsPanel').inert, true);
+  assert.notEqual(page.element('pageContent').inert, true);
+  assert.equal(page.element('eventNameInput').value, 'Retained tournament draft');
+  views.add('event-setup');
+  page.permissionsChanged();
+  assert.equal(page.element('workspacePanel').inert, false);
+  assert.equal(page.element('eventNameInput').value, 'Retained tournament draft');
 });
 
 test('Administration tools stay in the shell, unload on exit, and obey unsaved draft guards', async () => {
@@ -843,8 +876,8 @@ test('Head Table links open under Ring Management and tolerate storage failures'
   await unavailable.click('navAdministration');
   assert.equal(unavailable.element('navAdministrationChildren').hidden, false);
   await unavailable.navigate('your-account');
-  assert.equal(unavailable.nav('your-account').getAttribute('data-nav-planned'), 'true');
-  assert.equal(unavailable.element('placeholderTitle').textContent, 'Your Account');
+  assert.equal(unavailable.nav('your-account').getAttribute('data-nav-planned'), undefined);
+  assert.equal(unavailable.element('administrationToolFrame').getAttribute('src'), '/account/profile?embedded=1');
 });
 
 test('Results is tournament-scoped, read-only and independent of active ring controls', async () => {
@@ -891,12 +924,13 @@ test('Planned destinations are explicit, independently addressable and never loa
   const page = await loadPage({ activeEvent: spring });
   const before = page.requests.length;
   for (const id of ['judge-assignments', 'printing',
-    'csv-settings', 'judge-management', 'clinic-management', 'event-history', 'your-account']) {
+    'csv-settings', 'judge-management', 'clinic-management', 'event-history']) {
     assert.equal(page.nav(id).getAttribute('data-nav-planned'), 'true');
     await page.navigate(id);
     assert.equal(page.element('placeholderView').hidden, false);
     assert.equal(page.element('placeholderTitle').textContent, page.nav(id).getAttribute('data-nav-label'));
-    assert.equal(page.element('placeholderMessage').textContent, 'Planned.');
+    assert.equal(page.element('placeholderMessage').textContent,
+      ['judge-management', 'clinic-management'].includes(id) ? 'Under Development.' : 'Planned.');
     assert.equal(page.nav(id).getAttribute('aria-current'), 'page');
     assert.equal(new URLSearchParams(page.location.search).get('view'), id);
     for (const view of ['eventSetupView', 'importView', 'groupsView', 'ringAssignmentView', 'headTableView', 'competitorLookupView', 'detailsPanel']) {

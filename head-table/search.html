@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script src="/assets/browser-session.js"></script>
   <meta charset="UTF-8">
   <title>Competitor Search</title>
   <style>
@@ -15,7 +16,7 @@
     tr:hover { background-color: #f9f9f9; }
   </style>
 </head>
-<body>
+<body data-auth-workspace="competitors">
   <h1>Competitor Search</h1>
   <div class="row"><label for="firstName">First name</label><input id="firstName" type="text" placeholder="Prefix search"></div>
   <div class="row"><label for="lastName">Last name</label><input id="lastName" type="text" placeholder="Prefix search"></div>

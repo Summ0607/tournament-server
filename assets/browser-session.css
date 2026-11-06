@@ -1,0 +1,12 @@
+#browserSessionBar { position: relative; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 6px 12px; background: #243248; color: white; font: 13px system-ui, sans-serif; }
+#browserSessionBar a { color: white; }
+#browserSessionBar button { min-height: 32px; border: 1px solid #9db5d4; border-radius: 5px; background: #243248; color: white; cursor: pointer; }
+#browserSessionNotice { color: #ffe4a8; }
+#browserSessionNotice:empty { display: none; }
+#browserLoginDialog { width: min(460px, 90vw); border: 1px solid #aebccd; border-radius: 10px; padding: 24px; background: white; color: #172336; font: 16px system-ui, sans-serif; }
+#browserLoginDialog::backdrop { background: #172336dd; }
+#browserLoginForm { display: grid; gap: 16px; }
+#browserLoginForm label { display: grid; gap: 6px; }
+#browserLoginForm input, #browserLoginForm button { min-height: 44px; padding: 8px; font: inherit; }
+#browserLoginMessage { white-space: normal; }
+[data-nav-id][hidden], [data-nav-group][hidden], [data-auth-view][hidden] { display: none !important; }

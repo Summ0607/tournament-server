@@ -1,9 +1,10 @@
 param(
-  [switch]$OpenBrowser,
+  [switch]$OpenBrowser = $true,
   [string]$HttpsConfig = "C:\TournamentPrivate\https\server.json",
   [switch]$HttpOnly
 )
 
+$ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $nodeExe = "node"
 $serverScript = Join-Path $repoRoot "server-launcher.js"
@@ -37,18 +38,37 @@ $surfaces = @(
   }
 )
 
+$groupId = [guid]::NewGuid().ToString('N')
+$groupPipe = "\\.\pipe\tournament-services-$groupId"
+$groupToken = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+foreach ($surface in $surfaces) {
+  $ports = @($surface.Port)
+  if (!$HttpOnly) { $ports += $surface.Port + 443 }
+  foreach ($port in $ports) {
+    $probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $port)
+    try { $probe.Start() }
+    catch { throw "Port $port is already in use. Stop the existing services before launching this coordinated group. No services were launched." }
+    finally { $probe.Stop() }
+  }
+}
+
 function Start-Surface {
   param(
     [Parameter(Mandatory = $true)]$Surface
   )
 
   $command = @"
-Set-Location '$repoRoot'
+Set-Location '$($repoRoot.Replace("'", "''"))'
 `$env:TOURNAMENT_SURFACE = '$($Surface.Name)'
 `$env:TOURNAMENT_HTTPS_CONFIG = '$(if ($HttpOnly) { '' } else { $HttpsConfig.Replace("'", "''") })'
+`$env:TOURNAMENT_SERVICE_GROUP = '$groupPipe'
+`$env:TOURNAMENT_SERVICE_TOKEN = '$groupToken'
+`$env:TOURNAMENT_HOME_URL = '$($surfaces[0].Url)'
+`$env:TOURNAMENT_OPEN_HOME = '$(if ($OpenBrowser) { '1' } else { '0' })'
+`$env:TOURNAMENT_CONSOLE_PID = [string]`$PID
 Write-Host 'Starting surface: $($Surface.Name) ($($Surface.Port))'
 Write-Host 'Entry URL: $($Surface.Url)'
-& $nodeExe $serverScript
+& '$nodeExe' '$($serverScript.Replace("'", "''"))'
 "@
 
   Start-Process -FilePath "powershell.exe" -WindowStyle Minimized -WorkingDirectory $repoRoot -ArgumentList @(
@@ -63,7 +83,5 @@ foreach ($surface in $surfaces) {
   Start-Surface -Surface $surface
 }
 
-if ($OpenBrowser) {
-  Start-Sleep -Seconds 2
-  Start-Process $surfaces[0].Url | Out-Null
-}
+Write-Host 'Three minimized service windows launched.'
+if ($OpenBrowser) { Write-Host 'Tournament Management home opens when all services report ready.' }

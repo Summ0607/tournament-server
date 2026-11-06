@@ -26,7 +26,7 @@ after(() => {
   if (tlsRoot) fs.rmSync(tlsRoot, { recursive: true, force: true });
 });
 
-const password = 'a long test password phrase';
+const password = 'A long test password phrase1!';
 async function setup(t, sourceLimit = { maxAttempts: 100, windowMs: 60000 }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'account-api-'));
   let timestamp = Date.now();
@@ -198,11 +198,11 @@ test('password reset and role removal revoke browser API access, including admin
   const admin = await p.login();
   const coord = await p.login('coord');
   assert.equal((await p.request('/users/coord', { method: 'PUT', headers: admin.headers,
-    body: { revision: 1, password: 'a replacement password phrase' } })).status, 200);
+    body: { revision: 1, password: 'A replacement password phrase1!' } })).status, 200);
   assert.equal((await p.request('/session', { headers: coord.headers })).status, 401);
   assert.equal((await p.request('/login', { method: 'POST', body: { userId: 'coord', password } })).status, 401);
   const replacement = await p.request('/login', { method: 'POST',
-    body: { userId: 'coord', password: 'a replacement password phrase' } });
+    body: { userId: 'coord', password: 'A replacement password phrase1!' } });
   assert.equal(replacement.status, 200);
   await p.store.createAccount({ userId: 'second-admin', password, roles: ['administrator'], actor: 'test-setup' });
   const second = await p.login('second-admin');

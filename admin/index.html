@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="/assets/browser-session.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tournament Administration</title>
@@ -103,7 +104,7 @@
   </style>
   <link rel="stylesheet" href="/assets/embedded-administration.css">
 </head>
-<body>
+<body data-auth-workspace="server-maintenance">
   <header>
     <div>
       <h1>Tournament Administration</h1>
@@ -119,15 +120,17 @@
     <section class="panel" aria-labelledby="server-control-title">
       <h2 id="server-control-title">Server maintenance - local administrator</h2>
       <div id="serverMaintenanceContent">
-      <p class="error">Warning: restarting interrupts production tablets, monitoring, and all simulations on this server process. Use only during a planned break. Other server processes are not restarted.</p>
+      <p class="error">Warning: coordinated restart interrupts tablets, monitoring, and simulations across all three services. Use only during a planned break.</p>
+      <p class="subtle">Start with launch-surfaces.ps1 for coordinated restart. Service windows are minimized and Tournament Management home opens after all three services are ready. A standalone server-launcher.js can restart only its own service.</p>
       <p class="subtle">Running or paused simulations will be stopped and saved, not automatically resumed. Reset them before running again. Saved tournament data and results are retained.</p>
-      <button id="restartServerButton" type="button" class="danger" disabled>Restart server...</button>
+      <button id="restartServerButton" type="button" class="danger" disabled>Restart services...</button>
       <button id="refreshServerStatusButton" type="button">Check server status</button>
       <p id="serverControlStatus" role="status" aria-live="polite" class="status-box" data-state="checking">Checking restart availability...</p>
       </div>
     </section>
     <dialog id="restartServerDialog" aria-labelledby="restart-dialog-title">
-      <h2 id="restart-dialog-title">Confirm server restart</h2>
+      <h2 id="restart-dialog-title">Confirm service restart</h2>
+      <p id="restartScope"></p>
       <p class="error">Production connections will be interrupted. Tell ring operators before continuing. This affects the whole server, not just one page.</p>
       <p>Pending requests and simulator operations will finish before shutdown. Active simulations will stop and require reset to run again. This page will reconnect when a new server instance is ready.</p>
       <label>Type RESTART to confirm
@@ -164,6 +167,10 @@
         const status = await response.json();
         if (!response.ok) throw new Error(status.error || `Server status request failed (${response.status}).`);
         serverControl = status;
+        $('restartServerButton').textContent = status.restartScope === 'all-services' ? 'Restart all three services...' : 'Restart this service...';
+        $('restartScope').textContent = status.restartScope === 'all-services'
+          ? 'All three services will restart in minimized windows. Tournament Management home opens after all three reconnect.'
+          : 'This is a standalone launcher: only this service will restart. To restart all three, stop the old services and launch once with launch-surfaces.ps1.';
         $('restartServerButton').disabled = !serverControl.restartAvailable || serverControl.restarting;
         setStatus(`Checked ${checkedAt()} - Server is running. ${serverControl.message || 'Restart unavailable on this server.'}`,
           serverControl.restartAvailable ? 'ok' : 'warn');
@@ -205,13 +212,14 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || `Restart request failed (${response.status}).`);
         for (let attempt = 0; attempt < 45; attempt += 1) {
-          setStatus('Restarting... waiting for a new server instance. Do not start another server.', 'checking');
+          setStatus('Restarting... waiting for all managed services to be ready. Do not start duplicate servers.', 'checking');
           await new Promise((resolve) => setTimeout(resolve, 2000));
           try {
             const ready = await fetch('/api/server-control/status', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
             if (!ready.ok) throw new Error(`Server status ${ready.status}`);
             const status = await ready.json();
-            if (status.instanceId && status.instanceId !== previousInstance && !status.restarting) {
+            if (status.instanceId && status.instanceId !== previousInstance && !status.restarting &&
+                (serverControl.restartScope !== 'all-services' || status.restartAvailable)) {
               location.reload();
               return;
             }

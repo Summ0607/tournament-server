@@ -100,6 +100,7 @@ test('server restart handles unavailability, rejected requests and reconnection 
           token: 'token', instanceId: 'old-instance', message: 'Use managed launcher.' }) };
       }
     });
+
     await new Promise(setImmediate);
     if (mode === 'unavailable') {
       assert.equal(nodes.get('restartServerButton').disabled, true);
@@ -114,6 +115,29 @@ test('server restart handles unavailability, rejected requests and reconnection 
     }
     assert.equal(reloads(), 0);
   }
+});
+
+test('Administration waits for the entire service group and identifies coordinated restart scope', async () => {
+  let requested = false, polls = 0;
+  const { nodes, reloads } = simulatorPageHarness({ page: 'admin',
+    serverFetch: async (url) => {
+      if (url.endsWith('/restart')) {
+        requested = true;
+        return { ok: true, json: async () => ({ restarting: true }) };
+      }
+      if (requested) polls++;
+      return { ok: true, json: async () => ({ restartScope: 'all-services',
+        instanceId: requested ? 'new-instance' : 'old-instance',
+        restartAvailable: !requested || polls >= 3, restarting: false, token: 'token' }) };
+    }
+  });
+  await new Promise(setImmediate);
+  assert.equal(nodes.get('restartServerButton').textContent, 'Restart all three services...');
+  assert.match(nodes.get('restartScope').textContent, /minimized/);
+  nodes.get('restartConfirmation').value = 'RESTART';
+  await nodes.get('confirmRestartButton').handlers.click();
+  assert.equal(polls, 3);
+  assert.equal(reloads(), 1);
 });
 
 test('simulator history and recent events start minimized, expand independently and remember their state', async () => {

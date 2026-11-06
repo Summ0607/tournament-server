@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="/assets/browser-session.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Audience Monitor</title>
@@ -9,7 +10,7 @@
   <script defer src="/audience-monitor/monitor.js"></script>
   <script defer src="/assets/help-tooltips.js"></script>
 </head>
-<body>
+<body data-auth-workspace="audience-viewer">
   <main data-help-page="audience-monitor" data-help-title="Audience Monitor">
     <header>
       <div><h1 id="eventName">Audience Monitor</h1><p id="connection" role="status">Loading active event...</p></div>

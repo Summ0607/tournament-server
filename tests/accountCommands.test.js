@@ -10,8 +10,8 @@ const { createAccountSessions } = require('../backend/accountSessions');
 const { DEFAULT_ACCOUNT_POLICY } = require('../backend/accountPolicy');
 const { parseArguments, readHiddenPassword, runAccountCommand } = require('../backend/accountCommands');
 
-const password = 'a long setup passphrase';
-const replacement = 'a new recovery passphrase';
+const password = 'A long setup passphrase1!';
+const replacement = 'A new recovery passphrase1!';
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tournament-account-commands-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -91,6 +91,7 @@ test('setup creates explicit roles with hidden confirmation, hashes passwords an
   await runAccountCommand(args(file, 'create', 'coordinator', 'judging-coordinator'), terminal());
   await runAccountCommand(args(file, 'create', 'operator', 'tournament-operator'), terminal());
   assert.equal(io.prompts, 2);
+  assert.match(io.text, /10-128 characters.*uppercase.*lowercase.*number.*special/);
   assert.equal(io.text.includes(password), false);
   const store = await createAccountSessions({ file });
   try {
@@ -140,7 +141,7 @@ test('setup and recovery obey saved password policy and preserve administrator r
   await assert.rejects(runAccountCommand(args(file, 'create', 'coordinator', 'judging-coordinator'), terminal()),
     /Password must contain 30/);
   assert.equal((await rows(file, 'SELECT * FROM account_audit')).length, 2);
-  const longer = 'an administrator recovery password of sufficient length';
+  const longer = 'An administrator recovery password of sufficient length1!';
   await runAccountCommand(args(file, 'recover-admin'), terminal([longer, longer]));
   store = await createAccountSessions({ file });
   try {

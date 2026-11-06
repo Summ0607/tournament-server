@@ -1,10 +1,8 @@
-const crypto = require('node:crypto');
 const express = require('express');
+const { createBrowserSecurity, COOKIE_NAME, COOKIE_OPTIONS } = require('./browserSecurity');
+const { allowedViews, homePath, ROLE_LABELS } = require('./browserPermissions');
 
-const COOKIE_NAME = '__Host-tournament-session';
-const COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: 'strict', path: '/' };
-
-function createAccountRouter({ store, allowedOrigins, sourceLimit, now = Date.now }) {
+function createAccountRouter({ store, allowedOrigins, sourceLimit, now = Date.now, security = createBrowserSecurity({ store, allowedOrigins }) }) {
   if (!Array.isArray(allowedOrigins) || !allowedOrigins.length ||
       allowedOrigins.some((origin) => {
         try { return new URL(origin).protocol !== 'https:' || new URL(origin).origin !== origin; }
@@ -15,17 +13,9 @@ function createAccountRouter({ store, allowedOrigins, sourceLimit, now = Date.no
     throw new Error('An explicit source login rate limit is required.');
   }
   const router = express.Router();
-  const csrfKey = crypto.randomBytes(32);
   const attempts = new Map();
-  const csrf = (token) => crypto.createHmac('sha256', csrfKey).update(token).digest('hex');
+  const { csrf } = security;
   const fail = (message, statusCode) => { throw Object.assign(new Error(message), { statusCode }); };
-  function sessionToken(req) {
-    const cookies = (req.get('cookie') || '').split(';').map((cookie) => cookie.trim())
-      .filter((cookie) => cookie.startsWith(`${COOKIE_NAME}=`));
-    if (cookies.length !== 1) return '';
-    const token = cookies[0].slice(COOKIE_NAME.length + 1);
-    return /^[a-f0-9]{64}$/.test(token) ? token : '';
-  }
   function body(req, keys) {
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) ||
         Object.keys(req.body).some((key) => !keys.includes(key))) fail('Invalid account request fields.', 400);
@@ -41,17 +31,7 @@ function createAccountRouter({ store, allowedOrigins, sourceLimit, now = Date.no
     res.set('Cache-Control', 'no-store');
     res.removeHeader('Access-Control-Allow-Origin');
     res.removeHeader('Access-Control-Allow-Credentials');
-    if (!req.socket.encrypted) fail('Account access requires HTTPS.', 403);
-    const origin = `https://${req.get('host')}`;
-    if (!allowedOrigins.includes(origin)) fail('Unrecognized account server address.', 403);
-    if (req.get('origin') && req.get('origin') !== origin ||
-        req.get('sec-fetch-site') && !['same-origin', 'none'].includes(req.get('sec-fetch-site'))) {
-      fail('Account requests must be same-origin.', 403);
-    }
-    if (!['GET', 'HEAD'].includes(req.method)) {
-      if (req.get('origin') !== origin) fail('A same-origin request is required.', 403);
-      if (!req.is('application/json')) fail('Account requests require JSON.', 415);
-    }
+    security.verifyRequest(req);
     next();
   }));
   router.use('/login', (req, res, next) => {
@@ -86,26 +66,13 @@ function createAccountRouter({ store, allowedOrigins, sourceLimit, now = Date.no
     res.json({ account: login.account, expiresAt: login.expiresAt, csrfToken: csrf(login.token) });
   }));
   router.use(handle(async (req, res, next) => {
-    const token = sessionToken(req);
-    const session = await store.resolveSession(token);
-    if (!session) {
-      res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
-      fail('Sign in to continue.', 401);
-    }
-    if (!['GET', 'HEAD'].includes(req.method)) {
-      const supplied = req.get('x-csrf-token') || '';
-      const expected = csrf(token);
-      if (!/^[a-f0-9]{64}$/.test(supplied) ||
-          !crypto.timingSafeEqual(Buffer.from(supplied, 'hex'), Buffer.from(expected, 'hex'))) {
-        fail('Request verification failed. Refresh session details and try again.', 403);
-      }
-    }
-    res.locals.accountToken = token;
-    res.locals.accountSession = session;
+    await security.authenticate(req, res);
     next();
   }));
   router.get('/session', (_req, res) => {
-    res.json({ ...res.locals.accountSession, csrfToken: csrf(res.locals.accountToken) });
+    const roles = res.locals.accountSession.account.roles;
+    res.json({ ...res.locals.accountSession, csrfToken: csrf(res.locals.accountToken),
+      allowedViews: allowedViews(roles), homePath: homePath(roles), roleLabels: ROLE_LABELS });
   });
   router.post('/activity', handle(async (req, res) => {
     body(req, []);

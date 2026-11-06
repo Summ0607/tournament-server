@@ -93,6 +93,8 @@ async function runAccountCommand(args, { input = process.stdin, output = process
       throw new Error('Select an existing administrator account.');
     }
     output.write(`${options.command === 'create' ? 'Creating account' : 'Recovering administrator'}: ${options.userId}\n`);
+    const { policy } = await store.getPolicy();
+    output.write(`Password: ${policy.passwordMinLength}-${policy.passwordMaxLength} characters with uppercase (A-Z), lowercase (a-z), number (0-9), and a special character. Spaces do not count as special characters.\n`);
     password = await readPassword('New password (hidden): ');
     confirmation = await readPassword('Confirm password (hidden): ');
     if (password !== confirmation) throw new Error('Passwords do not match. No account changes were made.');

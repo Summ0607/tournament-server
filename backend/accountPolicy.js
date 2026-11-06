@@ -1,7 +1,7 @@
 const DEFAULT_ACCOUNT_POLICY = Object.freeze({
   userIdMinLength: 3,
   userIdMaxLength: 64,
-  passwordMinLength: 15,
+  passwordMinLength: 10,
   passwordMaxLength: 128,
   idleTimeoutMinutes: 30,
   absoluteTimeoutHours: 12,
@@ -23,7 +23,7 @@ function validateAccountPolicy(input) {
   if (Object.keys(input).some((key) => !keys.includes(key))) fail('Account policy contains an unknown setting.');
   const ranges = {
     userIdMinLength: [3, 64], userIdMaxLength: [3, 64],
-    passwordMinLength: [15, 128], passwordMaxLength: [64, 128],
+    passwordMinLength: [10, 128], passwordMaxLength: [64, 128],
     idleTimeoutMinutes: [5, 120], absoluteTimeoutHours: [1, 24],
     failureThreshold: [3, 10], failureWindowMinutes: [1, 60], cooldownMinutes: [1, 60]
   };

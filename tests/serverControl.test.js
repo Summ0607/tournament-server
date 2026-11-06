@@ -11,12 +11,12 @@ const express = require('express');
 const { createServerControl, isLocalRequest } = require('../backend/serverControl');
 const { startSupervisor } = require('../server-launcher');
 
-async function withControl(enabled, callback) {
+async function withControl(enabled, callback, options = {}) {
   let restarts = 0;
   const app = express();
   app.use(express.json());
   app.use('/api/server-control', createServerControl({
-    enabled, instanceId: 'original-instance', requestRestart: () => { restarts += 1; }
+    enabled, instanceId: 'original-instance', requestRestart: () => { restarts += 1; }, ...options
   }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
@@ -78,6 +78,43 @@ test('server controls reject LAN clients, rebinding hosts and cross-origin reque
     assert.equal((await request('status', { headers: { Origin: `http://localhost:${port}` } })).status, 200);
     assert.equal(restarts(), 0);
   });
+
+  test('configured HTTPS maintenance accepts the server own network address, never another LAN client', () => {
+    const original = os.networkInterfaces;
+    os.networkInterfaces = () => ({ ethernet: [{ address: '192.168.4.42' }] });
+    try {
+      const req = (address, headers = {}) => ({ socket: { remoteAddress: address }, protocol: 'https',
+        get: (name) => ({ host: 'tourn-svr.home.arpa:3443', ...headers })[name] });
+      const hosts = ['tourn-svr.home.arpa:3443', '192.168.4.42:3443'];
+      assert.equal(isLocalRequest(req('192.168.4.42'), hosts), true);
+      assert.equal(isLocalRequest(req('::ffff:192.168.4.42'), hosts), true);
+      assert.equal(isLocalRequest(req('192.168.4.43'), hosts), false);
+      assert.equal(isLocalRequest(req('192.168.4.42', { host: 'evil.example:3443' }), hosts), false);
+      assert.equal(isLocalRequest(req('192.168.4.42', { origin: 'https://evil.example' }), hosts), false);
+      assert.equal(isLocalRequest(req('192.168.4.42', { origin: 'https://tourn-svr.home.arpa:3443' }), hosts), true);
+    } finally { os.networkInterfaces = original; }
+  });
+});
+
+test('coordinated server controls reject partial groups and expose all-service readiness', async () => {
+  let state = { restartAvailable: false, restarting: false, message: 'Waiting for all three services.',
+    services: [{ name: 'pre', ready: true }, { name: 'monitoring', ready: false }, { name: 'adminProgress', ready: true }] };
+  await withControl(true, async (request, restarts) => {
+    const status = await request('status');
+    assert.equal(status.body.restartScope, 'all-services');
+    assert.equal(status.body.restartAvailable, false);
+    assert.equal(status.body.services[1].ready, false);
+    const options = { method: 'POST', headers: { 'Content-Type': 'application/json',
+      'X-Server-Control-Token': status.body.token }, body: { confirmation: 'RESTART' } };
+    assert.equal((await request('restart', options)).status, 409);
+    assert.equal(restarts(), 0);
+    state = { ...state, restartAvailable: true, message: 'All three services ready.' };
+    assert.equal((await request('restart', options)).status, 202);
+    assert.equal(restarts(), 1);
+    state = { ...state, restartAvailable: false, restarting: true };
+    assert.equal((await request('status')).body.restarting, true);
+    assert.equal((await request('restart', options)).status, 409);
+  }, { getGroupState: () => state });
 });
 
 test('supervisor relaunches only after an explicit clean restart and forwards shutdown', () => {

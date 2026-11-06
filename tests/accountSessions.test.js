@@ -7,7 +7,7 @@ const sqlite3 = require('sqlite3');
 const { createAccountSessions, IDLE_MS, ABSOLUTE_MS } = require('../backend/accountSessions');
 const { DEFAULT_ACCOUNT_POLICY, validateAccountPolicy } = require('../backend/accountPolicy');
 
-const password = 'a long demo passphrase';
+const password = 'A long demo passphrase1!';
 async function setup(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tournament-accounts-'));
   let timestamp = 1000000;
@@ -79,6 +79,112 @@ test('browser sessions use exact idle boundaries; polling does not extend inacti
   assert.equal(await p.store.resolveSession(token, { activity: true }), null);
 });
 
+test('new and reset passwords require ten characters and all four character classes, without trimming spaces', async (t) => {
+  const p = await setup(t);
+  const tenCharacters = 'Abcdefg1!x';
+  assert.equal(tenCharacters.length, 10);
+  for (const candidate of ['Abcdef1!x', 'abcdefg1!x', 'ABCDEFG1!X', 'Abcdefgh!x',
+    'Abcdefgh1x', 'Abcdefg1 x']) {
+    await assert.rejects(p.store.createAccount({ userId: 'new-user', roles: ['viewer'],
+      password: candidate, actor: 'test' }), { statusCode: 400 });
+  }
+  assert.deepEqual(await p.store.listAccounts(), []);
+  const admin = await p.store.createAccount({ userId: 'admin', roles: ['administrator'],
+    password: tenCharacters, actor: 'test' });
+  for (const candidate of ['abcdefg1!x', 'ABCDEFG1!X', 'Abcdefgh!x', 'Abcdefgh1x', 'Abcdefg1 x']) {
+    await assert.rejects(p.store.changeAccount({ userId: admin.userId, revision: admin.revision,
+      password: candidate, actor: 'test' }), /uppercase.*lowercase.*number.*special/);
+    await assert.rejects(p.store.recoverAdministrator({ userId: admin.userId, revision: admin.revision,
+      password: candidate, actor: 'test' }), /uppercase.*lowercase.*number.*special/);
+  }
+  assert.ok(await p.store.login({ userId: 'admin', password: tenCharacters }));
+  const reset = await p.store.changeAccount({ userId: 'admin', revision: admin.revision,
+    password: ' Zbcdefg2!x ', actor: 'test' });
+  assert.ok(await p.store.login({ userId: 'admin', password: ' Zbcdefg2!x ' }));
+  await assert.rejects(p.store.login({ userId: 'admin', password: 'Zbcdefg2!x' }), { statusCode: 401 });
+  await p.store.recoverAdministrator({ userId: 'admin', revision: reset.revision,
+    password: tenCharacters, actor: 'test' });
+  assert.ok(await p.store.login({ userId: 'admin', password: tenCharacters }));
+});
+
+test('legacy policy upgrade lowers only the old default once, revokes sessions and preserves old password sign-in', async (t) => {
+  const p = await setup(t);
+  await p.create('admin', ['administrator']);
+  const login = await p.store.login({ userId: 'admin', password });
+  const db = new sqlite3.Database(p.file);
+  const run = (sql, params = []) => new Promise((resolve, reject) => db.run(sql, params, (error) => error ? reject(error) : resolve()));
+  const legacyPassword = 'an old lowercase passphrase';
+  const salt = require('node:crypto').randomBytes(16).toString('hex');
+  const hash = require('node:crypto').scryptSync(legacyPassword, salt, 64,
+    { N: 131072, r: 8, p: 1, maxmem: 256 * 1024 * 1024 }).toString('hex');
+  try {
+    await run('UPDATE account_policy SET settings = ? WHERE id = 1',
+      [JSON.stringify({ ...DEFAULT_ACCOUNT_POLICY, passwordMinLength: 15, idleTimeoutMinutes: 45 })]);
+    await run('UPDATE accounts SET password_salt = ?, password_hash = ? WHERE user_id = ?', [salt, hash, 'admin']);
+    await run('INSERT INTO login_attempts VALUES (?, ?, ?, ?)', ['legacy-attempt', 1000000, 3, 0]);
+    await run('PRAGMA user_version = 0');
+  } finally { await new Promise((resolve) => db.close(resolve)); }
+  await p.reopen();
+  const upgraded = await p.store.getPolicy();
+  assert.equal(upgraded.revision, 2);
+  assert.equal(upgraded.policy.passwordMinLength, 10);
+  assert.equal(upgraded.policy.idleTimeoutMinutes, 45);
+  assert.equal(await p.store.resolveSession(login.token), null);
+  const legacyLogin = await p.store.login({ userId: 'admin', password: legacyPassword });
+  assert.ok(legacyLogin.token);
+  await assert.rejects(p.store.changeAccount({ userId: 'admin', revision: 1,
+    password: legacyPassword, actor: 'test' }), /uppercase/);
+  const customized = await p.store.changePolicy({ ...upgraded, actor: 'test',
+    policy: { ...upgraded.policy, passwordMinLength: 15 } });
+  const currentLogin = await p.store.login({ userId: 'admin', password: legacyPassword });
+  await p.reopen();
+  assert.deepEqual(await p.store.getPolicy(), customized);
+  assert.ok(await p.store.resolveSession(currentLogin.token));
+  const inspection = new sqlite3.Database(p.file);
+  try {
+    const get = (sql) => new Promise((resolve, reject) => inspection.get(sql,
+      (error, row) => error ? reject(error) : resolve(row)));
+    assert.equal((await get("SELECT COUNT(*) AS count FROM login_attempts WHERE account_key = 'legacy-attempt'")).count, 0);
+    assert.equal((await get("SELECT COUNT(*) AS count FROM account_audit WHERE action = 'password-rules-updated-sessions-revoked'")).count, 1);
+    assert.equal((await get('PRAGMA user_version')).user_version, 1);
+  } finally { await new Promise((resolve) => inspection.close(resolve)); }
+});
+
+test('legacy policy upgrade preserves a custom minimum instead of replacing it with ten', async (t) => {
+  const p = await setup(t);
+  const db = new sqlite3.Database(p.file);
+  try {
+    await new Promise((resolve, reject) => db.run('UPDATE account_policy SET settings = ? WHERE id = 1',
+      [JSON.stringify({ ...DEFAULT_ACCOUNT_POLICY, passwordMinLength: 24 })], (error) => error ? reject(error) : resolve()));
+    await new Promise((resolve, reject) => db.run('PRAGMA user_version = 0', (error) => error ? reject(error) : resolve()));
+  } finally { await new Promise((resolve) => db.close(resolve)); }
+  const results = await Promise.allSettled(Array.from({ length: 3 },
+    () => createAccountSessions({ file: p.file })));
+  const stores = results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
+  try {
+    for (const result of results) assert.equal(result.status, 'fulfilled', result.reason?.message);
+    for (const store of stores) {
+      const saved = await store.getPolicy();
+      assert.equal(saved.policy.passwordMinLength, 24);
+      assert.equal(saved.revision, 2);
+    }
+  } finally { await Promise.all(stores.map((store) => store.close())); }
+});
+
+test('opening a future account database version fails without changing its policy', async (t) => {
+  const p = await setup(t);
+  const db = new sqlite3.Database(p.file);
+  try {
+    await new Promise((resolve, reject) => db.run('PRAGMA user_version = 2',
+      (error) => error ? reject(error) : resolve()));
+    await assert.rejects(createAccountSessions({ file: p.file }), /newer server version/);
+    assert.deepEqual(await p.store.getPolicy(), { revision: 1, policy: DEFAULT_ACCOUNT_POLICY });
+    const version = await new Promise((resolve, reject) => db.get('PRAGMA user_version',
+      (error, row) => error ? reject(error) : resolve(row.user_version)));
+    assert.equal(version, 2);
+  } finally { await new Promise((resolve) => db.close(resolve)); }
+});
+
 test('activity extends idle time but never the exact twelve-hour absolute deadline', async (t) => {
   const p = await setup(t);
   await p.create('operator', ['tournament-operator']);
@@ -113,8 +219,8 @@ test('multiple sessions survive restart; logout affects only the selected sessio
 test('disable, password reset and role changes revoke all sessions persistently', async (t) => {
   const p = await setup(t);
   let account = await p.create('coordinator');
-  for (const change of [{ roles: ['tournament-operator'] }, { password: 'a replacement passphrase' }, { enabled: false }]) {
-    const currentPassword = account.revision > 2 ? 'a replacement passphrase' : password;
+  for (const change of [{ roles: ['tournament-operator'] }, { password: 'A replacement passphrase1!' }, { enabled: false }]) {
+    const currentPassword = account.revision > 2 ? 'A replacement passphrase1!' : password;
     const first = await p.store.login({ userId: 'coordinator', password: currentPassword });
     const second = await p.store.login({ userId: 'coordinator', password: currentPassword });
     account = await p.store.changeAccount({ userId: 'coordinator', revision: account.revision, actor: 'admin', ...change });
@@ -126,14 +232,14 @@ test('disable, password reset and role changes revoke all sessions persistently'
         { statusCode: 401, message: 'Invalid user ID or password.' });
     }
   }
-  await assert.rejects(p.store.login({ userId: 'coordinator', password: 'a replacement passphrase' }),
+  await assert.rejects(p.store.login({ userId: 'coordinator', password: 'A replacement passphrase1!' }),
     { statusCode: 401, message: 'Invalid user ID or password.' });
 });
 
 test('password bounds count Unicode characters and preserve leading/trailing spaces', async (t) => {
   const p = await setup(t);
-  for (const [userId, value] of [['minimum', ' '.repeat(2) + 'x'.repeat(11) + ' '.repeat(2)],
-    ['unicode', '\u{1F512}'.repeat(15)], ['maximum', 'x'.repeat(128)]]) {
+  for (const [userId, value] of [['minimum', '  Aa1!xx  '],
+    ['unicode', 'Aa1' + '\u{1F512}'.repeat(7)], ['maximum', 'Aa1!' + 'x'.repeat(124)]]) {
     await p.store.createAccount({ userId, password: value, roles: ['administrator'], actor: 'local-setup' });
     assert.ok((await p.store.login({ userId, password: value })).token);
     await assert.rejects(p.store.login({ userId, password: value.slice(1) }), { statusCode: 401 });
@@ -215,7 +321,7 @@ test('account storage rejects paths inside the web-served repository', async () 
 test('policy validates all settings and cross-field safety limits', () => {
   assert.deepEqual(validateAccountPolicy(DEFAULT_ACCOUNT_POLICY), DEFAULT_ACCOUNT_POLICY);
   for (const change of [
-    { passwordMinLength: 14 }, { passwordMaxLength: 63 }, { passwordMaxLength: 129 },
+    { passwordMinLength: 9 }, { passwordMaxLength: 63 }, { passwordMaxLength: 129 },
     { userIdMinLength: 2 }, { userIdMaxLength: 65 }, { userIdMinLength: 20, userIdMaxLength: 10 },
     { passwordMinLength: 100, passwordMaxLength: 64 }, { idleTimeoutMinutes: 4 },
     { idleTimeoutMinutes: 121 }, { absoluteTimeoutHours: 0 }, { absoluteTimeoutHours: 25 },
@@ -269,7 +375,7 @@ test('new identifier/password bounds apply to creation and reset, not existing l
   await assert.rejects(p.create('new-person'), /Password must contain 30 to 64/);
   await assert.rejects(p.store.changeAccount({ userId: 'short', revision: account.revision,
     password, actor: 'admin' }), /Password must contain 30 to 64/);
-  await p.store.createAccount({ userId: 'new-person', password: 'x'.repeat(30),
+  await p.store.createAccount({ userId: 'new-person', password: 'Aa1!' + 'x'.repeat(26),
     roles: ['administrator'], actor: 'admin' });
   await assert.rejects(p.store.createAccount({ userId: 'too-long', password: 'x'.repeat(65),
     roles: ['administrator'], actor: 'admin' }), /Password must/);
@@ -303,7 +409,7 @@ test('optional account-change revocation keeps sessions current but disabling al
     roles: ['tournament-operator'], actor: 'admin' });
   assert.deepEqual((await p.store.resolveSession(token)).account.roles, ['tournament-operator']);
   account = await p.store.changeAccount({ userId: 'coordinator', revision: account.revision,
-    password: 'replacement password phrase', actor: 'admin' });
+    password: 'Replacement password phrase1!', actor: 'admin' });
   await p.reopen();
   assert.ok(await p.store.resolveSession(token));
   await p.store.changeAccount({ userId: 'coordinator', revision: account.revision, enabled: false, actor: 'admin' });
