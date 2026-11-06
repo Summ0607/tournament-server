@@ -64,16 +64,16 @@ authorized publishers. APKs/manifests are deployment data, not Git source.
 
 Validate with `npm run test:app-release`.
 
-## Local security foundation (in progress)
+## Local HTTPS and access control
 
 Browser pages and tournament APIs now require HTTPS, sign-in and role permissions.
-**Exact native-tablet calls retain a temporary unauthenticated exception, and
-transitional tablet HTTP remains unencrypted. This is not a completed security
-rollout.** The app already supports HTTPS with the public CA. Device enrollment
-and removal of legacy HTTP are still required. Use only on the trusted tournament
+Tablets use daily ring QR authorization over validated HTTPS; the old user-agent
+bypass and all HTTP listeners have been removed. Fixed-IP QR pairing has been
+verified on the physical tablet; tablet DNS resolution is not currently available,
+so QR codes default to the fixed IP. Use only on the trusted tournament
 network; do not expose this installation to untrusted networks.
 
-### Private Root CA and staged HTTPS setup
+### Private Root CA and HTTPS setup
 
 From PowerShell in this repository:
 
@@ -149,14 +149,16 @@ coordinator merely by refreshing the browser or restarting their child server.
 After that, use the Administration restart button. Validate with
 `npm run test:services` (uses isolated processes, not the live tournament services).
 
-| Surface | Secure entry | Temporary unsecured port |
-| --- | --- | --- |
-| Tournament Management | `https://tourn-svr.home.arpa:3443/tournament-management/` | 3000 |
-| Monitoring | `https://tourn-svr.home.arpa:3445/event-progress/` | 3002 |
-| Administration Progress | `https://tourn-svr.home.arpa:3447/administration-progress/` | 3004 |
+| Surface | Secure entry |
+| --- | --- |
+| Tournament Management | `https://tourn-svr.home.arpa:3443/tournament-management/` |
+| Monitoring | `https://tourn-svr.home.arpa:3445/event-progress/` |
+| Administration Progress | `https://tourn-svr.home.arpa:3447/administration-progress/` |
 
-Other named surfaces use their existing HTTP port plus 443 for HTTPS. Restart and
-shutdown drain both listeners. Invalid/missing configured keys, SANs, CA, expired
+The fixed IP `192.168.4.42` may replace the DNS hostname at the same HTTPS ports.
+Legacy HTTP ports **3000, 3002 and 3004 no longer listen**, including for health
+checks or redirects. Restart and shutdown drain the HTTPS listener on each surface.
+Invalid/missing configured keys, SANs, CA, expired
 certificates, account paths, or occupied ports fail startup; there is no silent
 HTTP-only fallback. HTTPS requires TLS 1.2 or newer. The configured source login
 limit is 50 attempts per direct source per 15 minutes, per surface process, in
@@ -173,12 +175,17 @@ DNS/IP address **on the server computer**. The socket source must be loopback or
 one of this computer's interface addresses; another LAN computer is still denied.
 The restart token and typed confirmation remain required for coordinated restart.
 
-Direct startup without `TOURNAMENT_HTTPS_CONFIG` and the explicit
-`launch-surfaces.ps1 -HttpOnly` mode retain **native-tablet compatibility only**,
-not the old unauthenticated browser interface. Browser pages/APIs are blocked on
-HTTP (426), and login/password submission is rejected. The default launcher
-requires the private HTTPS configuration. Restart all three surfaces after this
-update so they consistently apply the new authorization policy.
+Direct startup requires `TOURNAMENT_HTTPS_CONFIG` and fails before initializing
+databases if configuration is absent or invalid. The `-HttpOnly` launcher option
+has been removed. The launcher preflights only HTTPS ports 3443, 3445 and 3447,
+then starts three minimized windows and opens home after all are ready.
+Restart all three services to apply this conversion; refreshing a browser alone
+does not stop an already running HTTP listener. Use **Administration → Server
+Maintenance → Restart** when the coordinated launcher is running, or stop the
+old three services and rerun `.\launch-surfaces.ps1`. Verify
+`/api/https-status` reports `legacyHttpEnabled: false` on each HTTPS surface and
+TCP ports 3000, 3002 and 3004 are closed. Health checks now use HTTPS only.
+Validate with `npm run test:https` and `tests/launchSurfaces.test.ps1`.
 
 ### Browser roles and sign-in
 
@@ -191,7 +198,7 @@ created or promoted.
 | Administrator | All functions, users/settings, global definitions, simulator and local Server Maintenance |
 | Event Coordinator | Tournament preparation and day-of functions; Clinic Management (Under Development) |
 | Judging Coordinator | Volunteers/types, Ring Judges and judge assignments; Judging Management (Under Development) |
-| Tournament Operator | Ring Assignment, Head Table and Audience Viewer only |
+| Tournament Operator | Ring Assignment (tablet QR authorization), Division Assignments, Head Table and Audience Viewer only |
 | Viewer | Read-only Audience Viewer only; not Head Table |
 
 Use **Administration → Users** to assign Event Coordinator or Viewer explicitly;
@@ -219,12 +226,12 @@ public CA. They follow the same idle/absolute session limits as other users:
 background display refresh is **not** activity, and there is no Remember Me or
 always-on exemption. Verify CA installation and sign-in on each actual display.
 
-The temporary native exception is limited to `GET /api/version`, `/download-app`,
-`/api/events/active`, `/api/rings/config`, `/api/rings/:id/current`, and
-`POST /api/rings/:id/{request-group,heartbeat,complete,assistance,assistance/clear}`.
-It requires the Android `Dalvik/` user agent and no Origin, Cookie or Fetch
-Metadata headers. **These headers are spoofable by non-browser clients; this is
-not device authentication.** Device enrollment must replace this exception.
+Tablet requests to `GET /api/version`, `/download-app`, `/api/events/active`,
+`/api/rings/config`, `/api/rings/:id/current`, and
+`POST /api/rings/:id/{request-group,heartbeat,complete,assistance,assistance/clear}`
+now require a daily ring credential over HTTPS. The old `Dalvik/` user-agent
+bypass has been removed. Older tablets must install the updated app and scan a
+daily ring QR code; browser permissions are unchanged.
 `GET /api/health` and `/api/https-status` are public diagnostics. Public frontend
 assets contain no credentials; other repository files are blocked.
 
@@ -237,6 +244,55 @@ when the same CA signs the renewed certificate.
 
 Validate with `npm run test:https`; tests generate isolated certificates/accounts,
 do not install trust, and do not modify tournament data.
+
+### Daily tablet QR authorization
+
+Under **Ring Management**, open **Ring Assignment**, directly above **Division
+Assignments**. Administrators, Event Coordinators and Tournament Operators can
+display a daily ring QR code, **Print selected ring**, or **Print all rings**.
+All-ring printing produces one labeled sheet per configured ring, with tournament,
+server-local date, HTTPS address and scanning instructions. If any generation
+fails or the tournament/day changes during generation, no partial set is printed;
+the error is displayed so the operator can retry. **Division Assignments** remains
+the separate workspace for queuing divisions; its ring details also link to the
+QR page. Direct access remains available at `/tablet-pairing/`.
+Give each ring its code for that day. Codes are stable
+across service restarts and may be scanned repeatedly until **midnight using the
+laptop's local date/time**. Changing the active tournament also prevents use of
+credentials from a different tournament.
+The QR page defaults to **Fixed IP (no DNS)**. **DNS name** remains optional
+for networks where tablet DNS resolves correctly; both retain HTTPS and
+certificate verification.
+
+On app **1.46 (47)** or later, tap **Scan daily ring QR code** and allow camera
+access. Scanning authorizes and automatically connects that tablet to the coded
+ring, including its current group. No account password or manual ring selection
+is needed on the tablet. Another tablet scanning the same code sees a warning;
+confirming **Replace previous tablet** immediately revokes the first tablet.
+The same tablet can rescan without replacement confirmation. Moving it to
+another ring releases its previous authorization.
+
+The QR contains the HTTPS server address, tournament, ring, date and daily token.
+It is a reusable daily authorization code: anyone holding it can authorize a
+tablet for that ring that day. Distribute it to ring staff rather than publish it
+to the audience. The app exchanges it for a separately hashed server credential,
+stores that credential privately (excluded from Android backup/device transfer),
+and attaches it only to the same HTTPS origin. Ring IDs are enforced server-side;
+tablet credentials cannot access browser administration. Credential expiry and
+replacement do not discard unsent scores; rescan the same ring's current code
+and retry. A loaded division cannot be reassigned to a different ring/tournament.
+
+The external tablet database is `<accountDatabase>.devices`, beside the private
+account database. Apply the same Windows directory ACL restrictions. It stores a
+persistent signing secret and hashed tablet credentials; never copy it into this
+repository or distribute it with an APK. Restart all services after updating to
+load enforcement consistently. All production listeners are now HTTPS-only.
+
+Validate with `npm run test:tablets`. For physical testing, install the new APK
+over USB, display a test tournament's ring code on the laptop, scan, then verify
+the ring identity, group loading, heartbeat and test score submission. Reopen the
+app and briefly disconnect/reconnect Wi-Fi; authorization should persist. Verify
+replacement and expired-code rejection with test data, not live results.
 
 `backend/accountSessions.js` stores accounts and browser sessions in SQLite at an
 explicit absolute path **outside this repository**. Browser access is allowlisted,
@@ -265,7 +321,7 @@ By default, browser sessions expire after 30 minutes without explicit user activ
 survive server restarts; concurrent logins are independent and logout revokes only
 the selected session. Account disabling always revokes all sessions; password
 resets and role changes do so by default. Browser route permissions use current
-account roles on every request; device enrollment remains subsequent work. Trusted local account mutations
+account roles on every request; tablets use separate daily ring authorization. Trusted local account mutations
 record an audit actor and reject stale account revisions.
 
 Per-account login throttling persists across restarts: by default, five failures in fifteen
@@ -363,9 +419,10 @@ change tournament data. Setup alone therefore does not secure the running server
 ### Protected account API (HTTPS only)
 
 `createAccountRouter({store, allowedOrigins, sourceLimit})` in
-`backend/accountRoutes.js` is mounted at `/api/account` before global body parsers,
-permissive legacy HTTP CORS, and static-file middleware, so its request-size and
-origin checks run first. HTTPS tournament responses do not enable permissive CORS.
+`backend/accountRoutes.js` is mounted at `/api/account` before global body parsers
+and static-file middleware, so its request-size and origin checks run first.
+Tournament responses do not enable permissive CORS; the legacy HTTP CORS middleware
+has been removed.
 `allowedOrigins` must explicitly list canonical HTTPS origins (including ports).
 `sourceLimit` requires `{maxAttempts, windowMs}`; no production threshold is
 assumed. It counts login attempts across user IDs by the direct socket source,
@@ -1489,14 +1546,14 @@ Run `node --test tests/competitorStore.test.js` for the save regression tests.
 This branch is being used to document a proposed split of tournament surfaces by
 port and operational purpose:
 
-- `3000` Pre-Tournament
-- `3001-3009` Day-of Event surfaces
-  - `3001` Ring Assignment Operations
-  - `3002` Event Progress / display-only
-  - `3003` Medical
-  - `3004` Administration Progress View
-  - `3005-3009` Reserved for additional Day-of surfaces
-- `3010+` Post-Tournament
+- `3443` Pre-Tournament
+- `3444` Ring Assignment Operations (named surface, not launched by default)
+- `3445` Event Progress / display-only
+- `3446` Medical (named surface, not launched by default)
+- `3447` Administration Progress View
+- `3453` Post-Tournament (named surface, not launched by default)
+
+All surface ports use HTTPS; the former HTTP port range is retired.
 
 The goal is to keep the surfaces loosely coupled while sharing the same server
 backend and data model.

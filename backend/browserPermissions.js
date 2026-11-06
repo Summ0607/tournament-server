@@ -15,7 +15,7 @@ const VIEW_ROLES = {
   'competition-types': EVENT, 'grand-champion-categories': EVENT, 'medal-points': EVENT,
   volunteers: JUDGING, 'volunteer-types': JUDGING, 'ring-judges': JUDGING, 'judge-assignments': JUDGING,
   'judge-management': ['administrator', 'judging-coordinator'],
-  'clinic-management': EVENT, 'ring-assignment': DAY, 'head-table': DAY, 'audience-viewer': AUDIENCE,
+  'clinic-management': EVENT, 'tablet-pairing': DAY, 'ring-assignment': DAY, 'head-table': DAY, 'audience-viewer': AUDIENCE,
   printing: EVENT, 'csv-settings': EVENT, 'event-history': EVENT,
   schools: ['administrator'], ranks: ['administrator'], 'visual-definitions': ['administrator'],
   users: ['administrator'], 'user-account-settings': ['administrator'],
@@ -49,6 +49,7 @@ rule('POST PUT', /^\/api\/(visual-definitions|schools|ranks)(?:\/[^/]+)?$/, ['ad
 rule('GET POST PUT', /^\/api\/competition-settings\/[^/]+(?:\/[^/]+)?$/, EVENT);
 rule('GET POST PUT', /^\/api\/(ring-judges|volunteers|volunteer-types)(?:\/[^/]+)?$/, JUDGING);
 rule('GET', /^\/api\/rings\/monitor$/, AUDIENCE);
+rule('POST', /^\/api\/tablet\/codes$/, DAY);
 rule('GET', /^\/(?:status|api\/rings(?:\/(?:config|estimates))?)$/, DAY);
 rule('POST', /^\/api\/rings\/config$/, EVENT);
 rule('POST', /^\/api\/rings\/schedule\/day2$/, DAY);
@@ -80,6 +81,7 @@ function pageView(pathname) {
   if (['/audience-monitor'].includes(name)) return 'audience-viewer';
   if (['/head-table', '/dashboard', '/control-board', '/event-progress', '/administration-progress', '/ring-progress', '/ring-status', '/rings'].includes(name)) return 'head-table';
   if (name === '/ring-assignment') return 'ring-assignment';
+  if (name === '/tablet-pairing') return 'tablet-pairing';
   if (name === '/competitors') return 'competitors';
   if (name === '/head-table/search' || name === '/dashboard/search') return 'competitors';
   if (name === '/simulator') return 'simulator';

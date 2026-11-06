@@ -92,10 +92,10 @@ Simulator page) includes **Server maintenance - local administrator**.
 Server restart is an administration function and is not on the Simulator page.
 **Check server status** shows a large, color-coded, timestamped result (green:
 restart available; amber: running but restart unavailable; red: not responding).
-It restarts the server process serving that page, including its production
-connections, not just the selected simulation. It does not restart other
-independently launched surfaces. Use it only during a planned break and warn
-ring operators first.
+It restarts the managed service group, including production connections, not just
+the selected simulation. A standalone managed launcher restarts only its own
+service. It does not restart independently launched surfaces. Use it only during
+a planned break and warn ring operators first.
 
 One-time setup for the existing Windows shortcut:
 
@@ -103,14 +103,19 @@ One-time setup for the existing Windows shortcut:
 2. Right-click the shortcut, open **Properties**, and change **Target** to:
    `"C:\Program Files\nodejs\node.exe" "C:\Karate4\tournament-server\server-launcher.js"`
 3. Keep **Start in** set to `C:\Karate4\tournament-server`.
-4. Start that shortcut. The managed launcher stays running and starts the server.
+4. Configure the shortcut's environment with `TOURNAMENT_HTTPS_CONFIG` pointing
+   to `C:\TournamentPrivate\https\server.json`, then start it. The managed launcher
+   stays running and starts the server. Missing TLS configuration fails startup.
+   Prefer `.\launch-surfaces.ps1` for the coordinated three-service installation.
 
 The multi-surface PowerShell launcher also uses the managed launcher for each
 surface. Existing directly launched servers must be stopped before switching;
 do not start a second server on an occupied port.
 
-On the server computer, visit `http://localhost:3000/admin/` (or the applicable
-surface port). Click **Restart server...**, read the warning, type **RESTART**,
+On the server computer, visit `https://tourn-svr.home.arpa:3443/admin/` (or the applicable
+HTTPS surface port) and sign in as an Administrator. The configured fixed IP can
+replace the hostname. HTTP/localhost entry points are no longer supported.
+Click **Restart services...**, read the warning, type **RESTART**,
 and choose **Confirm restart**. **Cancel** or Escape leaves the server running.
 The server stops accepting new work, drains pending requests, stops and saves
 running/paused simulations, closes its database, and asks the launcher to start
@@ -118,11 +123,13 @@ a fresh process. The page waits for a different server instance, then reloads.
 Saved event data and results remain intact. Stopped simulations require reset
 before rerunning; they are not automatically resumed.
 
-The control is limited to loopback connections with a localhost/loopback Host,
-same-origin checks, a per-process confirmation token, and explicit confirmation.
-It is a local maintenance control, not a substitute for user-account
-authentication. LAN clients cannot invoke it. A directly launched server shows
-the control as unavailable instead of exiting without a relauncher.
+The control requires a server-owned source address, the configured HTTPS host,
+an Administrator session, same-origin/CSRF checks, a per-process confirmation
+token and explicit confirmation. With the three-service launcher it restarts all
+three minimized services and reopens home when all are ready; standalone
+`node server-launcher.js` controls only its own HTTPS service. Other LAN clients
+cannot invoke it. A directly launched server shows the control as unavailable
+instead of exiting without a relauncher.
 
 If reconnection times out, inspect the launcher command window and use
 **Check server status**. Do not start a duplicate server. A crash or failed

@@ -1177,6 +1177,7 @@
         '<div class="detail-card"><span>Assistance</span><strong>' + escapeHtml(assistance) + '</strong></div>',
         '<div class="detail-card"><span>Assignment started</span><strong>' + escapeHtml(ring.assignmentStartedAt ? new Date(ring.assignmentStartedAt).toLocaleString() : 'Not started') + '</strong></div>',
         '<div class="detail-card"><span>Last heartbeat</span><strong>' + escapeHtml(ring.lastHeartbeatAt ? new Date(ring.lastHeartbeatAt).toLocaleString() : 'Not received') + '</strong></div>',
+        '<a class="btn" target="_blank" rel="noopener" href="/tablet-pairing/?ring=' + encodeURIComponent(ring.ringId) + '">Daily tablet QR code</a>',
         '<button type="button" class="ring-reset-button" data-help="Reset this ring and clear its operational state after confirmation." data-action="reset-ring" data-ring-id="' + escapeHtml(ring.ringId) + '">Reset ring</button>'
       ].join('');
     }

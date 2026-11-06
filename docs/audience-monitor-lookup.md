@@ -20,8 +20,10 @@ is also described in the main [README](../README.md).
 
 ## Audience Monitor
 
-- URL: `http://localhost:3000/audience-monitor/` (also on the monitoring
-  server port 3002). Head Table links to it in a new tab.
+- URL: `https://tourn-svr.home.arpa:3443/audience-monitor/` (also on monitoring
+  HTTPS port 3445). The fixed IP `192.168.4.42` can replace the hostname.
+  Head Table links to it in a new tab. A permitted browser account and trusted
+  public Root CA are required; the HTTP listeners have been removed.
 - API: `GET /api/rings/monitor` returns a public projection built by
   `backend/audienceMonitor.js`. It contains ring labels, division
   descriptions, applicable phase progression, and assigned queued divisions

@@ -1,14 +1,7 @@
 const {
-  apiRoles, hasRole, VIEW_ROLES, homePath, pageView, isTabletEndpoint
+  apiRoles, hasRole, VIEW_ROLES, homePath, pageView
 } = require('./browserPermissions');
 
-function isTransitionalTablet(req, pathname) {
-  // This is a compatibility boundary, NOT device authentication. A non-browser
-  // client can spoof Dalvik until device enrollment replaces this exception.
-  return isTabletEndpoint(req.method, pathname) && /^Dalvik\//.test(req.get('user-agent') || '') &&
-    !req.get('origin') && !req.get('cookie') && !req.get('sec-fetch-site') &&
-    !req.get('sec-fetch-mode') && !req.get('sec-fetch-dest');
-}
 function createBrowserAuthorization({ config, security }) {
   return async (req, res, next) => {
     let pathname;
@@ -18,7 +11,7 @@ function createBrowserAuthorization({ config, security }) {
       return res.status(400).json({ error: 'Invalid request path.' });
     }
     if (pathname === '/api/health' && ['GET', 'HEAD'].includes(req.method)) return next();
-    if (isTransitionalTablet(req, pathname)) return next();
+    if (res.locals.tabletSession) return next();
     if (['GET', 'HEAD'].includes(req.method) &&
         /^(?:\/assets\/|\/tournament-management\/|\/audience-monitor\/|\/control-board-assets\/)[a-zA-Z0-9._/-]+\.(?:js|css|png|svg|jpg|ico|woff2?)$/.test(pathname) &&
         !pathname.includes('/.')) return next();
@@ -28,7 +21,7 @@ function createBrowserAuthorization({ config, security }) {
     res.set('Cache-Control', 'no-store');
     res.set('X-Content-Type-Options', 'nosniff');
     if (!config || !req.socket.encrypted) {
-      return res.status(426).type('html').send('<!doctype html><html lang="en"><meta charset="utf-8"><title>HTTPS required</title><h1>Browser access requires HTTPS</h1><p>Open the configured HTTPS Tournament Management address. HTTP is retained only for temporary tablet compatibility.</p></html>');
+      return res.status(426).type('html').send('<!doctype html><html lang="en"><meta charset="utf-8"><title>HTTPS required</title><h1>Browser access requires HTTPS</h1><p>Open the configured HTTPS Tournament Management address. This installation supports HTTPS only.</p></html>');
     }
     try {
       security.verifyRequest(req);
@@ -62,4 +55,4 @@ function createBrowserAuthorization({ config, security }) {
     }
   };
 }
-module.exports = { createBrowserAuthorization, isTransitionalTablet };
+module.exports = { createBrowserAuthorization };

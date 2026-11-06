@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ring Assignment - Daily QR Codes</title>
+  <script src="/assets/browser-session.js"></script>
+  <script src="/assets/tablet-pairing.js" defer></script>
+  <style>
+    body { font: 18px system-ui, sans-serif; margin: 24px auto; max-width: 760px; padding: 0 16px; }
+    label, button, select { font: inherit; margin: 8px; }
+    img { display: block; width: min(100%, 640px); height: auto; margin: auto; }
+    #status { color: #b91c1c; }
+    #printPages { display: none; }
+    .print-sheet { break-after: page; page-break-after: always; }
+    .print-sheet:last-child { break-after: auto; page-break-after: auto; }
+    @page { margin: 15mm; }
+    @media print { .controls, #status, #browserSessionBar, #browserLoginDialog { display: none !important; } }
+    @media print {
+      body { margin: 0; max-width: none; padding: 0; }
+      body > h1, body > .intro { display: none; }
+      img { width: 140mm; max-width: 100%; }
+      body.printing-all #code { display: none; }
+      body.printing-all #printPages { display: block; }
+    }
+  </style>
+</head>
+<body data-auth-workspace="tablet-pairing">
+  <h1>Ring Assignment</h1>
+  <p class="intro">Authorize each tablet by scanning its ring's daily QR code. Display one ring,
+    print the selected ring, or print a labeled sheet for every configured ring.</p>
+  <div class="controls">
+    <label>Ring <select id="ring"></select></label>
+    <label>Server address <select id="address"><option value="ip">Fixed IP (no DNS)</option><option value="dns">DNS name</option></select></label>
+    <button id="display" type="button">Display QR code</button>
+    <button id="print" type="button">Print selected ring</button>
+    <button id="printAll" type="button">Print all rings</button>
+  </div>
+  <p id="status" role="status"></p>
+  <section id="code" hidden>
+    <h2 id="title"></h2>
+    <p id="details"></p>
+    <img id="qr" alt="Daily ring authorization QR code">
+    <p>Scan with the Tournament Scoring App to authorize and assign this tablet to this ring.
+      This code can be reused today and expires at midnight on the server laptop.</p>
+  </section>
+  <div id="printPages"></div>
+</body>
+</html>

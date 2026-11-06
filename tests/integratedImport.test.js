@@ -655,7 +655,7 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   const expected = {
     'event-setup': 'Tournament', competitors: 'Competitors', volunteers: 'Volunteers', 'volunteer-types': 'Volunteer Types', groups: 'Divisions',
     results: 'Results', 'team-management': 'Teams', 'team-settings': 'Settings', 'ring-judges': 'Ring Judges',
-    'judge-assignments': 'Judge Assignments', 'ring-assignment': 'Division Assignments',
+    'judge-assignments': 'Judge Assignments', 'tablet-pairing': 'Ring Assignment', 'ring-assignment': 'Division Assignments',
     'head-table': 'Head Table', 'audience-viewer': 'Audience Viewer', printing: 'Printing', 'csv-settings': 'CSV Settings',
     'judge-management': 'Judging Management', 'clinic-management': 'Clinic Management',
     'event-history': 'Event History', 'your-account': 'Your Account', 'visual-definitions': 'Visual Definitions',
@@ -670,6 +670,7 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   assert.equal(page.nav('competitors').getAttribute('data-nav-parents'), 'tournament');
   assert.doesNotMatch(html, /id="navCompetitors"|id="navCompetitorsChildren"/);
   assert.equal(page.nav('ring-assignment').getAttribute('data-nav-parents'), 'tournament rings');
+  assert.ok(html.indexOf('data-nav-id="tablet-pairing"') < html.indexOf('data-nav-id="ring-assignment"'));
   assert.equal(page.nav('head-table').getAttribute('data-nav-parents'), 'tournament rings');
   assert.ok(html.indexOf('id="navVolunteers"') < html.indexOf('id="navCompetitionSettings"'));
   assert.doesNotMatch(html, /id="navSelectedEvent"|id="navActiveEvent"/);
@@ -681,15 +682,30 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   assert.equal(page.nav('event-setup').hasAttribute('aria-current'), false);
 });
 
+test('Ring Assignment opens daily QR tools inside the shell and unloads on navigation', async () => {
+  const page = await loadPage({ activeEvent: spring, search: '?view=tablet-pairing' });
+  assert.equal(page.element('administrationToolView').hidden, false);
+  assert.equal(page.element('administrationToolFrame').getAttribute('src'), '/tablet-pairing/?embedded=1');
+  assert.equal(page.element('administrationToolFrame').getAttribute('title'), 'Ring Assignment');
+  assert.equal(page.element('workspaceTitle').textContent, 'Ring Assignment');
+  assert.equal(page.element('tournamentReferenceLabel').textContent, 'Active Tournament');
+  await page.openDayOf();
+  assert.equal(page.element('ringAssignmentView').hidden, false);
+  assert.equal(page.element('administrationToolFrame').hasAttribute('src'), false);
+});
+
 test('role-limited shell selects an allowed initial workspace and rejects programmatic forbidden navigation', async () => {
-  const views = new Set(['ring-assignment', 'head-table', 'audience-viewer', 'your-account']);
-  const page = await loadPage({ activeEvent: spring,
+  const views = new Set(['tablet-pairing', 'ring-assignment', 'head-table', 'audience-viewer', 'your-account']);
+  const page = await loadPage({ activeEvent: spring, search: '?view=ring-assignment',
     browserSession: { ready: Promise.resolve(), canView: (view) => views.has(view) } });
   assert.equal(page.element('ringAssignmentView').hidden, false);
   assert.equal(page.element('tournamentReferenceSelect').disabled, true);
   await page.navigate('users');
   assert.equal(page.element('ringAssignmentView').hidden, false);
   assert.match(page.element('notice').textContent, /role does not permit/);
+  await page.navigate('tablet-pairing');
+  assert.equal(page.element('administrationToolFrame').getAttribute('src'), '/tablet-pairing/?embedded=1');
+  assert.equal(page.element('tournamentReferenceSelect').disabled, true);
   await page.navigate('head-table');
   assert.equal(page.element('headTableView').hidden, false);
 });
@@ -1575,6 +1591,7 @@ test('ring details use plain division names and explicit competitor buttons', as
   assert.match(markup, /data-ra-group="22"[^>]* aria-expanded="false"[^>]*>Show competitors<\/button>/);
   assert.doesNotMatch(markup, /Saved Competitor|Showing competitors|class="danger"/);
   assert.match(markup, /class="ra-ring-maintenance"/);
+  assert.match(markup, /target="_blank" rel="noopener" href="\/tablet-pairing\/\?ring=ring-a-1">Daily tablet QR code<\/a>/);
 });
 
 test('ring tiles separate connection from assignment and retain label order across refreshes', async () => {
@@ -2157,7 +2174,7 @@ test('Ring Assignment simulation is isolated, read-only and follows source selec
   assert.match(page.element('raDivisions').innerHTML, /Ring ~5 real min/);
   assert.match(page.element('raDivisions').innerHTML, /Start TBD/);
   await page.ringAction('raRings', { raRing: 'ring-a-1' });
-  assert.doesNotMatch(page.element('ringAssignmentDetails').innerHTML, /data-ra-remove|data-ra-reset/);
+  assert.doesNotMatch(page.element('ringAssignmentDetails').innerHTML, /data-ra-remove|data-ra-reset|tablet-pairing/);
   const writes = () => page.requests.filter((request) => request.init && request.init.method !== 'GET');
   const before = writes().length;
   await page.ringAction('raDivisions', { raDivision: '20' });
@@ -2765,7 +2782,7 @@ test('each tournament workspace shows the shared selection while live ring pages
 });
 
 test('all Ring Management selectors activate only after confirmation and preserve preparation context', async () => {
-  for (const view of ['ring-assignment', 'head-table', 'judge-assignments']) {
+  for (const view of ['tablet-pairing', 'ring-assignment', 'head-table', 'judge-assignments']) {
     const page = await loadPage({ activeEvent: winter, selectedEvent: spring, confirm: true });
     await page.navigate(view);
     assert.equal(page.element('tournamentReferenceLabel').textContent, 'Active Tournament');
@@ -2784,7 +2801,9 @@ test('all Ring Management selectors activate only after confirmation and preserv
     assert.equal(page.element('tournamentReferenceSelect').value, spring);
     assert.equal(page.element('eventNameInput').value, spring);
     assert.equal(page.element('bannerEventName').textContent, spring);
-    if (view === 'judge-assignments') {
+    if (view === 'tablet-pairing') {
+      assert.equal(page.element('administrationToolFrame').getAttribute('src'), '/tablet-pairing/?embedded=1');
+    } else if (view === 'judge-assignments') {
       assert.equal(page.requests.slice(start).some((request) => request.path.startsWith('/api/rings')), false);
     } else {
       assert.ok(page.requests.slice(start).some((request) => request.path === '/api/rings' && request.name === spring));

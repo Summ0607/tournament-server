@@ -1,10 +1,10 @@
 const SURFACE_PORTS = Object.freeze({
-  pre: 3000,
-  ringOps: 3001,
-  monitoring: 3002,
-  medical: 3003,
-  adminProgress: 3004,
-  post: 3010
+  pre: 3443,
+  ringOps: 3444,
+  monitoring: 3445,
+  medical: 3446,
+  adminProgress: 3447,
+  post: 3453
 });
 
 function resolveSurfaceName(surfaceName = 'pre') {

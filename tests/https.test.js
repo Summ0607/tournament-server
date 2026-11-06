@@ -27,7 +27,7 @@ test('HTTPS config loads external CA-signed DNS/IP certificates and stable surfa
   assert.equal(HTTPS_PORTS.monitoring, 3445);
   assert.equal(HTTPS_PORTS.adminProgress, 3447);
   assert.deepEqual(httpsOrigins(loaded, 'pre'), ['https://tourn-svr.home.arpa:3443', 'https://192.168.4.42:3443']);
-  assert.equal(loadHttpsConfig(undefined), null);
+  assert.throws(() => loadHttpsConfig(undefined), /HTTPS configuration is required/);
 });
 
 test('HTTPS config rejects repository files, missing files, bad SANs, keys, CA and source limit', () => {
@@ -105,7 +105,7 @@ async function setup(t, enabled = true) {
   } };
 }
 
-test('staged listeners require trusted CA/name, serve account UI, and preserve legacy HTTP without exposing login', async (t) => {
+test('HTTPS requires trusted CA/name and HTTP test requests cannot expose login or tablet operations', async (t) => {
   const { tlsServer, httpServer } = await setup(t);
   for (const pathname of ['/account/users', '/account/settings']) {
     assert.equal((await request(tlsServer, { pathname })).status, 302);
@@ -134,11 +134,10 @@ test('staged listeners require trusted CA/name, serve account UI, and preserve l
   assert.equal(login.headers['set-cookie'], undefined);
   const legacy = await request(httpServer, { secure: false, pathname: '/api/rings/ring-a-1/heartbeat',
     method: 'POST', body: { value: 42 }, headers: { Origin: '', 'User-Agent': 'Dalvik/2.1.0 (Android)' } });
-  assert.equal(legacy.status, 200);
-  assert.deepEqual(legacy.json, { ok: true, value: 42 });
-  assert.equal(legacy.headers['access-control-allow-origin'], '*');
+  assert.equal(legacy.status, 426);
+  assert.equal(legacy.headers['access-control-allow-origin'], undefined);
   const status = await request(httpServer, { secure: false, pathname: '/api/https-status' });
-  assert.equal(status.json.legacyHttpEnabled, true);
+  assert.equal(status.json.legacyHttpEnabled, false);
   assert.equal(status.json.browserAuthorizationEnforced, true);
   assert.equal(status.json.tournamentAuthorizationEnforced, false);
 });
@@ -283,7 +282,7 @@ test('current roles apply when role-change revocation is disabled, and restartin
   assert.equal((await request(tlsServer, { pathname: '/api/events/create', method: 'POST', body: {}, headers: admin })).status, 200);
 });
 
-test('only exact Dalvik native-tablet calls bypass browser login, never browser traffic or unclassified endpoints', async (t) => {
+test('Dalvik user agents no longer bypass authorization on either listener', async (t) => {
   const { tlsServer, httpServer } = await setup(t);
   const native = { 'User-Agent': 'Dalvik/2.1.0 (Linux; Android)', Origin: '' };
   for (const [method, pathname] of [
@@ -295,7 +294,7 @@ test('only exact Dalvik native-tablet calls bypass browser login, never browser 
     for (const secure of [true, false]) {
       assert.equal((await request(secure ? tlsServer : httpServer, {
         secure, method, pathname, headers: native, ...(method === 'POST' ? { body: {} } : {})
-      })).status, 200, pathname);
+      })).status, secure ? (method === 'POST' ? 403 : 401) : 426, pathname);
     }
   }
   for (const headers of [{ 'User-Agent': 'Mozilla/5.0' },

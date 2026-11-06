@@ -406,7 +406,7 @@ test('event APIs synchronize an active event, lock every field, and archive/rese
     '\nreturn { app, db, simulatorRouter, authorize: (store, config) => { accountWeb = createAccountWeb({store, config, surface: "pre"}); } };';
   const loadServer = vm.compileFunction(source, ['require', '__dirname', 'console', 'process'], { filename });
   const { app, db, simulatorRouter, authorize } = loadServer(createRequire(filename), root,
-    { log() {}, warn() {}, error() {} }, { env: {}, argv: [], on() {} });
+    { log() {}, warn() {}, error() {} }, { env: { TOURNAMENT_HTTPS_CONFIG: configFile }, argv: [], on() {} });
   authorize(accounts, tlsConfig);
   const https = require('node:https');
   const server = await new Promise((resolve) => {

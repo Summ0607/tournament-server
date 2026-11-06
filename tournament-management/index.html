@@ -1518,6 +1518,7 @@
             <div id="navRingsChildren" class="sidebar-children" hidden>
               <button class="sidebar-item" type="button" data-nav-id="ring-judges" data-nav-label="Ring Judges" data-nav-parents="tournament rings">Ring Judges</button>
               <button class="sidebar-item" type="button" data-nav-id="judge-assignments" data-nav-label="Judge Assignments" data-nav-parents="tournament rings" data-nav-planned="true">Judge Assignments <span class="nav-planned">Planned</span></button>
+              <button class="sidebar-item" type="button" data-nav-id="tablet-pairing" data-nav-label="Ring Assignment" data-nav-parents="tournament rings">Ring Assignment</button>
               <button class="sidebar-item" type="button" data-nav-id="ring-assignment" data-nav-label="Division Assignments" data-nav-parents="tournament rings">Division Assignments</button>
               <button class="sidebar-item" type="button" data-nav-id="head-table" data-nav-label="Head Table" data-nav-parents="tournament rings">Head Table</button>
             </div>
@@ -2185,6 +2186,7 @@
         import: 'Load competitor registrations into the selected event.',
         groups: 'Build and adjust the competitor groups for the selected event.',
         'ring-assignment': 'Assign the active event\'s saved divisions to rings.',
+        'tablet-pairing': 'Authorize tablets for rings and display or print the daily QR codes.',
         'head-table': 'Monitor the active event, respond to assistance, and identify rings needing attention.',
         placeholder: ''
       };
@@ -2206,7 +2208,7 @@
       let importBusy = false;
       let activationBusy = false;
       let activeRequestToken = 0;
-      const dayOfViews = ['ring-assignment', 'head-table', 'judge-assignments'];
+      const dayOfViews = ['tablet-pairing', 'ring-assignment', 'head-table', 'judge-assignments'];
       const createEventBtn = document.getElementById('createEventBtn');
       const deleteEventBtn = document.getElementById('deleteEventBtn');
       const resetEventBtn = document.getElementById('resetEventBtn');
@@ -2857,6 +2859,9 @@
           renderTournamentList();
           if (currentView === 'ring-assignment') raLoad();
           else if (currentView === 'head-table') htLoad();
+          else if (currentView === 'tablet-pairing' && activated) {
+            document.getElementById('administrationToolFrame').setAttribute('src', '/tablet-pairing/?embedded=1');
+          }
         }
       }
 
@@ -3087,7 +3092,8 @@
         document.getElementById('volunteersView').hidden = !['volunteers', 'volunteer-types'].includes(view);
         const toolPaths = { 'server-maintenance': '/admin/?embedded=1', simulator: '/simulator/?embedded=1',
           users: '/account/users?embedded=1', 'user-account-settings': '/account/settings?embedded=1',
-          'audience-viewer': '/audience-monitor/?embedded=1', 'your-account': '/account/profile?embedded=1' };
+          'audience-viewer': '/audience-monitor/?embedded=1', 'your-account': '/account/profile?embedded=1',
+          'tablet-pairing': '/tablet-pairing/?embedded=1' };
         const toolFrame = document.getElementById('administrationToolFrame');
         document.getElementById('administrationToolView').hidden = !toolPaths[view];
         if (toolPaths[view]) {
@@ -4332,7 +4338,7 @@
           </section>
           ${detailGroup ? `<section class="ra-detail"><h3>${gbEsc(raGroupLabel(raAnchor(detailGroup)))}</h3>${raMembers(detailGroup)}</section>` : ''}
           ${ra.simulatorRunId ? '<p class="ra-meta">Simulation data is read-only.</p>'
-            : `<div class="ra-ring-maintenance"><button type="button" data-ra-reset data-help="Clear this ring's assignments and operational state after confirmation."${ra.busy ? ' disabled' : ''}>Reset ring</button></div>`}`;
+            : `<div class="ra-ring-maintenance"><a target="_blank" rel="noopener" href="/tablet-pairing/?ring=${encodeURIComponent(ring.ringId)}">Daily tablet QR code</a><button type="button" data-ra-reset data-help="Clear this ring's assignments and operational state after confirmation."${ra.busy ? ' disabled' : ''}>Reset ring</button></div>`}`;
       }
 
       function raScheduleState() {

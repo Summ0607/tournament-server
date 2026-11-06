@@ -1,40 +1,34 @@
 param(
   [switch]$OpenBrowser = $true,
-  [string]$HttpsConfig = "C:\TournamentPrivate\https\server.json",
-  [switch]$HttpOnly
+  [string]$HttpsConfig = "C:\TournamentPrivate\https\server.json"
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $nodeExe = "node"
 $serverScript = Join-Path $repoRoot "server-launcher.js"
-$scheme = "http"
-$entryHost = "localhost"
-if (!$HttpOnly) {
-  if (!(Test-Path -LiteralPath $HttpsConfig -PathType Leaf)) { throw "HTTPS configuration not found. Run setup-https.ps1 first, or explicitly use -HttpOnly for the unsecured legacy service." }
-  $HttpsConfig = (Resolve-Path -LiteralPath $HttpsConfig -ErrorAction Stop).Path
-  & $nodeExe -e "require(process.argv[1]).loadHttpsConfig(process.argv[2])" (Join-Path $repoRoot "backend\httpsConfig.js") $HttpsConfig
-  if ($LASTEXITCODE -ne 0) { throw "Invalid HTTPS installation. No surface processes were launched." }
-  $httpsSettings = Get-Content -LiteralPath $HttpsConfig -Raw | ConvertFrom-Json
-  $entryHost = $httpsSettings.hostname
-  $scheme = "https"
-}
+if (!(Test-Path -LiteralPath $HttpsConfig -PathType Leaf)) { throw "HTTPS configuration not found. Run setup-https.ps1 first. HTTP-only startup is no longer supported." }
+$HttpsConfig = (Resolve-Path -LiteralPath $HttpsConfig -ErrorAction Stop).Path
+& $nodeExe -e "require(process.argv[1]).loadHttpsConfig(process.argv[2])" (Join-Path $repoRoot "backend\httpsConfig.js") $HttpsConfig
+if ($LASTEXITCODE -ne 0) { throw "Invalid HTTPS installation. No surface processes were launched." }
+$httpsSettings = Get-Content -LiteralPath $HttpsConfig -Raw | ConvertFrom-Json
+$entryHost = $httpsSettings.hostname
 
 $surfaces = @(
   [pscustomobject]@{
     Name = "pre"
-    Port = 3000
-    Url = "${scheme}://${entryHost}:$(if ($HttpOnly) { 3000 } else { 3443 })/tournament-management/"
+    Port = 3443
+    Url = "https://${entryHost}:3443/tournament-management/"
   },
   [pscustomobject]@{
     Name = "monitoring"
-    Port = 3002
-    Url = "${scheme}://${entryHost}:$(if ($HttpOnly) { 3002 } else { 3445 })/event-progress/"
+    Port = 3445
+    Url = "https://${entryHost}:3445/event-progress/"
   },
   [pscustomobject]@{
     Name = "adminProgress"
-    Port = 3004
-    Url = "${scheme}://${entryHost}:$(if ($HttpOnly) { 3004 } else { 3447 })/administration-progress/"
+    Port = 3447
+    Url = "https://${entryHost}:3447/administration-progress/"
   }
 )
 
@@ -42,14 +36,11 @@ $groupId = [guid]::NewGuid().ToString('N')
 $groupPipe = "\\.\pipe\tournament-services-$groupId"
 $groupToken = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
 foreach ($surface in $surfaces) {
-  $ports = @($surface.Port)
-  if (!$HttpOnly) { $ports += $surface.Port + 443 }
-  foreach ($port in $ports) {
-    $probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $port)
-    try { $probe.Start() }
-    catch { throw "Port $port is already in use. Stop the existing services before launching this coordinated group. No services were launched." }
-    finally { $probe.Stop() }
-  }
+  $port = $surface.Port
+  $probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $port)
+  try { $probe.Start() }
+  catch { throw "Port $port is already in use. Stop the existing services before launching this coordinated group. No services were launched." }
+  finally { $probe.Stop() }
 }
 
 function Start-Surface {
@@ -60,7 +51,7 @@ function Start-Surface {
   $command = @"
 Set-Location '$($repoRoot.Replace("'", "''"))'
 `$env:TOURNAMENT_SURFACE = '$($Surface.Name)'
-`$env:TOURNAMENT_HTTPS_CONFIG = '$(if ($HttpOnly) { '' } else { $HttpsConfig.Replace("'", "''") })'
+`$env:TOURNAMENT_HTTPS_CONFIG = '$($HttpsConfig.Replace("'", "''"))'
 `$env:TOURNAMENT_SERVICE_GROUP = '$groupPipe'
 `$env:TOURNAMENT_SERVICE_TOKEN = '$groupToken'
 `$env:TOURNAMENT_HOME_URL = '$($surfaces[0].Url)'

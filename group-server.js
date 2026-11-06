@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const https = require('node:https');
+const { loadHttpsConfig, HTTPS_PORTS, httpsOrigins } = require('./backend/httpsConfig');
+const httpsConfig = loadHttpsConfig(process.env.TOURNAMENT_HTTPS_CONFIG);
 const sqlite3 = require('sqlite3').verbose();
 
 require('./db/init');
@@ -27,28 +29,26 @@ const { createResultPacketStore } = require('./backend/resultPacket');
 const { createSimulatorRunStore } = require('./backend/simulatorRunStore');
 const { createSimulatorRunRouter } = require('./backend/simulatorRunRoutes');
 const { createSimulatorRunClientFactory } = require('./backend/simulatorRunAdapter');
-const { resolveSurfaceName, resolveSurfacePort } = require('./backend/surfacePorts');
+const { resolveSurfaceName } = require('./backend/surfacePorts');
 const { registerPageRoutes } = require('./backend/pages');
 const { createServerControl } = require('./backend/serverControl');
 const { createEventConfigStore, normalizeEventRingConfig, normalizeTournamentScope, hasOperationalUse } = require('./backend/eventConfig');
 const { writeJsonAtomicSync } = require('./backend/atomicJsonFile');
 const { normalizeTournamentDays } = require('./backend/tournamentSchedule');
-const { loadHttpsConfig, HTTPS_PORTS, httpsOrigins } = require('./backend/httpsConfig');
 const { createAccountSessions } = require('./backend/accountSessions');
 const { createAccountWeb } = require('./backend/accountWeb');
+const { createTabletStore } = require('./backend/tabletAuthorization');
 const { createAppReleaseRouter } = require('./backend/appRelease');
 
 const app = express();
-let httpServer;
 let httpsServer;
 let accountStore;
 let accountWeb;
+let tabletStore;
 let serviceGroupState = { restartAvailable: false, restarting: false,
   message: 'Waiting for the three-service launcher. Start using launch-surfaces.ps1.' };
-const httpsConfig = loadHttpsConfig(process.env.TOURNAMENT_HTTPS_CONFIG);
 let shuttingDown = false;
 const ACTIVE_SURFACE = resolveSurfaceName(process.env.TOURNAMENT_SURFACE);
-const PORT = resolveSurfacePort(ACTIVE_SURFACE);
 const SURFACE_ENTRY_PATH = ACTIVE_SURFACE === 'adminProgress'
   ? '/administration-progress/'
   : (ACTIVE_SURFACE === 'monitoring' ? '/event-progress/' : '/tournament-management/');
@@ -224,16 +224,6 @@ app.use('/api/server-control', createServerControl({
     else shutdownServer(true);
   }
 }));
-app.use((req, res, next) => {
-  if (req.socket.encrypted) return next();
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  next();
-});
 app.use((err, req, res, next) => {
   if (err && err.type === 'entity.parse.failed') {
     return res.status(400).json({ errors: ['payload: malformed JSON'] });
@@ -1340,10 +1330,13 @@ app.use('/api', createRingRouter({
 }));
 
 async function startServer() {
-  if (httpsConfig) {
-    accountStore = await createAccountSessions({ file: httpsConfig.accountDatabase });
-  }
-  accountWeb = createAccountWeb({ store: accountStore, config: httpsConfig, surface: ACTIVE_SURFACE });
+  accountStore = await createAccountSessions({ file: httpsConfig.accountDatabase });
+  tabletStore = await createTabletStore({ file: `${httpsConfig.accountDatabase}.devices` });
+  accountWeb = createAccountWeb({ store: accountStore, config: httpsConfig, surface: ACTIVE_SURFACE, tabletStore,
+    getTabletContext: () => {
+      const event = readActiveEvent();
+      return { event, rings: event ? ensureStateStructure(readAssignmentState(event)).rings : {} };
+    } });
   try {
     await primeGroupCacheFromDatabase();
   } catch (err) {
@@ -1364,19 +1357,14 @@ async function startServer() {
     });
   }
   try {
-    if (httpsConfig) {
-      httpsServer = https.createServer(httpsConfig.options, app);
-      await listen(httpsServer, HTTPS_PORTS[ACTIVE_SURFACE]);
-      console.log(`HTTPS entry: ${httpsOrigins(httpsConfig, ACTIVE_SURFACE)[0]}${SURFACE_ENTRY_PATH}`);
-      console.log(`Server certificate expires: ${httpsConfig.certificateExpiresAt}`);
-    }
-    httpServer = require('node:http').createServer(app);
-    await listen(httpServer, PORT);
-    console.warn(`UNSECURED transitional HTTP: http://localhost:${PORT}${SURFACE_ENTRY_PATH}`);
-    console.warn('Browser access requires configured HTTPS and role authorization. Exact native-tablet endpoints remain temporarily unauthenticated. Do not expose this staged installation to untrusted networks.');
+    httpsServer = https.createServer(httpsConfig.options, app);
+    await listen(httpsServer, HTTPS_PORTS[ACTIVE_SURFACE]);
+    console.log(`HTTPS entry: ${httpsOrigins(httpsConfig, ACTIVE_SURFACE)[0]}${SURFACE_ENTRY_PATH}`);
+    console.log(`Server certificate expires: ${httpsConfig.certificateExpiresAt}`);
+    console.log('HTTPS-only: legacy HTTP listeners are disabled. Tablets require daily QR authorization.');
     if (process.connected) process.send({ type: 'server-ready' });
   } catch (error) {
-    await Promise.all([httpServer, httpsServer].filter((server) => server?.listening)
+    await Promise.all([httpsServer].filter((server) => server?.listening)
       .map((server) => new Promise((resolve) => server.close(resolve))));
     throw error;
   }
@@ -1387,7 +1375,7 @@ async function shutdownServer(restart = false) {
   shuttingDown = true;
   console.log(restart ? 'Restart requested: draining requests and saving simulator state...' : 'Shutting down tournament server...');
   try {
-    const drained = Promise.all([httpServer, httpsServer].filter((server) => server?.listening)
+    const drained = Promise.all([httpsServer].filter((server) => server?.listening)
       .map((server) => new Promise((resolve, reject) => {
         server.close((error) => error ? reject(error) : resolve());
         server.closeIdleConnections();
@@ -1395,6 +1383,7 @@ async function shutdownServer(restart = false) {
     await Promise.all([drained, simulatorRouter.shutdown()]);
     await simulatorRouter.shutdown();
     await new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
+    if (tabletStore) await tabletStore.close();
     if (accountStore) await accountStore.close();
     if (restart && process.connected) {
       process.send({ type: 'restart-ready' }, (error) => {
@@ -1424,6 +1413,7 @@ process.on('message', (message) => {
 startServer().catch(async (error) => {
   console.error('Unable to start tournament server; no HTTP-only fallback will be used:', error);
   process.exitCode = 1;
+  if (tabletStore) await tabletStore.close();
   if (accountStore) await accountStore.close();
   await simulatorRouter.shutdown();
   await new Promise((resolve) => db.close(resolve));

@@ -4,9 +4,7 @@ const tls = require('node:tls');
 const { X509Certificate } = require('node:crypto');
 const { SURFACE_PORTS } = require('./surfacePorts');
 
-const HTTPS_PORTS = Object.freeze(Object.fromEntries(
-  Object.entries(SURFACE_PORTS).map(([surface, port]) => [surface, port + 443])
-));
+const HTTPS_PORTS = SURFACE_PORTS;
 
 function requirePrivateFile(file, rootDir = path.resolve(__dirname, '..')) {
   if (typeof file !== 'string' || !path.isAbsolute(file)) {
@@ -22,7 +20,7 @@ function requirePrivateFile(file, rootDir = path.resolve(__dirname, '..')) {
 }
 
 function loadHttpsConfig(file) {
-  if (!file) return null;
+  if (!file) throw new Error('HTTPS configuration is required. Run setup-https.ps1 and set TOURNAMENT_HTTPS_CONFIG, or use launch-surfaces.ps1. HTTP-only startup is no longer supported.');
   const config = JSON.parse(fs.readFileSync(requirePrivateFile(file), 'utf8'));
   const keys = ['hostname', 'ipAddress', 'keyFile', 'certFile', 'caFile', 'accountDatabase', 'sourceLimit'];
   if (!config || typeof config !== 'object' || Array.isArray(config) ||
