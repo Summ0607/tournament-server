@@ -25,9 +25,24 @@
   function status(message, error = false) {
     $('status').textContent = message;
     $('status').dataset.error = String(error);
+    $('status').hidden = !message;
   }
   function clearPasswords() {
     for (const id of ['loginPassword', 'userPassword', 'confirmPassword']) $(id).value = '';
+    validatePasswords();
+  }
+  function validatePasswords() {
+    const mismatch = $('userPassword').value !== $('confirmPassword').value;
+    const message = mismatch ? 'New passwords do not match.' : '';
+    $('confirmPassword').setCustomValidity(message);
+    $('confirmPassword').setAttribute('aria-invalid', String(mismatch));
+    $('passwordMismatch').textContent = message;
+    $('passwordMismatch').hidden = !mismatch;
+    return !mismatch;
+  }
+  function userSaveStatus(message) {
+    $('userSaveStatus').textContent = message;
+    $('userSaveStatus').hidden = !message;
   }
   function renderSession() {
     const admin = session?.account.roles.includes('administrator');
@@ -38,6 +53,7 @@
     $('sessionDetails').textContent = session
       ? `Signed in as ${session.account.userId} (${session.account.roles.map((role) => session.roleLabels?.[role] || role).join(', ')}).`
       : '';
+    $('adminNotice').hidden = !admin || view !== 'settings';
     document.querySelectorAll('[data-admin-link]').forEach((link) => { link.hidden = !admin; });
     if (session) $('accountHome').href = session.homePath;
   }
@@ -45,6 +61,7 @@
     session = null;
     csrfToken = '';
     clearPasswords();
+    userSaveStatus('');
     if ((userDirty || policyDirty) && editorUserId) {
       $('loginUser').value = editorUserId;
       $('loginUser').readOnly = true;
@@ -63,7 +80,7 @@
       if (response.status === 401 && endpoint !== '/login') {
         signedOut(session || editorUserId
           ? 'Your session expired or was revoked. Unsaved edits are retained on this page; sign in again. Password fields were cleared.'
-          : 'Sign in to continue. Use an account provided by your administrator.');
+          : '');
       }
       const error = new Error(data?.error || `Account request failed (${response.status}).`);
       error.status = response.status;
@@ -114,7 +131,7 @@
   }));
   const policyGroups = [
     ['Identifiers and passwords', 'New/reset passwords require uppercase (A-Z), lowercase (a-z), a number (0-9), and a special character. Spaces do not count as special characters. Existing passwords still work. Email delivery and self-service recovery are not enabled.', ['userIdMinLength', 'userIdMaxLength', 'passwordMinLength', 'passwordMaxLength']],
-    ['Browser sessions', 'Background refreshes do not count as activity. An unattended Audience Viewer signs out at the same idle deadline as other browser sessions.', ['idleTimeoutMinutes', 'absoluteTimeoutHours', 'allowConcurrentSessions', 'logoutAllSessions']],
+    ['Browser sessions', 'Background refreshes do not count as activity. The standalone read-only Audience Monitor allows 12 hours from sign-in without interaction; editable workspaces retain these idle and absolute deadlines.', ['idleTimeoutMinutes', 'absoluteTimeoutHours', 'allowConcurrentSessions', 'logoutAllSessions']],
     ['Failed sign-in protection', 'Repeated failures cause a cooldown. A separate per-source limit is configured in the private HTTPS configuration.', ['failureThreshold', 'failureWindowMinutes', 'cooldownMinutes']],
     ['Revoking existing sessions', 'Disabled accounts always lose access. When role-change revocation is off, each request still checks current permissions.', ['revokeOnPasswordReset', 'revokeOnRoleChange']]
   ];
@@ -159,6 +176,8 @@
     $('userEnabled').disabled = true;
     $('userEnabled').checked = true;
     $('userFormTitle').textContent = 'Add user';
+    validatePasswords();
+    userSaveStatus('');
     userDirty = false;
   }
   function editUser(account) {
@@ -170,7 +189,7 @@
     $('userEnabled').disabled = false;
     $('userEnabled').checked = account.enabled;
     $('roles').querySelectorAll('input').forEach((input) => { input.checked = account.roles.includes(input.value); });
-    $('userFormTitle').textContent = `Edit ${account.userId} (revision ${account.revision})`;
+    $('userFormTitle').textContent = `Edit ${account.userId}`;
   }
   async function loadUsers() {
     const data = await request('/users');
@@ -207,7 +226,7 @@
     }
     if (!policyLoaded) await loadPolicy();
     if (!usersLoaded && view === 'users') await loadUsers();
-    status('Account administration ready. Browser role permissions apply to all tournaments.');
+    status(view === 'users' ? '' : 'Account administration ready. Browser role permissions apply to all tournaments.');
   }
   $('loginForm').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -230,7 +249,11 @@
       signedOut('Signed out.');
     });
   });
-  $('userForm').addEventListener('input', () => { userDirty = true; });
+  $('userForm').addEventListener('input', () => {
+    userDirty = true;
+    userSaveStatus('');
+    validatePasswords();
+  });
   $('policyForm').addEventListener('input', () => { policyDirty = true; });
   $('newUser').addEventListener('click', () => { if (canDiscard(userDirty)) resetUser(); });
   $('refreshUsers').addEventListener('click', () => {
@@ -241,9 +264,13 @@
   });
   $('userForm').addEventListener('submit', (event) => {
     event.preventDefault();
+    if (!validatePasswords()) {
+      $('confirmPassword').reportValidity();
+      return;
+    }
+    userSaveStatus('');
     run(async () => {
       const password = $('userPassword').value;
-      if (password !== $('confirmPassword').value) throw new Error('New passwords do not match.');
       if (!selected && !password) throw new Error('A password is required for a new account.');
       const roles = [...$('roles').querySelectorAll('input:checked')].map((input) => input.value);
       if (!roles.length) throw new Error('Select at least one role.');
@@ -258,8 +285,9 @@
       clearPasswords();
       $('userId').disabled = true;
       $('userEnabled').disabled = false;
-      $('userFormTitle').textContent = `Edit ${selected.userId} (revision ${selected.revision})`;
-      status('User saved.');
+      $('userFormTitle').textContent = `Edit ${selected.userId}`;
+      status('');
+      userSaveStatus('User saved.');
       try { await checkSession(); }
       catch (error) {
         if (!error.sessionExpired) throw error;

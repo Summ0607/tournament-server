@@ -75,7 +75,7 @@
         populate(saved.values);
         baseline = JSON.stringify(values());
         updatePreview();
-        notice('Typography, style and dimensions apply to Tournament Management on refresh. Colors remain reference-only.');
+        notice('Typography, style and dimensions apply to Tournament Management on refresh. Saved colors apply to the Audience Monitor trial on refresh; other pages keep their existing colors.');
       } catch (error) { if (current === token) notice(error.message, true); }
       finally { if (current === token) { loading = false; controls(); } }
     }
@@ -91,7 +91,7 @@
           body: JSON.stringify({ revision: saved.revision, values: next }) });
         saved = { revision: result.revision, values: rules.validate(result.values) };
         populate(saved.values); baseline = JSON.stringify(values()); updatePreview();
-        notice('Definitions saved. Refresh Tournament Management to apply typography, style and dimensions. Colors are unchanged.');
+        notice('Definitions saved. Refresh Tournament Management to apply typography, style and dimensions. Refresh the Audience Monitor to apply saved colors; other pages keep their existing colors.');
       } catch (error) { notice(error.message, true); }
       finally { writing = false; controls(); }
     });

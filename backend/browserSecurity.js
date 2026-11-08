@@ -27,9 +27,14 @@ function createBrowserSecurity({ store, allowedOrigins }) {
   }
   async function authenticate(req, res) {
     const token = sessionToken(req);
-    const session = await store.resolveSession(token);
+    const read = ['GET', 'HEAD'].includes(req.method);
+    const pathname = (req.originalUrl || req.path).split('?')[0];
+    const audiencePage = read && /^\/audience-monitor(?:\/(?:index\.html)?|\.html)?$/.test(pathname);
+    const audienceApi = req.get('x-tournament-audience') === 'true' && (
+      read && /^(?:\/api\/(?:account\/session|rings\/monitor|visual-definitions|simulator\/runs(?:\/[^/]+\/audience)?))$/.test(pathname)
+      || req.method === 'POST' && pathname === '/api/account/logout');
+    const session = await store.resolveSession(token, { audience: audiencePage || audienceApi });
     if (!session) {
-      res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
       fail('Sign in to continue.', 401);
     }
     if (!['GET', 'HEAD'].includes(req.method)) {

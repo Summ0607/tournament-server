@@ -268,9 +268,11 @@
     #rjForm input:not([type="checkbox"]), #rjForm select, #rjForm textarea { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid var(--line); }
     #rjForm .rj-wide, #rjError, #rjForm .actions { grid-column: 1 / -1; }
     #rjForm .rj-flag { display: flex; align-items: center; }
+    #rjVolunteerFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
     @media (max-width: 640px) {
       #rjDialog { padding: 16px; }
       #rjForm { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+      #rjVolunteerFields { grid-template-columns: minmax(0, 1fr); }
     }
     #rjAdd, #rjPopulate, #rjPopulateVolunteers, #rjSave, #vmAdd, #vmImport, #vmSave { background: #45698b; color: #fff; border: 1px solid #45698b; }
     #volunteersView .table-wrap { max-height: none; }
@@ -403,7 +405,6 @@
     .cl-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 12px; margin-bottom: 12px; background: #f6f8fc; border: 1px solid #d8e1ed; border-radius: 8px; }
     .cl-toolbar label { display: grid; gap: 5px; min-width: 0; flex: 1 1 125px; color: #344a67; font-size: 12px; font-weight: 600; }
     .cl-toolbar .cl-search-field { flex: 2 1 210px; }
-    .cl-toolbar .cl-age-field { flex: 0 1 76px; }
     .cl-toolbar .cl-page-size { flex: 0 1 90px; }
     .cl-toolbar input, .cl-toolbar select { box-sizing: border-box; width: 100%; min-width: 0; height: 36px; border: 1px solid #bac7d8; border-radius: 6px; padding: 5px 8px; background: #fff; color: #20334e; font: inherit; font-size: 13px; }
     .cl-toolbar input:focus-visible, .cl-toolbar select:focus-visible { outline: 2px solid #2f66c8; outline-offset: 2px; }
@@ -418,20 +419,23 @@
     #competitorLookupView button:disabled { opacity: .5; cursor: default; }
     #clStatus { color: #526580; font-size: 13px; margin: 8px 0 12px; }
     .cl-table-wrap { max-height: 72vh; border: 1px solid #d8e1ed; border-radius: 8px; overflow: auto; }
-    .cl-table { width: 100%; border-collapse: collapse; table-layout: fixed; color: #253b57; }
+    .cl-table { width: 100%; min-width: 1100px; border-collapse: collapse; table-layout: fixed; color: #253b57; }
+    .cl-table th select { display: block; width: 100%; min-height: 28px; margin-top: 5px; border: 1px solid #bac7d8; border-radius: 4px; background: #fff; color: #253b57; font: inherit; }
     .cl-table th { position: sticky; top: 0; padding: 8px 10px; background: #f3f6fb; color: #526580; text-align: left; font-size: 11px; font-weight: 700; border-bottom: 1px solid #d8e1ed; }
     .cl-table td { height: 36px; padding: 6px 10px; border-bottom: 1px solid #e8edf4; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
     .cl-table tbody tr:nth-child(even) { background: #fafbfd; }
     .cl-table tbody tr:hover { background: #f0f5fc; }
     .cl-table tbody tr { cursor: pointer; }
     .cl-table tbody tr[aria-selected="true"] { background: #eaf2ff; box-shadow: inset 3px 0 #2f66c8; }
-    .cl-table col:nth-child(1) { width: 12%; }
-    .cl-table col:nth-child(2) { width: 22%; }
-    .cl-table col:nth-child(3) { width: 7%; }
-    .cl-table col:nth-child(4) { width: 10%; }
+    .cl-table col:nth-child(1) { width: 9%; }
+    .cl-table col:nth-child(2) { width: 17%; }
+    .cl-table col:nth-child(3) { width: 5%; }
+    .cl-table col:nth-child(4) { width: 8%; }
     .cl-table col:nth-child(5) { width: 10%; }
-    .cl-table col:nth-child(6) { width: 22%; }
-    .cl-table col:nth-child(7) { width: 17%; }
+    .cl-table col:nth-child(6) { width: 16%; }
+    .cl-table col:nth-child(7) { width: 9%; }
+    .cl-table col:nth-child(8) { width: 14%; }
+    .cl-table col:nth-child(9) { width: 12%; }
     #competitorLookupView .cl-result { border: 0; background: transparent; padding: 0; min-height: 22px; color: #20334e; font: inherit; font-weight: 700; text-align: left; }
     #competitorLookupView .cl-sort { border: 0; background: transparent; padding: 0; min-height: 20px; font: inherit; color: inherit; }
     .cl-rank { display: inline-block; border: 1px solid #cddbee; background: #eef3fa; color: #31547d; border-radius: 5px; padding: 0 5px; font-size: 11px; font-weight: 700; }
@@ -890,14 +894,6 @@
     .sidebar-tool:hover,
     .sidebar-disclosure:hover { background: #31465f; color: #fff; }
     .sidebar :focus-visible { outline: 3px solid #a9d0ff; outline-offset: -3px; }
-    .nav-planned {
-      margin-left: auto;
-      padding: 2px 4px;
-      border: 1px solid #71859f;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 500;
-    }
     .nav-toggle { display: none; }
 
     .sidebar-item.locked {
@@ -1517,18 +1513,18 @@
             <button id="navRings" class="sidebar-disclosure" type="button" data-nav-group="rings" aria-expanded="false" aria-controls="navRingsChildren">Ring Management</button>
             <div id="navRingsChildren" class="sidebar-children" hidden>
               <button class="sidebar-item" type="button" data-nav-id="ring-judges" data-nav-label="Ring Judges" data-nav-parents="tournament rings">Ring Judges</button>
-              <button class="sidebar-item" type="button" data-nav-id="judge-assignments" data-nav-label="Judge Assignments" data-nav-parents="tournament rings" data-nav-planned="true">Judge Assignments <span class="nav-planned">Planned</span></button>
+              <button class="sidebar-item" type="button" data-nav-id="judge-assignments" data-nav-label="Judge Assignments" data-nav-parents="tournament rings" data-nav-planned="true">Judge Assignments</button>
               <button class="sidebar-item" type="button" data-nav-id="tablet-pairing" data-nav-label="Ring Assignment" data-nav-parents="tournament rings">Ring Assignment</button>
               <button class="sidebar-item" type="button" data-nav-id="ring-assignment" data-nav-label="Division Assignments" data-nav-parents="tournament rings">Division Assignments</button>
               <button class="sidebar-item" type="button" data-nav-id="head-table" data-nav-label="Head Table" data-nav-parents="tournament rings">Head Table</button>
             </div>
-            <button class="sidebar-item" type="button" data-nav-id="printing" data-nav-label="Printing" data-nav-parents="tournament" data-nav-planned="true">Printing <span class="nav-planned">Planned</span></button>
-            <button class="sidebar-item" type="button" data-nav-id="csv-settings" data-nav-label="CSV Settings" data-nav-parents="tournament" data-nav-planned="true">CSV Settings <span class="nav-planned">Planned</span></button>
+            <button class="sidebar-item" type="button" data-nav-id="printing" data-nav-label="Printing" data-nav-parents="tournament" data-nav-planned="true">Printing</button>
+            <button class="sidebar-item" type="button" data-nav-id="csv-settings" data-nav-label="CSV Settings" data-nav-parents="tournament" data-nav-planned="true">CSV Settings</button>
           </div>
           <button class="sidebar-item" type="button" data-nav-id="audience-viewer" data-nav-label="Audience Viewer">Audience Viewer</button>
-          <button class="sidebar-item" type="button" data-nav-id="judge-management" data-nav-label="Judging Management" data-nav-planned="true">Judging Management <span class="nav-planned">Under Development</span></button>
-          <button class="sidebar-item" type="button" data-nav-id="clinic-management" data-nav-label="Clinic Management" data-nav-planned="true">Clinic Management <span class="nav-planned">Under Development</span></button>
-          <button class="sidebar-item" type="button" data-nav-id="event-history" data-nav-label="Event History" data-nav-planned="true">Event History <span class="nav-planned">Planned</span></button>
+          <button class="sidebar-item" type="button" data-nav-id="judge-management" data-nav-label="Judging Management" data-nav-planned="true">Judging Management</button>
+          <button class="sidebar-item" type="button" data-nav-id="clinic-management" data-nav-label="Clinic Management" data-nav-planned="true">Clinic Management</button>
+          <button class="sidebar-item" type="button" data-nav-id="event-history" data-nav-label="Event History" data-nav-planned="true">Event History</button>
           <button id="navAdministration" class="sidebar-disclosure" type="button" data-nav-group="administration" aria-expanded="false" aria-controls="navAdministrationChildren">Administration</button>
           <div id="navAdministrationChildren" class="sidebar-children" hidden>
             <button class="sidebar-item" type="button" data-nav-id="schools" data-nav-label="Schools" data-nav-parents="administration">Schools</button>
@@ -1742,18 +1738,14 @@
               </div>
               <form id="clToolbar" class="cl-toolbar" aria-label="Filter competitors">
                 <label class="cl-search-field">Search
-                  <input id="clSearch" type="search" autocomplete="off" placeholder="Name or TSD ID" aria-describedby="clStatus">
+                  <input id="clSearch" type="search" autocomplete="off" placeholder="Search competitors or contacts" aria-describedby="clStatus">
                 </label>
-                <label>School/Studio<select id="clFilterStudio"><option value="">All</option></select></label>
-                <label>Gender<select id="clFilterGender"><option value="">All</option></select></label>
-                <label class="cl-age-field">Min Age<input id="clFilterAgeMin" type="number" min="0" max="120" inputmode="numeric"></label>
-                <label class="cl-age-field">Max Age<input id="clFilterAgeMax" type="number" min="0" max="120" inputmode="numeric"></label>
                 <label class="cl-page-size">Per page<select id="clPageSize"><option>25</option><option>50</option><option>100</option><option selected>250</option></select></label>
-                <button id="clApplyFiltersBtn" class="cl-primary" type="submit" data-help="Apply search, school/studio, gender, and age together. Enter also applies these filters.">Filter</button>
+                <button id="clApplyFiltersBtn" class="cl-primary" type="submit" data-help="Apply search together with the Gender, Rank, and School column filters. Enter also applies these filters.">Filter</button>
               </form>
               <p id="clStatus" role="status" aria-live="polite"></p>
               <div id="clNotice" class="notice" role="status" aria-live="polite"></div>
-              <p data-help-source="Competitor roster">Browse the selected tournament's saved roster, 250 per page by default. Filter or Enter applies search and school/studio, gender, and age together. Comma-separated search terms match names, association/TSD ID, or rank with OR; terms shorter than two characters are ignored. Per page changes immediately. Pagination follows filtering and surname sorting. Saved division links open Divisions for this same tournament, not unsaved drafts. The roster refreshes every ten seconds.</p>
+              <p data-help-source="Competitor roster">Browse the selected tournament's saved roster, including saved parent/guardian contact name and phone, 250 per page by default. Gender, Rank, and School filters are in the column headings and apply immediately. Filter or Enter applies search together with those column filters. Comma-separated search terms match displayed columns, including age, full rank names and contacts, with OR; terms shorter than two characters are ignored. Per page changes immediately. Pagination follows filtering and surname sorting. Saved division links open Divisions for this same tournament, not unsaved drafts. The roster refreshes every ten seconds.</p>
               <p data-help-source="Competitor details">Select a competitor name to inspect registration details. This directory does not edit registrations; use Import Competitors to replace the saved roster.</p>
               <div class="cl-results-bar">
                 <span id="clResultCount" role="status" aria-live="polite"></span>
@@ -1762,11 +1754,15 @@
               </div>
               <div id="clTableWrap" class="cl-table-wrap">
                 <table class="cl-table" aria-label="Competitors in the selected tournament">
-                  <colgroup><col><col><col><col><col><col><col></colgroup>
+                  <colgroup><col><col><col><col><col><col><col><col><col></colgroup>
                   <thead><tr>
                     <th scope="col">TSD ID</th>
                     <th scope="col" id="clNameHeading" aria-sort="ascending"><button id="clSortName" class="cl-sort" type="button" data-help="Reverse competitor surname order.">Competitor <span id="clSortIndicator" aria-hidden="true">&#8593;</span></button></th>
-                    <th scope="col">Age</th><th scope="col">Gender</th><th scope="col">Rank</th><th scope="col">Studio / School</th><th scope="col">Division</th>
+                    <th scope="col">Age</th>
+                    <th scope="col"><label for="clFilterGender">Gender</label><select id="clFilterGender"><option value="">All</option></select></th>
+                    <th scope="col"><label for="clFilterRank">Rank</label><select id="clFilterRank"><option value="">All</option></select></th>
+                    <th scope="col"><label for="clFilterStudio">Studio / School</label><select id="clFilterStudio"><option value="">All</option></select></th>
+                    <th scope="col">Division</th><th scope="col">Contact name</th><th scope="col">Contact phone</th>
                   </tr></thead>
                   <tbody id="clResults"></tbody>
                 </table>
@@ -1813,7 +1809,7 @@
                 <p data-help-source="Tournament-specific settings">Save separate team size and gender policy for Team Sparring and Team Hyung. Settings changes must keep all existing teams valid. Operational use locks writes until Reset Run; resetting preserves teams and settings.</p>
             </div>
             <div class="view" id="visualDefinitionsView" data-help-page="visual-definitions" data-help-title="Visual Definitions" hidden>
-              <p>Typography, style and dimensions are used by Tournament Management and its integrated pages on refresh. Colors are reference-only and are not applied to existing screens. The preview below updates as you edit.</p>
+              <p>Typography, style and dimensions are used by Tournament Management and its integrated pages on refresh. Saved colors apply to the Audience Monitor trial on refresh; other pages keep their existing colors. The preview below updates as you edit.</p>
               <p id="vdNotice" role="status" aria-live="polite"></p>
               <form id="vdForm">
                 <div id="vdFields"></div>
@@ -1824,7 +1820,7 @@
                   <span id="vdDirty" role="status"></span>
                 </div>
               </form>
-              <p data-help-source="Visual definitions adoption">Definitions are server-wide, not tournament-specific. Typography, style and dimensions apply to the integrated Tournament Management interface on refresh, not standalone tools or tablets. Colors remain reference-only. Draft preview changes are contained in a sandboxed frame.</p>
+              <p data-help-source="Visual definitions adoption">Definitions are server-wide, not tournament-specific. Typography, style and dimensions apply to the integrated Tournament Management interface on refresh, not standalone tools or tablets. Saved colors apply to the Audience Monitor as a trial; refresh that page after saving. Other pages keep their existing colors. Draft preview changes are contained in a sandboxed frame.</p>
               <strong>Preview — not the live application</strong>
               <p id="vdPreviewError" role="alert"></p>
               <iframe id="vdPreview" title="Visual definition preview" sandbox="" hidden></iframe>
@@ -1871,7 +1867,7 @@
             </div>
             <div class="view" id="volunteersView" data-help-page="volunteers" data-help-title="Volunteer Management" hidden>
               <div class="actions"><button id="vmAdd" type="button" data-help="Add a volunteer or volunteer type to this tournament.">Add Volunteer</button><button id="vmReload" type="button" data-help="Reload saved volunteers, types and operational lock status without clearing filters.">Reload Saved</button></div>
-              <div id="vmImportArea"><label for="vmCsv">Volunteer CSV (max 2 MB)</label><input id="vmCsv" type="file" accept=".csv,text/csv"><button id="vmImport" type="button" data-help="Validate the entire CSV, then add or update volunteers by Assoc ID. Blank IDs always add.">Import CSV</button><p>Headers: First Name, Last Name, DOB, Assoc ID, School, Rank, Certification, Primary Volunteer Type, Secondary Volunteer Type. Optional columns: Parent/Guardian Name, Contact Number. Guardian name is required under 18. Omitted optional columns preserve existing values. DOB: YYYY-MM-DD or MM/DD/YYYY, converted to age on the tournament date and not stored. Certification maps to the shared levels (Unknown, Uncertified, SK/TK, Corner, Regional (Center), International); SK/TK requires age 16+ at G5 or higher, or age 14+ at CDB. Unrecognized values are stored as Unknown. Certification and Secondary may be blank; Assoc ID may be blank (add-only).</p></div>
+              <div id="vmImportArea"><label for="vmCsv">Volunteer CSV (max 2 MB)</label><input id="vmCsv" type="file" accept=".csv,text/csv"><button id="vmImport" type="button" data-help="Validate the entire CSV, then add or update volunteers by Assoc ID. Blank IDs always add.">Import CSV</button><p>Headers: First Name, Last Name, DOB, Assoc ID, School, Rank, Certification, Primary Volunteer Type, Secondary Volunteer Type.               Optional columns: Parent/Guardian Name, Contact Number, Gender, Email. Guardian name is required under 18. Omitted optional columns preserve existing values. DOB: YYYY-MM-DD or MM/DD/YYYY, converted to age on the tournament date and not stored. Certification maps to the shared levels (Unknown, Uncertified, SK/TK, Corner, Regional (Center), International);               SK/TK requires age 16+ at G5 or higher, or age 14+ at CDB; In-House tournaments use age 11+ for SK/TK and 15+ for Corner, with rank requirements unchanged. Unrecognized values are stored as Unknown. Certification and Secondary may be blank; Assoc ID may be blank (add-only).</p></div>
               <form id="vmSearchForm"><label for="vmSearch">Search</label><input id="vmSearch" type="search"><button type="submit" data-help="Search names, membership numbers and contact numbers.">Search</button><button id="vmClearFilters" type="button" data-help="Clear search and all dropdown filters.">Clear filters</button></form>
               <div id="vmColumnFilters" role="group" aria-label="Volunteer filters">
                 <label>Studio<select id="vmFilter-school"></select></label><label>Rank<select id="vmFilter-rank"></select></label>
@@ -1883,7 +1879,7 @@
               <p data-help-source="Volunteer filters and printing">Search matches names, membership numbers and contact numbers. The five dropdown filters combine with Search and remain applied on Reload Saved. Clear filters resets them; changing tournament or switching to Volunteer Types also resets them. Print filtered list includes every matching volunteer, regardless of selection. Age and guardian details remain in the editor and are not printed. Printing and filtering remain available when preparation is locked.</p>
               <div class="table-wrap"><table aria-label="Volunteer management"><thead><tr><th><input id="vmAll" type="checkbox" aria-label="Select all filtered entries"></th><th>Name</th><th id="vmCol0">Contact number</th><th id="vmCol1">First choice</th><th id="vmCol2">Second choice</th><th id="vmCol3">Studio</th><th id="vmCol4">Rank</th><th id="vmCol5">Certification</th><th id="vmCol6">Membership number</th></tr></thead><tbody id="vmBody"></tbody></table></div>
               <div class="actions"><button id="vmDelete" type="button" disabled data-help="Delete selected entries after confirmation. Types in use cannot be deleted.">Delete selected</button></div>
-              <p data-help-source="Volunteer preparation">Volunteers and editable types belong to the selected tournament. Operational use locks changes until Reset Run. CSV imports validate completely before saving; duplicate nonblank Assoc IDs within a file are rejected. Existing nonblank IDs update; blank IDs always add. Primary type is required; secondary is optional and must differ. Type names in CSV must match existing types (case-insensitive). SK/TK certification requires G5 or higher at age 16+, or CDB at age 14+, on the tournament date. The Ring Judges directory can include lower-ranked SK/TK volunteers when they are assigned the Judging type; Dan-ranked volunteers aged 18+ remain eligible as judge candidates. Population copies supplied certification and does not confirm availability; later volunteer edits or deletion do not change copied entries.</p>
+              <p data-help-source="Volunteer preparation">Volunteers and editable types belong to the selected tournament. Operational use locks changes until Reset Run. CSV imports validate completely before saving; duplicate nonblank Assoc IDs within a file are rejected. Existing nonblank IDs update; blank IDs always add. Primary type is required; secondary is optional and must differ. Type names in CSV must match existing types (case-insensitive). SK/TK certification requires G5 or higher at age 16+, or CDB at age 14+, on the tournament date. The Ring Judges directory can include lower-ranked SK/TK volunteers when they are assigned the Judging type; Dan-ranked volunteers aged 18+ remain eligible as judge candidates.               Population copies supplied certification and does not confirm availability. Ring Judges edits update linked volunteers with qualification validation; edits or deletion on the Volunteers page do not automatically change copied judges.</p>
               <dialog id="vmDialog" aria-labelledby="vmDialogTitle"><h2 id="vmDialogTitle">Add Volunteer</h2><form id="vmForm">
                 <div id="vmTypeFields" hidden><label>Type Name<input id="vm-typeName" maxlength="100"></label></div>
                 <div id="vmVolunteerFields">
@@ -1891,19 +1887,19 @@
                   <label>Parent/guardian name (required under 18)<input id="vm-parentName" maxlength="200"></label>
                   <label>Contact number<input id="vm-contactNumber" type="tel" maxlength="100"></label>
                   <label>Age<input id="vm-age" type="number" required min="0" max="120" step="1"></label><label>Assoc ID<input id="vm-associationNumber" maxlength="100"></label>
-                  <label>School<input id="vm-school" required maxlength="200"></label><label>Rank<input id="vm-rank" required maxlength="100" placeholder="D1"></label>
-                  <label>Certification<select id="vm-certification"></select></label><label>Primary Volunteer Type<select id="vm-primaryType" required></select></label>
-                  <label>Secondary Volunteer Type<select id="vm-secondaryType"></select></label>
+                  <label>School<input id="vm-school" required maxlength="200"></label>                  <label>Rank<select id="vm-rank" required></select></label>
+                  <label>Certification<select id="vm-certification"></select></label>                  <label>First choice<select id="vm-primaryType" required></select></label>
+                                    <label>Second choice<select id="vm-secondaryType"></select></label>
                 </div><p id="vmError" role="alert"></p><div class="actions"><button id="vmSave" type="submit" data-help="Save this volunteer management entry.">Save</button><button id="vmCancel" type="button" data-help="Close the overlay, confirming before discarding changes.">Cancel</button></div>
               </form></dialog>
             </div>
             <div class="view" id="ringJudgesView" data-help-page="ring-judges" data-help-title="Ring Judges" hidden>
-              <div class="actions"><button id="rjAdd" type="button" data-help="Add a judge or SK/TK candidate to the selected tournament's preparation directory.">Add Judge</button><button id="rjPopulate" type="button" data-help="Add adult Dan-ranked competitors and competitors meeting SK/TK age and rank requirements. Certification stays Unknown; eligible SK/TK candidates are noted.">Populate Judges from Competitors</button><button id="rjPopulateVolunteers" type="button" data-help="Add Dan-ranked adult Judging volunteers or SK/TK-certified Judging volunteers meeting the age and rank rules. Supplied certification is copied.">Populate Judges from Volunteers</button><button id="rjReload" type="button" data-help="Reload the saved judges and operational lock status.">Reload Saved</button></div>
+              <div class="actions"><button id="rjAdd" type="button"               data-help="Create a validated Judging volunteer and add only that volunteer to Ring Judges.">Add Judge</button><button id="rjPopulate" type="button" data-help="Add adult Dan-ranked competitors and competitors meeting SK/TK age and rank requirements. Certification stays Unknown; eligible SK/TK candidates are noted.">Populate Judges from Competitors</button><button id="rjPopulateVolunteers" type="button" data-help="Add Dan-ranked adult Judging volunteers or SK/TK-certified Judging volunteers meeting the age and rank rules. Supplied certification is copied.">Populate Judges from Volunteers</button><button id="rjReload" type="button" data-help="Reload the saved judges and operational lock status.">Reload Saved</button></div>
               <form id="rjSearchForm"><label for="rjSearch">Search</label><input id="rjSearch" type="search" maxlength="200"><button type="submit" data-help="Search across judge names, IDs, schools, ranks, certification and review notes.">Search</button><button id="rjClearFilters" type="button" data-help="Clear the search and all column filters.">Clear filters</button></form>
               <p id="rjNotice" role="status"></p><p id="rjCount"></p>
               <div class="table-wrap"><table aria-label="Ring Judges"><colgroup><col class="rj-select-column"><col class="rj-name-column"><col class="rj-id-column"><col class="rj-school-column"><col class="rj-rank-column"><col class="rj-certification-column"><col class="rj-priority-column"><col class="rj-review-column"><col class="rj-source-column"></colgroup><thead><tr><th><input id="rjAll" type="checkbox" aria-label="Select all filtered judges"></th><th>Name</th><th>TSD ID</th><th>School</th><th>Rank</th><th>Certification</th><th class="rj-priority-column">Priority</th><th class="rj-review-column">Flagged for Review</th><th class="rj-source-column">Source</th></tr><tr aria-label="Column filters"><th></th><th><input id="rjFilter-name" type="search" aria-label="Filter by name" placeholder="Filter name"></th><th><input id="rjFilter-associationNumber" type="search" aria-label="Filter by TSD ID" placeholder="Filter ID"></th><th><select id="rjFilter-school" aria-label="Filter by school"><option value="">All</option></select></th><th><select id="rjFilter-rank" aria-label="Filter by rank"><option value="">All</option></select></th><th><select id="rjFilter-certification" aria-label="Filter by certification"><option value="">All</option></select></th><th class="rj-priority-column"><select id="rjFilter-priority" aria-label="Filter by priority"><option value="">All</option></select></th><th><select id="rjFilter-flaggedForReview" aria-label="Filter by review flag"><option value="">All</option><option value="true">Flagged</option><option value="false">Not flagged</option></select></th><th><select id="rjFilter-source" aria-label="Filter by source"><option value="">All</option></select></th></tr></thead><tbody id="rjBody"></tbody></table></div>
               <div class="actions"><button id="rjDelete" type="button" disabled data-help="Delete selected judges after confirmation, without deleting their competitor registrations.">Delete selected</button><button id="rjClearReview" type="button" disabled data-help="Clear review flags for selected judges, keeping their notes.">Clear Review Flag</button></div>
-              <p data-help-source="Judge details">Click a judge's name to open Edit Judge directly in the main workspace, keeping navigation visible. Add Judge uses the same workspace. Locked preparation opens read-only details instead. Certification uses the shared levels Unknown, Uncertified, SK/TK, Corner, Regional (Center) and International; each level from SK/TK up requires a minimum rank (G5, D1, D1 and D2 respectively) and judge ranks span G5 through D8. Clear Review Flag keeps existing notes.</p>
+              <p data-help-source="Judge details">Click a judge's name to open Edit Judge directly in the main workspace, keeping navigation visible.               Add Judge uses the same workspace to create a validated Judging volunteer and add only that volunteer. Volunteer-derived edits validate and save both records; competitor-derived certification uses the saved registration rank and tournament-date age. Locked preparation opens read-only details instead. Certification uses the shared levels Unknown, Uncertified, SK/TK, Corner, Regional (Center) and International; each level from SK/TK up requires a minimum rank (G5, D1, D1 and D2 respectively) and judge ranks span G5 through D8. Clear Review Flag keeps existing notes.</p>
               <dialog id="rjDetailsDialog" aria-labelledby="rjDetailsTitle"><h2 id="rjDetailsTitle">Judge Details</h2><dl id="rjDetailsContent"></dl><div class="actions"><button id="rjDetailsEdit" type="button">Edit Judge</button><button id="rjDetailsClose" type="button">Close</button></div></dialog>
               <p data-help-source="Ring Judges preparation">Ring Judges contains judge and SK/TK candidates for the selected tournament, not necessarily the active tournament. Operational use locks edits until Reset Run. Competitor population adds Dan-ranked competitors aged 18+ as judge candidates and adds competitors meeting SK/TK rank and age rules (G5 or higher at age 16+, CDB at age 14+). Their certification remains Unknown, and SK/TK eligibility is noted for verification. Volunteer population adds primary/secondary Judging volunteers who are Dan-ranked and 18+, or who have SK/TK certification and meet its rank and age requirements; supplied certification is copied. Existing linked identities and Association IDs are not duplicated; existing entries are not overwritten. Certification and availability must be verified. Priority is an editable value from 0 to 99; use its column filter to narrow the directory. Judge Assignments and Manual Only are not implemented. Deletion affects only this directory.</p>
               <dialog id="rjDialog" aria-labelledby="rjDialogTitle"><h2 id="rjDialogTitle">Add Judge</h2><form id="rjForm">
@@ -1913,11 +1909,19 @@
                 <label>School<select id="rj-school"></select></label>
                 <label>Rank<select id="rj-rank" required></select></label>
                 <label>Certification<select id="rj-certification"></select></label>
+                <p id="rjSourceHelp" class="rj-wide"></p>
+                <div id="rjVolunteerFields" class="rj-wide">
+                  <label>Age on tournament date<input id="rj-age" type="number" min="0" max="120" step="1"></label>
+                  <label>Parent/guardian name (required under 18)<input id="rj-parentName" maxlength="200"></label>
+                  <label>Contact number<input id="rj-contactNumber" type="tel" maxlength="100"></label>
+                  <label>First choice<select id="rj-primaryType"></select></label>
+                  <label>Second choice<select id="rj-secondaryType"></select></label>
+                </div>
                 <label>Priority<input id="rj-priority" type="number" required min="0" max="99" step="1" value="4"></label>
                 <label class="rj-wide">Judging Notes (admin use only)<textarea id="rj-reviewNotes" maxlength="2000" rows="3"></textarea></label>
                 <label class="rj-flag rj-wide"><input id="rj-flaggedForReview" type="checkbox">Flagged for Review</label>
                 <p id="rjError" role="alert"></p>
-                <div class="actions"><button id="rjSave" type="submit" data-help="Save this judge without changing competitor registration.">Save</button><button id="rjCancel" type="button" data-help="Close the overlay, confirming before discarding edits.">Cancel</button></div>
+                <div class="actions"><button id="rjSave" type="submit"                 data-help="Validate qualifications and save this judge; linked volunteers update together. Competitor registrations remain unchanged.">Save</button><button id="rjCancel" type="button" data-help="Close the overlay, confirming before discarding edits.">Cancel</button></div>
               </form></dialog>
             </div>
             <div class="view" id="resultsView" data-help-page="results" data-help-title="Running Results" hidden>
@@ -5046,17 +5050,8 @@
         htRenderDetails();
         renderState();
         htTickFreshness();
-        if (simulationMode) {
-          document.getElementById('htEstimateSummary').textContent =
-            'Progress and division timing are provided by the simulator; live-event planning estimates are not shown.';
-          const simulatedStart = Date.parse(ht.startedAt);
-          document.getElementById('htEventTiming').innerHTML = Number.isFinite(simulatedStart)
-            ? `<span>Simulated timeline started <strong>${gbEsc(new Date(simulatedStart).toLocaleString())}</strong></span>`
-            : '<span>Simulated timeline has not started.</span>';
-        } else {
-          estimateSummary(ht, 'htEstimateSummary');
-          eventTiming(ht, 'htEventTiming');
-        }
+        estimateSummary(ht, 'htEstimateSummary');
+        eventTiming(ht, 'htEventTiming');
       }
 
       async function htLoad() {
@@ -5076,7 +5071,7 @@
             ht.groups = board.groups.map((group) => ({ ...group, competitors: (group.competitors || []).map(gbComp) }));
             ht.rings = board.rings;
             ht.available = board.availableGroupDivisionNumbers;
-            ht.estimates = null;
+            ht.estimates = board.estimates || null;
             ht.startedAt = board.eventStartedAt || '';
             ht.heartbeatSeconds = board.heartbeatPolicy.disconnectAfterSeconds;
             ht.simulatorStatus = board.simulatorStatus;
@@ -5186,8 +5181,8 @@
         }
       });
 
-      const cl = { eventName: '', roster: [], savedGroups: [], ready: false, selectedId: '', requestToken: 0, timer: null,
-        filters: { studio: '', gender: '', ageMin: '', ageMax: '' }, query: '', page: 1, pageSize: 250, busy: false, descending: false };
+      const cl = { eventName: '', roster: [], savedGroups: [], ranks: [], ready: false, selectedId: '', requestToken: 0, timer: null,
+        filters: { studio: '', gender: '', rank: '' }, query: '', page: 1, pageSize: 250, busy: false, descending: false };
       const clSearch = document.getElementById('clSearch');
       const clResults = document.getElementById('clResults');
       const clDetails = document.getElementById('competitorLookupDetails');
@@ -5196,8 +5191,14 @@
       function clMatches(person) {
         return !clQuery() || clTerms().some((term) =>
           [person.firstName, person.lastName, [person.firstName, person.lastName].filter(Boolean).join(' '),
-            person.associationNumber, person.rank].some((value) => String(value || '').toLowerCase().includes(term)));
+            person.associationNumber, person.rank, clRank(person.rank), person.gender, person.studio,
+            clAge(person), clDivision(person), clContact(person), person.phone, clPhone(person.phone)]
+            .some((value) => String(value ?? '').toLowerCase().includes(term)));
       }
+      function clRank(code) {
+        return cl.ranks.find((rank) => rank.code && rank.code.toUpperCase() === String(code || '').toUpperCase())?.name || code || '';
+      }
+      function clContact(person) { return [person.parentFirstName, person.parentLastName].filter(Boolean).join(' '); }
       function clHighlight(value) {
         const text = String(value || '');
         const terms = clTerms();
@@ -5240,19 +5241,15 @@
       }
       function clFilterMatches(person) {
         const filter = cl.filters;
-        const age = clAge(person);
-        const min = filter.ageMin === '' ? null : Number(filter.ageMin);
-        const max = filter.ageMax === '' ? null : Number(filter.ageMax);
         return (!filter.studio || String(person.studio || '') === filter.studio)
           && (!filter.gender || String(person.gender || '') === filter.gender)
-          && (min == null || Number.isFinite(age) && age >= min)
-          && (max == null || Number.isFinite(age) && age <= max);
+          && (!filter.rank || String(person.rank || '') === filter.rank);
       }
       function clFilterOptions() {
-        const populate = (id, label, entries) => {
+        const populate = (id, field, label, entries) => {
           const select = document.getElementById(id);
           const value = select.value;
-          const applied = cl.filters[id === 'clFilterStudio' ? 'studio' : 'gender'];
+          const applied = cl.filters[field];
           select.innerHTML = `<option value="">${label}</option>` + entries.map(([key, text]) =>
             `<option value="${gbEsc(key)}">${gbEsc(text)}</option>`).join('');
           if (applied && !entries.some(([key]) => key === applied)) {
@@ -5260,15 +5257,15 @@
           }
           select.value = entries.some(([key]) => key === value) || value === applied ? value : '';
         };
-        for (const [field, id, label] of [['studio', 'clFilterStudio', 'All'], ['gender', 'clFilterGender', 'All']]) {
+        for (const [field, id, label] of [['studio', 'clFilterStudio', 'All'], ['gender', 'clFilterGender', 'All'], ['rank', 'clFilterRank', 'All']]) {
           const values = [...new Set(cl.roster.map((person) => String(person[field] || '').trim()).filter(Boolean))]
             .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-          populate(id, label, values.map((value) => [value, value]));
+          populate(id, field, label, values.map((value) => [value, field === 'rank' ? clRank(value) : value]));
         }
       }
       function clClearFilters() {
-        cl.filters = { studio: '', gender: '', ageMin: '', ageMax: '' };
-        for (const id of ['clFilterStudio', 'clFilterGender', 'clFilterAgeMin', 'clFilterAgeMax']) document.getElementById(id).value = '';
+        cl.filters = { studio: '', gender: '', rank: '' };
+        for (const id of ['clFilterStudio', 'clFilterGender', 'clFilterRank']) document.getElementById(id).value = '';
       }
       function clRender() {
         const matches = cl.ready ? cl.roster.filter((person) => clMatches(person) && clFilterMatches(person)).sort((a, b) =>
@@ -5302,25 +5299,27 @@
           <td><button type="button" class="cl-result" data-cl-id="${gbEsc(person.id)}" aria-pressed="${String(person.id) === cl.selectedId}"><strong>${[person.firstName, person.lastName].filter(Boolean).map(clHighlight).join(' ') || 'Unnamed competitor'}</strong></button></td>
           <td>${clAge(person) == null ? '—' : gbEsc(clAge(person))}</td>
           <td>${gbEsc(person.gender || '—')}</td>
-          <td><span class="cl-rank">${gbEsc(person.rank || '—')}</span></td>
+          <td><span class="cl-rank">${clHighlight(clRank(person.rank) || '—')}</span></td>
           <td>${gbEsc(person.studio || '—')}</td>
           <td>${clDivisionMarkup(person)}</td>
+          <td>${clHighlight(clContact(person) || '—')}</td>
+          <td>${clHighlight(clPhone(person.phone) || '—')}</td>
         </tr>`).join('')
-          : `<tr><td class="empty-state" colspan="7">${cl.ready ? 'No matching competitors found.'
+          : `<tr><td class="empty-state" colspan="9">${cl.ready ? 'No matching competitors found.'
             : cl.eventName ? 'Competitor roster unavailable.' : 'Select a tournament to load its saved competitors.'}</td></tr>`;
         const person = matches.find((entry) => String(entry.id) === cl.selectedId);
         const section = (title, fields) => `<section class="cl-detail-section"><h4>${title}</h4><dl>${fields.map(([label, value]) =>
           `<dt>${gbEsc(label)}</dt><dd>${label === 'Saved division' ? value : gbEsc(value || 'Not provided')}</dd>`).join('')}</dl></section>`;
         clDetails.innerHTML = person ? `<div class="cl-detail-heading">
           <h3>${gbEsc([person.firstName, person.lastName].filter(Boolean).join(' '))}</h3>
-          <p>${gbEsc(person.studio || 'Studio not provided')}</p><span class="cl-rank">${gbEsc(person.rank || 'Rank not provided')}</span>
+          <p>${gbEsc(person.studio || 'Studio not provided')}</p><span class="cl-rank">${gbEsc(clRank(person.rank) || 'Rank not provided')}</span>
           <button type="button" id="clCloseDetails" class="cl-close" data-cl-close aria-label="Close competitor details" data-help="Close the selected competitor's details.">&times;</button>
         </div>` + section('Personal Information', [
           ['First name', person.firstName], ['Last name', person.lastName],
           ['Parent/Guardian', [person.parentFirstName, person.parentLastName].filter(Boolean).join(' ')],
           ['Phone', clPhone(person.phone)], ...(person.email ? [['Email', person.email]] : [])
         ]) + section('Competition Information', [
-          ['Rank', person.rank], ['Studio', person.studio],
+          ['Rank', clRank(person.rank)], ['Studio', person.studio],
           ['Association / TSD ID', person.associationNumber],
           ['Age', clAge(person) == null ? '' : String(clAge(person))],
           ['Gender', person.gender],
@@ -5352,6 +5351,9 @@
           }
           const roster = await fetchJson(`/api/competitors?eventName=${encodeURIComponent(eventName)}`);
           if (!Array.isArray(roster) || roster.some((person) => !person || person.id == null)) throw new Error('Invalid competitor roster returned by server.');
+          const rankDirectory = await fetchJson('/api/ranks');
+          if (!Array.isArray(rankDirectory.ranks) || rankDirectory.ranks.some((rank) =>
+            !rank || typeof rank.code !== 'string' || typeof rank.name !== 'string')) throw new Error('Invalid rank directory returned by server.');
           let savedGroups = [];
           try {
             const result = await fetchJson(`/api/groups?eventName=${encodeURIComponent(eventName)}`);
@@ -5362,7 +5364,7 @@
           }
           if (token !== cl.requestToken || currentView !== 'competitors') return;
           if (state.selectedEventName !== eventName) return;
-          cl.roster = roster; cl.savedGroups = savedGroups; cl.ready = true;
+          cl.roster = roster; cl.savedGroups = savedGroups; cl.ranks = rankDirectory.ranks; cl.ready = true;
           clFilterOptions();
           notice.textContent = '';
           notice.className = 'notice';
@@ -5389,11 +5391,17 @@
         cl.filters = {
           studio: document.getElementById('clFilterStudio').value,
           gender: document.getElementById('clFilterGender').value,
-          ageMin: document.getElementById('clFilterAgeMin').value,
-          ageMax: document.getElementById('clFilterAgeMax').value
+          rank: document.getElementById('clFilterRank').value
         };
         clRender();
       });
+      for (const [id, field] of [['clFilterStudio', 'studio'], ['clFilterGender', 'gender'], ['clFilterRank', 'rank']]) {
+        document.getElementById(id).addEventListener('change', () => {
+          cl.filters[field] = document.getElementById(id).value;
+          cl.page = 1;
+          clRender();
+        });
+      }
       document.getElementById('clPageSize').addEventListener('change', () => {
         const size = Number(document.getElementById('clPageSize').value);
         cl.pageSize = [25, 50, 100, 250].includes(size) ? size : 250;

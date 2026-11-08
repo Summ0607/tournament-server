@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   const originalFetch = window.fetch.bind(window);
+  const audience = /^\/audience-monitor(?:\/(?:index\.html)?|\.html)?$/.test(new URL(location.href).pathname);
   let session = null, pendingLogin = null, resolveLogin = null, dialog, message, user, password, submit;
   let lastActivity = 0, checking = false, recovering = false;
   const domReady = new Promise((resolve) => {
@@ -32,7 +33,10 @@
   async function account(endpoint, body) {
     const response = await originalFetch(`/api/account${endpoint}`, {
       method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store',
-      headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-CSRF-Token': session?.csrfToken || '' },
+      headers: {
+        ...(audience ? { 'X-Tournament-Audience': 'true' } : {}),
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json', 'X-CSRF-Token': session?.csrfToken || '' })
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
     const data = response.status === 204 ? null : await response.json();
@@ -129,6 +133,7 @@
     const request = new Request(input, options);
     const read = ['GET', 'HEAD'].includes(request.method);
     const headers = new Headers(request.headers);
+    if (audience) headers.set('X-Tournament-Audience', 'true');
     if (!read) {
       headers.set('X-CSRF-Token', session.csrfToken);
       if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
@@ -159,7 +164,7 @@
     return response;
   };
   async function activity(event) {
-    if (!event.isTrusted || !session || recovering || Date.now() - lastActivity < 60000) return;
+    if (audience || !event.isTrusted || !session || recovering || Date.now() - lastActivity < 60000) return;
     lastActivity = Date.now();
     try { await account('/activity', {}); }
     catch (error) {

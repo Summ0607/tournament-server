@@ -4,6 +4,7 @@
     const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fields = ['firstName', 'lastName', 'age', 'associationNumber', 'school', 'rank', 'certification', 'primaryType', 'secondaryType', 'parentName', 'contactNumber'];
     const certLabel = (code) => (data && data.certificationLevels || []).find((level) => level.code === code)?.label || code || 'Unknown';
+    const rankLabel = (code) => (data?.rankOptions || []).find((rank) => rank.code === code)?.label || code;
     const typeName = (id) => data?.types.find((row) => row.id === id)?.name || '';
     const filterLabels = { school: 'Studio', rank: 'Rank', certification: 'Certification', primaryType: 'First choice', secondaryType: 'Second choice' };
     const dropdowns = ['school', 'rank', 'primaryType', 'secondaryType', 'certification'];
@@ -24,7 +25,7 @@
       for (const key of dropdowns) {
         const values = [...new Set((data?.volunteers || []).map((row) => row[key] || (key === 'certification' ? 'UNKNOWN' : '')).filter(Boolean))].sort();
         if (filters[key] && !values.includes(filters[key])) values.push(filters[key]);
-        const label = (value) => key === 'certification' ? certLabel(value) : key.endsWith('Type') ? typeName(value) : value;
+        const label = (value) => key === 'certification' ? certLabel(value) : key === 'rank' ? rankLabel(value) : key.endsWith('Type') ? typeName(value) : value;
         node(`vmFilter-${key}`).innerHTML = '<option value="">All</option>' +
           values.map((value) => `<option value="${esc(value)}">${esc(label(value))}</option>`).join('');
         node(`vmFilter-${key}`).value = filters[key];
@@ -57,7 +58,7 @@
       node('vmSearch').placeholder = types ? 'Volunteer type name' : 'Name, membership number or contact';
       for (let i = 0; i < 7; i++) node(`vmCol${i}`).hidden = types;
       renderFilters();
-      node('vmBody').innerHTML = rows().map((row) => `<tr><td><input type="checkbox" data-vm-select="${esc(row.id)}" aria-label="Select ${esc(types ? row.name : fullName(row))}" ${selected.has(row.id) ? 'checked' : ''} ${locked() ? 'disabled' : ''}></td><td><button class="tournament-name" type="button" data-vm-edit="${esc(row.id)}">${esc(types ? row.name : fullName(row))}</button></td>${types ? '' : [row.contactNumber || '', typeName(row.primaryType), typeName(row.secondaryType), row.school, row.rank, certLabel(row.certification), row.associationNumber].map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') ||
+      node('vmBody').innerHTML = rows().map((row) => `<tr><td><input type="checkbox" data-vm-select="${esc(row.id)}" aria-label="Select ${esc(types ? row.name : fullName(row))}" ${selected.has(row.id) ? 'checked' : ''} ${locked() ? 'disabled' : ''}></td><td><button class="tournament-name" type="button" data-vm-edit="${esc(row.id)}">${esc(types ? row.name : fullName(row))}</button></td>${types ? '' : [row.contactNumber || '', typeName(row.primaryType), typeName(row.secondaryType),       row.school, rankLabel(row.rank), certLabel(row.certification), row.associationNumber].map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') ||
         `<tr><td colspan="${types ? 2 : 9}">${data ? 'No matching entries.' : 'Select a tournament above.'}</td></tr>`;
       node('vmCount').textContent = `${rows().length} of ${data ? (types ? data.types : data.volunteers).length : 0} ${types ? 'types' : 'volunteers'} · ${selected.size} selected`; controls();
     }
@@ -74,6 +75,12 @@
       const options = data.types.map((type) => `<option value="${esc(type.id)}">${esc(type.name)}</option>`).join('');
       node('vm-primaryType').innerHTML = options; node('vm-secondaryType').innerHTML = '<option value="">None</option>' + options;
       node('vm-certification').innerHTML = (data.certificationLevels || []).map((level) => `<option value="${esc(level.code)}">${esc(level.label)}</option>`).join('');
+      const ranks = (data.rankOptions || []).filter((rank) => rank.code !== 'D8');
+      node('vm-rank').innerHTML = '<option value="">Select rank</option>' + ranks.map((rank) =>
+        `<option value="${esc(rank.code)}">${esc(rank.label)}</option>`).join('');
+      if (row && !types && !ranks.some((rank) => rank.code === row.rank)) {
+        node('vm-rank').innerHTML += `<option value="${esc(row.rank)}">${esc(rankLabel(row.rank))} (saved rank outside editor range)</option>`;
+      }
       fields.forEach((key) => { node(`vm-${key}`).value = row && !types ? row[key] ?? '' : key === 'primaryType' ? data.types[0]?.id || '' : key === 'certification' ? 'UNKNOWN' : ''; });
       node('vm-parentName').required = !types && node('vm-age').value !== '' && Number(node('vm-age').value) < 18;
       node('vm-typeName').value = types && row ? row.name : '';

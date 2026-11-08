@@ -79,6 +79,71 @@ test('browser sessions use exact idle boundaries; polling does not extend inacti
   assert.equal(await p.store.resolveSession(token, { activity: true }), null);
 });
 
+test('audience reads last exactly twelve hours without renewing editable access, survive other logins and remain revocable', async (t) => {
+  const p = await setup(t);
+  await p.create('viewer', ['viewer']);
+  const { token } = await p.store.login({ userId: 'viewer', password });
+  p.advance(IDLE_MS);
+  assert.equal(await p.store.resolveSession(token), null);
+  assert.ok(await p.store.resolveSession(token, { audience: true }));
+  await p.store.login({ userId: 'viewer', password });
+  assert.ok(await p.store.resolveSession(token, { audience: true }), 'Idle cleanup must not delete an unattended monitor');
+  await p.reopen();
+  p.advance(ABSOLUTE_MS - IDLE_MS - 1);
+  assert.ok(await p.store.resolveSession(token, { audience: true, activity: true }));
+  assert.equal(await p.store.resolveSession(token, { activity: true }), null);
+  p.advance(1);
+  assert.equal(await p.store.resolveSession(token, { audience: true }), null);
+  const next = await p.store.login({ userId: 'viewer', password });
+  await p.store.logout(next.token);
+  assert.equal(await p.store.resolveSession(next.token, { audience: true }), null);
+  const third = await p.store.login({ userId: 'viewer', password });
+  const [account] = await p.store.listAccounts();
+  await p.store.changeAccount({ userId: 'viewer', revision: account.revision, enabled: false, actor: 'test' });
+  assert.equal(await p.store.resolveSession(third.token, { audience: true }), null);
+});
+
+test('audience lifetime is independent of shorter editable absolute policy and cookie retention covers it', async (t) => {
+  const p = await setup(t);
+  const saved = await p.store.getPolicy();
+  await p.store.changePolicy({ ...saved, policy: { ...saved.policy, absoluteTimeoutHours: 1 }, actor: 'test' });
+  await p.create('viewer', ['viewer']);
+  const login = await p.store.login({ userId: 'viewer', password });
+  assert.equal(login.cookieExpiresAt - login.expiresAt, 11 * 60 * 60 * 1000);
+  p.advance(2 * 60 * 60 * 1000);
+  assert.equal(await p.store.resolveSession(login.token), null);
+  assert.ok(await p.store.resolveSession(login.token, { audience: true }));
+});
+
+test('browser audience scope is limited to monitor reads, session checks and sign-out, never editable APIs', async () => {
+  const { createBrowserSecurity, COOKIE_NAME } = require('../backend/browserSecurity');
+  const calls = [];
+  const security = createBrowserSecurity({ allowedOrigins: ['https://example.test'], store: {
+    async resolveSession(token, options) { calls.push(options); return { account: { roles: ['viewer'] } }; }
+  } });
+  const token = 'a'.repeat(64);
+  for (const [pathname, method, header, expected] of [
+    ['/audience-monitor/', 'GET', false, true],
+    ['/api/account/session', 'GET', true, true],
+    ['/api/rings/monitor', 'GET', true, true],
+    ['/api/visual-definitions', 'GET', true, true],
+    ['/api/simulator/runs', 'GET', true, true],
+    ['/api/simulator/runs/run-1/audience', 'GET', true, true],
+    ['/api/account/logout', 'POST', true, true],
+    ['/api/account/session', 'GET', false, false],
+    ['/api/groups', 'GET', true, false],
+    ['/api/account/users', 'GET', true, false],
+    ['/api/rings/ring-1/reset', 'POST', true, false],
+    ['/api/simulator/runs/run-1/start', 'POST', true, false]
+  ]) {
+    const headers = { cookie: `${COOKIE_NAME}=${token}`, 'x-tournament-audience': header ? 'true' : '',
+      'x-csrf-token': security.csrf(token) };
+    await security.authenticate({ originalUrl: pathname, path: pathname.startsWith('/api/account/') ? '/session' : pathname,
+      method, get: (name) => headers[name] }, { locals: {} });
+    assert.equal(calls.at(-1).audience, expected, `${method} ${pathname}`);
+  }
+});
+
 test('new and reset passwords require ten characters and all four character classes, without trimming spaces', async (t) => {
   const p = await setup(t);
   const tenCharacters = 'Abcdefg1!x';

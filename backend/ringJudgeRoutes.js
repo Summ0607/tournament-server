@@ -6,8 +6,8 @@ const sqlite3 = require('sqlite3');
 const { writeJsonAtomicSync } = require('./atomicJsonFile');
 const { normalizeRank } = require('../db/rankNormalization');
 const { normalizeCertification, certificationLevels, certificationRankIssue, certificationAgeIssue, isJudgeRank, judgeRankOptions } = require('../db/judgeCertification');
-const { storedAge } = require('./tournamentAge');
-const { readVolunteers } = require('./volunteerRoutes');
+const { storedAge, lockAgeDate } = require('./tournamentAge');
+const { readVolunteers, validateVolunteer } = require('./volunteerRoutes');
 
 // Strict validation rejects qualification problems; lenient validation (saved
 // data migration and population) keeps the row, resets unrecognized
@@ -74,6 +74,11 @@ function readRoster(file) {
 }
 function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
   const router = express.Router();
+  const judgeAgeEligible = (rank, age, scope) => /^D[1-8]$/.test(rank) && age >= (scope === 'in-house' ? 15 : 18);
+  function volunteerDirectory(dir) {
+    const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
+    return { ...readVolunteers(path.join(dir, 'volunteers.json')), tournamentDate: config.date };
+  }
   function read(file) {
     if (!fs.existsSync(file)) return { revision: null, judges: [] };
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -104,12 +109,32 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
         if (write) writable();
         const data = read(file);
         if (write && (!req.body || req.body.revision !== data.revision)) fail('Judge directory changed. Reload before saving.', 409);
-        const commit = (extra = {}) => {
+        const commit = (extra = {}, volunteerChange = null) => {
           writable();
           if (read(file).revision !== data.revision) fail('Judge directory changed. Reload before saving.', 409);
+          const volunteerFile = path.join(dir, 'volunteers.json');
+          if (volunteerChange && readVolunteers(volunteerFile).revision !== volunteerChange.original.revision) {
+            fail('Volunteer data changed. Reload before saving.', 409);
+          }
           data.revision = crypto.randomUUID();
-          writeJsonAtomicSync(file, data);
-          return { ...data, certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name), ...extra };
+          if (volunteerChange) {
+            const existed = fs.existsSync(volunteerFile);
+            volunteerChange.next.revision = crypto.randomUUID();
+            lockAgeDate(dir, volunteerChange.date);
+            writeJsonAtomicSync(volunteerFile, volunteerChange.next);
+            try { writeJsonAtomicSync(file, data); }
+            catch (error) {
+              try {
+                if (existed) writeJsonAtomicSync(volunteerFile, volunteerChange.original);
+                else fs.unlinkSync(volunteerFile);
+              } catch (rollbackError) {
+                console.error('Volunteer/judge save rollback failed:', rollbackError);
+                fail('Judge save failed and volunteer rollback failed. Reload both directories before retrying.', 500);
+              }
+              throw error;
+            }
+          } else writeJsonAtomicSync(file, data);
+          return { ...data, volunteerDirectory: volunteerDirectory(dir), certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name), ...extra };
         };
         res.json(await callback(req, { name, dir, dbFile, data, commit }));
       } catch (error) {
@@ -118,17 +143,60 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
       }
     };
   }
-  router.get('/ring-judges', handle((_req, { name, data }) => ({ ...data, certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name) })));
-  const save = handle((req, { data, commit }) => {
-    let row;
-    try { row = validateJudge(req.body.judge); } catch (error) { fail(error.message, 400); }
+  router.get('/ring-judges', handle((_req, { name, data, dir }) => ({ ...data, volunteerDirectory: volunteerDirectory(dir), certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name) })));
+  const save = handle(async (req, { data, commit, dir, dbFile }) => {
     const existing = req.params.id ? data.judges.find((judge) => judge.id === req.params.id) : null;
     if (req.params.id && !existing) fail('Judge not found. Reload the directory.', 404);
+    const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
+    let row, volunteerChange = null, volunteerId = existing?.volunteerId || null;
+    try {
+      if (existing?.competitorId) {
+        const competitor = (await readRoster(dbFile)).find((member) => String(member.id) === existing.competitorId);
+        if (!competitor) fail('Source competitor not found. Correct the registration before editing this judge.', 409);
+        if (normalizeRank(req.body.judge?.rank).code !== normalizeRank(competitor.rank).code) {
+          fail('Judge rank must match the saved competitor registration. Correct the rank through registration.', 400);
+        }
+        row = validateJudge({ ...req.body.judge, rank: competitor.rank });
+        const issue = certificationAgeIssue(row.certification, row.rank, storedAge(competitor, config.date), config.scope);
+        if (issue) fail(issue, 400);
+      } else {
+        const original = readVolunteers(path.join(dir, 'volunteers.json'));
+        if (req.body.volunteerRevision !== original.revision) fail('Volunteer data changed. Reload before saving.', 409);
+        const sourceVolunteer = volunteerId ? original.volunteers.find((member) => member.id === volunteerId) : null;
+        if (volunteerId && !sourceVolunteer) fail('Source volunteer not found. Reload the directory.', 409);
+        const judging = original.types.find((type) => type.name.toLowerCase() === 'judging');
+        if (!judging) fail('A Volunteer Type named Judging is required.', 400);
+        const supplied = req.body.volunteer;
+        if (!supplied || typeof supplied !== 'object' || Array.isArray(supplied)) fail('Volunteer details including age are required.', 400);
+        row = validateJudge(req.body.judge);
+        const volunteer = validateVolunteer({ ...sourceVolunteer, ...supplied,
+          firstName: row.firstName, lastName: row.lastName, associationNumber: row.associationNumber,
+          school: row.school, rank: row.rank, certification: row.certification }, original.types, config.date, false, config.scope);
+        if (![volunteer.primaryType, volunteer.secondaryType].includes(judging.id)) {
+          fail('The volunteer must have Judging as First or Second Choice.', 400);
+        }
+        if (!judgeAgeEligible(volunteer.rank, volunteer.age, config.scope) &&
+            !(volunteer.certification === 'SK_TK' &&
+              !certificationAgeIssue('SK_TK', volunteer.rank, volunteer.age, config.scope))) {
+          fail('The volunteer must meet the tournament age and rank requirements for a judge or certified SK/TK candidate.', 400);
+        }
+        if (volunteer.associationNumber && original.volunteers.some((member) => member.id !== volunteerId &&
+            member.associationNumber.toUpperCase() === volunteer.associationNumber.toUpperCase())) {
+          fail('A volunteer with this Association ID already exists. Edit and populate that volunteer instead.', 409);
+        }
+        const next = structuredClone(original);
+        volunteerId ||= crypto.randomUUID();
+        const target = next.volunteers.find((member) => member.id === volunteerId);
+        if (target) Object.assign(target, volunteer);
+        else next.volunteers.push({ id: volunteerId, ...volunteer });
+        volunteerChange = { original, next, date: config.date };
+      }
+    } catch (error) { if (error.statusCode) throw error; fail(error.message, 400); }
     if (row.associationNumber && data.judges.some((judge) => judge.id !== req.params.id &&
         judge.associationNumber.toUpperCase() === row.associationNumber.toUpperCase())) fail('A judge with this Association ID already exists.', 409);
-    if (existing) Object.assign(existing, row);
-    else data.judges.push({ id: crypto.randomUUID(), competitorId: null, ...row });
-    return commit();
+    if (existing) Object.assign(existing, row, { volunteerId });
+    else data.judges.push({ id: crypto.randomUUID(), competitorId: null, volunteerId, ...row });
+    return commit({}, volunteerChange);
   }, true);
   router.post('/ring-judges', save);
   router.put('/ring-judges/:id', save);
@@ -164,8 +232,8 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
       let age;
       try { age = storedAge(member, config.date); }
       catch (error) { fail(`Cannot determine eligibility for ${member.firstName} ${member.lastName}: ${error.message}`, 400); }
-      const judgeEligible = /^D[1-8]$/.test(rank.code) && age >= 18;
-      const sktkEligible = (!volunteers || hasSktkCertification) && !certificationAgeIssue('SK_TK', rank.code, age);
+      const judgeEligible = judgeAgeEligible(rank.code, age, config.scope);
+      const sktkEligible = (!volunteers || hasSktkCertification) && !certificationAgeIssue('SK_TK', rank.code, age, config.scope);
       if (!judgeEligible && !sktkEligible) continue;
       const associationNumber = String(member.associationNumber || '').trim();
       if (data.judges.some((judge) => (volunteers ? judge.volunteerId : judge.competitorId) === String(member.id) || associationNumber &&

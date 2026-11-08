@@ -7,6 +7,7 @@
   <title>Audience Monitor</title>
   <link rel="stylesheet" href="/assets/help-tooltips.css">
   <link rel="stylesheet" href="/audience-monitor/monitor.css">
+  <script defer src="/assets/visual-definitions.js"></script>
   <script defer src="/audience-monitor/monitor.js"></script>
   <script defer src="/assets/help-tooltips.js"></script>
 </head>
@@ -16,18 +17,24 @@
       <div><h1 id="eventName">Audience Monitor</h1><p id="connection" role="status">Loading active event...</p></div>
       <time id="clock" class="clock" aria-label="Current time"></time>
       <div class="controls" data-help-root>
-        <label class="source-control" for="sourceRun">View
-          <select id="sourceRun" aria-label="Audience View data source">
-            <option value="">Active event</option>
-          </select>
-        </label>
-        <button id="pause" type="button" aria-pressed="false" data-help="Pause automatic page rotation in both sections. Live data continues to refresh.">Pause pages</button>
-        <button id="fullscreen" type="button" data-help="Enter or exit fullscreen for the audience display.">Fullscreen</button>
+        <details>
+          <summary>Display controls</summary>
+          <div class="operator-controls">
+            <label class="source-control" for="sourceRun">View
+              <select id="sourceRun" aria-label="Audience View data source">
+                <option value="">Active event</option>
+              </select>
+            </label>
+            <button id="pause" type="button" aria-pressed="false" data-help="Pause automatic page rotation in both sections. Live data continues to refresh.">Pause pages</button>
+            <button id="fullscreen" type="button" data-help="Enter or exit fullscreen for the audience display.">Fullscreen</button>
+          </div>
+        </details>
       </div>
     </header>
+    <p id="paletteStatus" role="status" hidden></p>
     <div class="display">
       <section class="panel" aria-labelledby="ringsTitle">
-        <div class="panel-heading"><h2 id="ringsTitle">Ring Status</h2><span id="ringsPages" class="page-count"></span></div>
+        <div class="panel-heading"><h2 id="ringsTitle">In the Ring</h2><span id="ringsPages" class="page-count"></span></div>
         <div id="rings" class="cards ring-cards"></div>
       </section>
       <section class="panel" aria-labelledby="upcomingTitle">
@@ -35,10 +42,10 @@
         <div id="upcoming" class="cards upcoming-cards"></div>
       </section>
     </div>
-    <footer>Approximate start windows, not call times. Subject to change. Please follow staff announcements.</footer>
-    <p data-help-source="Reading the display">Ring, Division, and upcoming start times use matching 64px bold text for distance viewing, with smaller text on narrow screens. Fewer items appear per page so the key information stays prominent; descriptions and phase names are secondary. The progress pill sits alongside Ring and Division on wide screens, and below them on narrower screens. Green phases are complete, blue fills current progress, and neutral phases have not started; routine Waiting and In progress labels are omitted. Segments represent phases, not equal amounts of time. The first queued division previews its applicable phases, including Weapons where appropriate, unfilled with an accessible queued, not started description. A neutral preview does not imply operational readiness. Empty rings show a neutral No current division pill. Temporarily paused and Updates unavailable use neutral status pills in the same space rather than showing untrusted progression.</p>
-    <p data-help-source="On Deck">Only assigned queued divisions appear, ordered by expected start, then ring and queue order. Each compact tile shows Division and Ring at the top, a large centered estimated start time below, and division details at the bottom. Queue positions are not displayed. Approximate windows use the shared low-confidence planning model, not guaranteed call times. Unassigned hypothetical suggestions are not displayed. Start TBD means the available data cannot support a prediction. Follow staff announcements.</p>
-    <p data-help-source="Pages and refresh">The upper and lower sections rotate complete pages independently every 12 seconds, wrapping to the beginning only when content exceeds the screen capacity. Nothing scrolls continuously. Refreshes occur every 10 seconds without resetting rotation or reordering existing rows while you read. Pause pages stops rotation, not refresh. Stale or failed data hides predictions and progress; the display recovers automatically. Fullscreen improves distant viewing. Browser zoom can increase text size and reduce items per page.</p>
+    <footer>Approximate start and finish times, not call times. Subject to change. Please follow staff announcements.</footer>
+    <p data-help-source="Reading the display">In the Ring shows compact rows in fixed ring order: ring, active division and description, a thin overall-progress bar, and estimated finish. Overall progress is approximate and weighted by modeled phase duration; individual phases and percentages are not displayed. Missing progress or estimates are labeled unavailable. Paused and disconnected rings show a neutral message rather than old progress or finish times. Queued divisions appear only in On Deck, not as active divisions. This page trials the saved Visual Definitions colors. Refresh the page after saving color changes; font sizes and layout remain audience-specific.</p>
+    <p data-help-source="On Deck">Only assigned queued divisions appear. The next division for every ring takes priority over later queue entries; within each queue position, divisions are ordered by estimated start and ring. Each compact row shows ring, division, description, and estimated start. Missing estimates say Not available. Predictions are low-confidence planning estimates, not guaranteed call times. Unassigned hypothetical suggestions are not displayed. Follow staff announcements.</p>
+    <p data-help-source="Pages and refresh">Compact rows and additional columns on wide screens keep more rings visible. Sections stay stationary when all rows fit; overflow pages rotate independently every 12 seconds. Nothing scrolls continuously. Data refreshes every 10 seconds. Ring order stays fixed; queue updates retain existing order within each queue position until the next rotation. Display controls contains source selection, Pause pages, and Fullscreen. Pause pages stops rotation, not refresh. Stale or failed data hides predictions and progress; the display recovers automatically. Unattended read-only access lasts 12 hours from sign-in, without extending access to editable workspaces. Sign-out, account disabling, and session revocation still take effect.</p>
   </main>
 </body>
 </html>

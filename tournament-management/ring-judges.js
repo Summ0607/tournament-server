@@ -3,6 +3,7 @@
     const node = (id) => document.getElementById(id);
     const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fields = ['firstName', 'lastName', 'associationNumber', 'school', 'rank', 'certification', 'priority', 'reviewNotes'];
+    const volunteerFields = ['age', 'parentName', 'contactNumber', 'primaryType', 'secondaryType'];
     const certLabel = (code) => (data && data.certificationLevels || []).find((level) => level.code === code)?.label || code || 'Unknown';
     const rankLabel = (code) => (data && data.judgeRanks || []).find((rank) => rank.code === code)?.label || code;
     const filterFields = ['name', 'associationNumber', 'school', 'rank', 'certification', 'priority', 'flaggedForReview', 'source'];
@@ -12,7 +13,11 @@
     const draft = () => ({ ...Object.fromEntries(fields.map((key) => [key,
       key === 'priority' ? Number(node('rj-priority').value) : node(`rj-${key}`).value
     ])), flaggedForReview: node('rj-flaggedForReview').checked });
-    const dirty = () => editing && JSON.stringify(draft()) !== baseline;
+    const volunteerDraft = () => ({ ...Object.fromEntries(volunteerFields.map((key) =>
+      [key, key === 'age' ? Number(node('rj-age').value) : node(`rj-${key}`).value])),
+      ageAsOf: data.volunteerDirectory.tournamentDate });
+    const editorDraft = () => JSON.stringify({ judge: draft(), volunteer: node('rjVolunteerFields').hidden ? null : volunteerDraft() });
+    const dirty = () => editing && editorDraft() !== baseline;
     const locked = () => !data || writing || data.configurationLocked || scope !== selectedEvent();
     const source = (row) => row.volunteerId ? 'Volunteer' : row.competitorId === null ? 'Manual' : 'Competitor';
     const matchesText = (value, filter) => String(value || '').toLowerCase().includes(filter.toLowerCase());
@@ -72,6 +77,9 @@
       node('rjAll').checked = rows.length > 0 && count === rows.length;
       node('rjAll').indeterminate = count > 0 && count < rows.length;
       [...fields.map((key) => `rj-${key}`), 'rj-flaggedForReview'].forEach((key) => { node(key).disabled = locked(); });
+      volunteerFields.forEach((key) => { node(`rj-${key}`).disabled = locked() || node('rjVolunteerFields').hidden; });
+      const linked = data?.judges.find((row) => row.id === id);
+      node('rj-rank').disabled = locked() || Boolean(linked?.competitorId);
     }
     function render() {
       renderFilters();
@@ -100,17 +108,39 @@
     function open(row) {
       if (!data || writing) return;
       id = row ? row.id : '';
+      const competitor = Boolean(row?.competitorId);
+      node('rjVolunteerFields').hidden = competitor;
+      const volunteer = data.volunteerDirectory?.volunteers.find((member) => member.id === row?.volunteerId);
+      const types = data.volunteerDirectory?.types || [];
+      const typeOptions = types.map((type) => `<option value="${esc(type.id)}">${esc(type.name)}</option>`).join('');
+      node('rj-primaryType').innerHTML = '<option value="">Select first choice</option>' + typeOptions;
+      node('rj-secondaryType').innerHTML = '<option value="">None</option>' + typeOptions;
+      volunteerFields.forEach((key) => {
+        node(`rj-${key}`).value = volunteer?.[key] ?? (key === 'primaryType' ? types.find((type) => type.name.toLowerCase() === 'judging')?.id || '' : '');
+      });
+      node('rj-age').required = !competitor;
+      node('rj-primaryType').required = !competitor;
+      node('rj-parentName').required = !competitor && node('rj-age').value !== '' && Number(node('rj-age').value) < 18;
+      node('rjSourceHelp').textContent = competitor
+        ? "Certification is checked against the competitor's saved rank and tournament-date age. Correct rank through registration."
+        : 'Save validates this volunteer and updates both the volunteer and this judge. Judging must be First or Second Choice.';
       node('rj-rank').innerHTML = '<option value="">--</option>' + (data.judgeRanks || []).map((rank) => `<option value="${esc(rank.code)}">${esc(rank.label)}</option>`).join('');
       if (row && !(data.judgeRanks || []).some((rank) => rank.code === row.rank)) {
         node('rj-rank').innerHTML += `<option value="${esc(row.rank)}" disabled>${esc(row.rank)} (outside allowed range)</option>`;
       }
       const schoolNames = new Set(schools.filter((school) => !school.archived).map((school) => school.name));
       if (row && row.school) schoolNames.add(row.school);
+      if (volunteer?.school) schoolNames.add(volunteer.school);
       node('rj-school').innerHTML = '<option value="">--</option>' + [...schoolNames].sort((a, b) => a.localeCompare(b))
         .map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
       node('rj-certification').innerHTML = (data.certificationLevels || []).map((level) => `<option value="${esc(level.code)}">${esc(level.label)}</option>`).join('');
       fields.forEach((key) => { node(`rj-${key}`).value = row ? row[key] ?? (key === 'priority' ? 4 : '') : key === 'certification' ? 'UNKNOWN' : key === 'priority' ? 4 : ''; });
-      if (row && row.firstName === undefined && row.lastName === undefined) {
+      if (volunteer) {
+        for (const key of ['firstName', 'lastName', 'associationNumber', 'school', 'rank', 'certification']) {
+          node(`rj-${key}`).value = volunteer[key];
+        }
+      }
+      if (row && !volunteer && row.firstName === undefined && row.lastName === undefined) {
         // Legacy judges stored only a display name; populated names use "Last, First".
         const comma = row.name.indexOf(',');
         const space = row.name.lastIndexOf(' ');
@@ -118,9 +148,9 @@
         node('rj-lastName').value = comma >= 0 ? row.name.slice(0, comma).trim() : space >= 0 ? row.name.slice(space + 1) : '';
       }
       node('rj-flaggedForReview').checked = row ? row.flaggedForReview : false;
-      node('rjDialogTitle').textContent = row ? 'Edit Judge' : 'Add Judge';
+      node('rjDialogTitle').textContent = row ? 'Edit Judge' : 'Add Volunteer to Ring Judges';
       node('rjError').textContent = data.configurationLocked ? data.configurationLockReason || 'Read only. Reset Run before editing.' : '';
-      editing = true; baseline = JSON.stringify(draft()); controls();
+      editing = true; baseline = editorDraft(); controls();
       node('rjDialog').show(); node('rjCancel').focus();
     }
     async function load() {
@@ -219,7 +249,18 @@
     node('rjPopulateVolunteers').addEventListener('click', () => {
       if (!locked() && confirm(`Add primary or secondary Judging volunteers who are Dan-ranked and aged 18+, or have SK/TK certification and meet its rank and age requirements, for ${scope}? Existing entries will not be overwritten.`)) return write('/populate-volunteers', 'POST', {});
     });
-    node('rjForm').addEventListener('submit', (event) => { event.preventDefault(); return write(id ? `/${encodeURIComponent(id)}` : '', id ? 'PUT' : 'POST', { judge: draft() }, true); });
+    node('rj-age').addEventListener('input', () => {
+      node('rj-parentName').required = node('rj-age').value !== '' && Number(node('rj-age').value) < 18;
+    });
+    node('rjForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const body = { judge: draft() };
+      if (!node('rjVolunteerFields').hidden) {
+        body.volunteer = volunteerDraft();
+        body.volunteerRevision = data.volunteerDirectory.revision;
+      }
+      return write(id ? `/${encodeURIComponent(id)}` : '', id ? 'PUT' : 'POST', body, true);
+    });
     node('rjCancel').addEventListener('click', close);
     node('rjDialog').addEventListener('cancel', (event) => { event.preventDefault(); close(); });
     node('rjDialog').addEventListener('keydown', (event) => {

@@ -18,6 +18,9 @@ async function harness({ view = 'users', initialSession = false, role = 'adminis
     }
     replaceChildren(...children) { this.children = []; this.append(...children); }
     addEventListener(name, callback) { this.handlers[name] = callback; }
+    setCustomValidity(message) { this.validationMessage = message; }
+    setAttribute(name, value) { this[name] = value; }
+    reportValidity() { this.validityReported = true; return !this.validationMessage; }
     querySelectorAll(selector) {
       const inputs = this.children.flatMap((child) => [child, ...child.querySelectorAll('input')])
         .filter((child) => child.tag === 'input');
@@ -139,13 +142,59 @@ test('unsaved administration drafts can only be resumed by the original account'
 });
 
 test('account UI shows login errors explicitly, clears passwords, and does not expose admin panels before login', async () => {
-  const h = await harness();
+  const h = await harness({ view: 'login' });
   assert.equal(h.nodes.get('loginPanel').hidden, false);
   assert.equal(h.nodes.get('usersPanel').hidden, true);
+  assert.equal(h.nodes.get('adminNotice').hidden, true);
+  assert.equal(h.nodes.get('status').hidden, true);
   h.rejectLogin();
   await h.login();
   assert.match(h.nodes.get('status').textContent, /Invalid user ID or password/);
+  assert.equal(h.nodes.get('status').hidden, false);
   assert.equal(h.nodes.get('loginPassword').value, '');
+});
+
+test('Users omits routine banners while settings retains administrator deployment guidance', async () => {
+  const admin = await harness({ initialSession: true });
+  assert.equal(admin.nodes.get('adminNotice').hidden, true);
+  assert.equal(admin.nodes.get('status').hidden, true);
+  const settings = await harness({ initialSession: true, view: 'settings' });
+  assert.equal(settings.nodes.get('adminNotice').hidden, false);
+  const viewer = await harness({ initialSession: true, role: 'viewer' });
+  assert.equal(viewer.nodes.get('adminNotice').hidden, true);
+});
+
+test('Users validates password matching before Save and places green save feedback beside the actions', async () => {
+  const h = await harness({ initialSession: true });
+  h.nodes.get('users').children[0].children[3].children[0].handlers.click();
+  assert.equal(h.nodes.get('userFormTitle').textContent, 'Edit admin');
+  h.nodes.get('userPassword').value = 'NewPassword123!';
+  await h.fire('userForm', 'input');
+  assert.equal(h.nodes.get('passwordMismatch').hidden, false);
+  assert.match(h.nodes.get('confirmPassword').validationMessage, /do not match/);
+  const before = h.requests.length;
+  await h.fire('userForm', 'submit');
+  assert.equal(h.requests.length, before);
+  assert.equal(h.nodes.get('confirmPassword').validityReported, true);
+  h.nodes.get('confirmPassword').value = 'NewPassword123!';
+  await h.fire('userForm', 'input');
+  assert.equal(h.nodes.get('passwordMismatch').hidden, true);
+  assert.equal(h.nodes.get('confirmPassword').validationMessage, '');
+  await h.fire('userForm', 'submit');
+  assert.equal(h.requests.find((r) => r.method === 'PUT').body.revision, 1);
+  assert.equal(h.nodes.get('userFormTitle').textContent, 'Edit admin');
+  assert.equal(h.nodes.get('status').hidden, true);
+  assert.equal(h.nodes.get('userSaveStatus').textContent, 'User saved.');
+  assert.equal(h.nodes.get('userSaveStatus').hidden, false);
+  await h.fire('userForm', 'input');
+  assert.equal(h.nodes.get('userSaveStatus').hidden, true);
+  await h.fire('newUser');
+  assert.equal(h.nodes.get('confirmPassword').validationMessage, '');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'account', 'index.html'), 'utf8');
+  assert.match(html, /id="userSaveStatus" class="success"/);
+  assert.ok(html.indexOf('Save user</button>') < html.indexOf('id="userSaveStatus"'));
+  const css = fs.readFileSync(path.join(__dirname, '..', 'account', 'style.css'), 'utf8');
+  assert.match(css, /\.success \{[^}]*color: #176333/);
 });
 
 test('administrator can create/edit users, keeps stale drafts and reauthenticates without losing edits', async () => {

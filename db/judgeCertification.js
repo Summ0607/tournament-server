@@ -87,7 +87,12 @@ function certificationRankIssue(certificationCode, rankCode) {
   return '';
 }
 
-function certificationAgeIssue(certificationCode, rankCode, age) {
+function certificationAgeIssue(certificationCode, rankCode, age, scope = '') {
+  if (scope === 'in-house' && ['SK_TK', 'CORNER'].includes(certificationCode)) {
+    const minimumAge = certificationCode === 'SK_TK' ? 11 : 15;
+    return Number.isInteger(age) && age >= minimumAge ? '' :
+      `${formatCertificationForDisplay(certificationCode)} certification requires age ${minimumAge} or older for In-House tournaments.`;
+  }
   if (certificationCode !== 'SK_TK' || !isJudgeRank(rankCode)) return '';
   const minimumAge = rankCode === 'CDB' ? 14 : 16;
   return Number.isInteger(age) && age >= minimumAge ? '' :

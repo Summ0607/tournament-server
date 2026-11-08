@@ -90,7 +90,12 @@
         .map((key) => [`--vd-${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`, `${v[key]}px`])
     ]);
   }
-  const api = { fields, defaults, validate, preview, presentation };
+  function colorPresentation(values) {
+    const v = validate(values);
+    return Object.fromEntries(fields.filter((field) => field.type === 'color')
+      .map((field) => [`--audience-${field.key}`, v[field.key]]));
+  }
+  const api = { fields, defaults, validate, preview, presentation, colorPresentation };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.VisualDefinitionRules = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

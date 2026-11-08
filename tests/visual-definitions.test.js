@@ -28,6 +28,17 @@ test('visual definitions validate exact fields, colors, font choices and numeric
   assert.doesNotMatch(preview, /<script/);
 });
 
+test('audience palette maps validated colors only and permits read-only viewer access', () => {
+  const { apiRoles } = require('../backend/browserPermissions');
+  const tokens = rules.colorPresentation({ ...rules.defaults(), primary: '#123456', bodySize: 20 });
+  assert.equal(tokens['--audience-primary'], '#123456');
+  assert.ok(Object.values(tokens).every((value) => /^#[0-9a-f]{6}$/.test(value)));
+  assert.throws(() => rules.colorPresentation({ ...rules.defaults(), text: 'invalid' }));
+  assert.ok(apiRoles('GET', '/api/visual-definitions').includes('viewer'));
+  assert.deepEqual(apiRoles('PUT', '/api/visual-definitions'), ['administrator']);
+  assert.equal(apiRoles('GET', '/api/schools').includes('viewer'), false);
+});
+
 test('server-wide definition API persists atomically, rejects stale saves and reports corrupt files', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'visual-definitions-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

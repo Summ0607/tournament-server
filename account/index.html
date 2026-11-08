@@ -19,14 +19,11 @@
     </nav>
   </header>
   <main>
-    <p class="warning">Browser access requires HTTPS and role permissions. Transitional tablet endpoints are not yet device-authorized.
-      Roles currently apply to all tournaments. Do not expose this staged installation to untrusted networks.</p>
-    <p id="status" role="status" aria-live="polite">Checking session...</p>
+    <p id="adminNotice" class="warning" hidden>Browser access uses HTTPS, and roles apply across all tournaments. Ring tablets require pairing; keep the server on trusted networks.</p>
+    <p id="status" role="status" aria-live="polite" hidden></p>
     <section id="loginPanel" class="panel" hidden>
       <h2>Sign in</h2>
       <p>Use the account provided by your administrator. There is no default user or password.</p>
-      <p>Expired sessions do not discard unsaved account edits. Password fields are cleared; sign in again to continue.
-        No form drafts or passwords are stored in browser storage.</p>
       <form id="loginForm">
         <label>User ID <input id="loginUser" autocomplete="username" required maxlength="64"></label>
         <label>Password <input id="loginPassword" type="password" autocomplete="current-password" required maxlength="128"></label>
@@ -66,12 +63,14 @@
         <label id="passwordLabel">New password (required for new accounts; leave blank to keep an existing password)
           <input id="userPassword" type="password" autocomplete="new-password" maxlength="128">
         </label>
-        <label>Confirm new password <input id="confirmPassword" type="password" autocomplete="new-password" maxlength="128"></label>
+        <label>Confirm new password <input id="confirmPassword" type="password" autocomplete="new-password" maxlength="128" aria-describedby="passwordMismatch"></label>
+        <p id="passwordMismatch" class="field-error" role="status" aria-live="polite" hidden></p>
         <p id="passwordHelp"></p>
         <div class="actions">
           <button type="submit">Save user</button>
           <button id="newUser" type="button">Clear / add another user</button>
         </div>
+        <p id="userSaveStatus" class="success" role="status" aria-live="polite" hidden></p>
       </form>
     </section>
     <section id="policyPanel" class="panel" hidden>

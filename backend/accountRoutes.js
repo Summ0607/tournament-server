@@ -62,7 +62,7 @@ function createAccountRouter({ store, allowedOrigins, sourceLimit, now = Date.no
   router.post('/login', handle(async (req, res) => {
     const { userId, password } = body(req, ['userId', 'password']);
     const login = await store.login({ userId, password });
-    res.cookie(COOKIE_NAME, login.token, { ...COOKIE_OPTIONS, maxAge: Math.max(0, login.expiresAt - now()) });
+    res.cookie(COOKIE_NAME, login.token, { ...COOKIE_OPTIONS, maxAge: Math.max(0, (login.cookieExpiresAt || login.expiresAt) - now()) });
     res.json({ account: login.account, expiresAt: login.expiresAt, csrfToken: csrf(login.token) });
   }));
   router.use(handle(async (req, res, next) => {

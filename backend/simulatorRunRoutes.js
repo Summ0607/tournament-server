@@ -607,7 +607,12 @@ function createSimulatorRunRouter({
       if (controller && controller.simulator) persistController(req.params.runId, controller);
       const workspace = simulatorRunStore.getRunWorkspace(req.params.runId);
       res.set('Cache-Control', 'no-store');
-      return res.json(simulatorHeadTable(workspace));
+      const board = simulatorHeadTable(workspace);
+      return res.json({
+        ...board,
+        eventStartedAt: workspace.manifest.wallClockStartedAt || '',
+        estimates: buildSimulatorAssignmentEstimates(workspace, board)
+      });
     } catch (error) {
       console.error(`Failed to build simulator Head Table ${req.params.runId}:`, error);
       return res.status(500).json({ error: 'Failed to build simulator Head Table' });

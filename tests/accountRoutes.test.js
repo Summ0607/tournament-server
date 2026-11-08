@@ -91,6 +91,28 @@ test('HTTPS login issues a secure host-only cookie, no session token in JSON, an
   assert.equal((await p.request('/session', { headers: second.headers })).status, 200);
 });
 
+test('mounted account routes allow unattended monitor checks but reject editable access after idle expiry', async (t) => {
+  const p = await setup(t);
+  const { headers } = await p.login();
+  const monitorHeaders = { ...headers, 'X-Tournament-Audience': 'true' };
+  p.advance(IDLE_MS);
+  const expired = await p.request('/session', { headers });
+  assert.equal(expired.status, 401);
+  assert.equal(expired.headers['set-cookie'], undefined, 'An idle editable tab must not erase the monitor cookie');
+  const monitor = await p.request('/session', { headers: monitorHeaders });
+  assert.equal(monitor.status, 200);
+  assert.equal(monitor.body.expiresAt, monitor.body.idleExpiresAt);
+  assert.equal((await p.request('/users', { headers: monitorHeaders })).status, 401);
+  assert.equal((await p.request('/activity', { method: 'POST', headers: monitorHeaders, body: {} })).status, 401);
+  assert.equal((await p.request('/logout', { method: 'POST', headers: monitorHeaders, body: {} })).status, 204);
+  assert.equal((await p.request('/session', { headers: monitorHeaders })).status, 401);
+  const next = await p.login();
+  p.advance(12 * 60 * 60 * 1000 - 1);
+  assert.equal((await p.request('/session', { headers: { ...next.headers, 'X-Tournament-Audience': 'true' } })).status, 200);
+  p.advance(1);
+  assert.equal((await p.request('/session', { headers: { ...next.headers, 'X-Tournament-Audience': 'true' } })).status, 401);
+});
+
 test('cross-origin, forged-host, non-JSON and missing CSRF requests cannot mutate accounts', async (t) => {
   const p = await setup(t);
   const { headers } = await p.login();

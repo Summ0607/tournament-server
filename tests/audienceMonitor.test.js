@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const { buildAudienceMonitor, buildSimulatorAudienceMonitor } = require('../backend/audienceMonitor');
 const { buildEstimates } = require('../backend/ringEstimates');
 const ui = require('../audience-monitor/monitor');
+const visualRules = require('../assets/visual-definitions');
 const now = Date.parse('2026-10-25T16:00:00Z');
 const windowAt = (minutes) => ({
   earliestAt: new Date(now + Math.max(0, minutes - 2) * 60000).toISOString(),
@@ -19,7 +20,8 @@ function fixture(count = 4) {
     rings: Array.from({ length: count }, (_, index) => ({
       ringId: `ring-a-${index + 1}`, ringLabel: `A${index + 1}`,
       divisionNumber: String(20 + index), description: 'Division description',
-      status: 'active', phases: [{ key: 'hyungs', label: 'Hyungs', state: 'active', progress: 25 }]
+      status: 'active', overallProgress: 25, completionWindow: windowAt(index + 2),
+      phases: [{ key: 'hyungs', label: 'Hyungs', state: 'active', progress: 25 }]
     })),
     upcoming: Array.from({ length: count }, (_, index) => ({
       ringId: `ring-a-${index + 1}`, ringLabel: `A${index + 1}`, divisionNumber: String(40 + index),
@@ -48,6 +50,7 @@ test('public projection includes applicable progression and assigned queues, nev
   assert.equal(snapshot.upcoming[0].description, 'Division description 22');
   assert.ok(snapshot.upcoming[0].startWindow);
   assert.ok(snapshot.rings[0].completionWindow);
+  assert.equal(snapshot.rings[0].overallProgress, estimates.rings[0].current.progressPercent);
   assert.equal(snapshot.upcoming.length, 1, 'Unassigned division 24 is not an audience promise');
   assert.doesNotMatch(JSON.stringify(snapshot), /Private person|Secret device|dob|competitors|assistanceType|tabletLabel/);
   assert.equal(JSON.stringify(rings), before);
@@ -57,6 +60,7 @@ test('public projection includes applicable progression and assigned queues, nev
     const result = buildAudienceMonitor({ eventName: 'Active', rings: modified, groups,
       estimates: buildEstimates({ eventName: 'Active', rings: modified, groups, now }) });
     assert.equal(result.rings[0].status, status);
+    assert.equal(result.rings[0].overallProgress, null);
     assert.equal(result.upcoming[0].startWindow, null);
   }
 });
@@ -121,11 +125,24 @@ test('simulator Audience View estimates queued start from remaining active phase
     latestAt: new Date(expectedMs + uncertaintyMs).toISOString()
   });
   assert.equal(snapshot.upcoming[0].divisionNumber, '11');
+  assert.equal(snapshot.rings[0].overallProgress, 25, 'Setup and awards use their saved simulated durations');
+  assert.equal(Date.parse(snapshot.rings[0].completionWindow.expectedAt), expectedMs - 1500,
+    'Finish does not include the 30 simulated seconds between divisions');
+  workspace.manifest.state.rings[0].phaseDurationsMs.awards = 180_000;
+  assert.equal(buildSimulatorAudienceMonitor(workspace, now).rings[0].overallProgress, 12.5,
+    'Longer awards phase changes overall progress; phases are not equally weighted');
+  workspace.manifest.status = 'paused';
+  const paused = buildSimulatorAudienceMonitor(workspace, now);
+  assert.equal(paused.rings[0].overallProgress, null);
+  assert.equal(paused.rings[0].completionWindow, null);
 });
 
 test('pagination capacity, stable refresh order, queue ordering and date windows are deterministic', () => {
   assert.deepEqual(ui.capacity(660, 310, 146), { columns: 2, count: 4 });
   assert.deepEqual(ui.capacity(320, 146, 146), { columns: 1, count: 1 });
+  assert.deepEqual(ui.capacity(1820, 400, 80, 760), { columns: 2, count: 8 });
+  assert.deepEqual(ui.capacity(1253, 238, 80, 540), { columns: 2, count: 4 });
+  assert.deepEqual(ui.capacity(1820, 320, 80, 540), { columns: 3, count: 9 });
   const snapshot = fixture(12);
   const sorted = snapshot.rings.slice().reverse().sort(ui.ringOrder);
   assert.equal(sorted[1].ringLabel, 'A2');
@@ -144,9 +161,12 @@ test('pagination capacity, stable refresh order, queue ordering and date windows
   assert.throws(() => ui.validate({ ...snapshot, version: 2 }), /Invalid/);
   assert.throws(() => ui.validate({ ...snapshot, upcoming: null }), /Invalid/);
   assert.throws(() => ui.validate({ ...snapshot, validUntil: snapshot.generatedAt }), /Invalid/);
+  assert.throws(() => ui.validate({ ...snapshot, rings: [{ ...snapshot.rings[0], overallProgress: 101 }] }), /Invalid/);
+  const later = { ...old[0], divisionNumber: '100', position: 2, startWindow: windowAt(0) };
+  assert.equal([later, old[1]].sort(ui.upcomingOrder)[0], old[1], 'Every next division precedes later queue entries');
 });
 
-async function harness(initial = fixture()) {
+async function harness(initial = fixture(), { palette = visualRules.defaults(), paletteFailure = false } = {}) {
   const nodes = new Map();
   const node = (id) => {
     if (!nodes.has(id)) nodes.set(id, {
@@ -173,12 +193,13 @@ async function harness(initial = fixture()) {
     Date: class extends Date { static now() { return time; } },
     URLSearchParams,
     window: { location: { search: '' } },
-    AbortController,
+    AbortController, AbortSignal, VisualDefinitionRules: visualRules,
     console: { error: (...args) => errors.push(args) },
     document: {
       getElementById: node, querySelector: () => node('display'), hidden: false,
       createElement: () => ({ value: '', textContent: '' }),
-      documentElement: { requestFullscreen: async () => { throw new Error('Denied'); } }
+      documentElement: { style: { setProperty(name, value) { node('palette').style[name] = value; } },
+        requestFullscreen: async () => { throw new Error('Denied'); } }
     },
     ResizeObserver: class { observe() {} },
     setTimeout: (callback, delay) => { timeouts.set(++timerId, { callback, delay }); return timerId; },
@@ -186,6 +207,8 @@ async function harness(initial = fixture()) {
     setInterval: (callback, delay) => intervals.push({ callback, delay }),
     fetch: async (url, options) => {
       requests.push({ url, options });
+      if (url === '/api/visual-definitions') return paletteFailure
+        ? { ok: false, status: 500 } : { ok: true, json: async () => ({ values: palette }) };
       if (fail) return { ok: false, status: 503 };
       if (url === '/api/simulator/runs') return { ok: true, json: async () => ({ runs: simulatorRuns }) };
       if (url.includes('/audience')) return { ok: true, json: async () => simulatorPayload };
@@ -217,16 +240,33 @@ async function harness(initial = fixture()) {
   };
 }
 
+test('monitor applies saved palette colors without changing layout and reports palette loading errors', async () => {
+  const page = await harness(fixture(), { palette: { ...visualRules.defaults(), primary: '#123456', text: '#223344' } });
+  assert.equal(page.node('palette').style['--audience-primary'], '#123456');
+  assert.equal(page.node('palette').style['--audience-text'], '#223344');
+  assert.equal(page.node('paletteStatus').hidden, true);
+  assert.ok(Object.keys(page.node('palette').style).every((key) => key.startsWith('--audience-')));
+  const failed = await harness(fixture(), { paletteFailure: true });
+  assert.equal(failed.node('paletteStatus').hidden, false);
+  assert.match(failed.node('paletteStatus').textContent, /Saved display colors unavailable.*built-in palette/);
+  assert.match(failed.node('rings').innerHTML, /Ring A1/);
+  assert.equal(failed.errors.length, 1);
+  const invalid = await harness(fixture(), { palette: { ...visualRules.defaults(), primary: 'invalid' } });
+  assert.match(invalid.node('paletteStatus').textContent, /Invalid Primary buttons/);
+});
+
 test('display rotates independently, wraps, pauses, preserves pages on refresh, and resets on event switch', async () => {
   const page = await harness();
   assert.match(page.node('rings').innerHTML, /Ring A1/);
-  assert.match(page.node('rings').innerHTML, /<strong>Ring A1<\/strong><strong>Division 20<\/strong>/);
-  assert.match(page.node('rings').innerHTML, /class="ring-top"><div class="card-heading">[\s\S]*?<\/div><div class="phases"/);
+  assert.match(page.node('rings').innerHTML, /class="ring-label">Ring A1/);
+  assert.match(page.node('rings').innerHTML, /role="meter"[^>]*aria-valuenow="25"/);
+  assert.match(page.node('rings').innerHTML, /Est\. finish/);
+  assert.doesNotMatch(page.node('rings').innerHTML, /Hyungs|25%<\/|class="phase /);
   assert.doesNotMatch(page.node('rings').innerHTML, /class="badge"|>Waiting<|>In progress</);
   assert.match(page.node('upcoming').innerHTML, /Division 40/);
-  assert.match(page.node('upcoming').innerHTML, /<strong class="ring-badge">Ring A1<\/strong>/);
+  assert.match(page.node('upcoming').innerHTML, /<strong class="ring-label">Ring A1<\/strong>/);
   assert.doesNotMatch(page.node('upcoming').innerHTML, /queue-position|Queue \d/);
-  assert.match(page.node('upcoming').innerHTML, /class="card-heading"[\s\S]*class="start"[\s\S]*class="description"/);
+  assert.match(page.node('upcoming').innerHTML, /class="division"[\s\S]*class="description"[\s\S]*Est\. start/);
   assert.doesNotMatch(page.node('upcoming').innerHTML, /Ring A1 &middot; Queue/);
   assert.equal(page.node('ringsPages').textContent, 'Page 1 of 4');
   await page.tick(ui.ROTATE_MS);
@@ -263,11 +303,11 @@ test('display suppresses stale and failed data, recovers, escapes descriptions a
   assert.doesNotMatch(page.node('rings').innerHTML, /<img/);
   await page.advance(31000);
   assert.match(page.node('connection').textContent, /stale/);
-  assert.doesNotMatch(page.node('rings').innerHTML, /phases/);
-  assert.doesNotMatch(page.node('upcoming').innerHTML, /start/);
+  assert.doesNotMatch(page.node('rings').innerHTML, /role="meter"|Est\. finish/);
+  assert.doesNotMatch(page.node('upcoming').innerHTML, /Est\. start/);
   page.payload({ ...fixture(), generatedAt: new Date(now + 31000).toISOString(), validUntil: new Date(now + 61000).toISOString() });
   await page.refresh();
-  assert.match(page.node('rings').innerHTML, /phases/);
+  assert.match(page.node('rings').innerHTML, /role="meter"/);
   page.fail(true);
   await page.refresh();
   assert.match(page.node('connection').textContent, /503/);
@@ -301,7 +341,7 @@ test('one-page content does not rotate and no-active-event response has an expli
 
 test('upper and lower sections use different capacities and wrap independently', async () => {
   const page = await harness();
-  page.node('rings').clientHeight = 396;
+  page.node('rings').clientHeight = 232;
   await page.click('pause');
   assert.equal(page.node('ringsPages').textContent, 'Page 1 of 2 - paused');
   assert.equal(page.node('upcomingPages').textContent, 'Page 1 of 4 - paused');
@@ -325,9 +365,9 @@ test('paused rings and unavailable start windows stay explicit without displayin
   snapshot.upcoming[0].startWindow = null;
   const page = await harness(snapshot);
   assert.match(page.node('rings').innerHTML, /Temporarily paused/);
-  assert.match(page.node('rings').innerHTML, /class="phases neutral-pill"/);
-  assert.doesNotMatch(page.node('rings').innerHTML, /class="phase active"/);
-  assert.match(page.node('upcoming').innerHTML, /Start TBD/);
+  assert.match(page.node('rings').innerHTML, /class="ring-status"/);
+  assert.doesNotMatch(page.node('rings').innerHTML, /role="meter"|~\d/);
+  assert.match(page.node('upcoming').innerHTML, /Not available/);
   const invalid = fixture();
   invalid.rings[0].phases[0].progress = NaN;
   page.payload(invalid);
@@ -336,11 +376,12 @@ test('paused rings and unavailable start windows stay explicit without displayin
   assert.doesNotMatch(page.node('upcoming').innerHTML, /Division 40/);
 });
 
-test('empty, queued, active and unavailable rings keep a pill without fabricating progression', async () => {
+test('only active divisions appear in the upper panel and overall progress is never fabricated', async () => {
   const snapshot = fixture(1);
   snapshot.rings[0] = { ...snapshot.rings[0], divisionNumber: null, description: '', status: 'waiting', phases: [] };
   const page = await harness(snapshot);
-  assert.match(page.node('rings').innerHTML, /class="phases neutral-pill">No current division/);
+  assert.match(page.node('rings').innerHTML, /No current division/);
+  assert.doesNotMatch(page.node('rings').innerHTML, /role="meter"/);
   const groups = [{ groupDivisionNumber: 22, name: 'Queued weapons division', competitors: [] }];
   const rings = [{
     ringId: 'ring-a-1', ringLabel: 'A1', queuedGroupDivisionNumbers: ['22'],
@@ -357,18 +398,55 @@ test('empty, queued, active and unavailable rings keep a pill without fabricatin
   assert.ok(projected.rings[0].phases.every((phase) => phase.state === 'upcoming' && phase.progress === 0));
   page.payload(projected);
   await page.refresh();
-  assert.match(page.node('rings').innerHTML, /queued, not started/);
-  assert.match(page.node('rings').innerHTML, /Weapons/);
-  assert.equal((page.node('rings').innerHTML.match(/class="phase upcoming"/g) || []).length, 5);
+  assert.doesNotMatch(page.node('rings').innerHTML, /Division 22|Weapons|role="meter"/);
+  assert.match(page.node('upcoming').innerHTML, /Division 22/);
   page.payload(fixture(1));
   await page.refresh();
-  assert.match(page.node('rings').innerHTML, /class="phase active" style="--progress:25%"/);
+  assert.match(page.node('rings').innerHTML, /role="meter"[\s\S]*style="width:25%"/);
+  const missingProgress = fixture(1);
+  missingProgress.rings[0].overallProgress = null;
+  missingProgress.rings[0].completionWindow = null;
+  page.payload(missingProgress);
+  await page.refresh();
+  assert.match(page.node('rings').innerHTML, /Progress unavailable/);
+  assert.match(page.node('rings').innerHTML, /Not available/);
+  assert.doesNotMatch(page.node('rings').innerHTML, /role="meter"/);
   const unavailable = fixture(1);
   unavailable.rings[0].status = 'updates-unavailable';
   page.payload(unavailable);
   await page.refresh();
-  assert.match(page.node('rings').innerHTML, /class="phases neutral-pill">Updates unavailable/);
-  assert.doesNotMatch(page.node('rings').innerHTML, /class="phase active"/);
+  assert.match(page.node('rings').innerHTML, /class="ring-status">Updates unavailable/);
+  assert.doesNotMatch(page.node('rings').innerHTML, /role="meter"|~\d/);
+});
+
+test('eight rings remain visible and stationary at desktop capacity while added rings retain natural order', async () => {
+  const page = await harness(fixture(8));
+  page.node('rings').clientWidth = 1820;
+  page.node('rings').clientHeight = 400;
+  await page.click('pause');
+  assert.equal((page.node('rings').innerHTML.match(/class="card ring-card"/g) || []).length, 8);
+  assert.equal(page.node('ringsPages').textContent, '');
+  const before = page.node('rings').innerHTML;
+  await page.click('pause');
+  await page.tick(ui.ROTATE_MS);
+  assert.equal(page.node('rings').innerHTML, before);
+  page.payload(fixture(9));
+  await page.refresh();
+  assert.match(page.node('rings').innerHTML, /Ring A1[\s\S]*Ring A2[\s\S]*Ring A8/);
+});
+
+test('ordinary desktop widths show two compact ring columns with matching rotation capacity', async () => {
+  const page = await harness(fixture(8));
+  page.node('rings').clientWidth = 1253;
+  page.node('rings').clientHeight = 238;
+  await page.click('pause');
+  assert.equal(page.node('rings').style.gridTemplateColumns, 'repeat(2, minmax(0, 1fr))');
+  assert.equal((page.node('rings').innerHTML.match(/class="card ring-card"/g) || []).length, 4);
+  assert.equal(page.node('ringsPages').textContent, 'Page 1 of 2 - paused');
+  await page.click('pause');
+  await page.tick(ui.ROTATE_MS);
+  assert.match(page.node('rings').innerHTML, /Ring A5/);
+  assert.equal(page.node('ringsPages').textContent, 'Page 2 of 2');
 });
 
 test('audience monitor offers simulator selection without changing its default active-event source', async () => {

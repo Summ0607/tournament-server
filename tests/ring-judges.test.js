@@ -83,12 +83,16 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   assert.equal((await fetch(`${url}?eventName=missing`)).status, 404);
   assert.deepEqual((await get()).judges, []);
   assert.equal(fs.existsSync(path.join(root, 'A', 'ring-judges.json')), false);
-  let response = await write('', { revision: null, judge: { ...judge, firstName: 'Jane Ann', lastName: 'Doe', associationNumber: 'D101', priority: 4 } });
+  const volunteerDetails = { age: 25, ageAsOf: '2027-01-09', parentName: '', contactNumber: '', primaryType: 'judging', secondaryType: '' };
+  let response = await write('', { revision: null, volunteerRevision: null, volunteer: volunteerDetails,
+    judge: { ...judge, firstName: 'Jane Ann', lastName: 'Doe', associationNumber: 'D101', priority: 4 } });
   assert.equal(response.status, 200);
   let data = await response.json();
   assert.deepEqual(data.judgeRanks, judgeRankOptions());
   assert.equal(data.judges[0].firstName, 'Jane Ann');
   assert.equal(data.judges[0].priority, 4);
+  assert.equal(data.volunteerDirectory.volunteers.length, 1);
+  assert.equal(data.judges[0].volunteerId, data.volunteerDirectory.volunteers[0].id);
   assert.equal((await get()).judges[0].lastName, 'Doe');
   const manualId = data.judges[0].id;
   assert.equal((await write('', { revision: null, judge })).status, 409);
@@ -111,7 +115,53 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   ]);
   assert.deepEqual(concurrent.map((r) => r.status).sort(), [200, 409]);
   data = await get();
+  const volunteerRevision = data.volunteerDirectory.revision;
+  response = await write(`/${manualId}`, { revision: data.revision, volunteerRevision,
+    volunteer: { ...volunteerDetails, age: 10 }, judge: { ...data.judges.find((row) => row.id === manualId), certification: 'SK/TK' } }, 'PUT');
+  assert.equal(response.status, 400);
+  assert.equal((await get()).revision, data.revision);
+  assert.equal((await get()).volunteerDirectory.revision, volunteerRevision);
+  const originalRename = fs.renameSync;
+  const renameMock = t.mock.method(fs, 'renameSync', (from, to) => {
+    if (to === path.join(root, 'A', 'ring-judges.json')) throw Object.assign(new Error('Injected judge write failure'), { code: 'EIO' });
+    return originalRename(from, to);
+  });
+  const logMock = t.mock.method(console, 'error', () => {});
+  response = await write(`/${manualId}`, { revision: data.revision, volunteerRevision,
+    volunteer: volunteerDetails, judge: { ...data.judges.find((row) => row.id === manualId), certification: 'Corner' } }, 'PUT');
+  assert.equal(response.status, 500);
+  renameMock.mock.restore();
+  logMock.mock.restore();
+  assert.equal((await get()).revision, data.revision);
+  assert.equal((await get()).volunteerDirectory.revision, volunteerRevision);
+  assert.equal((await get()).volunteerDirectory.volunteers[0].certification, 'UNKNOWN');
+  response = await write(`/${manualId}`, { revision: data.revision, volunteerRevision,
+    volunteer: volunteerDetails, judge: { ...data.judges.find((row) => row.id === manualId), certification: 'Corner' } }, 'PUT');
+  assert.equal(response.status, 200);
+  data = await response.json();
+  assert.equal(data.volunteerDirectory.volunteers[0].certification, 'CORNER');
+  assert.equal(data.judges.find((row) => row.id === manualId).certification, 'CORNER');
+  assert.equal((await write(`/${manualId}`, { revision: data.revision, volunteerRevision,
+    volunteer: volunteerDetails, judge: data.judges.find((row) => row.id === manualId) }, 'PUT')).status, 409);
+  const competitorCandidate = data.judges.find((row) => row.rank === 'D3');
+  response = await write(`/${competitorCandidate.id}`, { revision: data.revision,
+    judge: { ...competitorCandidate, rank: 'D1' } }, 'PUT');
+  assert.equal(response.status, 400);
+  response = await write(`/${competitorCandidate.id}`, { revision: data.revision,
+    judge: { ...competitorCandidate, certification: 'SK/TK' } }, 'PUT');
+  assert.equal(response.status, 200);
+  data = await response.json();
   const linked = data.judges.find((row) => row.competitorId !== null && row.rank === 'D8');
+  const db = new sqlite3.Database(path.join(root, 'A', 'tournament.db'));
+  await new Promise((resolve, reject) => db.run('UPDATE competitors SET age = 15 WHERE id = ?', [competitorCandidate.competitorId],
+    (error) => error ? reject(error) : resolve()));
+  await new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
+  const beforeAgeFailure = data.revision;
+  response = await write(`/${competitorCandidate.id}`, { revision: data.revision,
+    judge: { ...competitorCandidate, certification: 'SK/TK' } }, 'PUT');
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /age 16/);
+  assert.equal((await get()).revision, beforeAgeFailure);
   data = await (await write(`/${linked.id}`, { revision: data.revision, judge: { ...linked, flaggedForReview: true, certification: 'Regional', reviewNotes: 'Follow up' } }, 'PUT')).json();
   data = await (await write('/populate', { revision: data.revision })).json();
   assert.equal(data.judges.find((row) => row.id === linked.id).reviewNotes, 'Follow up');
@@ -169,7 +219,9 @@ function frontend(change = {}, rows = null) {
         else if (!url.includes('/populate?')) judges = [{ id: 'one', competitorId: null, ...body.judge,
           name: `${body.judge.lastName}, ${body.judge.firstName}` }];
       }
-      return { judges, revision: 'r1', configurationLocked: locked, certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), added: 0, skipped: 1 };
+      return { judges, revision: 'r1', volunteerDirectory: { revision: null, tournamentDate: '2027-01-09',
+        types: [{ id: 'judging', name: 'Judging' }, { id: 'medical', name: 'Medical' }], volunteers: [] },
+        configurationLocked: locked, certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), added: 0, skipped: 1 };
     } });
   return { workspace, node, requests, confirmations, setEvent: (v) => { event = v; },
     confirm: (v) => { allowed = v; }, fail: (v) => { failure = v; }, lock: () => { locked = true; },
@@ -275,7 +327,7 @@ test('Add and Edit use named rank and school dropdowns, retain selections and su
   const p = frontend({ name: 'van Doe, Jane Ann', school: 'Former <School>', rank: 'D8' }), n = p.node;
   await p.workspace.load();
   n('rjAdd').handlers.click();
-  assert.equal(n('rjDialogTitle').textContent, 'Add Judge');
+  assert.equal(n('rjDialogTitle').textContent, 'Add Volunteer to Ring Judges');
   assert.equal(n('rjDialog').modal, false);
   assert.equal(n('rj-rank').value, '');
   assert.match(n('rj-rank').innerHTML, /value="G5">5th Gup/);
@@ -314,6 +366,30 @@ test('failed school directory load surfaces an error and disables judge editing'
   await p.workspace.load();
   assert.match(p.node('rjNotice').textContent, /Unable to load schools/);
   assert.equal(p.node('rjAdd').disabled, true);
+});
+test('judge editor collects a volunteer for Add and locks competitor rank while certification remains editable', async () => {
+  const p = frontend(), n = p.node;
+  await p.workspace.load();
+  n('rjAdd').handlers.click();
+  assert.equal(n('rjVolunteerFields').hidden, false);
+  assert.equal(n('rj-age').required, true);
+  assert.equal(n('rj-primaryType').value, 'judging');
+  assert.match(n('rj-primaryType').innerHTML, /Medical/);
+  assert.match(n('rj-secondaryType').innerHTML, /None/);
+  n('rj-age').value = '11';
+  n('rj-age').handlers.input();
+  assert.equal(n('rj-parentName').required, true);
+  await n('rjForm').handlers.submit({ preventDefault() {} });
+  const body = JSON.parse(p.requests.at(-1).options.body);
+  assert.equal(body.volunteer.age, 11);
+  assert.equal(body.volunteer.ageAsOf, '2027-01-09');
+  assert.equal(body.volunteerRevision, null);
+  const competitor = frontend({}, [{ id: 'one', competitorId: '1', ...judge }]);
+  await competitor.workspace.load();
+  competitor.node('rjBody').handlers.dblclick(nameEvent(2));
+  assert.equal(competitor.node('rjVolunteerFields').hidden, true);
+  assert.equal(competitor.node('rj-rank').disabled, true);
+  assert.equal(competitor.node('rj-certification').disabled, false);
 });
 const nameEvent = (detail = 1) => ({
   detail, preventDefault() {},

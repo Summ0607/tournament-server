@@ -187,7 +187,9 @@ async function loadPage(options = {}) {
           data = { revision: null, types: [{ id: 'judging', name: 'Judging' }], volunteers: [], configurationLocked: false };
           break;
         case '/api/ring-judges':
-          data = { eventName: name, revision: null, judges: [], configurationLocked: false };
+          data = { eventName: name, revision: null, judges: [], configurationLocked: false,
+            volunteerDirectory: { revision: null, tournamentDate: '2027-01-09',
+              volunteers: [], types: [{ id: 'judging', name: 'Judging' }] } };
           break;
         case '/api/tournament-results':
           data = { eventName: name, source: { id: 'live', simulation: false },
@@ -300,7 +302,7 @@ async function loadPage(options = {}) {
             data = { revision: null, rows: require('../assets/competition-settings').defaults(request.pathname.split('/').at(-1)), configurationLocked: false };
             break;
           }
-          if (/^\/api\/simulator\/runs\/[^/]+\/ring-assignment$/.test(request.pathname)) {
+          if (/^\/api\/simulator\/runs\/[^/]+\/(?:ring-assignment|head-table)$/.test(request.pathname)) {
             if (options.waitForSimulation) await options.waitForSimulation;
             if (options.failSimulation) return { ok: false, json: async () => ({ error: 'Simulation unavailable' }) };
             const board = typeof options.simulatorBoard === 'function' ? options.simulatorBoard() : options.simulatorBoard;
@@ -937,6 +939,7 @@ test('Ring Judges and Volunteer Management use selected-tournament preparation',
 });
 
 test('Planned destinations are explicit, independently addressable and never load or write live tools', async () => {
+  assert.doesNotMatch(html, /class="nav-planned"/);
   const page = await loadPage({ activeEvent: spring });
   const before = page.requests.length;
   for (const id of ['judge-assignments', 'printing',
@@ -2248,6 +2251,40 @@ test('Ring Assignment and Head Table show the same queue start and completion wi
   assert.equal(page.requests.some((request) => request.init), false, 'Predictions never schedule or write assignments');
 });
 
+test('simulator Head Table mirrors live timing with simulated completion, paused and complete states', async () => {
+  const fixture = estimationFixture();
+  const eventName = 'SIMULATION - rehearsal';
+  const runId = 'timing-rehearsal';
+  const simulation = {
+    eventName, simulatorStatus: 'running', ...fixture,
+    eventStartedAt: new Date(Date.now() - 60000).toISOString(),
+    availableGroupDivisionNumbers: [], heartbeatPolicy: { disconnectAfterSeconds: 90 },
+    estimates: buildEstimates({ eventName, ...fixture, now: Date.now() })
+  };
+  const page = await loadPage({
+    ...fixture, activeEvent: winter,
+    simulatorRuns: [{ runId, sourceEventName: 'Rehearsal', status: 'running' }],
+    simulatorBoard: simulation
+  });
+  await page.openDayOf('head-table');
+  page.element('htSourceRun').value = runId;
+  await page.input('htSourceRun', 'change');
+  assert.match(page.element('htSimulationNotice').textContent, /SIMULATION.*read-only/);
+  assert.match(page.element('htEventTiming').innerHTML, /Event started <strong>(?!TBD)[^<]+/);
+  assert.match(page.element('htEventTiming').innerHTML, /Est\. completion <strong>~/);
+  assert.doesNotMatch(page.element('htEstimateSummary').textContent, /live-event planning estimates are not shown/);
+  simulation.simulatorStatus = 'paused';
+  simulation.estimates = { ...simulation.estimates, status: 'unavailable', reason: 'Simulator run is paused.' };
+  await page.click('htRefreshBtn');
+  assert.match(page.element('htEventTiming').innerHTML, /Est\. completion <strong>Unavailable/);
+  assert.match(page.element('htEventTiming').innerHTML, /Simulator run is paused/);
+  simulation.estimates = { ...simulation.estimates, status: 'ready',
+    eventCompletion: { status: 'complete', reason: null, window: null } };
+  await page.click('htRefreshBtn');
+  assert.match(page.element('htEventTiming').innerHTML, /All divisions complete/);
+  assert.equal(page.requests.some((request) => request.init && request.init.method !== 'GET'), false);
+});
+
 test('Ring Assignment and Head Table show event start and a held all-division completion estimate, TBD until start', async () => {
   const fixture = estimationFixture();
   let offset = 0;
@@ -2394,7 +2431,7 @@ async function searchLookup(page, query) {
   await page.submitLookup();
 }
 
-test('Competitors browse the selected inactive tournament roster and keep private details behind selection', async () => {
+test('Competitors browse the selected inactive tournament roster with contact columns and full rank names', async () => {
   const savedGroups = [{ groupDivisionNumber: 20, name: 'Saved division', competitors: [lookupPerson] }];
   const page = await loadPage({
     activeEvent: winter, selectedEvent: spring,
@@ -2418,11 +2455,12 @@ test('Competitors browse the selected inactive tournament roster and keep privat
   await searchLookup(page, '');
   await searchLookup(page, 'AN');
   assert.match(page.element('clResults').innerHTML, /<mark>An<\/mark>na/);
-  assert.doesNotMatch(page.element('clResults').innerHTML, /555-0100|Guardian|Pat/);
+  assert.match(page.element('clResults').innerHTML, /555-0100/);
+  assert.match(page.element('clResults').innerHTML.replace(/<\/?mark>/g, ''), /Pat Guardian/);
   await page.ringAction('clResults', { clRow: '1' });
   assert.equal(page.element('detailsPanel').hidden, false);
   assert.equal(page.element('detailsTitle').textContent, 'Competitor Details');
-  for (const value of ['Anna', 'Hannah', 'Pat Guardian', '555-0100', 'G1', 'North Studio', 'Saved division', 'TSD-100']) {
+  for (const value of ['Anna', 'Hannah', 'Pat Guardian', '555-0100', '1st Gup', 'North Studio', 'Saved division', 'TSD-100']) {
     assert.ok(page.element('competitorLookupDetails').innerHTML.includes(value), value);
   }
   await searchLookup(page, 'No matching name');
@@ -2553,11 +2591,11 @@ test('competitor search matches names and association IDs literally and safely',
   });
   await page.openDayOf('competitors');
   assert.match(page.element('clStatus').textContent, /4 competitors/);
-  await searchLookup(page, 'AN');
+  await searchLookup(page, 'Anna');
   const markup = page.element('clResults').innerHTML;
   assert.match(page.element('clStatus').textContent, /1 competitor/);
   assert.equal((markup.match(/data-cl-id=/g) || []).length, 1);
-  assert.match(markup, /<mark>An<\/mark>na/);
+  assert.match(markup, /<mark>Anna<\/mark>/);
   await searchLookup(page, 'TSD-200');
   assert.match(page.element('clResults').innerHTML, /TSD-200/);
   assert.match(page.element('clResults').innerHTML, /Bob Smith/);
@@ -2568,9 +2606,9 @@ test('competitor search matches names and association IDs literally and safely',
   assert.match(html, /max-width: 1380px/);
 });
 
-test('competitor table keeps the requested compact seven-column layout and responsive detail panel', () => {
-  assert.match(html, /<colgroup><col><col><col><col><col><col><col><\/colgroup>/);
-  for (const heading of ['TSD ID', 'Competitor', 'Age', 'Gender', 'Rank', 'Studio \/ School', 'Division']) {
+test('competitor table keeps nine columns and accessible column filters with a responsive detail panel', () => {
+  assert.match(html, /<colgroup><col><col><col><col><col><col><col><col><col><\/colgroup>/);
+  for (const heading of ['TSD ID', 'Competitor', 'Age', 'Gender', 'Rank', 'Studio \/ School', 'Division', 'Contact name', 'Contact phone']) {
     assert.ok(html.includes(heading), heading);
   }
   assert.match(html, /cl-division-link/);
@@ -2578,6 +2616,7 @@ test('competitor table keeps the requested compact seven-column layout and respo
   assert.match(html, /<form id="clToolbar"[^>]*aria-label="Filter competitors"/);
   assert.doesNotMatch(html, /id="clFilters|id="clSearchBtn|id="clClearFiltersBtn|type="checkbox"[^>]*data-cl/);
   assert.match(html, /id="clApplyFiltersBtn"[^>]*type="submit"/);
+  assert.doesNotMatch(html, /clFilterAgeMin|clFilterAgeMax|cl-age-field/);
   assert.match(html, /<option>25<\/option><option>50<\/option><option>100<\/option><option selected>250<\/option>/);
   assert.ok(html.indexOf('id="clResultCount"') < html.indexOf('<table class="cl-table"'));
   assert.ok(html.indexOf('id="clPagination"') < html.indexOf('<table class="cl-table"'));
@@ -2591,7 +2630,7 @@ test('competitor roster renders compact rows, sorting and complete sectioned per
   await page.openDayOf('competitors');
   const results = page.element('clResults').innerHTML;
   assert.equal((results.match(/<tr /g) || []).length, 2);
-  assert.equal((results.match(/<td[ >]/g) || []).length, 14);
+  assert.equal((results.match(/<td[ >]/g) || []).length, 18);
   assert.doesNotMatch(results, /Rank:/);
   assert.match(results, /class="cl-rank"/);
   assert.equal(page.element('clResultCount').textContent, 'Showing 1–2 of 2');
@@ -2607,10 +2646,51 @@ test('competitor roster renders compact rows, sorting and complete sectioned per
   assert.equal(page.element('clResultCount').textContent, 'Showing 0–0 of 0');
 });
 
-test('studio, gender and age filters combine and reset when the selected tournament changes', async () => {
+test('competitor column filters apply immediately, combine with search, and show full ranks and escaped contacts', async () => {
+  const page = await loadPage({ activeEvent: winter, competitors: [
+    { ...lookupPerson, rank: 'G6', gender: 'Female', parentFirstName: '<Pat>', parentLastName: 'Guardian', phone: '5551234567' },
+    { ...lookupPerson, id: 2, rank: 'D1', gender: 'Male', studio: 'South Studio', parentFirstName: '', parentLastName: '', phone: '' }
+  ] });
+  await page.openDayOf('competitors');
+  assert.match(page.element('clResults').innerHTML, /6th Gup/);
+  assert.match(page.element('clResults').innerHTML, /Cho Dan/);
+  assert.match(page.element('clResults').innerHTML, /&lt;Pat&gt; Guardian/);
+  assert.match(page.element('clResults').innerHTML, /555-123-4567/);
+  assert.match(page.element('clResults').innerHTML, /<td>—<\/td>\s*<td>—<\/td>/);
+  assert.doesNotMatch(page.element('clResults').innerHTML, /<Pat>/);
+  await page.ringAction('clResults', { clId: String(lookupPerson.id) });
+  assert.match(page.element('competitorLookupDetails').innerHTML, /6th Gup/);
+  assert.doesNotMatch(page.element('competitorLookupDetails').innerHTML, />G6</);
+  assert.match(page.element('clFilterRank').innerHTML, /value="G6">6th Gup/);
+  page.element('clFilterRank').value = 'G6';
+  await page.input('clFilterRank', 'change');
+  assert.match(page.element('clStatus').textContent, /1 competitor/);
+  assert.doesNotMatch(page.element('clResults').innerHTML, /Cho Dan/);
+  await page.refreshTimer();
+  assert.equal(page.element('clFilterRank').value, 'G6');
+  assert.match(page.element('clStatus').textContent, /1 competitor/);
+  page.element('clFilterGender').value = 'Male';
+  await page.input('clFilterGender', 'change');
+  assert.match(page.element('clResults').innerHTML, /No matching competitors/);
+  page.element('clFilterGender').value = '';
+  await page.input('clFilterGender', 'change');
+  await searchLookup(page, '555-123');
+  assert.match(page.element('clStatus').textContent, /1 competitor/);
+  await searchLookup(page, '6th Gup');
+  assert.match(page.element('clStatus').textContent, /1 competitor/);
+  await searchLookup(page, 'Guardian');
+  assert.match(page.element('clStatus').textContent, /1 competitor/);
+  page.element('clFilterStudio').value = 'South Studio';
+  await page.input('clFilterStudio', 'change');
+  assert.match(page.element('clResults').innerHTML, /No matching competitors/);
+  await page.selectTournament(spring);
+  for (const id of ['clFilterGender', 'clFilterRank', 'clFilterStudio']) assert.equal(page.element(id).value, '');
+});
+
+test('competitor school and gender filters combine with age search and reset when the selected tournament changes', async () => {
   const people = [
     { ...lookupPerson, age: 15, gender: 'Female' },
-    { ...lookupPerson, id: 2, firstName: 'Bob', rank: 'D2', studio: 'South Studio', age: 10, gender: 'Male', groupDivisionNumber: 22 },
+    { ...lookupPerson, id: 2, firstName: 'Bob', rank: 'D2', studio: 'South Studio', age: 17, gender: 'Male', groupDivisionNumber: 22 },
     { ...lookupPerson, id: 3, firstName: 'Cara', studio: 'North Studio', age: 20, gender: 'Female', groupDivisionNumber: null }
   ];
   const page = await loadPage({ activeEvent: winter, competitors: people });
@@ -2618,25 +2698,21 @@ test('studio, gender and age filters combine and reset when the selected tournam
   assert.match(page.element('clFilterStudio').innerHTML, /South Studio/);
   page.element('clFilterStudio').value = 'North Studio';
   page.element('clFilterGender').value = 'Female';
-  page.element('clFilterAgeMin').value = '10';
-  page.element('clFilterAgeMax').value = '18';
+  page.element('clSearch').value = '15';
   await page.submitLookup();
   assert.match(page.element('clStatus').textContent, /1 competitor.*filters applied/);
   assert.match(page.element('clResults').innerHTML, /Anna/);
-  assert.match(page.element('clResults').innerHTML, /Anna/);
   await searchLookup(page, 'Bob');
   assert.match(page.element('clResults').innerHTML, /No matching competitors found/);
-  for (const id of ['clFilterStudio', 'clFilterGender', 'clFilterAgeMin', 'clFilterAgeMax']) page.element(id).value = '';
+  for (const id of ['clFilterStudio', 'clFilterGender']) page.element(id).value = '';
   await page.submitLookup();
   assert.match(page.element('clResults').innerHTML, /Bob/);
-  page.element('clFilterAgeMin').value = '0';
-  page.element('clFilterAgeMax').value = '12';
-  await page.submitLookup();
+  await searchLookup(page, '17');
   assert.match(page.element('clStatus').textContent, /1 competitor/);
   assert.doesNotMatch(page.element('clResults').innerHTML, /Anna/);
   await page.selectTournament(spring);
-  assert.equal(page.element('clFilterAgeMin').value, '');
-  assert.equal(page.element('clFilterAgeMax').value, '');
+  assert.equal(page.element('clSearch').value, '');
+  assert.equal(page.element('clFilterGender').value, '');
   assert.equal(page.element('clFilterStudio').value, '');
 });
 
@@ -2693,15 +2769,13 @@ test('competitor filters apply atomically on submit, preserve comma OR semantics
   page.element('clSearch').value = 'tsd-1, TSD-2, tsd-1, x, ';
   page.element('clFilterStudio').value = 'North Studio';
   page.element('clFilterGender').value = 'Female';
-  page.element('clFilterAgeMin').value = '14';
-  page.element('clFilterAgeMax').value = '20';
   assert.equal(resultSummary(page), 'Showing 501–601 of 601');
   await page.refreshTimer();
   assert.equal(resultSummary(page), 'Showing 501–601 of 601');
   await page.submitLookup();
   const expected = pagedRoster(601).filter((person) =>
     (person.associationNumber.toLowerCase().includes('tsd-1') || person.associationNumber.toLowerCase().includes('tsd-2'))
-    && person.studio === 'North Studio' && person.gender === 'Female' && person.age >= 14 && person.age <= 20);
+    && person.studio === 'North Studio' && person.gender === 'Female');
   assert.deepEqual(resultIds(page), expected.map((person) => person.id));
   assert.equal(resultSummary(page), `Showing 1–${expected.length} of ${expected.length}`);
   assert.equal(page.element('competitorLookupDetails').innerHTML, '');

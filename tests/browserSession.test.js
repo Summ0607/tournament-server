@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 
-async function harness() {
+async function harness({ audience = false } = {}) {
   const nodes = new Map(), intervals = [], handlers = {}, calls = [];
   let valid = true, timestamp = 0, rejectLogin = false, legacySession = false;
   class Node {
@@ -30,7 +30,7 @@ async function harness() {
   roleNode.getAttribute = (name) => name === 'data-nav-id' ? 'users' : null;
   const body = new Node();
   const origin = 'https://tourn-svr.home.arpa:3443';
-  const location = { href: `${origin}/tournament-management/`, origin, assign: (value) => { location.assigned = value; } };
+  const location = { href: `${origin}/${audience ? 'audience-monitor/' : 'tournament-management/'}`, origin, assign: (value) => { location.assigned = value; } };
   class BrowserRequest extends Request {
     constructor(input, options) { super(typeof input === 'string' ? new URL(input, location.href) : input, options); }
   }
@@ -89,6 +89,22 @@ test('browser session shows identity, hides forbidden navigation and adds sessio
   assert.equal(change.headers.get('x-csrf-token'), 'session-csrf');
   assert.equal(change.headers.get('content-type'), 'application/json');
   assert.equal(change.body, '{}');
+});
+
+test('unattended monitor scopes session and data reads without generating editable-session activity', async () => {
+  const h = await harness({ audience: true });
+  assert.equal(h.calls[0].headers.get('x-tournament-audience'), 'true');
+  await h.window.fetch('/api/rings/monitor');
+  assert.equal(h.calls.at(-1).headers.get('x-tournament-audience'), 'true');
+  h.advance();
+  await h.handlers.pointerdown({ isTrusted: true });
+  assert.equal(h.calls.some((call) => call.endpoint === '/api/account/activity'), false);
+  await h.intervals[0]();
+  assert.equal(h.calls.at(-1).endpoint, '/api/account/session');
+  assert.equal(h.calls.at(-1).headers.get('x-tournament-audience'), 'true');
+  await h.nodes.get('browserSignOut').handlers.click();
+  assert.equal(h.calls.at(-1).endpoint, '/api/account/logout');
+  assert.equal(h.calls.at(-1).headers.get('x-tournament-audience'), 'true');
 });
 
 test('expired save preserves drafts, clears passwords, opens reauthentication and never automatically replays the mutation', async () => {

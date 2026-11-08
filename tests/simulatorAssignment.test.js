@@ -105,6 +105,10 @@ test('simulator assignment GET is isolated, read-only and uses the board identit
   const context = await fixture(t);
   const board = await requestJson(context.server, `/api/simulator/runs/${context.run.runId}/head-table`);
   assert.equal(board.status, 200);
+  assert.equal(board.body.eventStartedAt, '');
+  assert.equal(board.body.estimates.eventName, board.body.eventName);
+  assert.equal(board.body.estimates.status, 'unavailable');
+  assert.ok(board.body.estimates.eventCompletion);
   const other = context.store.createRun({
     eventName: 'Unrelated Run',
     groups: [{ groupDivisionNumber: 99, competitors: [{ id: 'other', age: 18, ageAsOf: '2027-01-09' }] }],

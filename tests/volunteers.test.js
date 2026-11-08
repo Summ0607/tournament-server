@@ -7,6 +7,7 @@ const express = require('express');
 const { createVolunteerRouter, headers, validateVolunteer } = require('../backend/volunteerRoutes');
 const { createRingJudgeRouter } = require('../backend/ringJudgeRoutes');
 const { create } = require('../tournament-management/volunteers');
+const { judgeRankOptions, certificationLevels } = require('../db/judgeCertification');
 const volunteer = { firstName: 'Jane', lastName: 'Doe', dob: '2000-01-09', associationNumber: 'D100', school: 'School',
   rank: 'D2', certification: 'Regional', primaryType: 'setup', secondaryType: 'judging', parentName: 'Guardian' };
 const csvRow = (association = 'D100', first = 'Jane') => `${first},Doe,2000-01-09,${association},School,D2,,Setup,Judging`;
@@ -32,18 +33,47 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   assert.equal((await fetch(`${base}/volunteers?eventName=..`)).status, 400);
   let data = await get();
   assert.deepEqual(data.types.map((r) => r.name), ['Setup', 'Teardown', 'Judging', 'Security']);
+  assert.deepEqual(data.rankOptions, judgeRankOptions());
   assert.equal(fs.existsSync(path.join(root, 'A', 'volunteers.json')), false);
-  const response = await write('volunteers', { revision: null, volunteer });
+  fs.writeFileSync(path.join(root, 'A', 'event-config.json'), JSON.stringify({ date: '2027-01-09', scope: 'in-house' }));
+  let inHouse = await write('volunteers/import', { revision: null,
+    csv: csvText('Young,Doe,2016-01-09,IH1,School,G5,SK/TK,Judging,').replace('\n', ',Parent/Guardian Name\n') + ',Guardian' });
+  assert.equal(inHouse.status, 200);
+  data = await inHouse.json();
+  let corner = await write('volunteers', { revision: data.revision,
+    volunteer: { ...volunteer, associationNumber: 'IH2', dob: '2012-01-09', certification: 'Corner', primaryType: 'judging', secondaryType: '' } });
+  assert.equal(corner.status, 200);
+  data = await corner.json();
+  for (const [certification, dob] of [['SK/TK', '2017-01-09'], ['Corner', '2013-01-09']]) {
+    assert.equal((await write('volunteers', { revision: data.revision,
+      volunteer: { ...volunteer, associationNumber: '', dob, certification } })).status, 400);
+  }
+  const populated = await write('ring-judges/populate-volunteers', { revision: null });
+  assert.equal(populated.status, 200);
+  const inHouseJudges = await populated.json();
+  assert.equal(inHouseJudges.added, 2);
+  assert.equal((await write('ring-judges/delete', { revision: inHouseJudges.revision,
+    ids: inHouseJudges.judges.map((row) => row.id) })).status, 200);
+  fs.unlinkSync(path.join(root, 'A', 'ring-judges.json'));
+  data = await (await write('volunteers/delete', { revision: data.revision,
+    ids: data.volunteers.map((row) => row.id) })).json();
+  fs.writeFileSync(path.join(root, 'A', 'event-config.json'), JSON.stringify({ date: '2027-01-09' }));
+  const response = await write('volunteers', { revision: data.revision, volunteer });
   assert.equal(response.status, 200); data = await response.json();
   assert.equal(data.volunteers[0].age, 27);
   assert.equal(data.volunteers[0].ageAsOf, '2027-01-09');
   assert.doesNotMatch(fs.readFileSync(path.join(root, 'A', 'volunteers.json'), 'utf8'), /"dob"/i);
   const originalId = data.volunteers[0].id;
-  const extendedCsv = csvText(csvRow('D100')).replace('\n', ',Parent/Guardian Name,Contact Number\n') + ',Guardian,+44 (20) 1234 5678 ext 2';
+  const extendedCsv = csvText(csvRow('D100')).replace('\n', ',Parent/Guardian Name,Contact Number,Gender,Email\n') + ',Guardian,+44 (20) 1234 5678 ext 2, Female , judge@example.test ';
   let updated = await write('volunteers/import', { revision: data.revision, csv: extendedCsv });
   assert.equal(updated.status, 200); data = await updated.json();
   assert.equal(data.volunteers[0].contactNumber, '+44 (20) 1234 5678 ext 2');
   assert.equal(data.volunteers[0].parentName, 'Guardian');
+  assert.equal(data.volunteers[0].gender, 'Female');
+  assert.equal(data.volunteers[0].email, 'judge@example.test');
+  const persisted = JSON.parse(fs.readFileSync(path.join(root, 'A', 'volunteers.json'), 'utf8')).volunteers[0];
+  assert.equal(persisted.gender, 'Female');
+  assert.equal(persisted.email, 'judge@example.test');
   const beforeInvalid = data.revision;
   const badMinor = csvText(csvRow('D200'), 'Minor,Doe,2012-01-09,M100,School,G5,,Setup,Judging');
   updated = await write('volunteers/import', { revision: data.revision, csv: badMinor });
@@ -76,6 +106,8 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   assert.equal(data.volunteers[0].contactNumber, '+44 (20) 1234 5678 ext 2');
   assert.equal(data.volunteers[0].parentName, 'Guardian');
   const unchanged = JSON.stringify(data.volunteers);
+  assert.equal(data.volunteers[0].gender, 'Female');
+  assert.equal(data.volunteers[0].email, 'judge@example.test');
   for (const text of [csvText(csvRow('D200'), csvRow('d200')), csvText(csvRow('D200'), csvRow('D201').replace('Setup', 'Unknown')), 'Bad,Headers\nA,B', csvText(),
     csvText(csvRow('D202').replace(',D2,,', ',G3,Corner,')),
     csvText('Young,Doe,2011-01-10,D203,School,G5,SK/TK,Setup,Judging')]) {
@@ -99,11 +131,38 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   assert.equal(data.volunteers[0].age, 27);
   assert.equal((await get()).volunteers[0].contactNumber, '+1 (555) 0100 ext 4');
   assert.equal((await get()).volunteers[0].parentName, '');
+  assert.equal((await get()).volunteers[0].gender, 'Female');
+  assert.equal((await get()).volunteers[0].email, 'judge@example.test');
+  const blankContactCsv = csvText(csvRow('D100').replace(',D2,,', ',D2,Regional,')).replace('\n', ',Gender,Email\n') + ',,';
+  const clearedContacts = await write('volunteers/import', { revision: data.revision, csv: blankContactCsv });
+  assert.equal(clearedContacts.status, 200);
+  data = await clearedContacts.json();
+  assert.equal(data.volunteers[0].gender, '');
+  assert.equal(data.volunteers[0].email, '');
   assert.equal((await write('volunteers', { revision: data.revision, volunteer: { ...ageOnly, associationNumber: '', age: 27, ageAsOf: '2028-01-09' } })).status, 400);
   data = await (await write('volunteer-types', { revision: data.revision, name: 'Hospitality' })).json();
   const type = data.types.at(-1);
   data = await (await write(`volunteer-types/${type.id}`, { revision: data.revision, name: 'Welcome' }, 'PUT')).json();
   data = await (await write('volunteer-types/delete', { revision: data.revision, ids: [type.id] })).json();
+  for (const name of ['Medical', 'Operations Mgmt']) {
+    const response = await write('volunteer-types', { revision: data.revision, name });
+    assert.equal(response.status, 200);
+    data = await response.json();
+  }
+  const medical = data.types.find((row) => row.name === 'Medical');
+  const operations = data.types.find((row) => row.name === 'Operations Mgmt');
+  const customImport = await write('volunteers/import', { revision: data.revision,
+    csv: csvText('Custom,Doe,2000-01-09,CUSTOM,School,D2,,medical,OPERATIONS MGMT') });
+  assert.equal(customImport.status, 200);
+  data = await customImport.json();
+  const customVolunteer = data.volunteers.find((row) => row.associationNumber === 'CUSTOM');
+  assert.equal(customVolunteer.primaryType, medical.id);
+  assert.equal(customVolunteer.secondaryType, operations.id);
+  const customEdit = await write(`volunteers/${customVolunteer.id}`, { revision: data.revision,
+    volunteer: { ...volunteer, associationNumber: 'CUSTOM', primaryType: operations.id, secondaryType: medical.id } }, 'PUT');
+  assert.equal(customEdit.status, 200);
+  data = await customEdit.json();
+  assert.equal(data.volunteers.find((row) => row.id === customVolunteer.id).primaryType, operations.id);
   assert.deepEqual((await get('B')).volunteers, []);
   let judges = await (await write('ring-judges/populate-volunteers', { revision: null })).json();
   assert.equal(judges.added, 4);
@@ -139,11 +198,26 @@ test('volunteer editor switches types, protects drafts, filters and surfaces imp
     return nodes.get(id);
   };
   let allowed = false, failure = false;
-  const data = { revision: null, types: [{ id: 'setup', name: 'Setup' }, { id: 'judging', name: 'Judging' }], volunteers: [{ id: 'one', ...volunteer }] };
+  const data = { revision: null, rankOptions: judgeRankOptions(), certificationLevels: certificationLevels(),
+    types: [{ id: 'setup', name: 'Setup' }, { id: 'judging', name: 'Judging' },
+      { id: 'medical', name: 'Medical' }, { id: 'operations', name: 'Operations Mgmt' }],
+    volunteers: [{ id: 'one', ...volunteer }] };
   const workspace = create({ document: { getElementById: node }, selectedEvent: () => 'A', confirm: () => allowed, request: async (url, options) => {
     requests.push({ url, options }); if (failure) throw new Error('Import failed'); return data;
   } });
   await workspace.load('volunteers'); node('vmAdd').handlers.click();
+  for (const field of ['vm-primaryType', 'vm-secondaryType']) {
+    for (const type of data.types) assert.ok(node(field).innerHTML.includes(`value="${type.id}">${type.name}`));
+    assert.equal(node(field).disabled, false);
+  }
+  assert.match(node('vm-secondaryType').innerHTML, /value="">None/);
+  for (const [code, label] of [['G5', '5th Gup'], ['D1', 'Cho Dan'], ['D2', 'E Dan'], ['D7', 'Chil Dan']]) {
+    assert.ok(node('vm-rank').innerHTML.includes(`value="${code}">${label}`));
+  }
+  assert.doesNotMatch(node('vm-rank').innerHTML, /value="G6"|value="D8"/);
+  for (const level of certificationLevels()) assert.ok(node('vm-certification').innerHTML.includes(`value="${level.code}">${level.label}`));
+  assert.equal(node('vm-rank').disabled, false);
+  assert.equal(node('vm-certification').disabled, false);
   node('vm-firstName').value = 'New';
   assert.equal(workspace.canLeave(), false);
   assert.equal(workspace.dirty(), true);
@@ -177,6 +251,8 @@ test('volunteer contact and guardian validation preserves legacy reads and enfor
   assert.equal(Object.hasOwn(legacy, 'dob'), false);
   assert.throws(() => validateVolunteer({ ...volunteer, contactNumber: 123 }, types, date), /contact number/);
   assert.throws(() => validateVolunteer({ ...volunteer, parentName: 'x'.repeat(201) }, types, date), /parent\/guardian/);
+  assert.throws(() => validateVolunteer({ ...volunteer, gender: 123 }, types, date), /gender/);
+  assert.throws(() => validateVolunteer({ ...volunteer, email: 'x'.repeat(255) }, types, date), /email/);
 });
 
 test('volunteer column filters combine, reset selections, and print all matching rows without private guardian details', async () => {

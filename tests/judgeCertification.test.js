@@ -57,6 +57,17 @@ test('certification comparisons and rank minimums follow the shared order and G5
   assert.match(certificationRankIssue('INTERNATIONAL', 'D1'), /requires rank D2 or higher/);
 });
 
+test('In-House certification ages use exact 11 and 15 boundaries without relaxing rank rules', () => {
+  for (const rank of ['G5', 'CDB', 'D1']) {
+    assert.equal(certificationAgeIssue('SK_TK', rank, 11, 'in-house'), '');
+    assert.match(certificationAgeIssue('SK_TK', rank, 10, 'in-house'), /age 11/);
+  }
+  assert.equal(certificationAgeIssue('CORNER', 'D1', 15, 'in-house'), '');
+  assert.match(certificationAgeIssue('CORNER', 'D1', 14, 'in-house'), /age 15/);
+  assert.match(certificationRankIssue('SK_TK', 'G6'), /G5/);
+  assert.match(certificationRankIssue('CORNER', 'CDB'), /D1/);
+});
+
 test('SK/TK certification enforces age 16 for Gup and Dan ranks and age 14 for CDB', () => {
   assert.equal(certificationAgeIssue('SK_TK', 'G5', 16), '');
   assert.equal(certificationAgeIssue('SK_TK', 'D1', 16), '');

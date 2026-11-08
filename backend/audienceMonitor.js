@@ -23,6 +23,7 @@ function buildAudienceMonitor({ eventName, rings, groups, estimates }) {
       })),
       queuedDivisionNumber: queued ? String(queued.groupDivisionNumber) : null,
       queuedDescription: queued ? descriptions.get(String(queued.groupDivisionNumber)) || '' : '',
+      overallProgress: active && prediction?.current?.status === 'estimated' ? prediction.current.progressPercent : null,
       completionWindow: prediction?.current?.status === 'estimated' ? prediction.current.completionWindow : null
     };
   }) : [];
@@ -60,7 +61,7 @@ function simulatorPhases(group) {
   return SIMULATOR_PHASES.filter((phase) => phases.includes(phase.key));
 }
 
-function simulatorStartWindow(currentGroup, state, isRunning, speed, now) {
+function simulatorStartWindow(currentGroup, state, isRunning, speed, now, transitionMs = 30_000) {
   if (!isRunning) return null;
   const startMs = now;
   if (!currentGroup) {
@@ -71,7 +72,7 @@ function simulatorStartWindow(currentGroup, state, isRunning, speed, now) {
 
   const durations = Object.values(state.phaseDurationsMs || {});
   if (!durations.length || durations.some((duration) => !Number.isFinite(duration) || duration < 0)) return null;
-  const remainingMs = remainingSimulatorDivisionMs(currentGroup, state, now) + 30_000;
+  const remainingMs = remainingSimulatorDivisionMs(currentGroup, state, now) + transitionMs;
   const runSpeed = Number.isFinite(speed) && speed > 0 ? speed : 1;
   const wallClockRemainingMs = remainingMs / runSpeed;
   const uncertaintyMs = Math.round(wallClockRemainingMs * 0.1);
@@ -127,6 +128,12 @@ function buildSimulatorAudienceMonitor(workspace, now = Date.now()) {
       ...phase, state: 'upcoming', progress: 0
     })) : []);
     const paused = ['paused', 'stopped'].includes(manifest.status);
+    const durations = publicPhases.map((phase) => state?.phaseDurationsMs?.[phase.key]);
+    const totalDuration = durations.reduce((sum, duration) => sum + duration, 0);
+    const overallProgress = currentGroup && !paused && state?.state !== 'failed'
+      && durations.every((duration) => Number.isFinite(duration) && duration >= 0) && totalDuration > 0
+      ? publicPhases.reduce((sum, phase, index) => sum + durations[index] * phase.progress, 0) / totalDuration
+      : null;
     return {
       ringId,
       ringLabel: assignment.ringLabel,
@@ -138,7 +145,10 @@ function buildSimulatorAudienceMonitor(workspace, now = Date.now()) {
       phases: publicPhases,
       queuedDivisionNumber: uniqueQueued[0] || null,
       queuedDescription: displayDivisionName((queuedGroup || {}).name),
-      completionWindow: currentGroup ? startWindow : null
+      overallProgress,
+      completionWindow: currentGroup ? simulatorStartWindow(
+        currentGroup, state, manifest.status === 'running', manifest.speed, now, 0
+      ) : null
     };
   });
   const upcoming = Object.entries(workspace.assignments.rings).flatMap(([ringId, assignment]) => {

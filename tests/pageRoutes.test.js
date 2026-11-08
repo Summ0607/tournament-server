@@ -422,7 +422,7 @@ test('audience monitor has standalone routes and assets without replacing legacy
     for (const route of ['/audience-monitor/', '/audience-monitor.html', '/audience-monitor/index.html']) {
       const response = await requestPath(surface, route);
       assert.equal(response.statusCode, 200);
-      assert.match(response.body, /<h2 id="ringsTitle">Ring Status<\/h2>/);
+      assert.match(response.body, /<h2 id="ringsTitle">In the Ring<\/h2>/);
       assert.match(response.body, /<h2 id="upcomingTitle">On Deck<\/h2>/);
       assert.match(response.body, /id="sourceRun"/);
       assert.doesNotMatch(response.body, /data-ra-reset|data-ht-clear/);

@@ -29,28 +29,38 @@ is also described in the main [README](../README.md).
   descriptions, applicable phase progression, and assigned queued divisions
   with start windows. It never contains competitor names, contact data,
   tablet names, or other private operational fields.
-- Layout: **Rings now** (about 55% height, compact 64px rows, every ring has a
-  segmented progression pill, including **No current division**) above
-  **Coming up** (160px cards with a prominent high-contrast ring badge and a
-  separate queue-position line). Unassigned hypothetical suggestions are
-  excluded.
-- Each section pages independently every 12 seconds when needed. **Pause
-  pages**, **Fullscreen**, and page help are provided.
+- Layout: **In the Ring** (about 55% height) shows ring, active division,
+  description, a thin duration-weighted overall-progress bar, and estimated
+  finish. No individual phase segments or numerical percentages are displayed.
+  **On Deck** shows ring, queued division, description, and estimated start;
+  every ring's next division precedes later queue entries. Desktop rows are
+  80px high, with additional columns on wide screens; narrow rows are 112px.
+  Missing estimates say **Not available**. Unassigned suggestions are excluded.
+- Each section stays stationary when all rows fit and pages independently every
+  12 seconds only for overflow. **Display controls** contains source selection,
+  **Pause pages**, and **Fullscreen**; page help is provided.
 - Data refreshes every 10 seconds. Stale or failed data hides progression and
   predictions and shows an explicit warning until recovery.
 - A large running clock sits in the header.
+- Unattended read-only display lasts 12 hours from sign-in. Background refresh
+  does not extend editable-session access or the fixed monitor deadline.
+  Sign-out, account disabling, permissions, and session revocation still apply.
+- Saved Visual Definitions colors apply to this page as a palette trial on
+  refresh, without changing its typography or layout. Other pages retain their
+  colors. Palette failures show a notice and keep the built-in dark palette.
 
 ## Competitor Lookup (staff)
 
 - Open **Competitors** in Tournament Management
   (`/tournament-management/?view=competitors`).
-- Search by first name, last name, or rank with at least two characters per
+- Search displayed columns, including full rank names and contacts, with at least two characters per
   term. Comma-separated terms are OR-matched, and matches are highlighted.
-- Collapsible advanced filters (Name, Rank, Studio, Division, Ring, Show only
-  unassigned) combine with AND and align with the results table columns on
-  wide layouts.
-- The results table shows Competitor, Rank, Studio, Division, and Ring with
-  sortable names and a real result count footer.
+- Gender, Rank, and School filters in column headings apply immediately and
+  combine with search using AND. Age remains visible and searchable; there are no
+  minimum/maximum age controls.
+- The results table shows TSD ID, Competitor, Age, Gender, full Rank name,
+  School, Division, saved parent/guardian Contact name, and Contact phone,
+  with sortable names and paginated result counts.
 - The details panel shows personal information (including the phone formatted
   as `xxx-yyy-zzzz`), competition information, ring assignment, and notes,
   without inferring missing data. It sits beside the results above 1380px

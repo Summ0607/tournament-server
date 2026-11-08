@@ -8,6 +8,7 @@ const { DEFAULT_ACCOUNT_POLICY, validateAccountPolicy } = require('./accountPoli
 const scrypt = promisify(crypto.scrypt);
 const IDLE_MS = 30 * 60 * 1000;
 const ABSOLUTE_MS = 12 * 60 * 60 * 1000;
+const AUDIENCE_MS = 12 * 60 * 60 * 1000;
 const ROLES = Object.keys(require('./browserPermissions').ROLE_LABELS);
 const HASH_OPTIONS = { N: 131072, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
@@ -179,11 +180,11 @@ async function createAccountSessions({ file, now = Date.now }) {
     if (!row) throw new Error('Saved account policy is missing.');
     return { revision: row.revision, policy: validateAccountPolicy(JSON.parse(row.settings)) };
   }
-  async function resolveSession(token, activity = false) {
+  async function resolveSession(token, activity = false, audience = false) {
     const { policy } = await readPolicy();
     const idleMs = policy.idleTimeoutMinutes * 60 * 1000;
     const absoluteMs = policy.absoluteTimeoutHours * 60 * 60 * 1000;
-    if (typeof activity !== 'boolean') invalid('Activity must be true or false.');
+    if (typeof activity !== 'boolean' || typeof audience !== 'boolean') invalid('Session options must be true or false.');
     if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) return null;
     const digest = sessionDigest(token);
     const row = await get(`SELECT a.*, s.created_at, s.last_activity, s.account_revision
@@ -191,10 +192,16 @@ async function createAccountSessions({ file, now = Date.now }) {
     if (!row) return null;
     const timestamp = now();
     if (!row.enabled || row.account_revision !== row.revision ||
-        timestamp >= row.created_at + absoluteMs || timestamp >= row.last_activity + idleMs) {
+        timestamp >= row.created_at + Math.max(absoluteMs, AUDIENCE_MS)) {
       await run('DELETE FROM browser_sessions WHERE token_hash = ?', [digest]);
       return null;
     }
+    if (audience) {
+      if (timestamp >= row.created_at + AUDIENCE_MS) return null;
+      return { account: publicAccount(row), expiresAt: row.created_at + AUDIENCE_MS,
+        idleExpiresAt: row.created_at + AUDIENCE_MS };
+    }
+    if (timestamp >= row.created_at + absoluteMs || timestamp >= row.last_activity + idleMs) return null;
     if (activity) await run('UPDATE browser_sessions SET last_activity = ? WHERE token_hash = ?', [timestamp, digest]);
     return { account: publicAccount(row), expiresAt: row.created_at + absoluteMs,
       idleExpiresAt: (activity ? timestamp : row.last_activity) + idleMs };
@@ -349,22 +356,23 @@ async function createAccountSessions({ file, now = Date.now }) {
           return { error: Object.assign(new Error('Invalid user ID or password.'), { statusCode: 401 }) };
         }
         await run('DELETE FROM login_attempts WHERE account_key = ?', [accountKey]);
-        await run('DELETE FROM browser_sessions WHERE created_at <= ? OR last_activity <= ?',
-          [timestamp - absoluteMs, timestamp - idleMs]);
+        await run('DELETE FROM browser_sessions WHERE created_at <= ?',
+          [timestamp - Math.max(absoluteMs, AUDIENCE_MS)]);
         if (!policy.allowConcurrentSessions) {
           await run('DELETE FROM browser_sessions WHERE user_id = ?', [account.user_id]);
         }
         const token = crypto.randomBytes(32).toString('hex');
         await run(`INSERT INTO browser_sessions(token_hash, user_id, account_revision, created_at, last_activity)
           VALUES (?, ?, ?, ?, ?)`, [sessionDigest(token), account.user_id, account.revision, timestamp, timestamp]);
-        return { token, account: publicAccount(account), expiresAt: timestamp + absoluteMs };
+        return { token, account: publicAccount(account), expiresAt: timestamp + absoluteMs,
+          cookieExpiresAt: timestamp + Math.max(absoluteMs, AUDIENCE_MS) };
       });
       // Commit failed-attempt counters before surfacing the rejected login.
       if (result.error) throw result.error;
       return result;
     },
-    resolveSession(token, { activity = false } = {}) {
-      return transaction(() => resolveSession(token, activity));
+    resolveSession(token, { activity = false, audience = false } = {}) {
+      return transaction(() => resolveSession(token, activity, audience));
     },
     logout(token) {
       return transaction(async () => {

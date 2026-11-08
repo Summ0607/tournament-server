@@ -222,9 +222,11 @@ revoked workspaces are blocked without discarding drafts. Existing division-draf
 storage is unchanged; authentication does not newly persist form drafts/passwords.
 
 Viewer accounts on smart TVs need a compatible HTTPS browser and trust for the
-public CA. They follow the same idle/absolute session limits as other users:
-background display refresh is **not** activity, and there is no Remember Me or
-always-on exemption. Verify CA installation and sign-in on each actual display.
+public CA. The standalone Audience Monitor supports **12 hours from sign-in**
+without interaction. This read-only allowance never renews access to editable
+pages, which retain normal idle/absolute limits. Background refresh is not user
+activity, and displays require sign-in again at the 12-hour boundary.
+Verify CA installation and sign-in on each actual display.
 
 Tablet requests to `GET /api/version`, `/download-app`, `/api/events/active`,
 `/api/rings/config`, `/api/rings/:id/current`, and
@@ -317,12 +319,18 @@ Session
 tokens are random and only their SHA-256 digests are persisted.
 
 By default, browser sessions expire after 30 minutes without explicit user activity, or
-12 hours absolutely. Merely checking a session does not refresh it. Sessions
+12 hours absolutely. The standalone read-only Audience Monitor instead permits
+12 hours from sign-in without interaction. Merely checking a session does not refresh it. Sessions
 survive server restarts; concurrent logins are independent and logout revokes only
 the selected session. Account disabling always revokes all sessions; password
 resets and role changes do so by default. Browser route permissions use current
 account roles on every request; tablets use separate daily ring authorization. Trusted local account mutations
 record an audit actor and reject stale account revisions.
+
+The Users page keeps routine deployment guidance off the editing screen. Save
+confirmation appears in green beside the form actions, and password mismatches
+are shown while editing, before submission. Account revisions remain internal
+for stale-edit protection rather than appearing in the editor heading.
 
 Per-account login throttling persists across restarts: by default, five failures in fifteen
 minutes trigger a five-minute cooldown, including attempts for unknown user IDs.
@@ -469,7 +477,7 @@ Rehearsal and developer instructions are maintained separately in the
 Tournament Management uses one shared selected-tournament context for Tournament,
 Competitors, Import, Divisions, and planned tournament pages. Competitors shows the
 selected tournament's full saved roster by default and supports name/TSD ID search,
-studio, gender, and age filters. Saved division links open the corresponding saved
+school, gender, and rank column filters; age remains visible and searchable. Saved division links open the corresponding saved
 division without changing the active tournament; Division Assignments and Head Table
 remain explicitly scoped to the active tournament.
 
@@ -548,9 +556,20 @@ sources; a simulation run ID selects its isolated results. No results are writte
 
 **Tournament Management → Ring Management → Ring Judges** is a selected-tournament
 preparation directory. Add/Edit, search, filtered select-all and confirmed
-**Delete selected** operate only on judges, never on competitor registrations.
+**Delete selected** removes judges only, never volunteers or competitor registrations.
 Click a judge's name to open Edit Judge directly in the main workspace,
-keeping the navigation panel visible and usable. Add Judge uses the same workspace.
+keeping the navigation panel visible and usable. Add Judge uses the same workspace
+to create a validated Judging volunteer and add only that volunteer to Ring Judges.
+The form includes tournament-date age, guardian/contact details and First/Second
+Choice. Existing manual judges require these details to become linked volunteers
+on their next save. Volunteer-derived edits update the source volunteer and judge
+together after age/rank/certification validation; stale revisions reject the save.
+If the judge-file write fails, the volunteer write is rolled back, with rollback
+failures explicitly reported. Competitor-derived judges use the saved registration
+rank (read-only in the editor) and tournament-date age for certification checks.
+Correct competitor rank through registration. Invalid edits leave the draft open
+without saving. In-House scope uses SK/TK age 11+ and Corner age 15+; other scopes
+retain existing qualification rules.
 When preparation is locked, clicking opens read-only details instead.
 Both use a two-column form (one column on narrow screens), with separate First
 and Last Name, TSD ID, School and Rank dropdowns, Certification, Judging Notes
@@ -608,7 +627,14 @@ cannot be deleted until volunteers are reassigned. Primary is required, secondar
 is optional and cannot equal primary.
 
 Manual volunteers require First Name, Last Name, age on the tournament date,
-School and recognized Rank. Assoc ID may be blank. Certification uses the shared
+School and recognized Rank. Assoc ID may be blank.
+Add/Edit offers full-name rank choices from 5th Gup through Chil Dan, including
+Cho Dan Bo. Existing saved ranks outside that range remain visible without being
+silently changed. First and Second choice list every saved volunteer type;
+Second choice also offers None. All form fields are editable while preparation
+is unlocked. Save validates age, rank and certification together, retains the
+draft on failure and displays the error in the form.
+Certification uses the shared
 levels (Unknown, Uncertified, SK/TK, Corner, Regional (Center), International);
 unrecognized CSV values are stored as Unknown and reported, and saves enforce
 each level's minimum rank.
@@ -616,6 +642,10 @@ SK/TK certification additionally requires age 16+ at G5 or higher, or age
 14+ at Cho Dan Bo, on the tournament date. Judging volunteers with SK/TK
 certification can be included in Ring Judges at lower ranks when they meet
 those rules.
+For tournaments with saved scope **In-House**, SK/TK requires age **11+** and
+Corner requires age **15+** on the tournament date. Existing rank requirements
+remain unchanged. Volunteer import/edit and Ring Judges population use this scope,
+not the tournament name; other tournament scopes retain their existing age rules.
 CSV DOB accepts YYYY-MM-DD or MM/DD/YYYY and is converted transiently to
 tournament age; DOB is not retained in the volunteer directory.
 Contact number accepts international formats and extensions. Parent/guardian name
@@ -628,7 +658,10 @@ First Name,Last Name,DOB,Assoc ID,School,Rank,Certification,Primary Volunteer Ty
 Jane,Doe,1990-05-12,D12345,Example School,D2,,Judging,Setup
 ```
 
-Optional CSV columns: `Parent/Guardian Name`, `Contact Number`. Omitted optional
+Optional CSV columns: `Parent/Guardian Name`, `Contact Number`, `Gender`, `Email`.
+Gender and email are retained in the saved volunteer directory but are not shown
+in the volunteer table or editor; editing other fields preserves them.
+Omitted optional
 columns preserve those values on matching existing records; a supplied blank
 clears the value (guardian validation still applies for minors).
 
@@ -652,8 +685,10 @@ are supported. Maximum file size is 2 MB. Errors report row numbers.
 
 Data is tournament-specific and persists atomically in `volunteers.json` with one
 revision covering volunteers and types. Operational use locks every write until
-Reset Run, which preserves the directory. Volunteer changes never update copied
-judges or competitor registrations automatically.
+Reset Run, which preserves the directory. Edits made on the Volunteers page do
+not automatically update copied judges; editing the linked entry in Ring Judges
+loads the current volunteer details and saves both together. Competitor
+registrations are never changed by these edits.
 `GET/POST /api/volunteers`, `PUT /api/volunteers/:id`,
 `POST /api/volunteers/import` (`csv` text), `POST /api/volunteers/delete` (`ids`),
 `POST /api/volunteer-types`, `PUT /api/volunteer-types/:id` (`name`), and
@@ -906,13 +941,15 @@ event or unsaved group-builder drafts.
   anyone matching Anna or G1. Terms are trimmed and deduplicated; empty and
   single-character terms are ignored. Each competitor appears only once.
   Case-insensitive literal substring matching finds matches across the roster, sorted
-  by last name then first name. Matching characters are highlighted; studio,
-  parent name, and phone are not search fields.
-- One always-visible toolbar provides labeled Search, School/Studio and Gender
-  dropdowns (All), compact Min Age/Max Age inputs, Per page, and **Filter**.
+  by last name then first name. Search includes displayed columns, full rank names,
+  school, gender, age, division number, contact name, and raw/formatted phone.
+  Matches in names, IDs, ranks, and contacts are highlighted.
+- Gender, Rank, and School dropdowns (All) sit in their column headings and apply
+  immediately, resetting to page one. The toolbar provides Search,
+  Per page, and **Filter**. Age remains visible and searchable without range controls.
   Controls wrap on smaller screens. **Filter** or **Enter** applies search and
   filters together with AND; typing alone does not change results or counts.
-  Clear the search/ages and select All, then Filter, to restore the full roster.
+  Clear the search and select All, then Filter, to restore the full roster.
   A blank search browses the roster without requiring filters.
 - **Per page** defaults to **250**, with 25, 50, 100, and 250 choices that
   take effect immediately without applying pending filter edits. Filtering and
@@ -923,13 +960,16 @@ event or unsaved group-builder drafts.
   sorting, or changing the selected tournament resets to page one. Refresh
   preserves a valid page and clamps it if the roster shrinks.
 - An aligned table shows TSD ID, Competitor, Age, Gender, Rank, Studio/School,
-  and Division. Base rows are 36px high with 12px text, restrained rank chips, highlighted
+  Division, Contact name, and Contact phone. Ranks use saved rank-directory names
+  (for example, G6 becomes 6th Gup and D1 becomes Cho Dan); unknown ranks retain
+  their saved text. Base rows are 36px high with 12px text, restrained rank chips, highlighted
   matches, subtle alternating backgrounds, and a blue selected-row accent.
   The Competitor heading reverses last-name/first-name sorting.
   Select a result with mouse or keyboard to open the
   details panel containing **first name, last name, parent name, phone, rank,
-  studio, and saved group division**. Contact fields are not repeated
-  in the results. Missing contact/registration fields say **Not provided**.
+  studio, and saved group division**. Contact name uses the saved parent/guardian
+  name; absent contacts are not inferred. Missing table values show a dash,
+  while missing contact/registration details say **Not provided**.
 - The selected detail panel has a prominent name, studio, rank badge, and close
   control, followed by Personal Information, Competition Information /
   Assignments, and Notes sections. Email, an explicit age-range value, and
@@ -967,6 +1007,12 @@ Volunteer Lookup remains future work. Validate with `npm test` and
 
 ## Audience Monitor
 
+The simulated Head Table uses the same event-start, estimated tournament
+completion, and ring-availability presentation as the live Head Table. Its
+estimates come exclusively from the selected simulator run and reflect simulator
+speed; paused or unreliable runs show unavailable estimates. Simulation remains
+clearly labeled and read-only.
+
 The standalone audience display is available
 at **`https://tourn-svr.home.arpa:3443/audience-monitor/`** (or the same path on the
 monitoring server at port 3445), with a permitted browser account. Head Table includes an **Audience Monitor**
@@ -975,30 +1021,46 @@ new routes and API. Existing Event Progress routes and surface entry points
 remain unchanged.
 
 - A stable **over/under** layout gives approximately 55% of content height to
-  **Rings now**, with **Coming up** below. There is no continuous scrolling.
-- The top section shows configured rings in natural ring order, current
-  division descriptions, and applicable phase progression in compact 64px
-  horizontal rows with audience-sized text. Every row reserves a segmented
-  pill area: running divisions show progress, the first queued division previews
-  unfilled applicable phases (including Weapons), and empty rings show a neutral
-  **No current division** pill. Paused/unavailable rings keep a neutral status
-  pill in the same space, without presenting untrusted progress. Idle rings say
-  Waiting; this does not promise operational readiness. Paused or disconnected
-  work uses audience-friendly messages and does not show old phase progress.
-- The lower section contains **assigned queued divisions only**, with their
-  ring in a prominent high-contrast badge beside the division number.
-  Upcoming cards are 160px high; queue position is a separate secondary line.
-  Ring names in the upper rows use larger bold text without increasing row height.
-  Cards also show a description and approximate start window. Unassigned
-  hypothetical suggestions are deliberately excluded. Missing predictions say
-  **Start TBD**. Dates are included for future-day windows.
+  **In the Ring**, with **On Deck** below. There is no continuous scrolling.
+- The top section shows configured rings in natural ring order, active
+  divisions and descriptions, a thin overall-progress bar, and estimated finish.
+  Progress is weighted by modeled phase duration, not equal phase segments;
+  individual phases and numerical percentages are not shown.
+  Paused/disconnected rings show neutral status text without untrusted progress
+  or finish predictions. Queued divisions are never presented as active.
+- Desktop rows are 80px high, with additional columns on wide screens.
+  Two ring columns fit from 1088px of ring-area width (roughly a 1142px browser
+  viewport). At intermediate widths, the thin bar moves below division details
+  within the same 80px row; wider layouts keep it beside the division.
+  Main division text is 30px, ring labels 28px, and times 24px; section headings
+  remain 36px and the clock scales up to 40px. Narrow rows use a 112px stacked
+  layout. An 1820px-wide, 400px-high ring area fits eight rings without rotation.
+- The Audience Monitor trials the saved Visual Definitions palette: page/panel
+  backgrounds, text, secondary text, row backgrounds (table headings), primary
+  accents/progress, borders, controls, and warnings. Refresh after saving colors.
+  Audience font sizes and layout remain unchanged; other pages are not recolored.
+  If palette loading fails, a visible notice explains that the built-in dark
+  palette remains in use. Viewer accounts may read definitions, not edit them.
+- Standalone Audience Monitor sessions permit unattended read-only display for
+  **12 hours from sign-in**, without polling or interaction renewing editable
+  access. Editable pages retain the configured idle and absolute timeouts.
+  The exception covers monitor page/data, palette and simulator-list reads,
+  session verification, and sign-out only. Sign-out, disabled accounts, session
+  revocation and role permissions still apply. The session cookie is retained
+  long enough for the monitor even when editable access has expired.
+- The lower section contains **assigned queued divisions only**, with ring,
+  division, description, and estimated start in each row. Each ring's next
+  division takes priority over later queue entries, then expected start and ring
+  determine order within each queue position. Unassigned hypothetical suggestions
+  are excluded. Missing predictions say **Not available**.
 - Each section calculates its capacity from the available area. It advances
   complete pages every **12 seconds** only when more than one page is needed,
   wraps independently, and shows a page indicator. Live refreshes do not reset
-  rotation or reorder existing rows while being read; upcoming rows are
-  re-sorted by projected start at a rotation boundary. Removed rows disappear.
-- **Pause pages** stops both rotations without stopping updates. **Fullscreen**
-  and the page-level **?** support unattended display setup and review. The
+  rotation. Rings retain natural order; existing upcoming rows retain their
+  order within each queue position while being read, then re-sort at a rotation
+  boundary. Removed rows disappear. Sections stay stationary when all rows fit.
+- **Display controls** contains source selection, **Pause pages** (which stops
+  rotations without stopping updates), and **Fullscreen**. Page help supports review. The
   layout targets landscape TVs, with a 720px minimum document height; smaller
   windows can scroll the document rather than compressing cards into unreadable
   rows. Browser zoom changes the number of cards that fit.
@@ -1006,7 +1068,7 @@ remain unchanged.
   Staleness is checked every second. Refresh failures or expired snapshots hide
   predictions and progression, show an explicit warning, and retry
   automatically. Event changes clear the previous event's rows and reset pages.
-  Status space is reserved so ordinary status changes do not shift the panels.
+  Status and recovery messages remain visible in the header.
 
 ### Public display data
 
@@ -1017,7 +1079,8 @@ incorrect `eventName` with HTTP 409, checks event switches during loading,
 and reports saved-data loading failures with HTTP 500.
 
 The allowlisted response contains event identity/freshness, ring labels,
-division numbers/descriptions, audience status, applicable phase progression,
+division numbers/descriptions, audience status, applicable phase progression and
+duration-weighted `overallProgress` (0–100 or null),
 current completion windows where available, and assigned queue start windows.
 It omits competitor rosters, individual names, birth dates, tablet identities,
 assistance categories, and unassigned projections. A missing active event returns
@@ -1316,7 +1379,8 @@ Its hierarchy is:
 - **Administration**: **Server Maintenance** (`/admin/`) and **Simulator** (`/simulator/`)
 - **Your Account** — Planned
 
-Planned destinations only explain their status; they expose no operational tools
+Navigation labels omit Planned/Under Development tags; the destination pages
+explain their status. Planned destinations expose no operational tools
 and do not write tournament data. Navigation uses stable IDs, not display labels.
 Section expansion is remembered in browser storage and active-page ancestors
 automatically open. Container headings use smaller, blue-tinted uppercase text,
