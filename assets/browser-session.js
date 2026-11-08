@@ -101,6 +101,10 @@
         await account('/login', { userId: user.value, password: password.value });
         const next = verifySessionVersion(await account('/session'));
         if (session && next.account.userId !== session.account.userId) throw new Error('Sign in as the original account to resume this page.');
+        if (!session) {
+          window.top.location.replace(next.homePath);
+          return;
+        }
         session = next;
         lastActivity = Date.now();
         applyPermissions();

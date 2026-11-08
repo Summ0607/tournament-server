@@ -207,9 +207,9 @@ Under Development pages are placeholders, not newly implemented clinic/judging
 management workflows. Global Schools, Ranks and Visual Definitions editing remains
 Administrator-only.
 
-Opening a protected page while signed out redirects to `/account/login`, then
-returns to a local destination (or the role's home). APIs return 401 when signed
-out and 403 when a role is insufficient. Server-side method/path permissions
+Opening a protected page while signed out redirects to `/account/login`; a new
+sign-in opens the account's role-based home rather than the previous page. APIs
+return 401 when signed out and 403 when a role is insufficient. Server-side method/path permissions
 apply even when a hidden control or URL is invoked directly. Unknown API routes
 and raw repository files cannot bypass the page/API policy.
 

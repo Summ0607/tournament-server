@@ -46,7 +46,7 @@ function createBrowserAuthorization({ config, security }) {
       return next();
     } catch (error) {
       if (error.statusCode === 401 && !isApi && ['GET', 'HEAD'].includes(req.method)) {
-        return res.redirect(`/account/login?returnTo=${encodeURIComponent(req.originalUrl)}`);
+        return res.redirect('/account/login');
       }
       if (!error.statusCode) console.error('Browser authorization failed:', error);
       return res.status(error.statusCode || 500).json({

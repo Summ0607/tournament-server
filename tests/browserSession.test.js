@@ -4,9 +4,9 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 
-async function harness({ audience = false } = {}) {
+async function harness({ audience = false, initialSession = true } = {}) {
   const nodes = new Map(), intervals = [], handlers = {}, calls = [];
-  let valid = true, timestamp = 0, rejectLogin = false, legacySession = false;
+  let valid = initialSession, timestamp = 0, rejectLogin = false, legacySession = false;
   class Node {
     constructor() { this.handlers = {}; this.value = ''; this.disabled = false; this.textContent = ''; this.dataset = {}; }
     set innerHTML(html) {
@@ -30,7 +30,8 @@ async function harness({ audience = false } = {}) {
   roleNode.getAttribute = (name) => name === 'data-nav-id' ? 'users' : null;
   const body = new Node();
   const origin = 'https://tourn-svr.home.arpa:3443';
-  const location = { href: `${origin}/${audience ? 'audience-monitor/' : 'tournament-management/'}`, origin, assign: (value) => { location.assigned = value; } };
+  const location = { href: `${origin}/${audience ? 'audience-monitor/' : 'tournament-management/'}`, origin,
+    assign: (value) => { location.assigned = value; }, replace: (value) => { location.replaced = value; } };
   class BrowserRequest extends Request {
     constructor(input, options) { super(typeof input === 'string' ? new URL(input, location.href) : input, options); }
   }
@@ -54,6 +55,7 @@ async function harness({ audience = false } = {}) {
     return json({ ok: true });
   };
   const window = { fetch: originalFetch, dispatchEvent() {}, confirm: () => true };
+  window.top = { location };
   const context = vm.createContext({
     window, location, document: {
       readyState: 'complete', head: new Node(), body,
@@ -66,17 +68,25 @@ async function harness({ audience = false } = {}) {
     setInterval: (callback) => intervals.push(callback)
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'assets', 'browser-session.js'), 'utf8'), context);
-  await window.BrowserSession.ready;
+  if (initialSession) await window.BrowserSession.ready;
   async function signIn() {
     nodes.get('browserLoginPassword').value = 'a password';
     await nodes.get('browserLoginForm').handlers.submit({ preventDefault() {} });
   }
   const flush = async () => { for (let count = 0; count < 5; count++) await new Promise(setImmediate); };
-  return { window, nodes, calls, intervals, handlers, roleNode, signIn, flush,
+  if (!initialSession) await flush();
+  return { window, location, nodes, calls, intervals, handlers, roleNode, signIn, flush,
     expire: () => { valid = false; }, advance: () => { timestamp += 60001; },
     switchAccount: (userId) => { session.account.userId = userId; valid = true; },
     rejectLogin: () => { rejectLogin = true; }, useLegacySession: () => { legacySession = true; } };
 }
+
+test('sign-in without a known page owner opens role home instead of resuming the old page', async () => {
+  const h = await harness({ initialSession: false });
+  assert.equal(h.nodes.get('browserLoginDialog').open, true);
+  await h.signIn();
+  assert.equal(h.location.replaced, '/tournament-management/?view=ring-assignment');
+});
 
 test('browser session shows identity, hides forbidden navigation and adds session CSRF to JSON changes', async () => {
   const h = await harness();
@@ -119,6 +129,7 @@ test('expired save preserves drafts, clears passwords, opens reauthentication an
   assert.equal(h.nodes.get('browserLoginUser').readOnly, true);
   await h.signIn();
   assert.equal(h.nodes.get('browserLoginDialog').open, false);
+  assert.equal(h.location.replaced, undefined);
   assert.equal(h.nodes.get('draft').value, 'unsaved competitor changes');
   assert.equal(h.calls.filter((call) => call.endpoint === '/api/rings/ring-a-1/queue').length, 1);
   assert.match(h.nodes.get('browserSessionNotice').textContent, /never replayed automatically/);

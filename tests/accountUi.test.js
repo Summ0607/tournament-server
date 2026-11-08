@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { DEFAULT_ACCOUNT_POLICY } = require('../backend/accountPolicy');
+const { homePath } = require('../backend/browserPermissions');
 
 async function harness({ view = 'users', initialSession = false, role = 'administrator', returnTo = '' } = {}) {
   const nodes = new Map(), intervals = [], requests = [], documentHandlers = {}, windowHandlers = {};
@@ -69,8 +70,7 @@ async function harness({ view = 'users', initialSession = false, role = 'adminis
         if (rejectLogin) { status = 401; data = { error: 'Invalid user ID or password.' }; }
         else { loggedIn = true; data = { account, csrfToken: 'login-csrf' }; }
       } else if (!loggedIn) { status = 401; data = { error: 'Sign in to continue.' }; }
-      else if (endpoint === '/session') data = { account, csrfToken: 'session-csrf',
-        homePath: role === 'viewer' ? '/audience-monitor/' : '/tournament-management/?view=event-setup' };
+      else if (endpoint === '/session') data = { account, csrfToken: 'session-csrf', homePath: homePath(account.roles) };
       else if (endpoint === '/logout') { loggedIn = false; status = 204; }
       else if (endpoint === '/activity') data = { account };
       else if (endpoint === '/policy' && options.method === 'GET') data = policy;
@@ -91,6 +91,7 @@ async function harness({ view = 'users', initialSession = false, role = 'adminis
       return { ok: status < 400, status, json: async () => structuredClone(data) };
     }
   });
+  context.window.top = { location: context.location };
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'account', 'account.js'), 'utf8'), context);
   const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(setImmediate); };
   await flush();
@@ -109,18 +110,42 @@ async function harness({ view = 'users', initialSession = false, role = 'adminis
     rejectSave: () => { rejectUserSave = true; }, advance: () => { timestamp += 60001; } };
 }
 
-test('login returns to a local workspace or role home without fetching administration data', async () => {
-  const h = await harness({ view: 'login', role: 'viewer', returnTo: '/audience-monitor/?source=active' });
-  await h.login();
-  assert.equal(h.context.destination, '/audience-monitor/?source=active');
-  assert.equal(h.context.navigationBlocked, false);
-  assert.equal(h.requests.some((request) => ['/policy', '/users'].includes(request.endpoint)), false);
-  for (const returnTo of ['https://evil.example', '//evil.example', '/\\evil.example', '/\t/evil.example',
-    '/account/login', '/account/settings', '']) {
-    const rejected = await harness({ view: 'login', role: 'viewer', returnTo });
-    await rejected.login();
-    assert.equal(rejected.context.destination, '/audience-monitor/', returnTo);
+test('new login always opens role home, ignoring stale or unsafe return destinations', async () => {
+  for (const role of ['administrator', 'event-coordinator', 'judging-coordinator', 'tournament-operator', 'viewer']) {
+    for (const returnTo of ['/tournament-management/?view=users', '/audience-monitor/?source=active',
+      'https://evil.example', '//evil.example', '/\\evil.example', '/\t/evil.example', '/account/settings', '']) {
+      const h = await harness({ view: 'login', role, returnTo });
+      await h.login();
+      assert.equal(h.context.destination, homePath([role]), `${role}: ${returnTo}`);
+      assert.equal(h.context.navigationBlocked, false);
+      assert.equal(h.requests.some((request) => ['/policy', '/users'].includes(request.endpoint)), false);
+    }
   }
+});
+
+test('an existing session on the login page opens role home', async () => {
+  const h = await harness({ view: 'login', initialSession: true, role: 'tournament-operator',
+    returnTo: '/tournament-management/?view=users' });
+  assert.equal(h.context.destination, homePath(['tournament-operator']));
+});
+
+test('account sign out leaves the workspace and a new user opens home', async () => {
+  const h = await harness({ initialSession: true });
+  await h.fire('logout');
+  assert.equal(h.context.destination, '/account/login');
+  h.switchAccount('other-user');
+  h.expire();
+  await h.login();
+  assert.equal(h.context.destination, homePath(['administrator']));
+});
+
+test('account recovery for a different user without a draft opens home', async () => {
+  const h = await harness({ initialSession: true });
+  h.expire();
+  await h.intervals[0]();
+  h.switchAccount('other-user');
+  await h.login();
+  assert.equal(h.context.destination, homePath(['administrator']));
 });
 
 test('unsaved administration drafts can only be resumed by the original account', async () => {
@@ -137,6 +162,7 @@ test('unsaved administration drafts can only be resumed by the original account'
   h.switchAccount('admin');
   await h.login();
   assert.equal(h.nodes.get('usersPanel').hidden, false);
+  assert.equal(h.context.destination, undefined);
   assert.match(h.nodes.get('passwordHelp').textContent, /10-128 characters.*uppercase.*lowercase.*number.*special/);
   assert.equal(h.nodes.get('userId').value, 'unsaved-account');
 });
@@ -198,8 +224,7 @@ test('Users validates password matching before Save and places green save feedba
 });
 
 test('administrator can create/edit users, keeps stale drafts and reauthenticates without losing edits', async () => {
-  const h = await harness();
-  await h.login();
+  const h = await harness({ initialSession: true });
   assert.equal(h.nodes.get('usersPanel').hidden, false);
   h.nodes.get('userId').value = 'new-user';
   h.nodes.get('roles').children[2].checked = true;
@@ -220,6 +245,7 @@ test('administrator can create/edit users, keeps stale drafts and reauthenticate
   assert.equal(h.nodes.get('userEnabled').checked, false);
   await h.login();
   assert.equal(h.nodes.get('userEnabled').checked, false);
+  assert.equal(h.context.destination, undefined);
   h.rejectSave();
   await h.fire('userForm', 'submit');
   assert.match(h.nodes.get('status').textContent, /draft has been kept/);

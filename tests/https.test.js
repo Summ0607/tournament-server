@@ -159,8 +159,13 @@ test('browser page aliases require sign-in and deny disallowed roles; raw reposi
   for (const pathname of paths) {
     const unsigned = await request(tlsServer, { pathname });
     assert.equal(unsigned.status, 302, pathname);
-    assert.match(unsigned.headers.location, /^\/account\/login\?returnTo=/);
+    assert.equal(unsigned.headers.location, '/account/login');
     assert.equal((await request(httpServer, { secure: false, pathname })).status, 426);
+  }
+  for (const pathname of ['/account/profile', '/account/users', '/account/settings']) {
+    const unsigned = await request(tlsServer, { pathname });
+    assert.equal(unsigned.status, 302, pathname);
+    assert.equal(unsigned.headers.location, '/account/login', pathname);
   }
   const headers = await roleLogin(tlsServer, 'viewer');
   assert.equal((await request(tlsServer, { pathname: '/account/users', headers })).status, 403);
@@ -171,6 +176,8 @@ test('browser page aliases require sign-in and deny disallowed roles; raw reposi
     assert.equal(result.status, pathname.includes('audience-monitor') ? 200 :
       pathname.includes('tournament-management') ? 302 : 403, pathname);
   }
+  const forbidden = await request(tlsServer, { pathname: '/head-table/', headers });
+  assert.match(forbidden.raw, /href="\/".*permitted home page/i);
   for (const pathname of ['/db/tournament.db', '/events/active.json', '/backend/accountSessions.js',
     '/Results/result.json', '/app-releases/current.json', '/package.json', '/README.md', '/app-debug.apk',
     '/node_modules/express/package.json', '/group-server.js', '/assets/../backend/accountSessions.js']) {
