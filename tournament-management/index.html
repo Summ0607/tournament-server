@@ -240,6 +240,12 @@
     #resultSource { max-width: 100%; min-height: var(--vd-control-height, 28px); font: inherit; }
     #resultNotice[data-state="error"] { color: #a02020; }
     #ringJudgesView .table-wrap { max-height: none; }
+    #judgeAssignmentsView .ja-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    #judgeAssignmentsView .ja-card { border: 1px solid var(--line); padding: 12px; border-radius: 5px; }
+    #judgeAssignmentsView details, #judgeAssignmentsView section { margin: 12px 0; }
+    #judgeAssignmentsView table { min-width: 900px; }
+    #judgeAssignmentsView label { margin-right: 12px; }
+    #jaNotice[data-state="error"] { color: #d65b5b; }
     #judgeManagementView .jm-toolbar, #judgeManagementView .jm-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 12px; }
     #judgeManagementView .jm-panel { border: 1px solid var(--line); background: var(--panel); border-radius: 5px; padding: 16px; margin-bottom: 14px; }
     #judgeManagementView .jm-filters, #judgeManagementView .jm-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -1534,7 +1540,7 @@
             <button id="navRings" class="sidebar-disclosure" type="button" data-nav-group="rings" aria-expanded="false" aria-controls="navRingsChildren">Ring Management</button>
             <div id="navRingsChildren" class="sidebar-children" hidden>
               <button class="sidebar-item" type="button" data-nav-id="ring-judges" data-nav-label="Ring Judges" data-nav-parents="tournament rings">Ring Judges</button>
-              <button class="sidebar-item" type="button" data-nav-id="judge-assignments" data-nav-label="Judge Assignments" data-nav-parents="tournament rings" data-nav-planned="true">Judge Assignments</button>
+              <button class="sidebar-item" type="button" data-nav-id="judge-assignments" data-nav-label="Judge Assignments" data-nav-parents="tournament rings">Judge Assignments</button>
               <button class="sidebar-item" type="button" data-nav-id="tablet-pairing" data-nav-label="Ring Assignment" data-nav-parents="tournament rings">Ring Assignment</button>
               <button class="sidebar-item" type="button" data-nav-id="ring-assignment" data-nav-label="Division Assignments" data-nav-parents="tournament rings">Division Assignments</button>
               <button class="sidebar-item" type="button" data-nav-id="head-table" data-nav-label="Head Table" data-nav-parents="tournament rings">Head Table</button>
@@ -1923,6 +1929,12 @@
                 </div><p id="vmError" role="alert"></p><div class="actions"><button id="vmSave" type="submit" data-help="Save this volunteer management entry.">Save</button><button id="vmCancel" type="button" data-help="Close the overlay, confirming before discarding changes.">Cancel</button></div>
               </form></dialog>
             </div>
+            <div class="view" id="judgeAssignmentsView" data-help-page="judge-assignments" data-help-title="Judge Assignments" hidden>
+              <p>Plan P1 and P2 before the event. Competitor candidates require agreement; no contact messages are sent. BB competitors may serve in the Gup phase, not their competing BB phase.</p>
+              <div class="actions"><label>Assignment phase <select id="jaPhase"><option>P1</option><option>P2</option></select></label>
+                <button id="jaReload" type="button">Reload</button><button id="jaAuto" type="button">Auto assign phase</button><button id="jaSave" type="button">Save both phases</button></div>
+              <p id="jaNotice" role="status" aria-live="polite"></p><div id="jaContent"></div>
+            </div>
             <div class="view" id="ringJudgesView" data-help-page="ring-judges" data-help-title="Ring Judges" hidden>
               <div class="actions"><button id="rjAdd" type="button"               data-help="Create a validated member Judging volunteer with an Association ID and add that volunteer to Ring Judges.">Add Judge</button><button id="rjPopulate" type="button" data-help="Add member competitors with Association IDs who meet Dan or SK/TK age and rank requirements. Certification stays Unknown; eligible SK/TK candidates are noted.">Populate Judges from Competitors</button><button id="rjPopulateVolunteers" type="button" data-help="Add member Judging volunteers with Association IDs who meet Dan or SK/TK age and rank rules. Supplied certification is copied.">Populate Judges from Volunteers</button><button id="rjReload" type="button" data-help="Reload the saved judges and operational lock status.">Reload Saved</button></div>
               <form id="rjSearchForm"><label for="rjSearch">Search</label><input id="rjSearch" type="search" maxlength="200"><button type="submit" data-help="Search across judge names, IDs, schools, ranks, certification and review notes.">Search</button><button id="rjClearFilters" type="button" data-help="Clear the search and all column filters.">Clear filters</button></form>
@@ -2100,6 +2112,7 @@
   <script src="/tournament-management/competition-settings.js"></script>
   <script src="/tournament-management/results.js"></script>
   <script src="/tournament-management/ring-judges.js"></script>
+  <script src="/tournament-management/judge-assignments.js"></script>
   <script src="/tournament-management/judge-management.js"></script>
   <script src="/tournament-management/volunteers.js"></script>
   <script src="/assets/tournament-presentation.js" defer></script>
@@ -2162,6 +2175,8 @@
       });
       const resultsWorkspace = TournamentResultsWorkspace.create({ document, request: (url, options) => fetchJson(url, options), selectedEvent: () => state.selectedEventName });
       const ringJudgesWorkspace = RingJudgesWorkspace.create({ document, request: (url, options) => fetchJson(url, options),
+        selectedEvent: () => state.selectedEventName, confirm: (message) => window.confirm(message) });
+      const judgeAssignmentsWorkspace = JudgeAssignmentsWorkspace.create({ document, request: (url, options) => fetchJson(url, options),
         selectedEvent: () => state.selectedEventName, confirm: (message) => window.confirm(message) });
       const volunteersWorkspace = VolunteersWorkspace.create({ document, request: (url, options) => fetchJson(url, options),
         selectedEvent: () => state.selectedEventName, confirm: (message) => window.confirm(message) });
@@ -2311,7 +2326,7 @@
       let importBusy = false;
       let activationBusy = false;
       let activeRequestToken = 0;
-      const dayOfViews = ['tablet-pairing', 'ring-assignment', 'head-table', 'judge-assignments'];
+      const dayOfViews = ['tablet-pairing', 'ring-assignment', 'head-table'];
       const createEventBtn = document.getElementById('createEventBtn');
       const deleteEventBtn = document.getElementById('deleteEventBtn');
       const resetEventBtn = document.getElementById('resetEventBtn');
@@ -2711,6 +2726,7 @@
       }
 
       function allowTournamentSelection(nextName) {
+        if (!judgeAssignmentsWorkspace.canLeave()) return false;
         if (volunteersWorkspace.busy() || !volunteersWorkspace.canLeave()) return false;
         if (ringJudgesWorkspace.busy() || !ringJudgesWorkspace.canLeave()) return false;
         if (competitionSettings.busy() || !competitionSettings.canLeave()) return false;
@@ -2734,6 +2750,7 @@
       }
 
       function reloadSelectedWorkspace() {
+        if (currentView === 'judge-assignments') { judgeAssignmentsWorkspace.load(); return; }
         if (['volunteers', 'volunteer-types'].includes(currentView)) { volunteersWorkspace.load(currentView); return; }
         if (currentView === 'ring-judges') { ringJudgesWorkspace.load(); return; }
         if (currentView === 'results') { resultsWorkspace.load(); return; }
@@ -3076,6 +3093,7 @@
         input.addEventListener('change', () => { renderBanner(); updateRingSummary(); });
       });
       function allowLeavingTournamentForm() {
+        if (!judgeAssignmentsWorkspace.canLeave()) return false;
         if (!judgeManagementWorkspace.canLeave()) return false;
         const accountFrame = document.getElementById('administrationToolFrame');
         if (['users', 'user-account-settings'].includes(currentView) &&
@@ -3097,6 +3115,7 @@
         return allowed;
       }
       window.addEventListener('beforeunload', (event) => {
+        if (judgeAssignmentsWorkspace.dirty() || judgeAssignmentsWorkspace.busy()) { event.preventDefault(); event.returnValue = ''; return; }
         if (judgeManagementWorkspace.dirty() || judgeManagementWorkspace.busy()) { event.preventDefault(); event.returnValue = ''; return; }
         if (volunteersWorkspace.dirty() || volunteersWorkspace.busy()) { event.preventDefault(); event.returnValue = ''; return; }
         const dirty = tournamentSelectionHasUnsavedChanges();
@@ -3155,7 +3174,7 @@
           return;
         }
         if (activationBusy) { showNotice('Wait for live activation to finish before changing pages.', 'warn'); return; }
-        if ((view !== currentView || judgeManagementWorkspace.dirty() || judgeManagementWorkspace.busy() || view === 'event-setup' && state.metadataOpen || teamWorkspace.dirty() || visualDefinitions.dirty()) && !allowLeavingTournamentForm()) return;
+        if ((view !== currentView || judgeAssignmentsWorkspace.dirty() || judgeAssignmentsWorkspace.busy() || judgeManagementWorkspace.dirty() || judgeManagementWorkspace.busy() || view === 'event-setup' && state.metadataOpen || teamWorkspace.dirty() || visualDefinitions.dirty()) && !allowLeavingTournamentForm()) return;
         if (view === 'event-setup' && state.metadataOpen) setMetadataPanelVisible(false);
         if (importBusy) {
           setImportNotice('Wait for the import to finish before changing pages.', 'warn');
@@ -3172,6 +3191,7 @@
         competitionSettings.leave();
         resultsWorkspace.leave();
         ringJudgesWorkspace.leave();
+        judgeAssignmentsWorkspace.leave();
         volunteersWorkspace.leave();
         judgeManagementWorkspace.leave();
         activeRequestToken += 1;
@@ -3227,6 +3247,7 @@
         document.getElementById('competitionSettingsView').hidden = !competitionSettingViews.includes(view);
         document.getElementById('resultsView').hidden = view !== 'results';
         document.getElementById('ringJudgesView').hidden = view !== 'ring-judges';
+        document.getElementById('judgeAssignmentsView').hidden = view !== 'judge-assignments';
         document.getElementById('judgeManagementView').hidden = !Object.hasOwn(judgeManagementPanels, view);
         document.getElementById('volunteersView').hidden = !['volunteers', 'volunteer-types'].includes(view);
         const toolPaths = { 'server-maintenance': '/admin/?embedded=1', simulator: '/simulator/?embedded=1',
@@ -3271,6 +3292,7 @@
         if (Object.hasOwn(judgeManagementPanels, view)) { renderState(); judgeManagementWorkspace.load(); return; }
         if (view === 'results') { renderState(); resultsWorkspace.load(); return; }
         if (view === 'ring-judges') { renderState(); ringJudgesWorkspace.load(); return; }
+        if (view === 'judge-assignments') { renderState(); judgeAssignmentsWorkspace.load(); return; }
         if (['volunteers', 'volunteer-types'].includes(view)) { renderState(); volunteersWorkspace.load(view); return; }
         if (competitionSettingViews.includes(view)) { renderState(); competitionSettings.load(view); return; }
         if (view === 'schools') { renderState(); schoolsWorkspace.load(); return; }

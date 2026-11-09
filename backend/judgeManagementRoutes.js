@@ -444,4 +444,4 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
   return router;
 }
 
-module.exports = { createJudgeManagementRouter, defaults };
+module.exports = { createJudgeManagementRouter, defaults, evaluateEligibility };

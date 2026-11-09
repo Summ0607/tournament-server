@@ -9,6 +9,7 @@ const { normalizeCertification, certificationLevels, certificationRankIssue, cer
 const { storedAge, lockAgeDate } = require('./tournamentAge');
 const { validateVolunteer } = require('./volunteerRoutes');
 const { readVolunteerDirectory, replaceVolunteerDirectory } = require('./volunteerStore');
+const { assignmentCandidates, judgeSnapshot } = require('./judgeAssignmentCandidates');
 
 // Strict validation rejects qualification problems; lenient validation (saved
 // data migration and population) keeps the row, resets unrecognized
@@ -73,7 +74,7 @@ function readRoster(file) {
     });
   });
 }
-function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
+function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
   const router = express.Router();
   const judgeAgeEligible = (rank, age, scope) => /^D[1-8]$/.test(rank) && age >= (scope === 'in-house' ? 15 : 18);
   async function volunteerDirectory(dir) {
@@ -129,7 +130,19 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
           } else writeJsonAtomicSync(file, data);
           return { ...data, volunteerDirectory: await volunteerDirectory(dir), certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name), ...extra };
         };
-        res.json(await callback(req, { name, dir, dbFile, data, commit }));
+        const result = await callback(req, { name, dir, dbFile, data, commit });
+        if (judgeFile) {
+          result.certificationReadOnly = true;
+          const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
+          const linked = new Map((await assignmentCandidates({ eventFile: dbFile, judgeFile, config })).judges.map((judge) => [judge.id, judge]));
+          result.judges = result.judges.map((judge) => {
+            const candidate = linked.get(judge.associationNumber.toUpperCase());
+            return { ...judge, certification: candidate?.certification || 'UNKNOWN',
+              flaggedForReview: judge.flaggedForReview || !candidate || Boolean(candidate.qualificationIssue),
+              reviewNotes: [judge.reviewNotes, candidate?.qualificationIssue || (!candidate ? 'No current event candidate matched to Judge Management.' : '')].filter(Boolean).join(' ') };
+          });
+        }
+        res.json(result);
       } catch (error) {
         if (!error.statusCode) console.error('Unable to access ring judges:', error);
         res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Unable to access Ring Judges. Changes have not been saved.' });
@@ -141,15 +154,25 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
     const existing = req.params.id ? data.judges.find((judge) => judge.id === req.params.id) : null;
     if (req.params.id && !existing) fail('Judge not found. Reload the directory.', 404);
     const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
+    let judgeInput = req.body.judge;
+    if (judgeFile && judgeInput && typeof judgeInput.associationNumber === 'string') {
+      const directory = await judgeSnapshot(judgeFile, config.date);
+      const certification = directory.judges.find((judge) =>
+        judge.associationId.toUpperCase() === judgeInput.associationNumber.trim().toUpperCase())?.certification || 'UNKNOWN';
+      if (existing && normalizeCertification(judgeInput.certification).code !== certification) {
+        fail('Certification comes from Judge Management. Reload Ring Judges; make certification corrections in Judge Management.', 409);
+      }
+      judgeInput = { ...judgeInput, certification };
+    }
     let row, volunteerChange = null, volunteerId = existing?.volunteerId || null;
     try {
       if (existing?.competitorId) {
         const competitor = (await readRoster(dbFile)).find((member) => String(member.id) === existing.competitorId);
         if (!competitor) fail('Source competitor not found. Correct the registration before editing this judge.', 409);
-        if (normalizeRank(req.body.judge?.rank).code !== normalizeRank(competitor.rank).code) {
+        if (normalizeRank(judgeInput?.rank).code !== normalizeRank(competitor.rank).code) {
           fail('Judge rank must match the saved competitor registration. Correct the rank through registration.', 400);
         }
-        row = validateJudge({ ...req.body.judge, rank: competitor.rank });
+        row = validateJudge({ ...judgeInput, rank: competitor.rank });
         const issue = certificationAgeIssue(row.certification, row.rank, storedAge(competitor, config.date), config.scope);
         if (issue) fail(issue, 400);
       } else {
@@ -161,7 +184,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
         if (!judging) fail('A Volunteer Type named Judging is required.', 400);
         const supplied = req.body.volunteer;
         if (!supplied || typeof supplied !== 'object' || Array.isArray(supplied)) fail('Volunteer details including age are required.', 400);
-        row = validateJudge(req.body.judge);
+        row = validateJudge(judgeInput);
         const volunteer = validateVolunteer({ ...sourceVolunteer, ...supplied,
           firstName: row.firstName, lastName: row.lastName, associationNumber: row.associationNumber,
           school: row.school, rank: row.rank, certification: row.certification }, original.types, config.date, false, config.scope);
@@ -211,6 +234,8 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
   }, true));
   const populate = (volunteers) => handle(async (_req, { dir, dbFile, data, commit }) => {
     const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
+    const linked = judgeFile ? new Map((await assignmentCandidates({ eventFile: dbFile, judgeFile, config })).judges
+      .map((judge) => [judge.id, judge])) : null;
     const volunteerData = volunteers ? await readVolunteerDirectory(dbFile) : null;
     const judgingIds = volunteerData ? volunteerData.types.filter((type) => type.name.toLowerCase() === 'judging').map((type) => type.id) : [];
     if (volunteers && !judgingIds.length) fail('A Volunteer Type named Judging is required for judge population.', 400);
@@ -220,8 +245,10 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
     let added = 0, skipped = 0;
     for (const member of roster) {
       if (!String(member.associationNumber || '').trim()) continue;
+      const verified = linked?.get(String(member.associationNumber).trim().toUpperCase());
+      if (linked && !volunteers && (!verified || !Object.values(verified.roles).some(Boolean))) { skipped++; continue; }
       const rank = normalizeRank(member.rank);
-      const hasSktkCertification = volunteers && member.certification === 'SK_TK';
+      const hasSktkCertification = volunteers && (verified?.certification || member.certification) === 'SK_TK';
       if (!rank.recognized || !isJudgeRank(rank.code) ||
           volunteers && !/^D[1-8]$/.test(rank.code) && !hasSktkCertification) continue;
       let age;
@@ -229,13 +256,14 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
       catch (error) { fail(`Cannot determine eligibility for ${member.firstName} ${member.lastName}: ${error.message}`, 400); }
       const judgeEligible = judgeAgeEligible(rank.code, age, config.scope);
       const sktkEligible = (!volunteers || hasSktkCertification) && !certificationAgeIssue('SK_TK', rank.code, age, config.scope);
-      if (!judgeEligible && !sktkEligible) continue;
+      if (!judgeEligible && !sktkEligible && !verified?.roles.corner) continue;
       const associationNumber = String(member.associationNumber || '').trim();
       if (data.judges.some((judge) => (volunteers ? judge.volunteerId : judge.competitorId) === String(member.id) || associationNumber &&
           judge.associationNumber.toUpperCase() === associationNumber.toUpperCase())) { skipped++; continue; }
       const row = validateJudge({ firstName: member.firstName, lastName: member.lastName, associationNumber,
-        school: member.studio || '', rank: rank.code, certification: volunteers ? member.certification : '', flaggedForReview: false,
-        reviewNotes: !volunteers && sktkEligible ? 'Meets SK/TK age and rank criteria; certification is unverified.' : '' }, true);
+        school: member.studio || '', rank: rank.code, certification: verified?.certification || (volunteers ? member.certification : ''), flaggedForReview: Boolean(verified?.qualificationIssue),
+        reviewNotes: verified ? [verified.qualificationIssue, !volunteers ? 'Certified directory match; potential judge only. Coordinator must confirm phase availability before assignment.' : 'Matched to Judge Management by Association ID.'].filter(Boolean).join(' ') :
+          !volunteers && sktkEligible ? 'Meets SK/TK age and rank criteria; certification is unverified.' : '' }, true);
       data.judges.push({ id: crypto.randomUUID(), competitorId: volunteers ? null : String(member.id), volunteerId: volunteers ? String(member.id) : null, ...row }); added++;
     }
     return commit({ added, skipped });

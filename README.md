@@ -584,10 +584,10 @@ Unknown, Uncertified, SK/TK, Corner, Regional (Center) and International.
 Judge ranks span G5–D8, and each level from SK/TK up enforces a minimum rank
 (SK/TK: G5, Corner and Regional: D1, International: D2). **Clear Review Flag**, beside
 Delete, clears selected judges' flags after confirmation and preserves notes.
-**Populate Judges from Competitors** adds Dan-ranked competitors (D1–D8)
-aged 18+ as judge candidates, and competitors eligible for SK/TK: G5 or higher
-at age 16+, or Cho Dan Bo at age 14+, on the tournament date. Their certification
-remains Unknown; SK/TK eligibility is noted for verification. Existing linked
+**Populate Judges from Competitors** adds certified, event-date-qualified
+competitors matched to Judge Management by Association ID, including eligible
+SK/TK candidates. Certification is refreshed from that directory and is read-only
+here; make certification corrections in Judge Management. Existing linked
 competitors or matching case-insensitive Association IDs are skipped; existing
 edits are not overwritten. Population does not certify a judge or establish
 availability. Missing or stale tournament ages for eligible ranks prevent
@@ -595,18 +595,18 @@ population and are reported for correction.
 Every judge must have an Association ID. Population excludes any record without
 one, and In-House non-member volunteers cannot be added as judges.
 
-Certification defaults to Unknown. Saved directories with legacy free-text
+Unmatched certification is shown as Unknown. Saved directories with legacy free-text
 certification are normalized on load; unrecognized values or rank/certification
 mismatches reset to Unknown or flag the judge for review with an explanatory
 note. **Flagged for Review** and
 review notes capture follow-up observations, not automatic assignment exclusions.
 Judges have an editable Priority from 0 to 99, defaulting to 4; the directory can
-be filtered by priority. Manual Only is omitted; **Judge Assignments** remains
-Planned.
+be filtered by priority. Manual Only is omitted; **Judge Assignments** supports
+independent P1/P2 preparation with explicitly confirmed availability.
 **Populate Judges from Volunteers** includes member volunteers with an
 Association ID and primary or secondary Judging choice: those aged 18+ with Dan
 rank, and SK/TK-certified volunteers meeting the rank and age rules above.
-Supplied certification is copied.
+Certification comes from Judge Management, not a volunteer's claimed level.
 Linked volunteer IDs and nonblank Association IDs prevent repeated population;
 existing judge edits are not overwritten. Keep a type named **Judging** for this
 workflow; if it is renamed or deleted, population reports the missing type.
@@ -1386,7 +1386,7 @@ Its hierarchy is:
   - **Results** — read-only selected-tournament standings with live/simulation source selection
   - **Team Management** → **Teams** / **Settings** — manual, tournament-scoped
   - **Ring Management**: **Ring Judges** — selected-tournament preparation directory;
-    **Judge Assignments** — Planned;
+    **Judge Assignments** — P1/P2 preparation;
     **Division Assignments** (existing Ring Assignment)
   - **Head Table**
   - **Printing** and **CSV Settings** — Planned
@@ -1555,7 +1555,77 @@ Legacy manual records remain editable and use event name/date as their identity.
 Schema version 5 migrates existing history without dropping records.
 
 This shared append/verification interface is ready for future completed-service
-processing; result ingestion and phase-based ring assignments are not wired here.
+processing; result ingestion does not yet create experience automatically.
+
+##### Judge assignments: event participation and P1/P2 preparation (Step 2)
+
+Select a tournament, then **Ring Management > Judge Assignments**. This is a
+preparation workspace for the selected event, not an active-event-only page.
+Plan and save P1 and P2 independently before a one- or two-day event. Each phase
+has its own Black Belt/Gup discipline, configured rings, confirmed available
+officials, reserved arbitrators, and ring positions. These phases do not change
+the event's day schedule or switch automatically during competition.
+
+The candidate pool combines Judging volunteers (first or second choice) with
+certified event competitors matched to the standalone directory by
+case-insensitive Association ID. Nonmember volunteers and unmatched competitors
+are excluded; unmatched Judging volunteers remain visible for correction.
+Two people with the same name but different IDs remain distinct. A volunteer
+who is also a competitor appears once. Directory certification, expiration and
+progression are authoritative; a volunteer's claimed certification cannot
+override them. Age uses the event's dated registration/volunteer record;
+missing/stale age, identity or rank conflicts, missing/expired certification,
+and future awards block placement and require correction.
+
+Competitors who did not volunteer are marked **potential**; checking their
+availability asks the coordinator to confirm agreement for that phase. No
+separate volunteer registration is required. No candidate, including a
+registered volunteer, is automatically marked available for either phase.
+Black-belt competitors cannot be placed in a Black Belt phase, even if they also
+volunteered; they may serve in a Gup phase after agreement. Other timing conflicts
+and communications remain coordinator responsibilities; email, IM and contact
+automation are not implemented.
+
+Role eligibility enforces current certification and rank on the event date:
+Regional/International for Center and arbitrator; Corner or above for Corner;
+SK/TK or above for SK/TK. Center/arbitrator require age 18, Corner age 16 (15
+In-House), and SK/TK follows the shared age rules (16, CDB 14, In-House 11).
+Corner certification at CDB does not authorize Corner service until Dan rank.
+Readiness for promotion never substitutes for an awarded certification.
+
+Confirm availability, select rings, reserve qualified arbitrators (typically
+2-4), then choose **Auto assign phase**. Required staffing is satisfied first
+while maximizing fully staffed rings: one Center, four Corners and one SK/TK
+for Black Belt, or one Center, two Corners and one SK/TK for Gup. Remaining
+qualified available officials fill toward the preferred seven-person ring
+(one Center, four Corners, two SK/TK). Shortfalls remain visible; the planner
+does not invent volunteers or use unqualified candidates.
+
+Within those staffing constraints, missing progression experience prefers
+SK/TK officials in SK/TK, Corner officials in Corner and Regional officials in
+Center. Missing World experience cannot be satisfied by placement at a Regional
+event. A placement is only a potential learning opportunity: it does not create
+experience, verify service, pass tests or grant certification. Manual adjustments
+use the same qualification/availability checks. Arbitrators are reserved across
+the phase; they cannot also occupy a ring position in that phase.
+
+Save persists **both** phase plans in the selected event's
+`judge-assignments.json`. An official may serve once per phase, and in both phases.
+Removing phase availability clears that official's positions/arbitrator
+reservation in that phase. Changing a phase's discipline clears its assignments
+and arbitrators after confirmation. The other phase is unaffected.
+Incomplete staffing may be saved as a draft; invalid assignments cannot.
+Unsaved edits are guarded on navigation, event changes and page close.
+Changes to profiles, volunteers, registration or event configuration invalidate
+stale saves. Planning locks when operational event use begins; Reset Run returns
+the event to preparation. Runtime phase switching, substitutions, contact
+messaging and automatic experience capture remain later work.
+
+Ring Judges' competitor population now uses certified directory matches when
+running the normal server. Its review note identifies potential candidates.
+The assignment candidate view independently refreshes authoritative directory
+qualifications, including officials already populated earlier.
+Focused validation: `npm run test:judge-assignments`.
 
 For another independent dataset or port:
 
@@ -1664,8 +1734,9 @@ indicator identifies the event used by day-of workflows.
 On day-of views the banner switches explicitly to **Active Event** and uses that
 event's configured date. Selecting a different event for preparation does not
 change the day-of context; activation is available only through the **Active Tournament**
-selector on Division Assignments, Head Table, and Judge Assignments.
-Ring Judges instead uses the selected preparation tournament and never activates it.
+selector on Division Assignments and Head Table.
+Ring Judges and Judge Assignments instead use the selected preparation tournament
+and never activate it.
 Selecting the current active tournament makes no request and needs no confirmation.
 Selecting another asks “Switch live operations to [name]?” and explains that
 connected tablets will use the new tournament. Cancel or failed activation preserves
