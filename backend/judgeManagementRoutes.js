@@ -89,10 +89,12 @@ function evaluateEligibility(judge, tests, experience, today = new Date().toISOS
   else if (target === 'CORNER' && !recertifying) { requiredExperience = 1; }
   else if (target === 'REGIONAL') { requiredExperience = 2; }
   else if (target === 'INTERNATIONAL') { requiredExperience = 1; requiredRole = 'CENTER_JUDGE'; }
+  if (target === 'REGIONAL') requiredRole = 'CORNER_JUDGE';
   const qualifying = requiredRole ? records.filter((row) => row.role === requiredRole) : records;
-  if (!reason && target === 'CORNER' && !recertifying && qualifying.length < requiredExperience) reason = 'At least 1 verified sanctioned Championship judging-experience log is required.';
-  if (!reason && target === 'REGIONAL' && qualifying.length < requiredExperience) reason = `At least ${requiredExperience} verified sanctioned Championship experience records as a Corner Judge are required.`;
-  if (!reason && target === 'INTERNATIONAL' && qualifying.length < requiredExperience) reason = 'At least 1 verified sanctioned Championship experience record as a Regional Center Judge is required.';
+  const experienceCount = new Set(qualifying.map((row) => row.eventId || `legacy:${row.eventName?.trim().toLowerCase()}:${row.eventDate}`)).size;
+  if (!reason && target === 'CORNER' && !recertifying && experienceCount < requiredExperience) reason = 'At least 1 verified sanctioned Championship judging-experience log is required.';
+  if (!reason && target === 'REGIONAL' && experienceCount < requiredExperience) reason = `At least ${requiredExperience} verified sanctioned Championships as a Corner Judge are required.`;
+  if (!reason && target === 'INTERNATIONAL' && experienceCount < requiredExperience) reason = 'At least 1 verified sanctioned Championship experience record as a Regional Center Judge is required.';
   if (!reason && target === 'INTERNATIONAL' && !records.some((row) => row.eventScope === 'WORLD' && ['JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE'].includes(row.role))) reason = 'Verified experience judging at a World Championship is required.';
   const needsReview = recertifying && ['REGIONAL', 'INTERNATIONAL'].includes(target) && Boolean(reason);
   const testAfter = judge.grantedAt || (judge.expiration ? subtractFiveYears(judge.expiration) : '');
@@ -104,7 +106,7 @@ function evaluateEligibility(judge, tests, experience, today = new Date().toISOS
     status: needsReview ? 'Coordinator review required' : reason ? 'Not eligible' :
       recertifying ? 'Eligible to recertify' : 'Eligible to test',
     recertifying, reviewRequired: needsReview, writtenPassed, practicalRequired, practicalPassed,
-    experienceCount: qualifying.length, requiredExperience,
+    experienceCount, requiredExperience,
     mayJudge: !(judge.certification === 'CORNER' && judge.rank === 'CDB') };
 }
 
@@ -213,13 +215,22 @@ async function replaceRecords(db, judgeId, body, today) {
   }
   if (Object.hasOwn(body, 'experience')) {
     if (!Array.isArray(body.experience) || body.experience.length > 200) throw invalid('Experience records must be an array of at most 200 records.');
-    const records = body.experience.map((record) => validateExperience(record, today));
-    await run(db, 'DELETE FROM judge_experience WHERE judge_id = ?', [judgeId]);
+    for (const record of body.experience.filter((item) => item?.sourceId)) {
+      const validated = validateExperience(record, today);
+      const [existing] = await all(db, `SELECT event_name AS eventName,event_date AS eventDate,
+        location,role,event_scope AS eventScope,log_verified AS logVerified
+        FROM judge_experience WHERE judge_id = ? AND source_id = ?`, [judgeId, record.sourceId]);
+      if (!existing || Object.keys(validated).some((field) => validated[field] !== existing[field])) {
+        throw invalid('API service records are read-only here. Use the experience verification action.', 409);
+      }
+    }
+    const records = body.experience.filter((record) => !record?.sourceId).map((record) => validateExperience(record, today));
+    await run(db, 'DELETE FROM judge_experience WHERE judge_id = ? AND source_id IS NULL', [judgeId]);
     for (const record of records) {
       await run(db, `INSERT INTO judge_experience
-        (judge_id, event_name, event_date, location, role, event_scope, log_verified)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`, [judgeId, record.eventName, record.eventDate, record.location,
-        record.role, record.eventScope, record.logVerified]);
+        (judge_id, event_name, event_date, location, role, event_scope, log_verified, event_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [judgeId, record.eventName, record.eventDate, record.location,
+        record.role, record.eventScope, record.logVerified, `legacy:${record.eventName.toLowerCase()}:${record.eventDate}`]);
     }
   }
 }
@@ -242,7 +253,7 @@ async function parseCsv(text, aliases) {
   });
 }
 
-function createJudgeManagementRouter({ file, currentDate = () => new Date().toISOString().slice(0, 10) }) {
+function createJudgeManagementRouter({ file, currentDate = () => new Date().toISOString().slice(0, 10), allowSimulation = false }) {
   const router = express.Router();
   async function handle(req, res, operation, write = false) {
     let db;
@@ -270,13 +281,23 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
           written_score AS writtenScore, practical_date AS practicalDate, practical_passed AS practicalPassed
           FROM judge_test_attempts ORDER BY written_date DESC, practical_date DESC, id DESC`);
         const experience = await all(db, `SELECT id, judge_id AS judgeId, event_name AS eventName, event_date AS eventDate,
-          location, role, event_scope AS eventScope, log_verified AS logVerified
+          location, role, event_scope AS eventScope, log_verified AS logVerified,
+          event_id AS eventId, phase, source, source_id AS sourceId
           FROM judge_experience ORDER BY event_date DESC, id DESC`);
         const eligibility = judges.map((judge) => evaluateEligibility(judge, tests, experience, today));
         const publicJudges = judges.map(({ dateOfBirth, ...judge }) => judge);
         if (write) await run(db, 'COMMIT');
-        res.json({ asOf: today, revision: next.revision, aliases: Object.keys(JSON.parse(next.aliases)).length ? JSON.parse(next.aliases) : defaults,
-          judges: publicJudges, tests, experience, eligibility, certificationLevels: certificationLevels(), ranks: judgeRankOptions(), ...extra });
+        const payload = { asOf: today, revision: next.revision, aliases: Object.keys(JSON.parse(next.aliases)).length ? JSON.parse(next.aliases) : defaults,
+          judges: publicJudges, tests, experience, eligibility, certificationLevels: certificationLevels(), ranks: judgeRankOptions(), ...extra };
+        if (req.path === '/judge-management/profile') {
+          const judge = publicJudges.find((row) => row.associationId.toUpperCase() === String(req.query.associationId || '').trim().toUpperCase());
+          if (!judge) throw invalid('Judge not found by Association ID.', 404);
+          return res.json({ asOf: today, revision: next.revision, judge,
+            tests: tests.filter((row) => row.judgeId === judge.id),
+            experience: experience.filter((row) => row.judgeId === judge.id),
+            eligibility: eligibility.find((row) => row.judgeId === judge.id) });
+        }
+        res.json(payload);
       } catch (error) {
         if (write) {
           try { await run(db, 'ROLLBACK'); } catch (rollbackError) { console.error('Judge Management rollback failed:', rollbackError); }
@@ -290,6 +311,55 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
   }
   const endpoint = (operation, write = false) => (req, res) => handle(req, res, (db, aliases, today) => operation(req, db, aliases, today), write);
   router.get('/judge-management', endpoint(() => ({})));
+  router.get('/judge-management/profile', endpoint(() => ({})));
+  async function member(db, associationId) {
+    if (typeof associationId !== 'string' || !associationId.trim()) throw invalid('Association ID is required.');
+    const [judge] = await all(db, 'SELECT id FROM judges WHERE association_id = ? COLLATE NOCASE', [associationId.trim()]);
+    if (!judge) throw invalid('Judge not found by Association ID.', 404);
+    return judge;
+  }
+  router.post('/judge-management/experience', endpoint(async (req, db, _aliases, today) => {
+    const judge = await member(db, req.body.associationId);
+    if (!Array.isArray(req.body.records) || !req.body.records.length || req.body.records.length > 200) throw invalid('Provide 1 to 200 experience records.');
+    let added = 0, duplicates = 0;
+    for (const input of req.body.records) {
+      const record = validateExperience({ ...input, logVerified: false }, today);
+      for (const field of ['eventId', 'sourceId']) {
+        if (typeof input[field] !== 'string' || !input[field].trim() || input[field].length > 200) throw invalid(`${field} is required and must be at most 200 characters.`);
+      }
+      if (!['SIMULATION', 'TOURNAMENT'].includes(input.source) || input.source === 'SIMULATION' && !allowSimulation) throw invalid('Experience source is not permitted.');
+      if (input.logVerified !== undefined && input.logVerified !== false) throw invalid('Submitted experience must await coordinator verification.');
+      if (!['', 'P1', 'P2'].includes(input.phase ?? '')) throw invalid('Phase must be blank, P1 or P2.');
+      const values = [record.eventName, record.eventDate, record.location, record.role, record.eventScope,
+        input.eventId.trim(), input.phase || '', input.source, input.sourceId.trim()];
+      const [existing] = await all(db, `SELECT event_name,event_date,location,role,event_scope,event_id,phase,source,source_id
+        FROM judge_experience WHERE judge_id = ? AND (source_id = ? OR (event_id = ? AND role = ? AND phase = ?))`,
+      [judge.id, values[8], values[5], values[3], values[6]]);
+      if (existing) {
+        if (JSON.stringify(Object.values(existing)) !== JSON.stringify(values)) throw invalid('Experience identity already exists with different details.', 409);
+        duplicates++; continue;
+      }
+      const [event] = await all(db, `SELECT event_name,event_date,event_scope,event_id FROM judge_experience
+        WHERE event_id = ? OR (event_name = ? COLLATE NOCASE AND event_date = ?) LIMIT 1`, [values[5], record.eventName, record.eventDate]);
+      if (event && event.event_id !== values[5]) throw invalid('This event already uses a different eventId.', 409);
+      if (event && (event.event_name !== record.eventName || event.event_date !== record.eventDate || event.event_scope !== record.eventScope)) throw invalid('Event identity has conflicting name, date or scope.', 409);
+      await run(db, `INSERT INTO judge_experience
+        (judge_id,event_name,event_date,location,role,event_scope,event_id,phase,source,source_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`, [judge.id, ...values]);
+      added++;
+    }
+    return { added, duplicates };
+  }, true));
+  router.post('/judge-management/experience-verify', endpoint(async (req, db) => {
+    const judge = await member(db, req.body.associationId);
+    const ids = req.body.ids;
+    if (!Array.isArray(ids) || !ids.length || ids.length > 200 || new Set(ids).size !== ids.length ||
+        ids.some((id) => !Number.isSafeInteger(id) || id < 1) || typeof req.body.verified !== 'boolean') throw invalid('Select distinct experience IDs and a verification decision.');
+    const result = await run(db, `UPDATE judge_experience SET log_verified = ? WHERE judge_id = ? AND id IN (${ids.map(() => '?').join(',')})`,
+      [Number(req.body.verified), judge.id, ...ids]);
+    if (result.changes !== ids.length) throw invalid('One or more experience records do not belong to this judge.', 409);
+    return {};
+  }, true));
   router.post('/judge-management', endpoint(async (req, db, _aliases, today) => {
     const judge = validate(req.body.judge, today);
     const values = [...fields.map((f) => judge[f] || (f === 'rank' || f === 'expiration' ? null : '')), judge.dateOfBirth || null];
@@ -321,7 +391,7 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
     if (!judge) throw invalid('Judge not found.', 404);
     const tests = await all(db, `SELECT judge_id AS judgeId, target_level AS targetLevel, written_date AS writtenDate,
       written_score AS writtenScore, practical_date AS practicalDate, practical_passed AS practicalPassed FROM judge_test_attempts WHERE judge_id = ?`, [id]);
-    const experience = await all(db, `SELECT judge_id AS judgeId, event_date AS eventDate, role, event_scope AS eventScope,
+    const experience = await all(db, `SELECT judge_id AS judgeId, event_name AS eventName, event_id AS eventId, event_date AS eventDate, role, event_scope AS eventScope,
       log_verified AS logVerified FROM judge_experience WHERE judge_id = ?`, [id]);
     const eligibility = evaluateEligibility(judge, tests, experience, today);
     if (!eligibility.eligible || !eligibility.writtenPassed || !eligibility.practicalPassed) throw invalid('The judge must meet eligibility requirements and pass the required written and practical tests before certification can be granted.', 409);

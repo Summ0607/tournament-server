@@ -171,6 +171,7 @@ ring-assignments.json
 
 # Event data
 *.csv
+!test-data/judge-simulation/*.csv
 
 # IDE
 /.idea/

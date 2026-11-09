@@ -53,7 +53,7 @@
       node('jmExperienceBody').innerHTML = (data.experience || []).map((record) => {
         const judge = judges.get(record.judgeId);
         if (!judge) return '';
-        return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(record.eventName)}</td><td>${esc(record.eventDate)}</td><td>${esc(record.location)}</td><td>${esc(pretty(record.role))}</td><td>${esc(pretty(record.eventScope))}</td><td>${record.logVerified ? 'Verified' : 'Not verified'}</td></tr>`;
+        return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(record.eventName)}${record.phase ? ` (${esc(record.phase)})` : ''}</td><td>${esc(record.eventDate)}</td><td>${esc(record.location)}</td><td>${esc(pretty(record.role))}</td><td>${esc(pretty(record.eventScope))}</td><td>${record.logVerified ? 'Verified' : 'Not verified'} <button type="button" data-jm-verify="${record.id}" data-judge="${judge.id}">${record.logVerified ? 'Unverify' : 'Verify'}</button></td></tr>`;
       }).join('') || '<tr><td colspan="8">No experience records.</td></tr>';
       node('jmEligibilityBody').innerHTML = (data.eligibility || []).map((item) => {
         const judge = judges.get(item.judgeId);
@@ -69,14 +69,14 @@
       return `<option value="">-- Select --</option>${values.map((value) => `<option value="${value}" ${selectedValue === value ? 'selected' : ''}>${esc(pretty(value))}</option>`).join('')}`;
     }
     function renderRecordForms() {
-      node('jmExperienceRecords').innerHTML = experienceRecords.map((record, index) => `<div class="jm-card" data-exp-record="${index}"><div class="jm-form-grid">
+      node('jmExperienceRecords').innerHTML = experienceRecords.map((record, index) => `<div class="jm-card" data-exp-record="${index}">${record.sourceId ? '<p>API service record: read-only here. Verify from Experience.</p>' : ''}<fieldset ${record.sourceId ? 'disabled' : ''}><div class="jm-form-grid">
         <label>Event<input data-exp-field="eventName" maxlength="200" value="${esc(record.eventName)}"></label>
         <label>Date<input data-exp-field="eventDate" type="date" value="${esc(record.eventDate)}"></label>
         <label>Location<input data-exp-field="location" maxlength="200" value="${esc(record.location)}"></label>
         <label>Role<select data-exp-field="role">${recordOptions(roles, record.role)}</select></label>
         <label>Event Scope<select data-exp-field="eventScope">${recordOptions(scopes, record.eventScope)}</select></label>
         <label>Log Verified<select data-exp-field="logVerified"><option value="">-- Select --</option><option value="true" ${record.logVerified === true ? 'selected' : ''}>Yes</option><option value="false" ${record.logVerified === false ? 'selected' : ''}>No</option></select></label>
-        </div><button type="button" data-remove-exp="${index}">Remove Record</button></div>`).join('');
+        </div><button type="button" data-remove-exp="${index}">Remove Record</button></fieldset></div>`).join('');
       node('jmTestRecords').innerHTML = testRecords.map((record, index) => `<div class="jm-card" data-test-record="${index}"><div class="jm-form-grid">
         <label>Certification Level<select data-test-field="targetLevel">${recordOptions(levels, record.targetLevel)}</select></label>
         <label>Written Test Date<input data-test-field="writtenDate" type="date" value="${esc(record.writtenDate)}"></label>
@@ -117,7 +117,7 @@
       }));
       experienceRecords = (data.experience || []).filter((record) => record.judgeId === judge?.id).map((record) => ({
         eventName: record.eventName, eventDate: record.eventDate, location: record.location, role: record.role,
-        eventScope: record.eventScope, logVerified: Boolean(record.logVerified)
+        eventScope: record.eventScope, logVerified: Boolean(record.logVerified), sourceId: record.sourceId
       }));
       renderRecordForms();
       baseline = JSON.stringify(formDraft()); editing = true; node('jmError').textContent = '';
@@ -177,6 +177,16 @@
       const grantDate = node('jmEligibilityBody').querySelector(`[data-jm-grant-date="${judgeId}"]`).value;
       if (grantDate && confirm(`Grant ${label(data.eligibility.find((item) => item.judgeId === judgeId)?.targetLevel)} certification effective ${grantDate}?`)) {
         return write(`/api/judge-management/${judgeId}/award`, 'POST', { grantedAt: grantDate }, 'Certification granted.');
+      }
+    });
+    node('jmExperienceBody').addEventListener('click', (event) => {
+      const target = event.target.closest('[data-jm-verify]');
+      if (!target) return;
+      const record = data.experience.find((item) => item.id === Number(target.getAttribute('data-jm-verify')));
+      const judge = data.judges.find((item) => item.id === record?.judgeId);
+      if (judge && confirm(`${record.logVerified ? 'Remove verification of' : 'Verify'} this experience for ${judge.firstName} ${judge.lastName}?`)) {
+        return write('/api/judge-management/experience-verify', 'POST',
+          { associationId: judge.associationId, ids: [record.id], verified: !record.logVerified }, 'Experience verification updated.');
       }
     });
     node('jmExperienceRecords').addEventListener('input', (event) => updateRecordRows(event, 'experience', '[data-exp-record]', 'data-exp-field'));

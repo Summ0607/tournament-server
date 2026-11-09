@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
-const { initializeJudgeDatabase, verifyJudgeDatabase } = require('../db/judgeManagement');
+const { initializeJudgeDatabase } = require('../db/judgeManagement');
 const { createJudgeManagementRouter } = require('./judgeManagementRoutes');
 const { validDate } = require('./tournamentAge');
 const { writeJsonAtomicSync } = require('./atomicJsonFile');
@@ -102,7 +102,7 @@ function createSimulationApp(directory) {
     res.once('finish', finish); res.once('close', finish);
     next();
   }, createJudgeManagementRouter({ file: path.join(directory, 'judges.db'),
-    currentDate: () => readSimulation(directory).date }));
+    currentDate: () => readSimulation(directory).date, allowSimulation: true }));
   app.get('/', (_req, res) => res.sendFile(path.join(assets, 'judge-simulation.html')));
   app.get('/management-template', (_req, res) => res.sendFile(path.join(assets, 'index.html')));
   for (const name of ['judge-management.js', 'judge-simulation.js']) {
@@ -121,11 +121,12 @@ async function listen(app, port) {
   return server;
 }
 
-async function initializeSimulation(directory, date) {
+async function initializeSimulation(directory, date, { empty = false } = {}) {
   validDate(date);
   fs.mkdirSync(directory);
   await initializeJudgeDatabase(path.join(directory, 'judges.db'));
-  writeJsonAtomicSync(path.join(directory, 'simulation.json'), { format: FORMAT, date });
+  writeJsonAtomicSync(path.join(directory, 'simulation.json'), { format: FORMAT, date, initialDate: date });
+  if (empty) return;
   const server = await listen(createSimulationApp(directory), 0);
   try {
     let revision = 0;
@@ -147,20 +148,22 @@ async function main(args) {
   const values = {};
   for (let i = 0; i < options.length; i += 2) {
     const flag = options[i];
-    if (!['--date', '--directory', '--port'].includes(flag) || values[flag] !== undefined) throw new Error(`Invalid or duplicate option: ${flag}`);
+    if (!['--date', '--directory', '--port', '--population'].includes(flag) || values[flag] !== undefined) throw new Error(`Invalid or duplicate option: ${flag}`);
     values[flag] = options[i + 1];
   }
   const directory = path.resolve(values['--directory'] || DEFAULT_DIRECTORY);
   if (command === 'init') {
     if (values['--port']) throw new Error('--port is only valid for serve.');
-    await initializeSimulation(directory, values['--date']);
+    if (values['--population'] && !['empty', 'scenarios'].includes(values['--population'])) throw new Error('Population must be empty or scenarios.');
+    await initializeSimulation(directory, values['--date'], { empty: values['--population'] === 'empty' });
     console.log(`Created FABRICATED judge simulation at ${directory}. Date: ${values['--date']}. Existing directories are never overwritten.`);
   } else {
     if (values['--date']) throw new Error('Change the simulation date in the simulation page.');
+    if (values['--population']) throw new Error('--population is only valid for init.');
     const port = Number(values['--port'] || 3450);
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Port must be an integer from 1024 to 65535.');
     readSimulation(directory);
-    await verifyJudgeDatabase(path.join(directory, 'judges.db'));
+    await initializeJudgeDatabase(path.join(directory, 'judges.db'));
     await listen(createSimulationApp(directory), port);
     console.log(`FABRICATED Judge Management only: http://127.0.0.1:${port}\nDatabase: ${path.join(directory, 'judges.db')}\nNo live data or event services are connected. Stop with Ctrl+C; records and date persist.`);
   }

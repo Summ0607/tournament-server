@@ -1456,8 +1456,106 @@ validation and certification awards use that date. Dates cannot move backward;
 start a separate simulation to repeat from an earlier date. Stop with Ctrl+C and
 rerun `serve` to resume the same records and date; initialization is not repeated.
 Advancing the date does not create events, experience, tests or promotions.
-Existing progression rules are unchanged; championship-credit aggregation and
-event participation/assignment integration remain later steps.
+The regional population/API work below adds distinct-event credit counting.
+Event participation/assignment integration remains a later step.
+
+##### Regional population and shared experience API
+
+The reusable import file is
+[`regional-judges-200.csv`](test-data/judge-simulation/regional-judges-200.csv).
+It is entirely fabricated, based on a January 15, 2026 simulation start:
+
+| Certification | Count |
+| --- | ---: |
+| International (D5, arbitrator candidates) | 8 |
+| Regional Center | 32 |
+| Corner | 100 |
+| SK/TK | 48 |
+| Uncertified candidates | 12 |
+
+Eight certified records are deliberately expired (four Corner and four SK/TK).
+Other certified records start current. The pool supports staffing scenarios from
+8 through 20 rings, with reserve officials and candidates; it does not assert
+attendance or assign arbitrators. Event participation will come from volunteers
+matched to this directory by Association ID. No out-of-region scenarios are used.
+
+To review a clean 200-person directory without the original 11 scenario records:
+
+```powershell
+npm run judge:simulation -- init --date 2026-01-15 --directory C:\Karate4\tournament-server\judge-simulation-data\regional --population empty
+npm run judge:simulation -- serve --directory C:\Karate4\tournament-server\judge-simulation-data\regional --port 3451
+```
+
+Open `http://127.0.0.1:3451`, choose **Judges > Import Judges**, and import the CSV
+above. It uses the normal header-alias import, not a special database insert.
+The original dataset/server is not overwritten. For a different starting date,
+generate a new CSV (output must not already exist):
+
+```powershell
+npm run judge:simulation-data -- csv --date 2030-01-15 --output C:\TournamentTests\regional-judges-2030.csv
+```
+
+After importing, submit starting experience for selected judges, or omit `--ids`
+to process all 200:
+
+```powershell
+npm run judge:simulation-data -- experience --url http://127.0.0.1:3451 --ids SIM-R-041,SIM-R-042,SIM-R-043
+npm run judge:simulation-data -- experience --url http://127.0.0.1:3451
+```
+
+The script requires the isolated local simulation, preflights selected profiles,
+and then uses the shared API. It never writes SQLite directly, changes
+certifications, records tests, or verifies its own submissions. New candidates
+start without experience; other selected officials receive zero to three
+historical Regional events based on their ID and current certification role.
+All submissions start pending. Use **Experience > Verify**, then edit testing
+records and use the explicit coordinator **Grant** action when requirements
+are met. Reimporting the CSV preserves testing and experience, but its nonblank
+certification values will overwrite later awards: treat it as an initial
+population file, not a routine synchronization source after promotions.
+
+Starting-event dates are anchored to the environment's initial date (older
+environments without `initialDate` use their current date). Identical reruns
+report duplicates without creating new records. If a judge's certification has
+changed, generated roles may conflict with previous source records; the API
+reports the conflict rather than silently replacing history. The script commits
+per judge, reports errors and stops; rerun after correcting the cause.
+
+Production and simulation expose the same authorized management endpoints:
+
+- `GET /api/judge-management/profile?associationId=...` returns
+  `{asOf, revision, judge, tests, experience, eligibility}` for one member,
+  case-insensitively. DOB remains private; unknown members return 404.
+- `POST /api/judge-management/experience` accepts
+  `{revision, associationId, records}` and appends service records. Each record
+  requires `eventId`, `eventName`, `eventDate`, `location`, `role`, `eventScope`,
+  `source` (`TOURNAMENT`, or `SIMULATION` only in the isolated environment),
+  `sourceId`, and optional `phase` (`P1`, `P2`, or blank).
+  `eventDate` is the canonical event date, not the individual phase's service date;
+  both phases of a two-day event must share it and the same `eventId`.
+  `sourceId` is stable per judge/service; exact retries are duplicates, changed
+  payloads or conflicting event identities return 409. Submitted verification
+  cannot be true. Batches are transactional, with at most 200 records.
+- `POST /api/judge-management/experience-verify` accepts
+  `{revision, associationId, ids, verified}` for explicit coordinator review.
+  IDs must belong to that judge; a failed batch makes no changes.
+
+Both POST responses use the existing management response/revision contract;
+append adds `added` and `duplicates`. Refresh the profile before further writes
+to obtain the current revision. Normal browser authorization restricts these
+endpoints to Administrator and Judging Coordinator.
+
+Eligibility now counts distinct sanctioned events, not service rows: serving
+P1, P2, or multiple roles earns no more than one championship credit. Role details
+remain separate. Regional progression requires Corner service; International
+requires Center service and World judging experience. Existing verification
+exemptions for D5 and above remain in effect. API-created service records are
+read-only in the general edit form; verification is available in Experience.
+Legacy manual records remain editable and use event name/date as their identity.
+Schema version 5 migrates existing history without dropping records.
+
+This shared append/verification interface is ready for future completed-service
+processing; result ingestion and phase-based ring assignments are not wired here.
 
 For another independent dataset or port:
 

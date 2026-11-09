@@ -72,3 +72,31 @@ test('judge expiration filters and award defaults follow the server evaluation d
   await workspace.load();
   assert.match(node('jmBody').innerHTML, /No matching judges/);
 });
+
+test('API experience remains read-only in edits and coordinator verification uses the shared endpoint', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', innerHTML: '', textContent: '', handlers: {},
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {} });
+    return nodes.get(id);
+  };
+  const judge = { id: 1, associationId: 'SIM-R-041', firstName: 'Test', lastName: 'Judge',
+    certification: 'CORNER', school: '', status: 'Active' };
+  const state = { asOf: '2026-01-15', revision: 3, judges: [judge], aliases: defaults,
+    ranks: judgeRankOptions(), certificationLevels: certificationLevels(),
+    experience: [{ id: 12, judgeId: 1, eventName: 'Regional', eventDate: '2026-01-01', location: '',
+      role: 'CORNER_JUDGE', eventScope: 'REGIONAL', phase: 'P2', sourceId: 'service-1', logVerified: 0 }] };
+  const workspace = create({ document: { getElementById: node }, confirm: () => true, showPanel() {},
+    request: async (url, options) => { calls.push({ url, options }); return state; } });
+  await workspace.load();
+  assert.match(node('jmExperienceBody').innerHTML, /Regional \(P2\)/);
+  workspace.begin('judge-management', judge);
+  assert.match(node('jmExperienceRecords').innerHTML, /<fieldset disabled>/);
+  await node('jmExperienceBody').handlers.click({ target: { closest() {
+    return { getAttribute: () => '12' };
+  } } });
+  assert.equal(calls.at(-1).url, '/api/judge-management/experience-verify');
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
+    associationId: 'SIM-R-041', ids: [12], verified: true, revision: 3
+  });
+});
