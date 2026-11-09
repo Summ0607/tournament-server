@@ -659,7 +659,8 @@ test('navigation destinations have stable IDs, approved labels and native Admini
     results: 'Results', 'team-management': 'Teams', 'team-settings': 'Settings', 'ring-judges': 'Ring Judges',
     'judge-assignments': 'Judge Assignments', 'tablet-pairing': 'Ring Assignment', 'ring-assignment': 'Division Assignments',
     'head-table': 'Head Table', 'audience-viewer': 'Audience Viewer', printing: 'Printing', 'csv-settings': 'CSV Settings',
-    'judge-management': 'Judging Management', 'clinic-management': 'Clinic Management',
+    'judge-management': 'Judges', 'judge-testing': 'Testing', 'judge-eligibility': 'Eligibility',
+    'judge-experience': 'Experience', 'judge-csv-settings': 'CSV Settings', 'clinic-management': 'Clinic Management',
     'event-history': 'Event History', 'your-account': 'Your Account', 'visual-definitions': 'Visual Definitions',
     'server-maintenance': 'Server Maintenance', simulator: 'Simulator', schools: 'Schools', ranks: 'Ranks',
     'competition-types': 'Competition Types', 'grand-champion-categories': 'Grand Champion Categories', 'medal-points': 'Medal Points',
@@ -674,6 +675,9 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   assert.equal(page.nav('ring-assignment').getAttribute('data-nav-parents'), 'tournament rings');
   assert.ok(html.indexOf('data-nav-id="tablet-pairing"') < html.indexOf('data-nav-id="ring-assignment"'));
   assert.equal(page.nav('head-table').getAttribute('data-nav-parents'), 'tournament rings');
+  for (const id of ['judge-management', 'judge-testing', 'judge-eligibility', 'judge-experience', 'judge-csv-settings']) {
+    assert.equal(page.nav(id).getAttribute('data-nav-parents'), 'judge-management');
+  }
   assert.ok(html.indexOf('id="navVolunteers"') < html.indexOf('id="navCompetitionSettings"'));
   assert.doesNotMatch(html, /id="navSelectedEvent"|id="navActiveEvent"/);
   page.nav('groups').textContent = 'A translated display label';
@@ -682,6 +686,67 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   assert.equal(page.element('workspacePanel').getAttribute('aria-label'), 'Divisions workspace');
   assert.equal(page.nav('groups').getAttribute('aria-current'), 'page');
   assert.equal(page.nav('event-setup').hasAttribute('aria-current'), false);
+});
+
+test('Judge Management sections open independently and expand their navigation group', async () => {
+  const sections = ['judge-management', 'judge-testing', 'judge-eligibility', 'judge-experience', 'judge-csv-settings'];
+  const panels = ['jmJudges', 'jmTesting', 'jmEligibility', 'jmExperience', 'jmCsvSettings'];
+  const page = await loadPage();
+  for (const [index, id] of sections.entries()) {
+    await page.navigate(id);
+    assert.equal(page.element('navJudgeManagementChildren').hidden, false);
+    assert.equal(page.element('judgeManagementView').hidden, false);
+    for (const [panelIndex, panel] of panels.entries()) {
+      assert.equal(page.element(panel).hidden, panelIndex !== index);
+    }
+    assert.equal(page.element('workspaceTitle').textContent, page.nav(id).getAttribute('data-nav-label'));
+    assert.equal(new URLSearchParams(page.location.search).get('view'), id);
+    assert.equal(page.nav(id).getAttribute('aria-current'), 'page');
+  }
+  await page.navigate('event-setup');
+  assert.equal(page.element('judgeManagementView').hidden, true);
+  const direct = await loadPage({ search: '?view=judge-experience' });
+  assert.equal(direct.element('navJudgeManagementChildren').hidden, false);
+  assert.equal(direct.element('jmExperience').hidden, false);
+  assert.equal(direct.element('workspaceTitle').textContent, 'Experience');
+});
+
+test('Judge Management email entry and CSV mapping are explicitly disabled', () => {
+  assert.match(html, /<label>Email \(not available yet\)<input type="email" disabled><\/label>/);
+  assert.match(html, /<label>Email \(not available yet\)<input disabled placeholder="email, email_address"><\/label>/);
+  assert.match(html, /<label>Search name or WTSDA ID<input type="search"><\/label>/);
+});
+
+test('Judge Management preview opens Add and Import screens and returns to their source', async () => {
+  const page = await loadPage({ search: '?view=judge-management' });
+  assert.equal(page.element('jmJudges').hidden, false);
+  await page.click('jmAddJudge');
+  assert.equal(page.element('jmAdd').hidden, false);
+  assert.equal(page.element('workspaceTitle').textContent, 'Add Judge');
+  assert.equal(page.element('workspacePanel').getAttribute('aria-label'), 'Add Judge workspace');
+  await page.click('jmAddCancel');
+  assert.equal(page.element('jmJudges').hidden, false);
+  await page.click('jmImportJudges');
+  assert.equal(page.element('jmImport').hidden, false);
+  assert.equal(page.element('workspaceTitle').textContent, 'Import Judges');
+  await page.click('jmImportCancel');
+  assert.equal(page.element('jmJudges').hidden, false);
+  await page.navigate('judge-testing');
+  await page.click('jmTestingAdd');
+  await page.click('jmAddCancel');
+  assert.equal(page.element('jmTesting').hidden, false);
+  assert.equal(page.element('workspaceTitle').textContent, 'Testing');
+  for (const [section, addButton, panel, title] of [
+    ['judge-eligibility', 'jmEligibilityAdd', 'jmEligibility', 'Eligibility'],
+    ['judge-experience', 'jmExperienceAdd', 'jmExperience', 'Experience']
+  ]) {
+    await page.navigate(section);
+    await page.click(addButton);
+    await page.click('jmAddCancel');
+    assert.equal(page.element(panel).hidden, false);
+    assert.equal(page.element('workspacePanel').getAttribute('aria-label'), `${title} workspace`);
+  }
+  assert.equal(page.requests.some((request) => request.init && request.init.method !== 'GET'), false);
 });
 
 test('Ring Assignment opens daily QR tools inside the shell and unloads on navigation', async () => {
@@ -943,13 +1008,13 @@ test('Planned destinations are explicit, independently addressable and never loa
   const page = await loadPage({ activeEvent: spring });
   const before = page.requests.length;
   for (const id of ['judge-assignments', 'printing',
-    'csv-settings', 'judge-management', 'clinic-management', 'event-history']) {
+    'csv-settings', 'clinic-management', 'event-history']) {
     assert.equal(page.nav(id).getAttribute('data-nav-planned'), 'true');
     await page.navigate(id);
     assert.equal(page.element('placeholderView').hidden, false);
     assert.equal(page.element('placeholderTitle').textContent, page.nav(id).getAttribute('data-nav-label'));
     assert.equal(page.element('placeholderMessage').textContent,
-      ['judge-management', 'clinic-management'].includes(id) ? 'Under Development.' : 'Planned.');
+      id === 'clinic-management' ? 'Under Development.' : 'Planned.');
     assert.equal(page.nav(id).getAttribute('aria-current'), 'page');
     assert.equal(new URLSearchParams(page.location.search).get('view'), id);
     for (const view of ['eventSetupView', 'importView', 'groupsView', 'ringAssignmentView', 'headTableView', 'competitorLookupView', 'detailsPanel']) {

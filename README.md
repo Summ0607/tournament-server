@@ -197,15 +197,15 @@ created or promoted.
 | --- | --- |
 | Administrator | All functions, users/settings, global definitions, simulator and local Server Maintenance |
 | Event Coordinator | Tournament preparation and day-of functions; Clinic Management (Under Development) |
-| Judging Coordinator | Volunteers/types, Ring Judges and judge assignments; Judging Management (Under Development) |
+| Judging Coordinator | Volunteers/types, Ring Judges and judge assignments; Judge Management layout previews |
 | Tournament Operator | Ring Assignment (tablet QR authorization), Division Assignments, Head Table and Audience Viewer only |
 | Viewer | Read-only Audience Viewer only; not Head Table |
 
 Use **Administration → Users** to assign Event Coordinator or Viewer explicitly;
 Event Coordinator is an additional role, not a rename of Tournament Operator.
-Under Development pages are placeholders, not newly implemented clinic/judging
-management workflows. Global Schools, Ranks and Visual Definitions editing remains
-Administrator-only.
+Clinic Management is a placeholder. Judge Management contains layout previews,
+not operational judge management workflows. Global Schools, Ranks and Visual
+Definitions editing remains Administrator-only.
 
 Opening a protected page while signed out redirects to `/account/login`; a new
 sign-in opens the account's role-based home rather than the previous page. APIs
@@ -1375,9 +1375,17 @@ Its hierarchy is:
     **Division Assignments** (existing Ring Assignment)
   - **Head Table**
   - **Printing** and **CSV Settings** — Planned
-- **Judge Management**, **Clinic Management**, **Event History** — Planned
+- **Judge Management** → **Judges**, **Testing**, **Eligibility**, **Experience**, **CSV Settings** — layout previews
+- **Clinic Management**, **Event History** — Planned
 - **Administration**: **Server Maintenance** (`/admin/`) and **Simulator** (`/simulator/`)
 - **Your Account** — Planned
+
+Judge Management previews also include Add Judge and Import Judges layouts.
+Judge records, filters, saving, importing, sync, and submission-sheet generation
+are not implemented; unavailable controls are disabled and no sample records are
+shown. Judge email entry and its CSV mapping are explicitly disabled for now.
+Add Judge and Import Judges are preview panels within their originating
+section rather than separate browser history entries.
 
 Navigation labels omit Planned/Under Development tags; the destination pages
 explain their status. Planned destinations expose no operational tools

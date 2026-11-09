@@ -240,6 +240,22 @@
     #resultSource { max-width: 100%; min-height: var(--vd-control-height, 28px); font: inherit; }
     #resultNotice[data-state="error"] { color: #a02020; }
     #ringJudgesView .table-wrap { max-height: none; }
+    #judgeManagementView .jm-toolbar, #judgeManagementView .jm-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 12px; }
+    #judgeManagementView .jm-panel { border: 1px solid var(--line); background: var(--panel); border-radius: 5px; padding: 16px; margin-bottom: 14px; }
+    #judgeManagementView .jm-filters, #judgeManagementView .jm-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    #judgeManagementView .jm-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    #judgeManagementView label { display: flex; flex-direction: column; gap: 4px; }
+    #judgeManagementView label.jm-check { display: inline-flex; flex-direction: row; align-items: center; margin-right: 12px; }
+    #judgeManagementView input:not([type="checkbox"]):not([type="file"]), #judgeManagementView select, #judgeManagementView textarea { width: 100%; }
+    #judgeManagementView .jm-wide { grid-column: 1 / -1; }
+    #judgeManagementView .jm-note { color: var(--text-soft); }
+    #judgeManagementView .jm-card { border: 1px solid var(--line); padding: 12px; border-radius: 5px; margin: 10px 0; }
+    #judgeManagementView .table-wrap { max-height: none; overflow-x: auto; }
+    #judgeManagementView table { min-width: 700px; }
+    #judgeManagementView fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+    #judgeManagementView h2 { font-size: 1.1rem; margin: 0 0 12px; }
+    #judgeManagementView h3 { font-size: 1rem; margin: 14px 0 8px; }
+    @media (max-width: 760px) { #judgeManagementView .jm-filters, #judgeManagementView .jm-form-grid { grid-template-columns: 1fr; } }
     #ringJudgesView .table-wrap table { width: 962px; min-width: 0; table-layout: fixed; }
     #ringJudgesView .actions, #rjSearchForm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     #ringJudgesView thead tr:first-child th { vertical-align: top; }
@@ -1522,7 +1538,14 @@
             <button class="sidebar-item" type="button" data-nav-id="csv-settings" data-nav-label="CSV Settings" data-nav-parents="tournament" data-nav-planned="true">CSV Settings</button>
           </div>
           <button class="sidebar-item" type="button" data-nav-id="audience-viewer" data-nav-label="Audience Viewer">Audience Viewer</button>
-          <button class="sidebar-item" type="button" data-nav-id="judge-management" data-nav-label="Judging Management" data-nav-planned="true">Judging Management</button>
+          <button id="navJudgeManagement" class="sidebar-disclosure" type="button" data-nav-group="judge-management" aria-expanded="false" aria-controls="navJudgeManagementChildren">Judge Management</button>
+          <div id="navJudgeManagementChildren" class="sidebar-children" hidden>
+            <button class="sidebar-item" type="button" data-nav-id="judge-management" data-nav-label="Judges" data-nav-parents="judge-management">Judges</button>
+            <button class="sidebar-item" type="button" data-nav-id="judge-testing" data-nav-label="Testing" data-nav-parents="judge-management">Testing</button>
+            <button class="sidebar-item" type="button" data-nav-id="judge-eligibility" data-nav-label="Eligibility" data-nav-parents="judge-management">Eligibility</button>
+            <button class="sidebar-item" type="button" data-nav-id="judge-experience" data-nav-label="Experience" data-nav-parents="judge-management">Experience</button>
+            <button class="sidebar-item" type="button" data-nav-id="judge-csv-settings" data-nav-label="CSV Settings" data-nav-parents="judge-management">CSV Settings</button>
+          </div>
           <button class="sidebar-item" type="button" data-nav-id="clinic-management" data-nav-label="Clinic Management" data-nav-planned="true">Clinic Management</button>
           <button class="sidebar-item" type="button" data-nav-id="event-history" data-nav-label="Event History" data-nav-planned="true">Event History</button>
           <button id="navAdministration" class="sidebar-disclosure" type="button" data-nav-group="administration" aria-expanded="false" aria-controls="navAdministrationChildren">Administration</button>
@@ -1938,6 +1961,80 @@
               <div class="actions"><button id="csDelete" type="button" disabled data-help="Delete selected reference settings after confirmation.">Delete selected</button></div>
               <p data-help-source="Reference competition settings">These definitions belong to the selected tournament and are used by the read-only Results standings. They do not change tablet scoring, division assignment or registrations. Rank ranges use Gup/Dan codes rather than another system's database IDs. Operational use locks edits until Reset Run.</p>
               <dialog id="csDialog" aria-labelledby="csDialogTitle"><h2 id="csDialogTitle">Add</h2><form id="csForm"><div id="csFields"></div><p id="csError" role="alert"></p><div class="actions"><button id="csSave" type="submit" data-help="Save the reference entry for the selected tournament.">Save</button><button id="csCancel" type="button" data-help="Close the overlay, confirming before discarding edits.">Cancel</button></div></form></dialog>
+            </div>
+            <div class="view" id="judgeManagementView" data-help-page="judge-management" data-help-title="Judge Management" hidden>
+              <p class="jm-note" role="status">Layout preview only. Judge records, filters, saving, import, and submission sheets are not yet available. No sample data is shown.</p>
+              <section id="jmJudges" hidden>
+                <div class="jm-toolbar"><button type="button" id="jmAddJudge">Add Judge</button><button type="button" id="jmImportJudges">Import Judges</button></div>
+                <div class="jm-panel"><fieldset disabled><div class="jm-filters">
+                  <label>Search name or WTSDA ID<input type="search"></label>
+                  <label>Status<select><option>Any</option></select></label>
+                  <label>Certification Level<select><option>Any</option></select></label>
+                  <label>School<select><option>Any</option></select></label>
+                  <label>Expiration Within<select><option>Any</option></select></label>
+                </div><button type="button">Filter</button></fieldset></div>
+                <div class="table-wrap"><table aria-label="Judges"><thead><tr><th scope="col">Select</th><th scope="col">Details</th><th scope="col">WTSDA ID</th><th scope="col">Last Name</th><th scope="col">First Name</th><th scope="col">School</th><th scope="col">Certification</th><th scope="col">Expiration</th><th scope="col">Status</th></tr></thead><tbody><tr><td colspan="9">Judge records are not available in this preview.</td></tr></tbody></table></div>
+                <div class="jm-actions"><button type="button" disabled>Merge Records</button><button type="button" disabled>Delete Selected</button></div>
+              </section>
+              <section id="jmTesting" hidden>
+                <div class="jm-toolbar"><button type="button" disabled>Generate Submission Sheet</button><button type="button" id="jmTestingAdd">Add Judge</button></div>
+                <p class="jm-note">Testing records and submission sheets are not yet available.</p>
+                <div class="table-wrap"><table aria-label="Judge testing"><thead><tr><th scope="col">WTSDA ID</th><th scope="col">Last Name</th><th scope="col">First Name</th><th scope="col">School</th><th scope="col">Rank</th><th scope="col">Certification</th><th scope="col">Status</th></tr></thead><tbody><tr><td colspan="7">Testing records are not available in this preview.</td></tr></tbody></table></div>
+              </section>
+              <section id="jmEligibility" hidden>
+                <div class="jm-toolbar"><button type="button" id="jmEligibilityAdd">Add Judge</button></div>
+                <p class="jm-note">Eligibility calculations are not yet available.</p>
+                <div class="table-wrap"><table aria-label="Judge eligibility"><thead><tr><th scope="col">WTSDA ID</th><th scope="col">Last Name</th><th scope="col">First Name</th><th scope="col">School</th><th scope="col">Rank</th><th scope="col">Certification</th><th scope="col">Eligible For</th><th scope="col">Experience</th><th scope="col">Testing</th><th scope="col">Status</th></tr></thead><tbody><tr><td colspan="10">Eligibility records are not available in this preview.</td></tr></tbody></table></div>
+              </section>
+              <section id="jmExperience" hidden>
+                <div class="jm-toolbar"><button type="button" id="jmExperienceAdd">Add Judge</button></div>
+                <p class="jm-note">Experience requirements and records are not yet available.</p>
+                <div class="table-wrap"><table aria-label="Judge experience"><thead><tr><th scope="col">WTSDA ID</th><th scope="col">Last Name</th><th scope="col">First Name</th><th scope="col">School</th><th scope="col">Rank</th><th scope="col">Certification</th><th scope="col">Requirement</th><th scope="col">Have</th><th scope="col">Status</th></tr></thead><tbody><tr><td colspan="9">Experience records are not available in this preview.</td></tr></tbody></table></div>
+              </section>
+              <section id="jmCsvSettings" hidden>
+                <div class="jm-panel"><h2>CSV Field Mapping</h2><p class="jm-note">Column header aliases will be configured here. Saving is not available yet.</p>
+                  <fieldset disabled>
+                    <label>WTSDA ID<input placeholder="wtsda_id, idnumber"></label>
+                    <label>First Name<input placeholder="first_name, firstname"></label>
+                    <label>Last Name<input placeholder="last_name, lastname"></label>
+                    <label>Email (not available yet)<input disabled placeholder="email, email_address"></label>
+                    <label>School<input placeholder="school, studioname"></label>
+                    <label>Rank<input placeholder="rank, current_rank"></label>
+                    <label>Certification Level<input placeholder="certification_level, level"></label>
+                    <label>Certification Expiration<input placeholder="certification_expiration, judginglevelexpdate"></label>
+                    <label>Status<input placeholder="status, judge_status"></label>
+                    <label>Notes<input placeholder="notes, judging_notes"></label>
+                    <button type="button">Save</button>
+                  </fieldset>
+                </div>
+                <p class="jm-note">Judge data backup and restore are not available in this preview.</p>
+              </section>
+              <section id="jmAdd" hidden>
+                <div class="jm-panel"><fieldset disabled><div class="jm-form-grid">
+                  <label>WTSDA ID<input></label><label>Status<select><option>Active</option></select></label>
+                  <label>First Name<input></label><label>Last Name<input></label>
+                  <label>Email (not available yet)<input type="email" disabled></label><label>School<select><option>-- Select --</option></select></label>
+                  <label>Rank<select><option>-- Select --</option></select></label><label>Certification Level<select><option>-- Select --</option></select></label>
+                  <label>Certification Expiration<input type="date"></label><label class="jm-wide">Notes<textarea rows="3"></textarea></label>
+                </div>
+                <h3>Experience Records</h3><div class="jm-card"><div class="jm-form-grid">
+                  <label>Event<input></label><label>Date<input type="date"></label><label>Location<input></label>
+                  <label>Role<select><option>-- Select --</option></select></label><label>Event Scope<select><option>-- Select --</option></select></label>
+                </div><button type="button">Remove Record</button></div><button type="button">+ Add Experience Record</button>
+                <h3>Testing Records</h3><div class="jm-card"><div class="jm-form-grid">
+                  <label>Written Test Date<input type="date"></label><label>Practical Test Date<input type="date"></label>
+                  <label>Certification Level<select><option>-- Select --</option></select></label><label>Written Score<input></label>
+                  <div class="jm-wide">Certification Progress<br><label class="jm-check"><input type="checkbox"> Written Passed</label><label class="jm-check"><input type="checkbox"> Practical Passed</label><label class="jm-check"><input type="checkbox"> Retake Written</label><label class="jm-check"><input type="checkbox"> Retake Practical</label><label class="jm-check"><input type="checkbox"> Completed</label></div>
+                </div><button type="button">Remove Record</button></div><button type="button">+ Add Testing Record</button>
+                <div class="jm-actions"><button type="button">Save</button></div></fieldset><button type="button" id="jmAddCancel">Cancel</button></div>
+              </section>
+              <section id="jmImport" hidden>
+                <div class="jm-panel"><h2>CSV Import</h2><p class="jm-note">Judge CSV import and field mapping are not yet implemented.</p>
+                  <fieldset disabled><label>CSV File<input type="file" accept=".csv,text/csv"></label><button type="button">Import</button></fieldset>
+                </div>
+                <div class="jm-panel"><h2>Championship Sync</h2><p class="jm-note">Synchronizing tournament assignments and recording judging experience will be defined later; this preview does not synchronize data.</p></div>
+                <button type="button" id="jmImportCancel">Back to Judges</button>
+              </section>
             </div>
             <div class="view" id="administrationToolView" hidden>
               <iframe id="administrationToolFrame" title="Administration tool"></iframe>
@@ -3015,6 +3112,30 @@
       }
 
       const importNavItem = navById.get('import');
+      const judgeManagementPanels = {
+        'judge-management': 'jmJudges', 'judge-testing': 'jmTesting',
+        'judge-eligibility': 'jmEligibility', 'judge-experience': 'jmExperience',
+        'judge-csv-settings': 'jmCsvSettings'
+      };
+      let judgeManagementReturn = 'judge-management';
+      function showJudgeManagementPanel(panel, title) {
+        [...Object.values(judgeManagementPanels), 'jmAdd', 'jmImport'].forEach((id) => {
+          document.getElementById(id).hidden = id !== panel;
+        });
+        workspaceTitle.textContent = title;
+        document.getElementById('workspacePanel').setAttribute('aria-label', `${title} workspace`);
+      }
+      for (const [id, origin] of [['jmAddJudge', 'judge-management'], ['jmTestingAdd', 'judge-testing'],
+        ['jmEligibilityAdd', 'judge-eligibility'], ['jmExperienceAdd', 'judge-experience']]) {
+        document.getElementById(id).addEventListener('click', () => {
+          judgeManagementReturn = origin;
+          showJudgeManagementPanel('jmAdd', 'Add Judge');
+        });
+      }
+      document.getElementById('jmImportJudges').addEventListener('click', () => showJudgeManagementPanel('jmImport', 'Import Judges'));
+      document.getElementById('jmAddCancel').addEventListener('click', () =>
+        showJudgeManagementPanel(judgeManagementPanels[judgeManagementReturn], navLabel(navById.get(judgeManagementReturn))));
+      document.getElementById('jmImportCancel').addEventListener('click', () => showJudgeManagementPanel('jmJudges', 'Judges'));
 
       function showView(view, item = navById.get(view), historyMode = 'push') {
         if (window.BrowserSession && !window.BrowserSession.canView(view)) {
@@ -3093,6 +3214,7 @@
         document.getElementById('competitionSettingsView').hidden = !competitionSettingViews.includes(view);
         document.getElementById('resultsView').hidden = view !== 'results';
         document.getElementById('ringJudgesView').hidden = view !== 'ring-judges';
+        document.getElementById('judgeManagementView').hidden = !Object.hasOwn(judgeManagementPanels, view);
         document.getElementById('volunteersView').hidden = !['volunteers', 'volunteer-types'].includes(view);
         const toolPaths = { 'server-maintenance': '/admin/?embedded=1', simulator: '/simulator/?embedded=1',
           users: '/account/users?embedded=1', 'user-account-settings': '/account/settings?embedded=1',
@@ -3108,13 +3230,14 @@
         placeholderView.hidden = !planned;
         const title = navLabel(item);
         workspaceTitle.textContent = view === 'event-setup' ? state.metadataOpen ? 'Edit Tournament' : 'Tournaments' : view === 'results' ? 'Running Results' : title;
+        if (Object.hasOwn(judgeManagementPanels, view)) showJudgeManagementPanel(judgeManagementPanels[view], title);
         document.getElementById('workspacePanel').setAttribute('aria-label', `${title} workspace`);
         placeholderTitle.textContent = title;
         workspaceSubtitle.textContent = viewSubtitles[view];
         workspaceSubtitle.hidden = !viewSubtitles[view];
         if (planned) {
           placeholderTitle.textContent = title;
-          placeholderMessage.textContent = ['judge-management', 'clinic-management'].includes(view) ? 'Under Development.' : 'Planned.';
+          placeholderMessage.textContent = ['judge-management', 'judge-testing', 'judge-eligibility', 'judge-experience', 'judge-csv-settings', 'clinic-management'].includes(view) ? 'Under Development.' : 'Planned.';
         }
         if (view !== 'event-setup' && state.metadataOpen) {
           setMetadataPanelVisible(false);
@@ -3132,6 +3255,7 @@
           return;
         }
         if (toolPaths[view]) { renderState(); return; }
+        if (Object.hasOwn(judgeManagementPanels, view)) { renderState(); return; }
         if (view === 'results') { renderState(); resultsWorkspace.load(); return; }
         if (view === 'ring-judges') { renderState(); ringJudgesWorkspace.load(); return; }
         if (['volunteers', 'volunteer-types'].includes(view)) { renderState(); volunteersWorkspace.load(view); return; }

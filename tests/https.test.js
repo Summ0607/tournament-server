@@ -220,8 +220,12 @@ test('all five roles have enforced API permissions, including union of roles and
     const response = await request(tlsServer, { pathname: '/api/account/session', headers });
     assert.deepEqual(response.json.allowedViews, allowedViews([role]));
     assert.equal(response.json.roleLabels.viewer, 'Viewer');
+    for (const view of ['judge-management', 'judge-testing', 'judge-eligibility', 'judge-experience', 'judge-csv-settings']) {
+      assert.equal(response.json.allowedViews.includes(view), ['administrator', 'judging-coordinator'].includes(role), `${role}: ${view}`);
+    }
     if (role !== 'viewer') {
-      for (const view of ['head-table', 'ring-judges', 'users', 'clinic-management', 'judge-management', 'server-maintenance']) {
+      for (const view of ['head-table', 'ring-judges', 'users', 'clinic-management', 'judge-management',
+        'judge-testing', 'judge-eligibility', 'judge-experience', 'judge-csv-settings', 'server-maintenance']) {
         assert.equal((await request(tlsServer, { pathname: `/tournament-management/?view=${view}`, headers })).status,
           allowedViews([role]).includes(view) ? 200 : 403, `${role}: workspace ${view}`);
       }
