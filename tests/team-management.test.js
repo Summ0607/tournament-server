@@ -144,7 +144,7 @@ test('roster replacement is rejected with teams, FK/trigger protection and stale
   const { root, store } = await fixture(t);
   const team = await store.save(input());
   const csv = path.join(root, 'roster.csv');
-  fs.writeFileSync(csv, 'First Name,Last Name,DOB\nReplacement,Person,2000-01-01\n');
+  fs.writeFileSync(csv, 'First Name,Last Name,DOB,Association Number\nReplacement,Person,2000-01-01,TSD-002\n');
   await assert.rejects(importCSV(csv, path.join(root, 'A', 'tournament.db'), { clearExisting: true, tournamentDate: '2027-01-09' }),
     { statusCode: 409 });
   const db = new sqlite3.Database(path.join(root, 'A', 'tournament.db'));

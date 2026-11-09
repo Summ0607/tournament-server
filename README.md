@@ -197,19 +197,20 @@ created or promoted.
 | --- | --- |
 | Administrator | All functions, users/settings, global definitions, simulator and local Server Maintenance |
 | Event Coordinator | Tournament preparation and day-of functions; Clinic Management (Under Development) |
-| Judging Coordinator | Volunteers/types, Ring Judges and judge assignments; Judging Management (Under Development) |
+| Judging Coordinator | Volunteers/types, Ring Judges and judge assignments; Judge Management |
 | Tournament Operator | Ring Assignment (tablet QR authorization), Division Assignments, Head Table and Audience Viewer only |
 | Viewer | Read-only Audience Viewer only; not Head Table |
 
 Use **Administration → Users** to assign Event Coordinator or Viewer explicitly;
 Event Coordinator is an additional role, not a rename of Tournament Operator.
-Under Development pages are placeholders, not newly implemented clinic/judging
-management workflows. Global Schools, Ranks and Visual Definitions editing remains
-Administrator-only.
+Clinic Management is a placeholder. Judge Management supports its independent
+judge directory, CSV import, testing and experience records, eligibility review,
+and coordinator-granted certifications.
+Global Schools, Ranks and Visual Definitions editing remains Administrator-only.
 
-Opening a protected page while signed out redirects to `/account/login`, then
-returns to a local destination (or the role's home). APIs return 401 when signed
-out and 403 when a role is insufficient. Server-side method/path permissions
+Opening a protected page while signed out redirects to `/account/login`; a new
+sign-in opens the account's role-based home rather than the previous page. APIs
+return 401 when signed out and 403 when a role is insufficient. Server-side method/path permissions
 apply even when a hidden control or URL is invoked directly. Unknown API routes
 and raw repository files cannot bypass the page/API policy.
 
@@ -591,6 +592,8 @@ competitors or matching case-insensitive Association IDs are skipped; existing
 edits are not overwritten. Population does not certify a judge or establish
 availability. Missing or stale tournament ages for eligible ranks prevent
 population and are reported for correction.
+Every judge must have an Association ID. Population excludes any record without
+one, and In-House non-member volunteers cannot be added as judges.
 
 Certification defaults to Unknown. Saved directories with legacy free-text
 certification are normalized on load; unrecognized values or rank/certification
@@ -600,9 +603,10 @@ review notes capture follow-up observations, not automatic assignment exclusions
 Judges have an editable Priority from 0 to 99, defaulting to 4; the directory can
 be filtered by priority. Manual Only is omitted; **Judge Assignments** remains
 Planned.
-**Populate Judges from Volunteers** includes primary or secondary Judging
-volunteers aged 18+ with Dan rank, and SK/TK-certified volunteers meeting the
-rank and age rules above. Supplied certification is copied.
+**Populate Judges from Volunteers** includes member volunteers with an
+Association ID and primary or secondary Judging choice: those aged 18+ with Dan
+rank, and SK/TK-certified volunteers meeting the rank and age rules above.
+Supplied certification is copied.
 Linked volunteer IDs and nonblank Association IDs prevent repeated population;
 existing judge edits are not overwritten. Keep a type named **Judging** for this
 workflow; if it is renamed or deleted, population reports the missing type.
@@ -683,12 +687,23 @@ changes. Matching nonblank IDs update existing volunteers, preserving internal
 identity. Blank IDs always add, including on repeated imports. Quoted CSV fields
 are supported. Maximum file size is 2 MB. Errors report row numbers.
 
-Data is tournament-specific and persists atomically in `volunteers.json` with one
-revision covering volunteers and types. Operational use locks every write until
-Reset Run, which preserves the directory. Edits made on the Volunteers page do
-not automatically update copied judges; editing the linked entry in Ring Judges
-loads the current volunteer details and saves both together. Competitor
-registrations are never changed by these edits.
+Volunteer records and types are stored in the event's `tournament.db`, alongside
+competitor registrations, with one revision covering volunteers and types.
+Fresh event databases create the volunteer tables and default types. Association
+IDs are required for volunteers at Regional, National and World events; only
+In-House events allow non-member volunteers without one. Operational use locks
+every write until Reset Run, which preserves the directory. Edits made on the
+Volunteers page do not automatically update copied judges; editing the linked
+entry in Ring Judges loads the current volunteer details and saves both together.
+Competitor registrations are never changed by these edits.
+
+Each event database keeps one member identity for each case-insensitive
+Association ID. Competitor imports require a unique Association Number, and a
+member volunteer with the same ID links to that identity; non-member In-House
+volunteers remain unlinked and are never looked up across roles. A matching
+Association ID with a different first or last name is rejected for correction,
+not silently merged. Competitors and volunteers retain their separate
+role-specific registration and event data.
 `GET/POST /api/volunteers`, `PUT /api/volunteers/:id`,
 `POST /api/volunteers/import` (`csv` text), `POST /api/volunteers/delete` (`ids`),
 `POST /api/volunteer-types`, `PUT /api/volunteer-types/:id` (`name`), and
@@ -1375,9 +1390,96 @@ Its hierarchy is:
     **Division Assignments** (existing Ring Assignment)
   - **Head Table**
   - **Printing** and **CSV Settings** — Planned
-- **Judge Management**, **Clinic Management**, **Event History** — Planned
+- **Judge Management** → **Judges**, **Testing**, **Eligibility**, **Experience**, **CSV Settings**
+- **Clinic Management**, **Event History** — Planned
 - **Administration**: **Server Maintenance** (`/admin/`) and **Simulator** (`/simulator/`)
 - **Your Account** — Planned
+
+Judges supports adding, editing, filtering, and deleting records in the separate
+Judge Management directory. Email and Merge Records remain disabled. CSV Settings
+saves visible header aliases; the importer requires Association ID, first name,
+and last name headers, matches IDs without regard to ASCII letter case, and
+updates only nonblank imported values. DOB/date-of-birth headers are recognized
+for private age checks but are not displayed or returned by the judge-list API.
+Same-name judges with different IDs remain separate. Duplicate or missing IDs and
+invalid rows reject the entire import. Changing data in another session requires
+a reload before saving.
+
+Testing and Experience records are editable from Add/Edit Judge. Written tests
+pass at 80% or higher; practical tests are pass/fail. Each promotion and
+recertification requires current written and (for Corner and above) practical
+tests. Experience records include event, date, location, role, sanctioned scope
+and log verification. In-House events do not count. Corner requires one
+qualifying Championship experience record; Regional Center requires two; an
+International judge requires Center Judge experience and a World Championship
+judging record. Sah Dan (D5) and above are exempt from log verification.
+
+Eligibility is advisory and does not award certification automatically. An
+authorized coordinator must record the award date; the database sets the
+expiration five years after that date. Expired Regional Center and International
+recertifications that lack required experience are flagged for coordinator
+review and are not automatically demoted. Membership in good standing is
+assumed for judges entered in this directory. Tournament synchronization and
+submission-sheet generation remain unavailable. Add Judge and Import Judges
+are panels within their originating section, not separate browser history entries.
+
+#### Judge Management database and offline backup
+
+The server initializes `judge-management-data/judges.db` on startup, independently
+of any tournament. It contains no sample records. Association IDs are required
+and unique without regard to ASCII letter case; rank and certification codes use
+the shared judge definitions. The database is ignored by Git and direct browser
+requests for it are blocked. Restrict Windows access to the data folder and
+backups to authorized users; Git exclusion is not a substitute for file permissions.
+The database stores judge testing attempts, Championship experience and private
+dates of birth for age-based eligibility. Birth dates are omitted from browser
+views and the judge-list API response. To supply DOB without a visible DOB field,
+include an optional `DOB`, `date_of_birth`, `dateOfBirth` or `birthDate` column
+in a CSV import. Existing blank CSV values preserve saved data. Certification
+history is changed only by the coordinator award action; all expiration dates
+are five years from the recorded grant date.
+
+To back up, **stop all three server services and any other process accessing this
+database** and allow them to finish shutting down. Copy the file to a protected
+location outside the repository, using a new name (do not overwrite an existing
+backup). From PowerShell in the server folder:
+
+```powershell
+$source = Join-Path (Get-Location) 'judge-management-data\judges.db'
+$backup = 'C:\TournamentPrivate\JudgeBackups\judges-backup.db'
+foreach ($suffix in @('-wal', '-shm', '-journal')) {
+  if (Test-Path -LiteralPath ($source + $suffix)) { throw 'Database sidecar exists; investigate before backup.' }
+}
+if (Test-Path -LiteralPath $backup) { throw 'Choose a new backup file name.' }
+Copy-Item -LiteralPath $source -Destination $backup -ErrorAction Stop
+node db\verifyJudgeDatabase.js $backup
+if ($LASTEXITCODE -ne 0) { throw 'Backup verification failed. Do not use this backup.' }
+```
+
+Create and protect the backup directory in advance. Keep backups on separate,
+protected storage according to the organization's retention policy.
+
+To restore, stop all services and other database users. Verify the backup first.
+Move the current database to a **new, unused** safety-copy name, then copy the
+verified backup to the original path. Never overwrite the safety copy. Restart
+services only after verifying the restored file:
+
+```powershell
+$target = Join-Path (Get-Location) 'judge-management-data\judges.db'
+$backup = 'C:\TournamentPrivate\JudgeBackups\judges-backup.db'
+$safety = 'C:\TournamentPrivate\JudgeBackups\judges-before-restore.db'
+foreach ($suffix in @('-wal', '-shm', '-journal')) {
+  if (Test-Path -LiteralPath ($target + $suffix)) { throw 'Database sidecar exists; investigate before restore.' }
+}
+node db\verifyJudgeDatabase.js $backup
+if ($LASTEXITCODE -ne 0) { throw 'Backup verification failed; restore cancelled.' }
+if (!(Test-Path -LiteralPath $target)) { throw 'Current database not found; investigate before restoring.' }
+if (Test-Path -LiteralPath $safety) { throw 'Choose a new safety-copy name.' }
+Move-Item -LiteralPath $target -Destination $safety -ErrorAction Stop
+Copy-Item -LiteralPath $backup -Destination $target -ErrorAction Stop
+node db\verifyJudgeDatabase.js $target
+if ($LASTEXITCODE -ne 0) { throw 'Restore verification failed; keep services stopped and recover the safety copy.' }
+```
 
 Navigation labels omit Planned/Under Development tags; the destination pages
 explain their status. Planned destinations expose no operational tools
@@ -1472,11 +1574,13 @@ The name is the existing folder identity and cannot be renamed after creation.
 **Cancel / Back**, navigation, browser history, and tournament switching guard
 unsaved edits. Save failures remain visible without discarding the form.
 
-Scope is metadata only: Regional (`regional`), National (`national`), World
-(`world`), and In-House (`in-house`). Older tournaments remain **Unspecified**
-(`""`); blank is allowed and invalid supplied values are rejected. Scope is
-preserved by create/modify/read APIs and archived configuration snapshots; it
-does not change judging rules or simulator execution.
+Every tournament must have exactly one event type: Regional (`regional`),
+National (`national`), World (`world`), or In-House (`in-house`). Regional,
+National, and World are sanctioned; In-House is unsanctioned. The event type
+select is required, and the server rejects missing or invalid values. The saved
+configuration exposes the corresponding `sanctioned` boolean, derived from the
+event type. In-House scope continues to select the existing In-House age rules
+for volunteer and Ring Judge eligibility.
 Event configuration is authoritative;
 operational layout dimensions are derived automatically on creation, saving,
 activation, and reading unused event state, including for inactive events.

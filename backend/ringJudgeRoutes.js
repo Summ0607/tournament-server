@@ -7,7 +7,8 @@ const { writeJsonAtomicSync } = require('./atomicJsonFile');
 const { normalizeRank } = require('../db/rankNormalization');
 const { normalizeCertification, certificationLevels, certificationRankIssue, certificationAgeIssue, isJudgeRank, judgeRankOptions } = require('../db/judgeCertification');
 const { storedAge, lockAgeDate } = require('./tournamentAge');
-const { readVolunteers, validateVolunteer } = require('./volunteerRoutes');
+const { validateVolunteer } = require('./volunteerRoutes');
+const { readVolunteerDirectory, replaceVolunteerDirectory } = require('./volunteerStore');
 
 // Strict validation rejects qualification problems; lenient validation (saved
 // data migration and population) keeps the row, resets unrecognized
@@ -25,7 +26,7 @@ function validateJudge(input, lenient = false) {
     input = { ...input, name: `${row.lastName}, ${row.firstName}` };
   }
   for (const [key, label, max, required] of [
-    ['name', 'Name', 200, true], ['associationNumber', 'Association ID', 100, false],
+    ['name', 'Name', 200, true], ['associationNumber', 'Association ID', 100, true],
     ['school', 'School', 200, false], ['rank', 'Rank', 100, true],
     ['certification', 'Certification', 200, false], ['reviewNotes', 'Review notes', 2000, false]
   ]) {
@@ -75,9 +76,9 @@ function readRoster(file) {
 function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
   const router = express.Router();
   const judgeAgeEligible = (rank, age, scope) => /^D[1-8]$/.test(rank) && age >= (scope === 'in-house' ? 15 : 18);
-  function volunteerDirectory(dir) {
+  async function volunteerDirectory(dir) {
     const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
-    return { ...readVolunteers(path.join(dir, 'volunteers.json')), tournamentDate: config.date };
+    return { ...await readVolunteerDirectory(path.join(dir, 'tournament.db')), tournamentDate: config.date };
   }
   function read(file) {
     if (!fs.existsSync(file)) return { revision: null, judges: [] };
@@ -109,32 +110,24 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
         if (write) writable();
         const data = read(file);
         if (write && (!req.body || req.body.revision !== data.revision)) fail('Judge directory changed. Reload before saving.', 409);
-        const commit = (extra = {}, volunteerChange = null) => {
+        const commit = async (extra = {}, volunteerChange = null) => {
           writable();
           if (read(file).revision !== data.revision) fail('Judge directory changed. Reload before saving.', 409);
-          const volunteerFile = path.join(dir, 'volunteers.json');
-          if (volunteerChange && readVolunteers(volunteerFile).revision !== volunteerChange.original.revision) {
-            fail('Volunteer data changed. Reload before saving.', 409);
-          }
           data.revision = crypto.randomUUID();
           if (volunteerChange) {
-            const existed = fs.existsSync(volunteerFile);
-            volunteerChange.next.revision = crypto.randomUUID();
             lockAgeDate(dir, volunteerChange.date);
-            writeJsonAtomicSync(volunteerFile, volunteerChange.next);
+            const saved = await replaceVolunteerDirectory(dbFile, volunteerChange.original.revision, volunteerChange.next);
             try { writeJsonAtomicSync(file, data); }
             catch (error) {
-              try {
-                if (existed) writeJsonAtomicSync(volunteerFile, volunteerChange.original);
-                else fs.unlinkSync(volunteerFile);
-              } catch (rollbackError) {
+              try { await replaceVolunteerDirectory(dbFile, saved.revision, volunteerChange.original, volunteerChange.original.revision); }
+              catch (rollbackError) {
                 console.error('Volunteer/judge save rollback failed:', rollbackError);
                 fail('Judge save failed and volunteer rollback failed. Reload both directories before retrying.', 500);
               }
               throw error;
             }
           } else writeJsonAtomicSync(file, data);
-          return { ...data, volunteerDirectory: volunteerDirectory(dir), certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name), ...extra };
+          return { ...data, volunteerDirectory: await volunteerDirectory(dir), certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name), ...extra };
         };
         res.json(await callback(req, { name, dir, dbFile, data, commit }));
       } catch (error) {
@@ -143,7 +136,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
       }
     };
   }
-  router.get('/ring-judges', handle((_req, { name, data, dir }) => ({ ...data, volunteerDirectory: volunteerDirectory(dir), certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name) })));
+  router.get('/ring-judges', handle(async (_req, { name, data, dir }) => ({ ...data, volunteerDirectory: await volunteerDirectory(dir), certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name) })));
   const save = handle(async (req, { data, commit, dir, dbFile }) => {
     const existing = req.params.id ? data.judges.find((judge) => judge.id === req.params.id) : null;
     if (req.params.id && !existing) fail('Judge not found. Reload the directory.', 404);
@@ -160,7 +153,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
         const issue = certificationAgeIssue(row.certification, row.rank, storedAge(competitor, config.date), config.scope);
         if (issue) fail(issue, 400);
       } else {
-        const original = readVolunteers(path.join(dir, 'volunteers.json'));
+        const original = await readVolunteerDirectory(dbFile);
         if (req.body.volunteerRevision !== original.revision) fail('Volunteer data changed. Reload before saving.', 409);
         const sourceVolunteer = volunteerId ? original.volunteers.find((member) => member.id === volunteerId) : null;
         if (volunteerId && !sourceVolunteer) fail('Source volunteer not found. Reload the directory.', 409);
@@ -218,13 +211,15 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus }) {
   }, true));
   const populate = (volunteers) => handle(async (_req, { dir, dbFile, data, commit }) => {
     const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
-    const volunteerData = volunteers ? readVolunteers(path.join(dir, 'volunteers.json')) : null;
+    const volunteerData = volunteers ? await readVolunteerDirectory(dbFile) : null;
     const judgingIds = volunteerData ? volunteerData.types.filter((type) => type.name.toLowerCase() === 'judging').map((type) => type.id) : [];
     if (volunteers && !judgingIds.length) fail('A Volunteer Type named Judging is required for judge population.', 400);
-    const roster = volunteers ? volunteerData.volunteers.filter((row) => judgingIds.includes(row.primaryType) || judgingIds.includes(row.secondaryType))
+    const roster = volunteers ? volunteerData.volunteers.filter((row) => row.associationNumber &&
+      (judgingIds.includes(row.primaryType) || judgingIds.includes(row.secondaryType)))
       .map((row) => ({ ...row, studio: row.school })) : await readRoster(dbFile);
     let added = 0, skipped = 0;
     for (const member of roster) {
+      if (!String(member.associationNumber || '').trim()) continue;
       const rank = normalizeRank(member.rank);
       const hasSktkCertification = volunteers && member.certification === 'SK_TK';
       if (!rank.recognized || !isJudgeRank(rank.code) ||

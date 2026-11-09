@@ -47,7 +47,7 @@ function createAccountWeb({ store, config, surface, tabletStore, getTabletContex
           }
         }
       } catch (error) {
-        if (error.statusCode === 401) return res.redirect(`/account/login?returnTo=${encodeURIComponent(req.originalUrl)}`);
+        if (error.statusCode === 401) return res.redirect('/account/login');
         if (!error.statusCode) console.error('Account page authorization failed:', error);
         return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Unable to verify account page access. Check the server log.' });
       }

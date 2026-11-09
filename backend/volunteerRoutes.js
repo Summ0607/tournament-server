@@ -7,13 +7,12 @@ const csv = require('csv-parser');
 const { normalizeRank } = require('../db/rankNormalization');
 const { normalizeCertification, certificationLevels, certificationRankIssue, certificationAgeIssue, judgeRankOptions } = require('../db/judgeCertification');
 const { ageOnDate, storedAge, lockAgeDate } = require('./tournamentAge');
-const { writeJsonAtomicSync } = require('./atomicJsonFile');
+const { readVolunteerDirectory, replaceVolunteerDirectory } = require('./volunteerStore');
 
 const headers = { 'First Name': 'firstName', 'Last Name': 'lastName', 'DOB': 'dob', 'Assoc ID': 'associationNumber',
   'School': 'school', 'Rank': 'rank', 'Certification': 'certification', 'Primary Volunteer Type': 'primaryType', 'Secondary Volunteer Type': 'secondaryType' };
 const optionalHeaders = { 'Parent/Guardian Name': 'parentName', 'Contact Number': 'contactNumber',
   'Gender': 'gender', 'Email': 'email' };
-const initialTypes = ['Setup', 'Teardown', 'Judging', 'Security'].map((name) => ({ id: name.toLowerCase(), name }));
 // Strict validation rejects qualification problems; lenient validation
 // (saved data migration) resets unrecognized certification text to Unknown
 // and keeps the row instead.
@@ -26,6 +25,7 @@ function validateVolunteer(input, types, date, lenient = false, scope = '') {
     if (typeof input[key] !== 'string' || input[key].trim().length > max || required && !input[key].trim()) throw new Error(`Invalid ${key}.`);
     row[key] = input[key].trim();
   }
+  if (scope !== 'in-house' && !row.associationNumber) throw new Error('Association ID is required for volunteers at sanctioned events.');
   const ageAsOf = date || input.ageAsOf;
   const age = input.dob ? ageOnDate(input.dob, ageAsOf) : storedAge({ age: input.age, ageAsOf: input.ageAsOf }, ageAsOf);
   for (const [key, label, max] of [['parentName', 'Parent/guardian name', 200], ['contactNumber', 'Contact number', 100],
@@ -48,27 +48,6 @@ function validateVolunteer(input, types, date, lenient = false, scope = '') {
   for (const key of ['primaryType', 'secondaryType']) if (row[key] && !types.some((type) => type.id === row[key])) throw new Error(`Unknown ${key}.`);
   if (row.primaryType === row.secondaryType) throw new Error('Primary and secondary types must differ.');
   return { ...row, age, ageAsOf };
-}
-function readVolunteers(file) {
-  if (!fs.existsSync(file)) return { revision: null, types: initialTypes.map((row) => ({ ...row })), volunteers: [] };
-  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (typeof data.revision !== 'string' || !data.revision || !Array.isArray(data.types) || !Array.isArray(data.volunteers)) throw new Error('Invalid volunteer directory.');
-  const ids = new Set(), names = new Set(), associations = new Set();
-  for (const type of data.types) {
-    if (typeof type.id !== 'string' || !type.id || ids.has(type.id) || typeof type.name !== 'string' ||
-        !type.name.trim() || type.name.length > 100 || names.has(type.name.toLowerCase())) throw new Error('Invalid volunteer type.');
-    ids.add(type.id); names.add(type.name.toLowerCase());
-  }
-  ids.clear();
-  data.volunteers = data.volunteers.map((row) => {
-    if (typeof row.id !== 'string' || !row.id || ids.has(row.id)) throw new Error('Invalid volunteer identity.');
-    ids.add(row.id);
-    const value = validateVolunteer(row, data.types, undefined, true), key = value.associationNumber.toUpperCase();
-    if (key && associations.has(key)) throw new Error('Duplicate volunteer Association ID.');
-    if (key) associations.add(key);
-    return { id: row.id, ...value };
-  });
-  return data;
 }
 function parseCsv(text) {
   return new Promise((resolve, reject) => {
@@ -93,18 +72,17 @@ function createVolunteerRouter({ eventsRoot, configurationStatus }) {
       try {
         const name = req.query.eventName;
         if (typeof name !== 'string' || !name.trim() || name !== name.trim() || /[<>:"/\\|?*\x00-\x1F]/.test(name) || ['.', '..'].includes(name)) fail('An explicit valid eventName is required.');
-        const dir = path.join(eventsRoot, name), file = path.join(dir, 'volunteers.json');
-        if (!fs.existsSync(path.join(dir, 'tournament.db'))) fail('Tournament database not found.', 404);
+        const dir = path.join(eventsRoot, name), dbFile = path.join(dir, 'tournament.db');
+        if (!fs.existsSync(dbFile)) fail('Tournament database not found.', 404);
         const writable = () => { const status = configurationStatus(name); if (status.configurationLocked) fail(status.configurationLockReason || 'Volunteer preparation is locked. Reset Run before editing.', 409); };
         if (write) writable();
-        const data = readVolunteers(file);
+        const data = await readVolunteerDirectory(dbFile);
         if (write && (!req.body || req.body.revision !== data.revision)) fail('Volunteer data changed. Reload before saving.', 409);
-        const commit = (extra = {}) => {
+        const commit = async (extra = {}) => {
           writable();
-          if (readVolunteers(file).revision !== data.revision) fail('Volunteer data changed. Reload before saving.', 409);
           if (data.volunteers.length) lockAgeDate(dir, date);
-          data.revision = crypto.randomUUID(); writeJsonAtomicSync(file, data);
-          return { ...data, certificationLevels: certificationLevels(), rankOptions: judgeRankOptions(), eventName: name, tournamentDate: date, ...configurationStatus(name), ...extra };
+          const saved = await replaceVolunteerDirectory(dbFile, data.revision, data);
+          return { ...saved, certificationLevels: certificationLevels(), rankOptions: judgeRankOptions(), eventName: name, eventScope: config.scope, tournamentDate: date, ...configurationStatus(name), ...extra };
         };
         const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
         const date = config.date;
@@ -115,7 +93,7 @@ function createVolunteerRouter({ eventsRoot, configurationStatus }) {
       }
     };
   }
-  router.get('/volunteers', handle((_req, { data, name, date }) => ({ ...data, certificationLevels: certificationLevels(), rankOptions: judgeRankOptions(), eventName: name, tournamentDate: date, ...configurationStatus(name) })));
+  router.get('/volunteers', handle((_req, { data, name, date, scope }) => ({ ...data, certificationLevels: certificationLevels(), rankOptions: judgeRankOptions(), eventName: name, eventScope: scope, tournamentDate: date, ...configurationStatus(name) })));
   const save = handle((req, { data, commit, date, scope }) => {
     const existing = req.params.id ? data.volunteers.find((r) => r.id === req.params.id) : null;
     if (req.params.id && !existing) fail('Volunteer not found.', 404);
@@ -182,4 +160,4 @@ function createVolunteerRouter({ eventsRoot, configurationStatus }) {
   }, true));
   return router;
 }
-module.exports = { createVolunteerRouter, readVolunteers, validateVolunteer, headers };
+module.exports = { createVolunteerRouter, validateVolunteer, headers };

@@ -88,8 +88,8 @@ async function loadPage(options = {}) {
   if (options.draft) storage.set(draftKey, JSON.stringify(options.draft));
   const rosters = new Map([[winter, options.competitors || []], [spring, []]]);
   const configs = new Map([
-    [winter, { name: winter, date: '2027-01-16', ringConfigX: 0, ringConfigY: 0 }],
-    [spring, { name: spring, date: '2027-04-10', ringConfigX: 2, ringConfigY: 3 }]
+    [winter, { name: winter, date: '2027-01-16', scope: 'regional', ringConfigX: 0, ringConfigY: 0 }],
+    [spring, { name: spring, date: '2027-04-10', scope: 'world', ringConfigX: 2, ringConfigY: 3 }]
   ]);
   const location = { protocol: 'http:', origin: 'http://localhost:3000', href: `http://localhost:3000/tournament-management/${options.search || ''}`, search: options.search || '' };
   const windowHandlers = {};
@@ -137,6 +137,7 @@ async function loadPage(options = {}) {
     CompetitionSettingsWorkspace: require('../tournament-management/competition-settings'),
     TournamentResultsWorkspace: require('../tournament-management/results'),
     RingJudgesWorkspace: require('../tournament-management/ring-judges'),
+    JudgeManagementWorkspace: require('../tournament-management/judge-management'),
     VolunteersWorkspace: require('../tournament-management/volunteers'),
     DivisionRules: require('../assets/division-rules'),
     Date: class extends Date {
@@ -183,6 +184,11 @@ async function loadPage(options = {}) {
       requests.push({ path: request.pathname, name, init });
       let data;
       switch (request.pathname) {
+        case '/api/judge-management':
+          data = { revision: 0, judges: [], aliases: require('../backend/judgeManagementRoutes').defaults,
+            certificationLevels: require('../db/judgeCertification').certificationLevels(),
+            ranks: require('../db/judgeCertification').judgeRankOptions() };
+          break;
         case '/api/volunteers':
           data = { revision: null, types: [{ id: 'judging', name: 'Judging' }], volunteers: [], configurationLocked: false };
           break;
@@ -659,7 +665,8 @@ test('navigation destinations have stable IDs, approved labels and native Admini
     results: 'Results', 'team-management': 'Teams', 'team-settings': 'Settings', 'ring-judges': 'Ring Judges',
     'judge-assignments': 'Judge Assignments', 'tablet-pairing': 'Ring Assignment', 'ring-assignment': 'Division Assignments',
     'head-table': 'Head Table', 'audience-viewer': 'Audience Viewer', printing: 'Printing', 'csv-settings': 'CSV Settings',
-    'judge-management': 'Judging Management', 'clinic-management': 'Clinic Management',
+    'judge-management': 'Judges', 'judge-testing': 'Testing', 'judge-eligibility': 'Eligibility',
+    'judge-experience': 'Experience', 'judge-csv-settings': 'CSV Settings', 'clinic-management': 'Clinic Management',
     'event-history': 'Event History', 'your-account': 'Your Account', 'visual-definitions': 'Visual Definitions',
     'server-maintenance': 'Server Maintenance', simulator: 'Simulator', schools: 'Schools', ranks: 'Ranks',
     'competition-types': 'Competition Types', 'grand-champion-categories': 'Grand Champion Categories', 'medal-points': 'Medal Points',
@@ -674,6 +681,9 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   assert.equal(page.nav('ring-assignment').getAttribute('data-nav-parents'), 'tournament rings');
   assert.ok(html.indexOf('data-nav-id="tablet-pairing"') < html.indexOf('data-nav-id="ring-assignment"'));
   assert.equal(page.nav('head-table').getAttribute('data-nav-parents'), 'tournament rings');
+  for (const id of ['judge-management', 'judge-testing', 'judge-eligibility', 'judge-experience', 'judge-csv-settings']) {
+    assert.equal(page.nav(id).getAttribute('data-nav-parents'), 'judge-management');
+  }
   assert.ok(html.indexOf('id="navVolunteers"') < html.indexOf('id="navCompetitionSettings"'));
   assert.doesNotMatch(html, /id="navSelectedEvent"|id="navActiveEvent"/);
   page.nav('groups').textContent = 'A translated display label';
@@ -682,6 +692,67 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   assert.equal(page.element('workspacePanel').getAttribute('aria-label'), 'Divisions workspace');
   assert.equal(page.nav('groups').getAttribute('aria-current'), 'page');
   assert.equal(page.nav('event-setup').hasAttribute('aria-current'), false);
+});
+
+test('Judge Management sections open independently and expand their navigation group', async () => {
+  const sections = ['judge-management', 'judge-testing', 'judge-eligibility', 'judge-experience', 'judge-csv-settings'];
+  const panels = ['jmJudges', 'jmTesting', 'jmEligibility', 'jmExperience', 'jmCsvSettings'];
+  const page = await loadPage();
+  for (const [index, id] of sections.entries()) {
+    await page.navigate(id);
+    assert.equal(page.element('navJudgeManagementChildren').hidden, false);
+    assert.equal(page.element('judgeManagementView').hidden, false);
+    for (const [panelIndex, panel] of panels.entries()) {
+      assert.equal(page.element(panel).hidden, panelIndex !== index);
+    }
+    assert.equal(page.element('workspaceTitle').textContent, page.nav(id).getAttribute('data-nav-label'));
+    assert.equal(new URLSearchParams(page.location.search).get('view'), id);
+    assert.equal(page.nav(id).getAttribute('aria-current'), 'page');
+  }
+  await page.navigate('event-setup');
+  assert.equal(page.element('judgeManagementView').hidden, true);
+  const direct = await loadPage({ search: '?view=judge-experience' });
+  assert.equal(direct.element('navJudgeManagementChildren').hidden, false);
+  assert.equal(direct.element('jmExperience').hidden, false);
+  assert.equal(direct.element('workspaceTitle').textContent, 'Experience');
+});
+
+test('Judge Management email entry and CSV mapping are explicitly disabled', () => {
+  assert.match(html, /<label>Email \(not available yet\)<input type="email" disabled><\/label>/);
+  assert.match(html, /<label>Email \(not available yet\)<input disabled placeholder="email, email_address"><\/label>/);
+  assert.match(html, /<label>Search name or WTSDA ID<input id="jmSearch" type="search"><\/label>/);
+});
+
+test('Judge Management preview opens Add and Import screens and returns to their source', async () => {
+  const page = await loadPage({ search: '?view=judge-management' });
+  assert.equal(page.element('jmJudges').hidden, false);
+  await page.click('jmAddJudge');
+  assert.equal(page.element('jmAdd').hidden, false);
+  assert.equal(page.element('workspaceTitle').textContent, 'Add Judge');
+  assert.equal(page.element('workspacePanel').getAttribute('aria-label'), 'Add Judge workspace');
+  await page.click('jmAddCancel');
+  assert.equal(page.element('jmJudges').hidden, false);
+  await page.click('jmImportJudges');
+  assert.equal(page.element('jmImport').hidden, false);
+  assert.equal(page.element('workspaceTitle').textContent, 'Import Judges');
+  await page.click('jmImportCancel');
+  assert.equal(page.element('jmJudges').hidden, false);
+  await page.navigate('judge-testing');
+  await page.click('jmTestingAdd');
+  await page.click('jmAddCancel');
+  assert.equal(page.element('jmTesting').hidden, false);
+  assert.equal(page.element('workspaceTitle').textContent, 'Testing');
+  for (const [section, addButton, panel, title] of [
+    ['judge-eligibility', 'jmEligibilityAdd', 'jmEligibility', 'Eligibility'],
+    ['judge-experience', 'jmExperienceAdd', 'jmExperience', 'Experience']
+  ]) {
+    await page.navigate(section);
+    await page.click(addButton);
+    await page.click('jmAddCancel');
+    assert.equal(page.element(panel).hidden, false);
+    assert.equal(page.element('workspacePanel').getAttribute('aria-label'), `${title} workspace`);
+  }
+  assert.equal(page.requests.some((request) => request.init && request.init.method !== 'GET'), false);
 });
 
 test('Ring Assignment opens daily QR tools inside the shell and unloads on navigation', async () => {
@@ -943,13 +1014,13 @@ test('Planned destinations are explicit, independently addressable and never loa
   const page = await loadPage({ activeEvent: spring });
   const before = page.requests.length;
   for (const id of ['judge-assignments', 'printing',
-    'csv-settings', 'judge-management', 'clinic-management', 'event-history']) {
+    'csv-settings', 'clinic-management', 'event-history']) {
     assert.equal(page.nav(id).getAttribute('data-nav-planned'), 'true');
     await page.navigate(id);
     assert.equal(page.element('placeholderView').hidden, false);
     assert.equal(page.element('placeholderTitle').textContent, page.nav(id).getAttribute('data-nav-label'));
     assert.equal(page.element('placeholderMessage').textContent,
-      ['judge-management', 'clinic-management'].includes(id) ? 'Under Development.' : 'Planned.');
+      id === 'clinic-management' ? 'Under Development.' : 'Planned.');
     assert.equal(page.nav(id).getAttribute('aria-current'), 'page');
     assert.equal(new URLSearchParams(page.location.search).get('view'), id);
     for (const view of ['eventSetupView', 'importView', 'groupsView', 'ringAssignmentView', 'headTableView', 'competitorLookupView', 'detailsPanel']) {
@@ -1012,7 +1083,7 @@ test('a missing database can be initialized, imported and used to persist group 
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const dbPath = path.join(directory, 'tournament.db');
   const csvPath = path.join(directory, 'registration.csv');
-  fs.writeFileSync(csvPath, 'First Name,Last Name,DOB,Gender,Current Rank\nNew,Competitor,01/01/2010,Male,G1\n');
+  fs.writeFileSync(csvPath, 'First Name,Last Name,DOB,Association Number,Gender,Current Rank\nNew,Competitor,01/01/2010,TSD-001,Male,G1\n');
   assert.equal(fs.existsSync(dbPath), false);
   await initializeDatabase(dbPath);
   await importCSV(csvPath, dbPath, { clearExisting: true, tournamentDate: '2027-01-16' });
@@ -1032,13 +1103,13 @@ for (const header of ['Special Needs', 'Special Needs (Y|N)']) {
     const dbPath = path.join(directory, 'tournament.db');
     const csvPath = path.join(directory, 'registration.csv');
     const year = new Date().getFullYear();
-    fs.writeFileSync(csvPath, `First Name,Last Name,DOB,Gender,Current Rank,${header}\n` + [
-      `One,Test,01/01/${year - 14},Male,G10,Y`,
-      `Two,Test,01/01/${year - 17},Male,CDB,Y`,
-      `Three,Test,01/01/${year - 16},Female,G1,Y`,
-      `Four,Test,01/01/${year - 18},Male,D1,Y`,
-      `Five,Test,01/01/${year - 18},Male,G1,Y`,
-      `Six,Test,01/01/${year - 14},Male,G10,N`
+    fs.writeFileSync(csvPath, `First Name,Last Name,DOB,Association Number,Gender,Current Rank,${header}\n` + [
+      `One,Test,01/01/${year - 14},TSD-001,Male,G10,Y`,
+      `Two,Test,01/01/${year - 17},TSD-002,Male,CDB,Y`,
+      `Three,Test,01/01/${year - 16},TSD-003,Female,G1,Y`,
+      `Four,Test,01/01/${year - 18},TSD-004,Male,D1,Y`,
+      `Five,Test,01/01/${year - 18},TSD-005,Male,G1,Y`,
+      `Six,Test,01/01/${year - 14},TSD-006,Male,G10,N`
     ].join('\n'));
     await initializeDatabase(dbPath);
     const imported = await importCSV(csvPath, dbPath, { clearExisting: true, tournamentDate: '2027-01-16' });
@@ -1340,6 +1411,7 @@ test('integrated event metadata sends numeric dimensions, displays zero and bloc
   await page.select('__new__');
   page.element('eventNameInput').value = 'New Event';
   await page.input('eventNameInput', 'input');
+  page.element('scopeInput').value = 'regional';
   page.element('ringConfigXInput').value = '4';
   page.element('ringConfigYInput').value = '5';
   await page.click('saveMetadataBtn');
@@ -1374,17 +1446,28 @@ test('event format is saved, loaded and counted as an unsaved change', async () 
   assert.notEqual(page.element('bannerEventStatus').textContent, 'Unsaved changes');
 });
 
+test('new tournaments require an event type and show its sanctioning policy', async () => {
+  const page = await loadPage();
+  await page.click('createEventBtn');
+  page.element('eventNameInput').value = 'No Event Type';
+  await page.click('saveMetadataBtn');
+  assert.match(page.element('notice').textContent, /Select an event type/);
+  assert.equal(page.requests.some((request) => request.path === '/api/events/create'), false);
+  assert.match(html, /id="scopeInput" required/);
+  assert.match(html, /Regional, National, and World events are sanctioned\. In-House events are unsanctioned\./);
+});
+
 test('tournament list opens a center-workspace form with honest scope and live ring count', async () => {
   const page = await loadPage({ activeEvent: winter });
   assert.equal(page.element('workspaceTitle').textContent, 'Tournaments');
   assert.match(page.element('tournamentListBody').innerHTML, /data-edit-tournament=/);
-  assert.match(page.element('tournamentListBody').innerHTML, /Unspecified/);
+  assert.match(page.element('tournamentListBody').innerHTML, /Regional \(Sanctioned\)/);
   assert.doesNotMatch(html, /id="eventSelect"|id="modifyEventBtn"|id="activeEventChip"/);
   await page.openTournament();
   assert.equal(page.element('tournamentList').hidden, true);
   assert.equal(page.element('detailsPanel').hidden, true);
   assert.equal(page.element('metadataPanel').hidden, false);
-  assert.equal(page.element('scopeInput').value, '');
+  assert.equal(page.element('scopeInput').value, 'regional');
   assert.equal(page.element('eventNameInput').disabled, true);
   page.element('scopeInput').value = 'in-house';
   page.element('ringConfigXInput').value = '4';
@@ -1438,11 +1521,11 @@ test('browser history cancellation preserves tournament edits without repeated p
   await page.navigate('results');
   await page.navigate('event-setup');
   await page.openTournament();
-  page.element('scopeInput').value = 'regional';
+  page.element('scopeInput').value = 'in-house';
   const current = page.location.href;
   await page.history(-1);
   assert.equal(page.location.href, current);
-  assert.equal(page.element('scopeInput').value, 'regional');
+  assert.equal(page.element('scopeInput').value, 'in-house');
   assert.equal(page.element('metadataPanel').hidden, false);
   assert.equal(page.confirmations.length, 1);
 });

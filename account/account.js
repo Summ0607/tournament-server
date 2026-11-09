@@ -212,11 +212,7 @@
   }
   async function loadAdministration() {
     if (view === 'login') {
-      const requested = new URLSearchParams(location.search).get('returnTo') || '';
-      const local = /^\/(?!\/)/.test(requested) && !/[\\\x00-\x20]/.test(requested);
-      const target = new URL(local ? requested : session.homePath, location.origin);
-      location.replace(target.origin === location.origin && !target.pathname.startsWith('/account')
-        ? `${target.pathname}${target.search}${target.hash}` : session.homePath);
+      window.top.location.replace(session.homePath);
       return;
     }
     if (view === 'profile') { status('Signed in. Use Home to open your permitted workspace.'); return; }
@@ -232,9 +228,14 @@
     event.preventDefault();
     run(async () => {
       try {
+        const previousUserId = editorUserId;
         await request('/login', { method: 'POST', body: { userId: $('loginUser').value, password: $('loginPassword').value } });
         await checkSession();
         lastActivity = Date.now();
+        if (view !== 'login' && (!previousUserId || previousUserId !== session.account.userId)) {
+          window.top.location.replace(session.homePath);
+          return;
+        }
         await loadAdministration();
       } finally { $('loginPassword').value = ''; }
     });
@@ -247,6 +248,7 @@
       editorUserId = '';
       $('loginUser').readOnly = false;
       signedOut('Signed out.');
+      window.top.location.replace('/account/login');
     });
   });
   $('userForm').addEventListener('input', () => {

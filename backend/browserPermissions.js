@@ -15,6 +15,10 @@ const VIEW_ROLES = {
   'competition-types': EVENT, 'grand-champion-categories': EVENT, 'medal-points': EVENT,
   volunteers: JUDGING, 'volunteer-types': JUDGING, 'ring-judges': JUDGING, 'judge-assignments': JUDGING,
   'judge-management': ['administrator', 'judging-coordinator'],
+  'judge-testing': ['administrator', 'judging-coordinator'],
+  'judge-eligibility': ['administrator', 'judging-coordinator'],
+  'judge-experience': ['administrator', 'judging-coordinator'],
+  'judge-csv-settings': ['administrator', 'judging-coordinator'],
   'clinic-management': EVENT, 'tablet-pairing': DAY, 'ring-assignment': DAY, 'head-table': DAY, 'audience-viewer': AUDIENCE,
   printing: EVENT, 'csv-settings': EVENT, 'event-history': EVENT,
   schools: ['administrator'], ranks: ['administrator'], 'visual-definitions': ['administrator'],
@@ -49,6 +53,7 @@ rule('GET', /^\/api\/(schools|ranks)$/, Object.keys(ROLE_LABELS).filter((role) =
 rule('POST PUT', /^\/api\/(visual-definitions|schools|ranks)(?:\/[^/]+)?$/, ['administrator']);
 rule('GET POST PUT', /^\/api\/competition-settings\/[^/]+(?:\/[^/]+)?$/, EVENT);
 rule('GET POST PUT', /^\/api\/(ring-judges|volunteers|volunteer-types)(?:\/[^/]+)?$/, JUDGING);
+rule('GET POST PUT', /^\/api\/judge-management(?:\/[^/]+(?:\/award)?|-settings|-import)?$/, ['administrator', 'judging-coordinator']);
 rule('GET', /^\/api\/rings\/monitor$/, AUDIENCE);
 rule('POST', /^\/api\/tablet\/codes$/, DAY);
 rule('GET', /^\/(?:status|api\/rings(?:\/(?:config|estimates))?)$/, DAY);
