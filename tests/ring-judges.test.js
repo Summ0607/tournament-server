@@ -8,6 +8,7 @@ const express = require('express');
 const { createRingJudgeRouter, validateJudge } = require('../backend/ringJudgeRoutes');
 const { certificationLevels, judgeRankOptions } = require('../db/judgeCertification');
 const { create } = require('../tournament-management/ring-judges');
+const initializeDatabase = require('../db/init');
 const judge = { name: 'Judge One', associationNumber: 'D100', school: 'School', rank: 'D1',
   certification: '', flaggedForReview: false, reviewNotes: '' };
 test('judge validation preserves optional certification and review observations', () => {
@@ -17,6 +18,7 @@ test('judge validation preserves optional certification and review observations'
   for (const change of [{ name: '' }, { rank: 'unknown' }, { flaggedForReview: 'false' }, { reviewNotes: 'x'.repeat(2001) }, { certification: null }]) {
     assert.throws(() => validateJudge({ ...judge, ...change }));
   }
+  assert.throws(() => validateJudge({ ...judge, associationNumber: '' }), /Association ID/);
   for (const priority of [-1, 100, 1.5, '4']) {
     assert.throws(() => validateJudge({ ...judge, priority }), /Priority must be a whole number from 0 to 99/);
   }
@@ -48,15 +50,24 @@ test('judge certification uses shared levels with enforced rank minimums and len
   assert.match(validateJudge({ ...judge, rank: 'D9' }, true).reviewNotes, /between G5 and D8/);
 });
 async function seed(file) {
+  await initializeDatabase(file);
   const db = new sqlite3.Database(file);
   const run = (sql, params = []) => new Promise((resolve, reject) => db.run(sql, params, (error) => error ? reject(error) : resolve()));
-  await run('CREATE TABLE competitors (id INTEGER, firstName TEXT, lastName TEXT, associationNumber TEXT, studio TEXT, rank TEXT, age INTEGER, ageAsOf TEXT)');
   for (const [id, rank, dob, association] of [
     [1, 'D1', '01/09/2009', 'D101'], [2, 'D3', '01/10/2009', 'D102'],
     [3, 'CDB', '01/01/2000', 'G103'], [4, 'D8', '01/01/1950', 'D104'],
     [5, 'G1', '01/01/2000', 'G105'], [6, 'D10', '01/01/1950', 'D106'],
     [7, 'G5', '01/10/2011', 'G107'], [8, 'CDB', '01/10/2013', 'G108']
-  ]) await run('INSERT INTO competitors VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, `First${id}`, 'Last', association, 'School', rank, require('../backend/tournamentAge').ageOnDate(dob, '2027-01-09'), '2027-01-09']);
+  ]) {
+    const firstName = id === 1 ? 'Jane Ann' : `First${id}`, lastName = id === 1 ? 'Doe' : 'Last';
+    const personId = `person-${id}`;
+    await run('INSERT INTO event_people (id, association_id, first_name, last_name) VALUES (?, ?, ?, ?)',
+      [personId, association, firstName, lastName]);
+    await run(`INSERT INTO competitors
+      (id, firstName, lastName, associationNumber, studio, rank, age, ageAsOf, personId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [id, firstName, lastName, association, 'School', rank,
+      require('../backend/tournamentAge').ageOnDate(dob, '2027-01-09'), '2027-01-09', personId]);
+  }
   await new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
 }
 test('judge API persists scoped CRUD, idempotent adult Dan population, stale guards and operational locks', async (t) => {
@@ -65,7 +76,7 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   for (const name of ['A', 'B']) {
     fs.mkdirSync(path.join(root, name));
     await seed(path.join(root, name, 'tournament.db'));
-    fs.writeFileSync(path.join(root, name, 'event-config.json'), JSON.stringify({ date: '2027-01-09' }));
+    fs.writeFileSync(path.join(root, name, 'event-config.json'), JSON.stringify({ date: '2027-01-09', scope: 'regional' }));
   }
   let locked = false;
   const app = express(); app.use(express.json());
@@ -84,6 +95,8 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   assert.deepEqual((await get()).judges, []);
   assert.equal(fs.existsSync(path.join(root, 'A', 'ring-judges.json')), false);
   const volunteerDetails = { age: 25, ageAsOf: '2027-01-09', parentName: '', contactNumber: '', primaryType: 'judging', secondaryType: '' };
+  assert.equal((await write('', { revision: null, volunteerRevision: null, volunteer: volunteerDetails,
+    judge: { ...judge, associationNumber: '' } })).status, 400);
   let response = await write('', { revision: null, volunteerRevision: null, volunteer: volunteerDetails,
     judge: { ...judge, firstName: 'Jane Ann', lastName: 'Doe', associationNumber: 'D101', priority: 4 } });
   assert.equal(response.status, 200);

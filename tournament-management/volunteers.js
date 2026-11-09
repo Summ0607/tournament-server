@@ -82,6 +82,7 @@
         node('vm-rank').innerHTML += `<option value="${esc(row.rank)}">${esc(rankLabel(row.rank))} (saved rank outside editor range)</option>`;
       }
       fields.forEach((key) => { node(`vm-${key}`).value = row && !types ? row[key] ?? '' : key === 'primaryType' ? data.types[0]?.id || '' : key === 'certification' ? 'UNKNOWN' : ''; });
+      node('vm-associationNumber').required = data.eventScope !== 'in-house';
       node('vm-parentName').required = !types && node('vm-age').value !== '' && Number(node('vm-age').value) < 18;
       node('vm-typeName').value = types && row ? row.name : '';
       node('vmDialogTitle').textContent = `${row ? 'Edit' : 'Add'} ${types ? 'Volunteer Type' : 'Volunteer'}`;

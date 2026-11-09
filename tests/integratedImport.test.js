@@ -88,8 +88,8 @@ async function loadPage(options = {}) {
   if (options.draft) storage.set(draftKey, JSON.stringify(options.draft));
   const rosters = new Map([[winter, options.competitors || []], [spring, []]]);
   const configs = new Map([
-    [winter, { name: winter, date: '2027-01-16', ringConfigX: 0, ringConfigY: 0 }],
-    [spring, { name: spring, date: '2027-04-10', ringConfigX: 2, ringConfigY: 3 }]
+    [winter, { name: winter, date: '2027-01-16', scope: 'regional', ringConfigX: 0, ringConfigY: 0 }],
+    [spring, { name: spring, date: '2027-04-10', scope: 'world', ringConfigX: 2, ringConfigY: 3 }]
   ]);
   const location = { protocol: 'http:', origin: 'http://localhost:3000', href: `http://localhost:3000/tournament-management/${options.search || ''}`, search: options.search || '' };
   const windowHandlers = {};
@@ -1083,7 +1083,7 @@ test('a missing database can be initialized, imported and used to persist group 
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const dbPath = path.join(directory, 'tournament.db');
   const csvPath = path.join(directory, 'registration.csv');
-  fs.writeFileSync(csvPath, 'First Name,Last Name,DOB,Gender,Current Rank\nNew,Competitor,01/01/2010,Male,G1\n');
+  fs.writeFileSync(csvPath, 'First Name,Last Name,DOB,Association Number,Gender,Current Rank\nNew,Competitor,01/01/2010,TSD-001,Male,G1\n');
   assert.equal(fs.existsSync(dbPath), false);
   await initializeDatabase(dbPath);
   await importCSV(csvPath, dbPath, { clearExisting: true, tournamentDate: '2027-01-16' });
@@ -1103,13 +1103,13 @@ for (const header of ['Special Needs', 'Special Needs (Y|N)']) {
     const dbPath = path.join(directory, 'tournament.db');
     const csvPath = path.join(directory, 'registration.csv');
     const year = new Date().getFullYear();
-    fs.writeFileSync(csvPath, `First Name,Last Name,DOB,Gender,Current Rank,${header}\n` + [
-      `One,Test,01/01/${year - 14},Male,G10,Y`,
-      `Two,Test,01/01/${year - 17},Male,CDB,Y`,
-      `Three,Test,01/01/${year - 16},Female,G1,Y`,
-      `Four,Test,01/01/${year - 18},Male,D1,Y`,
-      `Five,Test,01/01/${year - 18},Male,G1,Y`,
-      `Six,Test,01/01/${year - 14},Male,G10,N`
+    fs.writeFileSync(csvPath, `First Name,Last Name,DOB,Association Number,Gender,Current Rank,${header}\n` + [
+      `One,Test,01/01/${year - 14},TSD-001,Male,G10,Y`,
+      `Two,Test,01/01/${year - 17},TSD-002,Male,CDB,Y`,
+      `Three,Test,01/01/${year - 16},TSD-003,Female,G1,Y`,
+      `Four,Test,01/01/${year - 18},TSD-004,Male,D1,Y`,
+      `Five,Test,01/01/${year - 18},TSD-005,Male,G1,Y`,
+      `Six,Test,01/01/${year - 14},TSD-006,Male,G10,N`
     ].join('\n'));
     await initializeDatabase(dbPath);
     const imported = await importCSV(csvPath, dbPath, { clearExisting: true, tournamentDate: '2027-01-16' });
@@ -1411,6 +1411,7 @@ test('integrated event metadata sends numeric dimensions, displays zero and bloc
   await page.select('__new__');
   page.element('eventNameInput').value = 'New Event';
   await page.input('eventNameInput', 'input');
+  page.element('scopeInput').value = 'regional';
   page.element('ringConfigXInput').value = '4';
   page.element('ringConfigYInput').value = '5';
   await page.click('saveMetadataBtn');
@@ -1445,17 +1446,28 @@ test('event format is saved, loaded and counted as an unsaved change', async () 
   assert.notEqual(page.element('bannerEventStatus').textContent, 'Unsaved changes');
 });
 
+test('new tournaments require an event type and show its sanctioning policy', async () => {
+  const page = await loadPage();
+  await page.click('createEventBtn');
+  page.element('eventNameInput').value = 'No Event Type';
+  await page.click('saveMetadataBtn');
+  assert.match(page.element('notice').textContent, /Select an event type/);
+  assert.equal(page.requests.some((request) => request.path === '/api/events/create'), false);
+  assert.match(html, /id="scopeInput" required/);
+  assert.match(html, /Regional, National, and World events are sanctioned\. In-House events are unsanctioned\./);
+});
+
 test('tournament list opens a center-workspace form with honest scope and live ring count', async () => {
   const page = await loadPage({ activeEvent: winter });
   assert.equal(page.element('workspaceTitle').textContent, 'Tournaments');
   assert.match(page.element('tournamentListBody').innerHTML, /data-edit-tournament=/);
-  assert.match(page.element('tournamentListBody').innerHTML, /Unspecified/);
+  assert.match(page.element('tournamentListBody').innerHTML, /Regional \(Sanctioned\)/);
   assert.doesNotMatch(html, /id="eventSelect"|id="modifyEventBtn"|id="activeEventChip"/);
   await page.openTournament();
   assert.equal(page.element('tournamentList').hidden, true);
   assert.equal(page.element('detailsPanel').hidden, true);
   assert.equal(page.element('metadataPanel').hidden, false);
-  assert.equal(page.element('scopeInput').value, '');
+  assert.equal(page.element('scopeInput').value, 'regional');
   assert.equal(page.element('eventNameInput').disabled, true);
   page.element('scopeInput').value = 'in-house';
   page.element('ringConfigXInput').value = '4';
@@ -1509,11 +1521,11 @@ test('browser history cancellation preserves tournament edits without repeated p
   await page.navigate('results');
   await page.navigate('event-setup');
   await page.openTournament();
-  page.element('scopeInput').value = 'regional';
+  page.element('scopeInput').value = 'in-house';
   const current = page.location.href;
   await page.history(-1);
   assert.equal(page.location.href, current);
-  assert.equal(page.element('scopeInput').value, 'regional');
+  assert.equal(page.element('scopeInput').value, 'in-house');
   assert.equal(page.element('metadataPanel').hidden, false);
   assert.equal(page.confirmations.length, 1);
 });

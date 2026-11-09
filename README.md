@@ -592,6 +592,8 @@ competitors or matching case-insensitive Association IDs are skipped; existing
 edits are not overwritten. Population does not certify a judge or establish
 availability. Missing or stale tournament ages for eligible ranks prevent
 population and are reported for correction.
+Every judge must have an Association ID. Population excludes any record without
+one, and In-House non-member volunteers cannot be added as judges.
 
 Certification defaults to Unknown. Saved directories with legacy free-text
 certification are normalized on load; unrecognized values or rank/certification
@@ -601,9 +603,10 @@ review notes capture follow-up observations, not automatic assignment exclusions
 Judges have an editable Priority from 0 to 99, defaulting to 4; the directory can
 be filtered by priority. Manual Only is omitted; **Judge Assignments** remains
 Planned.
-**Populate Judges from Volunteers** includes primary or secondary Judging
-volunteers aged 18+ with Dan rank, and SK/TK-certified volunteers meeting the
-rank and age rules above. Supplied certification is copied.
+**Populate Judges from Volunteers** includes member volunteers with an
+Association ID and primary or secondary Judging choice: those aged 18+ with Dan
+rank, and SK/TK-certified volunteers meeting the rank and age rules above.
+Supplied certification is copied.
 Linked volunteer IDs and nonblank Association IDs prevent repeated population;
 existing judge edits are not overwritten. Keep a type named **Judging** for this
 workflow; if it is renamed or deleted, population reports the missing type.
@@ -684,12 +687,23 @@ changes. Matching nonblank IDs update existing volunteers, preserving internal
 identity. Blank IDs always add, including on repeated imports. Quoted CSV fields
 are supported. Maximum file size is 2 MB. Errors report row numbers.
 
-Data is tournament-specific and persists atomically in `volunteers.json` with one
-revision covering volunteers and types. Operational use locks every write until
-Reset Run, which preserves the directory. Edits made on the Volunteers page do
-not automatically update copied judges; editing the linked entry in Ring Judges
-loads the current volunteer details and saves both together. Competitor
-registrations are never changed by these edits.
+Volunteer records and types are stored in the event's `tournament.db`, alongside
+competitor registrations, with one revision covering volunteers and types.
+Fresh event databases create the volunteer tables and default types. Association
+IDs are required for volunteers at Regional, National and World events; only
+In-House events allow non-member volunteers without one. Operational use locks
+every write until Reset Run, which preserves the directory. Edits made on the
+Volunteers page do not automatically update copied judges; editing the linked
+entry in Ring Judges loads the current volunteer details and saves both together.
+Competitor registrations are never changed by these edits.
+
+Each event database keeps one member identity for each case-insensitive
+Association ID. Competitor imports require a unique Association Number, and a
+member volunteer with the same ID links to that identity; non-member In-House
+volunteers remain unlinked and are never looked up across roles. A matching
+Association ID with a different first or last name is rejected for correction,
+not silently merged. Competitors and volunteers retain their separate
+role-specific registration and event data.
 `GET/POST /api/volunteers`, `PUT /api/volunteers/:id`,
 `POST /api/volunteers/import` (`csv` text), `POST /api/volunteers/delete` (`ids`),
 `POST /api/volunteer-types`, `PUT /api/volunteer-types/:id` (`name`), and
@@ -1560,11 +1574,13 @@ The name is the existing folder identity and cannot be renamed after creation.
 **Cancel / Back**, navigation, browser history, and tournament switching guard
 unsaved edits. Save failures remain visible without discarding the form.
 
-Scope is metadata only: Regional (`regional`), National (`national`), World
-(`world`), and In-House (`in-house`). Older tournaments remain **Unspecified**
-(`""`); blank is allowed and invalid supplied values are rejected. Scope is
-preserved by create/modify/read APIs and archived configuration snapshots; it
-does not change judging rules or simulator execution.
+Every tournament must have exactly one event type: Regional (`regional`),
+National (`national`), World (`world`), or In-House (`in-house`). Regional,
+National, and World are sanctioned; In-House is unsanctioned. The event type
+select is required, and the server rejects missing or invalid values. The saved
+configuration exposes the corresponding `sanctioned` boolean, derived from the
+event type. In-House scope continues to select the existing In-House age rules
+for volunteer and Ring Judge eligibility.
 Event configuration is authoritative;
 operational layout dimensions are derived automatically on creation, saving,
 activation, and reading unused event state, including for inactive events.

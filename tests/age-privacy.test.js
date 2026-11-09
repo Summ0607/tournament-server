@@ -32,7 +32,7 @@ test('competitor import retains age/date but no DOB, and invalid rows preserve t
   await initialize(db);
   assert.throws(() => writeJsonAtomicSync(path.join(root, 'bad.json'), { dob: '2000-01-09' }), /cannot be saved/);
   assert.equal(fs.existsSync(path.join(root, 'bad.json')), false);
-  fs.writeFileSync(csv, 'First Name,Last Name,DOB,Current Rank\nTest,Person,2000-01-09,D1');
+  fs.writeFileSync(csv, 'First Name,Last Name,DOB,Association Number,Current Rank\nTest,Person,2000-01-09,TSD-001,D1');
   await assert.rejects(importCSV(csv, db), /date/);
   const result = await importCSV(csv, db, { tournamentDate: '2027-01-09' });
   assert.equal(result.normalizedCompetitors[0].age, 27);
@@ -41,7 +41,7 @@ test('competitor import retains age/date but no DOB, and invalid rows preserve t
     assert.equal((await all('PRAGMA table_info(competitors)')).some((r) => r.name === 'dob'), false);
     assert.equal((await all('SELECT * FROM competitors'))[0].ageAsOf, '2027-01-09');
   });
-  fs.writeFileSync(csv, 'First Name,Last Name,DOB,Current Rank\nTest,Person,2000-01-09,D1\nBad,Date,broken,D1');
+  fs.writeFileSync(csv, 'First Name,Last Name,DOB,Association Number,Current Rank\nTest,Person,2000-01-09,TSD-001,D1\nBad,Date,broken,TSD-002,D1');
   await assert.rejects(importCSV(csv, db, { clearExisting: true, tournamentDate: '2027-01-09' }), /CSV row 3/);
   await database(db, async (_run, all) => assert.equal((await all('SELECT * FROM competitors')).length, 1));
 });
@@ -66,7 +66,7 @@ test('saving tournament ages locks the event date', (t) => {
   const event = path.join(root, 'events', 'Test');
   fs.mkdirSync(event, { recursive: true });
   const store = createEventConfigStore(path.join(root, 'events'));
-  store.writeEventConfig('Test', { date: '2027-01-09', ringConfigX: 1, ringConfigY: 1 });
+  store.writeEventConfig('Test', { scope: 'regional', date: '2027-01-09', ringConfigX: 1, ringConfigY: 1 });
   lockAgeDate(event, '2027-01-09');
   assert.throws(() => store.writeEventConfig('Test', { date: '2027-01-10' }), /date is fixed/);
   assert.equal(store.configurationStatus('Test').ageDateLocked, true);

@@ -7,11 +7,14 @@ const { writeJsonAtomicSync } = require('./atomicJsonFile');
 const CONFIG_LOCK_MESSAGE = 'Event configuration is locked because operational use has begun. Reset the run to return to preparation before editing.';
 
 function normalizeTournamentScope(value) {
-  if (value == null || value === '') return '';
   if (typeof value === 'string' && ['regional', 'national', 'world', 'in-house'].includes(value)) return value;
-  const error = new Error('scope must be Regional, National, World, In-House, or empty (Unspecified)');
+  const error = new Error('scope must be Regional, National, World, or In-House');
   error.statusCode = 400;
   throw error;
+}
+
+function isSanctionedTournamentScope(scope) {
+  return normalizeTournamentScope(scope) !== 'in-house';
 }
 
 function hasOperationalUse(state) {
@@ -86,6 +89,7 @@ function createEventConfigStore(eventsRoot) {
       name,
       location: '',
       scope: '',
+      sanctioned: null,
       date: '',
       tournamentDays: 1,
       ringConfigX: 0,
@@ -112,6 +116,7 @@ function createEventConfigStore(eventsRoot) {
       ...metadata,
       ...dimensions,
       scope: normalizeTournamentScope(raw.scope),
+      sanctioned: isSanctionedTournamentScope(raw.scope),
       tournamentDays: normalizeTournamentDays(raw.tournamentDays),
       eventName: name,
       name: String(raw.name || name).trim() || name
@@ -131,11 +136,13 @@ function createEventConfigStore(eventsRoot) {
       throw error;
     }
 
+    const scope = normalizeTournamentScope(config && config.scope);
     const payload = {
       eventName: name,
       name: String(config && config.name || name).trim() || name,
       location: String(config && config.location || '').trim(),
-      scope: normalizeTournamentScope(config && config.scope),
+      scope,
+      sanctioned: isSanctionedTournamentScope(scope),
       date: String(config && config.date || '').trim(),
       tournamentDays: normalizeTournamentDays(config && config.tournamentDays),
       ...normalizeEventRingConfig(config),
@@ -186,4 +193,4 @@ function createEventConfigStore(eventsRoot) {
   return { readEventConfig, writeEventConfig, readAssignmentState, configurationStatus, resetRun };
 }
 
-module.exports = { createEventConfigStore, normalizeEventRingConfig, normalizeTournamentScope, hasOperationalUse, CONFIG_LOCK_MESSAGE };
+module.exports = { createEventConfigStore, normalizeEventRingConfig, normalizeTournamentScope, isSanctionedTournamentScope, hasOperationalUse, CONFIG_LOCK_MESSAGE };

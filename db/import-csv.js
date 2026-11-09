@@ -4,6 +4,7 @@ const csv = require('csv-parser');
 const sqlite3 = require('sqlite3').verbose();
 const { normalizeRank } = require('./rankNormalization');
 const { ageOnDate, validDate, lockAgeDate } = require('../backend/tournamentAge');
+const { resolveMemberPerson, deleteOrphanPeople } = require('../backend/eventPeople');
 
 const defaultDbPath = path.join(__dirname, 'tournament.db');
 const weaponsEligibleRanks = new Set(['G2', 'G1', 'CDB', 'D1', 'D2', 'D3']);
@@ -84,7 +85,8 @@ function normalizeCompetitorRow(rawRow, generatedSequence = 1, tournamentDate) {
   const email = normalizeString(row.email);
   const phone = normalizeString(row.phone);
   const age = ageOnDate(row.dob, tournamentDate);
-  const associationNumber = normalizeString(row.associationNumber) || null;
+  const associationNumber = normalizeString(row.associationNumber);
+  if (!associationNumber) throw new Error('Association ID is required for every competitor.');
   const gender = normalizeGender(row.gender);
   const rankResult = normalizeRank(row.rank);
   const rank = rankResult.code;
@@ -145,6 +147,7 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
 
       const normalizedCompetitors = [];
       const rankWarnings = [];
+      const seenAssociationIds = new Set();
       let generatedSequence = 1;
       let csvLineNumber = 1;
 
@@ -188,6 +191,12 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
             let normalized;
             try { normalized = normalizeCompetitorRow(mapped, generatedSequence, tournamentDate); }
             catch (error) { parser.destroy(Object.assign(new Error(`CSV row ${csvLineNumber + 1}: ${error.message}`), { statusCode: 400 })); return; }
+            const associationKey = normalized.associationNumber.toUpperCase();
+            if (seenAssociationIds.has(associationKey)) {
+              parser.destroy(Object.assign(new Error(`CSV row ${csvLineNumber + 1}: Duplicate Association ID ${normalized.associationNumber}.`), { statusCode: 400 }));
+              return;
+            }
+            seenAssociationIds.add(associationKey);
             if (!readRawCompetitorId(mapped)) {
               generatedSequence += 1;
             }
@@ -207,7 +216,7 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
             }
 
             normalizedCompetitors.push(normalized);
-            rows.push([
+            rows.push({ normalized, values: [
               normalized.firstName,
               normalized.lastName,
               normalized.parentFirstName,
@@ -222,7 +231,7 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
               normalized.studio,
               normalized.specialNeeds,
               normalized.height
-            ]);
+            ] });
           })
           .on('error', (err) => {
             source.destroy();
@@ -230,9 +239,10 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
           })
           .on('end', async () => {
             const run = (sql, params = []) => new Promise((resolve, reject) => db.run(sql, params, (error) => error ? reject(error) : resolve()));
-            const get = (sql) => new Promise((resolve, reject) => db.get(sql, (error, row) => error ? reject(error) : resolve(row)));
+            const get = (sql, params = []) => new Promise((resolve, reject) => db.get(sql, params, (error, row) => error ? reject(error) : resolve(row)));
             let transaction = false;
             try {
+              await run('PRAGMA foreign_keys = ON');
               await run('BEGIN IMMEDIATE'); transaction = true;
               if (clearExisting) {
                 const table = await get("SELECT name FROM sqlite_master WHERE type='table' AND name='teams'");
@@ -240,14 +250,22 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
                   throw Object.assign(new Error('Teams exist. Delete all teams before replacing the competitor roster.'), { statusCode: 409 });
                 }
                 await run('DELETE FROM competitors');
+                await deleteOrphanPeople(db);
               }
-              for (const values of rows) await run(`
+              for (const { normalized, values } of rows) {
+                const personId = await resolveMemberPerson(db, normalized);
+                if (await get('SELECT id FROM competitors WHERE personId = ?', [personId])) {
+                  throw Object.assign(new Error(`Association ID ${normalized.associationNumber} already has a competitor record.`), { statusCode: 409 });
+                }
+                normalized.personId = personId;
+                await run(`
                 INSERT INTO competitors (
                   firstName, lastName, parentFirstName, parentLastName,
                   email, phone, age, ageAsOf, associationNumber, gender, rank,
-                  studio, specialNeeds, height
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              `, values);
+                  studio, specialNeeds, height, personId
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `, [...values, personId]);
+              }
               if (rows.length) lockAgeDate(path.dirname(targetDbPath), tournamentDate);
               await run('COMMIT'); transaction = false; finish();
             } catch (error) {

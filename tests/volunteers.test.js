@@ -8,6 +8,8 @@ const { createVolunteerRouter, headers, validateVolunteer } = require('../backen
 const { createRingJudgeRouter } = require('../backend/ringJudgeRoutes');
 const { create } = require('../tournament-management/volunteers');
 const { judgeRankOptions, certificationLevels } = require('../db/judgeCertification');
+const initializeDatabase = require('../db/init');
+const sqlite3 = require('sqlite3');
 const volunteer = { firstName: 'Jane', lastName: 'Doe', dob: '2000-01-09', associationNumber: 'D100', school: 'School',
   rank: 'D2', certification: 'Regional', primaryType: 'setup', secondaryType: 'judging', parentName: 'Guardian' };
 const csvRow = (association = 'D100', first = 'Jane') => `${first},Doe,2000-01-09,${association},School,D2,,Setup,Judging`;
@@ -17,8 +19,8 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const name of ['A', 'B']) {
     fs.mkdirSync(path.join(root, name));
-    fs.writeFileSync(path.join(root, name, 'tournament.db'), '');
-    fs.writeFileSync(path.join(root, name, 'event-config.json'), JSON.stringify({ date: '2027-01-09' }));
+    await initializeDatabase(path.join(root, name, 'tournament.db'));
+    fs.writeFileSync(path.join(root, name, 'event-config.json'), JSON.stringify({ date: '2027-01-09', scope: 'in-house' }));
   }
   let locked = false;
   const options = { eventsRoot: root, configurationStatus: () => ({ configurationLocked: locked }) };
@@ -35,7 +37,6 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   assert.deepEqual(data.types.map((r) => r.name), ['Setup', 'Teardown', 'Judging', 'Security']);
   assert.deepEqual(data.rankOptions, judgeRankOptions());
   assert.equal(fs.existsSync(path.join(root, 'A', 'volunteers.json')), false);
-  fs.writeFileSync(path.join(root, 'A', 'event-config.json'), JSON.stringify({ date: '2027-01-09', scope: 'in-house' }));
   let inHouse = await write('volunteers/import', { revision: null,
     csv: csvText('Young,Doe,2016-01-09,IH1,School,G5,SK/TK,Judging,').replace('\n', ',Parent/Guardian Name\n') + ',Guardian' });
   assert.equal(inHouse.status, 200);
@@ -44,6 +45,10 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
     volunteer: { ...volunteer, associationNumber: 'IH2', dob: '2012-01-09', certification: 'Corner', primaryType: 'judging', secondaryType: '' } });
   assert.equal(corner.status, 200);
   data = await corner.json();
+  const nonmember = await write('volunteers', { revision: data.revision,
+    volunteer: { ...volunteer, firstName: 'Nonmember', associationNumber: '', dob: '1990-01-09', certification: 'Unknown' } });
+  assert.equal(nonmember.status, 200);
+  data = await nonmember.json();
   for (const [certification, dob] of [['SK/TK', '2017-01-09'], ['Corner', '2013-01-09']]) {
     assert.equal((await write('volunteers', { revision: data.revision,
       volunteer: { ...volunteer, associationNumber: '', dob, certification } })).status, 400);
@@ -52,17 +57,20 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   assert.equal(populated.status, 200);
   const inHouseJudges = await populated.json();
   assert.equal(inHouseJudges.added, 2);
+  assert.equal(inHouseJudges.judges.some((row) => row.firstName === 'Nonmember'), false);
   assert.equal((await write('ring-judges/delete', { revision: inHouseJudges.revision,
     ids: inHouseJudges.judges.map((row) => row.id) })).status, 200);
   fs.unlinkSync(path.join(root, 'A', 'ring-judges.json'));
   data = await (await write('volunteers/delete', { revision: data.revision,
     ids: data.volunteers.map((row) => row.id) })).json();
-  fs.writeFileSync(path.join(root, 'A', 'event-config.json'), JSON.stringify({ date: '2027-01-09' }));
+  fs.writeFileSync(path.join(root, 'A', 'event-config.json'), JSON.stringify({ date: '2027-01-09', scope: 'regional' }));
+  assert.equal((await write('volunteers', { revision: data.revision,
+    volunteer: { ...volunteer, associationNumber: '' } })).status, 400);
   const response = await write('volunteers', { revision: data.revision, volunteer });
   assert.equal(response.status, 200); data = await response.json();
   assert.equal(data.volunteers[0].age, 27);
   assert.equal(data.volunteers[0].ageAsOf, '2027-01-09');
-  assert.doesNotMatch(fs.readFileSync(path.join(root, 'A', 'volunteers.json'), 'utf8'), /"dob"/i);
+  assert.equal(Object.hasOwn(data.volunteers[0], 'dob'), false);
   const originalId = data.volunteers[0].id;
   const extendedCsv = csvText(csvRow('D100')).replace('\n', ',Parent/Guardian Name,Contact Number,Gender,Email\n') + ',Guardian,+44 (20) 1234 5678 ext 2, Female , judge@example.test ';
   let updated = await write('volunteers/import', { revision: data.revision, csv: extendedCsv });
@@ -71,7 +79,12 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   assert.equal(data.volunteers[0].parentName, 'Guardian');
   assert.equal(data.volunteers[0].gender, 'Female');
   assert.equal(data.volunteers[0].email, 'judge@example.test');
-  const persisted = JSON.parse(fs.readFileSync(path.join(root, 'A', 'volunteers.json'), 'utf8')).volunteers[0];
+  const persisted = await new Promise((resolve, reject) => {
+    const db = new sqlite3.Database(path.join(root, 'A', 'tournament.db'));
+    db.get('SELECT gender, email FROM volunteers WHERE id = ?', [originalId], (error, row) => {
+      db.close((closeError) => error || closeError ? reject(error || closeError) : resolve(row));
+    });
+  });
   assert.equal(persisted.gender, 'Female');
   assert.equal(persisted.email, 'judge@example.test');
   const beforeInvalid = data.revision;
@@ -86,7 +99,7 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   }
   for (const [rank, age] of [['G5', 15], ['CDB', 13]]) {
     const response = await write('volunteers', { revision: data.revision, volunteer: {
-      ...volunteer, associationNumber: '', rank, certification: 'SK/TK', age, ageAsOf: '2027-01-09', dob: undefined
+      ...volunteer, associationNumber: `SK${rank}`, rank, certification: 'SK/TK', age, ageAsOf: '2027-01-09', dob: undefined
     } });
     assert.equal(response.status, 400);
     assert.match((await response.json()).error, /SK\/TK certification requires age/);
@@ -95,28 +108,30 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
     const response = await write('volunteers', { revision: data.revision, volunteer: {
       ...volunteer, associationNumber: `SK${rank}`, rank, certification: 'SK/TK', age, ageAsOf: '2027-01-09', dob: undefined
     } });
-    assert.equal(response.status, 200);
-    data = await response.json();
+    const saved = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(saved));
+    data = saved;
   }
   assert.equal((await write('volunteers', { revision: null, volunteer })).status, 409);
   assert.equal((await write('volunteer-types/delete', { revision: data.revision, ids: ['judging'] })).status, 409);
-  let imported = await write('volunteers/import', { revision: data.revision, csv: csvText(csvRow('d100', 'Updated'), csvRow('', 'Blank')) });
-  assert.equal(imported.status, 200); data = await imported.json();
+  let imported = await write('volunteers/import', { revision: data.revision, csv: csvText(csvRow('d100', 'Jane'), csvRow('D101', 'Additional')) });
+  data = await imported.json();
+  assert.equal(imported.status, 200, JSON.stringify(data));
   assert.equal(data.added, 1); assert.equal(data.updated, 1); assert.equal(data.volunteers[0].id, originalId);
   assert.equal(data.volunteers[0].contactNumber, '+44 (20) 1234 5678 ext 2');
   assert.equal(data.volunteers[0].parentName, 'Guardian');
-  const unchanged = JSON.stringify(data.volunteers);
+  const unchanged = data.volunteers.map((row) => ({ ...row }));
   assert.equal(data.volunteers[0].gender, 'Female');
   assert.equal(data.volunteers[0].email, 'judge@example.test');
   for (const text of [csvText(csvRow('D200'), csvRow('d200')), csvText(csvRow('D200'), csvRow('D201').replace('Setup', 'Unknown')), 'Bad,Headers\nA,B', csvText(),
     csvText(csvRow('D202').replace(',D2,,', ',G3,Corner,')),
     csvText('Young,Doe,2011-01-10,D203,School,G5,SK/TK,Setup,Judging')]) {
     assert.equal((await write('volunteers/import', { revision: data.revision, csv: text })).status, 400);
-    assert.equal(JSON.stringify((await get()).volunteers), unchanged);
+    assert.deepEqual((await get()).volunteers, unchanged);
   }
   const concurrent = await Promise.all([
-    write('volunteers/import', { revision: data.revision, csv: csvText(csvRow('D100', 'Updated')) }),
-    write('volunteers/import', { revision: data.revision, csv: csvText(csvRow('D100', 'Updated')) })
+    write('volunteers/import', { revision: data.revision, csv: csvText(csvRow('D100', 'Jane')) }),
+    write('volunteers/import', { revision: data.revision, csv: csvText(csvRow('D100', 'Jane')) })
   ]);
   assert.deepEqual(concurrent.map((r) => r.status).sort(), [200, 409]);
   data = await get();
@@ -159,7 +174,7 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   assert.equal(customVolunteer.primaryType, medical.id);
   assert.equal(customVolunteer.secondaryType, operations.id);
   const customEdit = await write(`volunteers/${customVolunteer.id}`, { revision: data.revision,
-    volunteer: { ...volunteer, associationNumber: 'CUSTOM', primaryType: operations.id, secondaryType: medical.id } }, 'PUT');
+    volunteer: { ...volunteer, firstName: 'Custom', associationNumber: 'CUSTOM', primaryType: operations.id, secondaryType: medical.id } }, 'PUT');
   assert.equal(customEdit.status, 200);
   data = await customEdit.json();
   assert.equal(data.volunteers.find((row) => row.id === customVolunteer.id).primaryType, operations.id);
@@ -186,9 +201,7 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   locked = false;
   data = await (await write('volunteers/delete', { revision: data.revision, ids: [originalId] })).json();
   assert.equal(data.volunteers.some((r) => r.id === originalId), false);
-  t.mock.method(console, 'error', () => {});
-  fs.writeFileSync(path.join(root, 'A', 'volunteers.json'), '{bad');
-  assert.equal((await fetch(`${base}/volunteers?eventName=A`)).status, 500);
+  assert.equal(fs.existsSync(path.join(root, 'A', 'volunteers.json')), false);
 });
 test('volunteer editor switches types, protects drafts, filters and surfaces import errors', async () => {
   const nodes = new Map(), requests = [];
@@ -198,7 +211,7 @@ test('volunteer editor switches types, protects drafts, filters and surfaces imp
     return nodes.get(id);
   };
   let allowed = false, failure = false;
-  const data = { revision: null, rankOptions: judgeRankOptions(), certificationLevels: certificationLevels(),
+  const data = { revision: null, eventScope: 'regional', rankOptions: judgeRankOptions(), certificationLevels: certificationLevels(),
     types: [{ id: 'setup', name: 'Setup' }, { id: 'judging', name: 'Judging' },
       { id: 'medical', name: 'Medical' }, { id: 'operations', name: 'Operations Mgmt' }],
     volunteers: [{ id: 'one', ...volunteer }] };
@@ -206,6 +219,7 @@ test('volunteer editor switches types, protects drafts, filters and surfaces imp
     requests.push({ url, options }); if (failure) throw new Error('Import failed'); return data;
   } });
   await workspace.load('volunteers'); node('vmAdd').handlers.click();
+  assert.equal(node('vm-associationNumber').required, true);
   for (const field of ['vm-primaryType', 'vm-secondaryType']) {
     for (const type of data.types) assert.ok(node(field).innerHTML.includes(`value="${type.id}">${type.name}`));
     assert.equal(node(field).disabled, false);
@@ -222,6 +236,9 @@ test('volunteer editor switches types, protects drafts, filters and surfaces imp
   assert.equal(workspace.canLeave(), false);
   assert.equal(workspace.dirty(), true);
   allowed = true; node('vmCancel').handlers.click();
+  data.eventScope = 'in-house'; await workspace.load('volunteers'); node('vmAdd').handlers.click();
+  assert.equal(node('vm-associationNumber').required, false);
+  node('vmCancel').handlers.click();
   node('vmSearch').value = 'absent'; node('vmSearchForm').handlers.submit({ preventDefault() {} });
   assert.match(node('vmBody').innerHTML, /No matching/);
   node('vmCsv').files = [{ size: 100, text: async () => csvText(csvRow()) }];

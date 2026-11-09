@@ -17,6 +17,7 @@ function ensureCompetitorColumns(db) {
       const columnsToAdd = [
         ['age', 'INTEGER'],
         ['ageAsOf', 'TEXT'],
+        ['personId', 'TEXT REFERENCES event_people(id)'],
         ['groupDivisionId', 'TEXT'],
         ['groupDivisionName', 'TEXT'],
         ['groupDivisionNumber', 'INTEGER'],
@@ -52,6 +53,7 @@ function ensureCompetitorIndexes(db) {
       'CREATE INDEX IF NOT EXISTS idx_competitors_first_name ON competitors(firstName)',
       'CREATE INDEX IF NOT EXISTS idx_competitors_last_name ON competitors(lastName)',
       'CREATE INDEX IF NOT EXISTS idx_competitors_association_number ON competitors(associationNumber)',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_competitors_person_id ON competitors(personId) WHERE personId IS NOT NULL',
       'CREATE INDEX IF NOT EXISTS idx_competitors_group_division_number ON competitors(groupDivisionNumber)',
       'CREATE INDEX IF NOT EXISTS idx_competitors_group_division_id ON competitors(groupDivisionId)',
       'CREATE INDEX IF NOT EXISTS idx_competitors_rank ON competitors(rank)'
@@ -115,6 +117,46 @@ function normalizeExistingRanks(db) {
   });
 }
 
+function run(db, sql, params = []) {
+  return new Promise((resolve, reject) => db.run(sql, params, (error) => error ? reject(error) : resolve()));
+}
+
+async function ensureVolunteerTables(db) {
+  await run(db, `CREATE TABLE IF NOT EXISTS volunteer_types (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE
+  )`);
+  await run(db, `CREATE TABLE IF NOT EXISTS volunteers (
+    id TEXT PRIMARY KEY,
+    person_id TEXT REFERENCES event_people(id),
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    association_id TEXT NOT NULL DEFAULT '',
+    school TEXT NOT NULL,
+    rank TEXT NOT NULL,
+    certification TEXT NOT NULL DEFAULT 'UNKNOWN',
+    primary_type TEXT NOT NULL REFERENCES volunteer_types(id),
+    secondary_type TEXT REFERENCES volunteer_types(id),
+    age INTEGER NOT NULL,
+    age_as_of TEXT NOT NULL,
+    parent_name TEXT NOT NULL DEFAULT '',
+    contact_number TEXT NOT NULL DEFAULT '',
+    gender TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT ''
+  )`);
+  await run(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_volunteers_association_id
+    ON volunteers(UPPER(association_id)) WHERE association_id <> ''`);
+  await run(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_volunteers_person_id
+    ON volunteers(person_id) WHERE person_id IS NOT NULL`);
+  await run(db, `CREATE TABLE IF NOT EXISTS volunteer_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    revision TEXT
+  )`);
+  await run(db, 'INSERT OR IGNORE INTO volunteer_settings (id, revision) VALUES (1, NULL)');
+  const types = [['setup', 'Setup'], ['teardown', 'Teardown'], ['judging', 'Judging'], ['security', 'Security']];
+  for (const type of types) await run(db, 'INSERT OR IGNORE INTO volunteer_types (id, name) VALUES (?, ?)', type);
+}
+
 function initializeDatabase(targetDbPath = DEFAULT_DB_PATH) {
   const directory = path.dirname(targetDbPath);
   if (!fs.existsSync(directory)) {
@@ -154,7 +196,8 @@ function initializeDatabase(targetDbPath = DEFAULT_DB_PATH) {
             groupDivisionId TEXT,
             groupDivisionName TEXT,
             groupDivisionNumber INTEGER,
-            competitionDivisionNumber INTEGER
+            competitionDivisionNumber INTEGER,
+            personId TEXT REFERENCES event_people(id)
           )
         `, (createErr) => {
           if (createErr) {
@@ -163,8 +206,19 @@ function initializeDatabase(targetDbPath = DEFAULT_DB_PATH) {
             return;
           }
 
+          db.run(`CREATE TABLE IF NOT EXISTS event_people (
+            id TEXT PRIMARY KEY,
+            association_id TEXT NOT NULL COLLATE NOCASE UNIQUE,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL
+          )`, (peopleError) => {
+          if (peopleError) {
+            db.close();
+            reject(peopleError);
+            return;
+          }
           ensureCompetitorColumns(db).then(() => {
-            ensureCompetitorIndexes(db).then(() => normalizeExistingRanks(db)).then(() => {
+            ensureCompetitorIndexes(db).then(() => normalizeExistingRanks(db)).then(() => ensureVolunteerTables(db)).then(() => {
               db.close((closeErr) => {
                 if (closeErr) {
                   reject(closeErr);
@@ -181,6 +235,7 @@ function initializeDatabase(targetDbPath = DEFAULT_DB_PATH) {
             db.close(() => {
               reject(migrationErr);
             });
+          });
           });
         });
       });

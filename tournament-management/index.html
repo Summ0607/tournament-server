@@ -1584,7 +1584,7 @@
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Name</th><th>Location</th><th>Date</th><th>Format</th><th>Scope</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Name</th><th>Location</th><th>Date</th><th>Format</th><th>Event Type / Policy</th><th>Status</th></tr></thead>
                   <tbody id="tournamentListBody"></tbody>
                 </table>
               </div>
@@ -1614,14 +1614,15 @@
                 <p id="tournamentDaysHint" class="event-format-hint"></p>
               </div>
               <div class="field-stack">
-                <label for="scopeInput">Scope</label>
-                <select id="scopeInput">
-                  <option value="">Unspecified</option>
+                <label for="scopeInput">Event Type</label>
+                <select id="scopeInput" required>
+                  <option value="" disabled>Choose event type</option>
                   <option value="regional">Regional</option>
                   <option value="national">National</option>
                   <option value="world">World</option>
                   <option value="in-house">In-House</option>
                 </select>
+                <p class="help-text">Regional, National, and World events are sanctioned. In-House events are unsanctioned.</p>
               </div>
               <div class="field-stack">
                 <label for="ringConfigXInput">Ring columns (Letters)</label>
@@ -1671,6 +1672,7 @@
                     <label for="csvTextInput">CSV text</label>
                     <textarea id="csvTextInput" placeholder="Paste CSV data here, or choose a file above."></textarea>
                   </div>
+                  <p>Every competitor row must include a unique Association Number. The Association ID links this registration to the same event member if they also volunteer.</p>
                   <div class="button-row">
                     <button id="importBtn" type="button" data-help="Import the chosen CSV file or pasted CSV into the selected event. Replacing a saved roster requires confirmation." disabled>Import CSV</button>
                     <button id="clearImportBtn" type="button" title="Clear pending CSV input and return to the saved roster. Saved competitors are not deleted.">Clear</button>
@@ -1895,7 +1897,7 @@
             </div>
             <div class="view" id="volunteersView" data-help-page="volunteers" data-help-title="Volunteer Management" hidden>
               <div class="actions"><button id="vmAdd" type="button" data-help="Add a volunteer or volunteer type to this tournament.">Add Volunteer</button><button id="vmReload" type="button" data-help="Reload saved volunteers, types and operational lock status without clearing filters.">Reload Saved</button></div>
-              <div id="vmImportArea"><label for="vmCsv">Volunteer CSV (max 2 MB)</label><input id="vmCsv" type="file" accept=".csv,text/csv"><button id="vmImport" type="button" data-help="Validate the entire CSV, then add or update volunteers by Assoc ID. Blank IDs always add.">Import CSV</button><p>Headers: First Name, Last Name, DOB, Assoc ID, School, Rank, Certification, Primary Volunteer Type, Secondary Volunteer Type.               Optional columns: Parent/Guardian Name, Contact Number, Gender, Email. Guardian name is required under 18. Omitted optional columns preserve existing values. DOB: YYYY-MM-DD or MM/DD/YYYY, converted to age on the tournament date and not stored. Certification maps to the shared levels (Unknown, Uncertified, SK/TK, Corner, Regional (Center), International);               SK/TK requires age 16+ at G5 or higher, or age 14+ at CDB; In-House tournaments use age 11+ for SK/TK and 15+ for Corner, with rank requirements unchanged. Unrecognized values are stored as Unknown. Certification and Secondary may be blank; Assoc ID may be blank (add-only).</p></div>
+              <div id="vmImportArea"><label for="vmCsv">Volunteer CSV (max 2 MB)</label><input id="vmCsv" type="file" accept=".csv,text/csv"><button id="vmImport" type="button" data-help="Validate the entire CSV, then add or update volunteers by Assoc ID. Blank IDs always add.">Import CSV</button><p>Headers: First Name, Last Name, DOB, Assoc ID, School, Rank, Certification, Primary Volunteer Type, Secondary Volunteer Type. Optional columns: Parent/Guardian Name, Contact Number, Gender, Email. Guardian name is required under 18. Omitted optional columns preserve existing values. DOB: YYYY-MM-DD or MM/DD/YYYY, converted to age on the tournament date and not stored. Certification maps to the shared levels (Unknown, Uncertified, SK/TK, Corner, Regional (Center), International); SK/TK requires age 16+ at G5 or higher, or age 14+ at CDB; In-House tournaments use age 11+ for SK/TK and 15+ for Corner, with rank requirements unchanged. Unrecognized values are stored as Unknown. Certification and Secondary may be blank. An Association ID is required except at In-House events, where non-member IDs may be blank (add-only).</p></div>
               <form id="vmSearchForm"><label for="vmSearch">Search</label><input id="vmSearch" type="search"><button type="submit" data-help="Search names, membership numbers and contact numbers.">Search</button><button id="vmClearFilters" type="button" data-help="Clear search and all dropdown filters.">Clear filters</button></form>
               <div id="vmColumnFilters" role="group" aria-label="Volunteer filters">
                 <label>Studio<select id="vmFilter-school"></select></label><label>Rank<select id="vmFilter-rank"></select></label>
@@ -1907,7 +1909,7 @@
               <p data-help-source="Volunteer filters and printing">Search matches names, membership numbers and contact numbers. The five dropdown filters combine with Search and remain applied on Reload Saved. Clear filters resets them; changing tournament or switching to Volunteer Types also resets them. Print filtered list includes every matching volunteer, regardless of selection. Age and guardian details remain in the editor and are not printed. Printing and filtering remain available when preparation is locked.</p>
               <div class="table-wrap"><table aria-label="Volunteer management"><thead><tr><th><input id="vmAll" type="checkbox" aria-label="Select all filtered entries"></th><th>Name</th><th id="vmCol0">Contact number</th><th id="vmCol1">First choice</th><th id="vmCol2">Second choice</th><th id="vmCol3">Studio</th><th id="vmCol4">Rank</th><th id="vmCol5">Certification</th><th id="vmCol6">Membership number</th></tr></thead><tbody id="vmBody"></tbody></table></div>
               <div class="actions"><button id="vmDelete" type="button" disabled data-help="Delete selected entries after confirmation. Types in use cannot be deleted.">Delete selected</button></div>
-              <p data-help-source="Volunteer preparation">Volunteers and editable types belong to the selected tournament. Operational use locks changes until Reset Run. CSV imports validate completely before saving; duplicate nonblank Assoc IDs within a file are rejected. Existing nonblank IDs update; blank IDs always add. Primary type is required; secondary is optional and must differ. Type names in CSV must match existing types (case-insensitive). SK/TK certification requires G5 or higher at age 16+, or CDB at age 14+, on the tournament date. The Ring Judges directory can include lower-ranked SK/TK volunteers when they are assigned the Judging type; Dan-ranked volunteers aged 18+ remain eligible as judge candidates.               Population copies supplied certification and does not confirm availability. Ring Judges edits update linked volunteers with qualification validation; edits or deletion on the Volunteers page do not automatically change copied judges.</p>
+              <p data-help-source="Volunteer preparation">Volunteers and editable types belong to the selected tournament. Operational use locks changes until Reset Run. CSV imports validate completely before saving; duplicate nonblank Assoc IDs within a file are rejected. Existing nonblank IDs update; blank IDs always add. Primary type is required; secondary is optional and must differ. Type names in CSV must match existing types (case-insensitive). SK/TK certification requires G5 or higher at age 16+, or CDB at age 14+, on the tournament date. Only volunteers with an Association ID can be added to Ring Judges; non-member In-House volunteers are never judges. The Ring Judges directory can include lower-ranked SK/TK volunteers when they are assigned the Judging type; Dan-ranked volunteers aged 18+ remain eligible as judge candidates. Population copies supplied certification and does not confirm availability. Ring Judges edits update linked volunteers with qualification validation; edits or deletion on the Volunteers page do not automatically change copied judges.</p>
               <dialog id="vmDialog" aria-labelledby="vmDialogTitle"><h2 id="vmDialogTitle">Add Volunteer</h2><form id="vmForm">
                 <div id="vmTypeFields" hidden><label>Type Name<input id="vm-typeName" maxlength="100"></label></div>
                 <div id="vmVolunteerFields">
@@ -1922,18 +1924,18 @@
               </form></dialog>
             </div>
             <div class="view" id="ringJudgesView" data-help-page="ring-judges" data-help-title="Ring Judges" hidden>
-              <div class="actions"><button id="rjAdd" type="button"               data-help="Create a validated Judging volunteer and add only that volunteer to Ring Judges.">Add Judge</button><button id="rjPopulate" type="button" data-help="Add adult Dan-ranked competitors and competitors meeting SK/TK age and rank requirements. Certification stays Unknown; eligible SK/TK candidates are noted.">Populate Judges from Competitors</button><button id="rjPopulateVolunteers" type="button" data-help="Add Dan-ranked adult Judging volunteers or SK/TK-certified Judging volunteers meeting the age and rank rules. Supplied certification is copied.">Populate Judges from Volunteers</button><button id="rjReload" type="button" data-help="Reload the saved judges and operational lock status.">Reload Saved</button></div>
+              <div class="actions"><button id="rjAdd" type="button"               data-help="Create a validated member Judging volunteer with an Association ID and add that volunteer to Ring Judges.">Add Judge</button><button id="rjPopulate" type="button" data-help="Add member competitors with Association IDs who meet Dan or SK/TK age and rank requirements. Certification stays Unknown; eligible SK/TK candidates are noted.">Populate Judges from Competitors</button><button id="rjPopulateVolunteers" type="button" data-help="Add member Judging volunteers with Association IDs who meet Dan or SK/TK age and rank rules. Supplied certification is copied.">Populate Judges from Volunteers</button><button id="rjReload" type="button" data-help="Reload the saved judges and operational lock status.">Reload Saved</button></div>
               <form id="rjSearchForm"><label for="rjSearch">Search</label><input id="rjSearch" type="search" maxlength="200"><button type="submit" data-help="Search across judge names, IDs, schools, ranks, certification and review notes.">Search</button><button id="rjClearFilters" type="button" data-help="Clear the search and all column filters.">Clear filters</button></form>
               <p id="rjNotice" role="status"></p><p id="rjCount"></p>
               <div class="table-wrap"><table aria-label="Ring Judges"><colgroup><col class="rj-select-column"><col class="rj-name-column"><col class="rj-id-column"><col class="rj-school-column"><col class="rj-rank-column"><col class="rj-certification-column"><col class="rj-priority-column"><col class="rj-review-column"><col class="rj-source-column"></colgroup><thead><tr><th><input id="rjAll" type="checkbox" aria-label="Select all filtered judges"></th><th>Name</th><th>TSD ID</th><th>School</th><th>Rank</th><th>Certification</th><th class="rj-priority-column">Priority</th><th class="rj-review-column">Flagged for Review</th><th class="rj-source-column">Source</th></tr><tr aria-label="Column filters"><th></th><th><input id="rjFilter-name" type="search" aria-label="Filter by name" placeholder="Filter name"></th><th><input id="rjFilter-associationNumber" type="search" aria-label="Filter by TSD ID" placeholder="Filter ID"></th><th><select id="rjFilter-school" aria-label="Filter by school"><option value="">All</option></select></th><th><select id="rjFilter-rank" aria-label="Filter by rank"><option value="">All</option></select></th><th><select id="rjFilter-certification" aria-label="Filter by certification"><option value="">All</option></select></th><th class="rj-priority-column"><select id="rjFilter-priority" aria-label="Filter by priority"><option value="">All</option></select></th><th><select id="rjFilter-flaggedForReview" aria-label="Filter by review flag"><option value="">All</option><option value="true">Flagged</option><option value="false">Not flagged</option></select></th><th><select id="rjFilter-source" aria-label="Filter by source"><option value="">All</option></select></th></tr></thead><tbody id="rjBody"></tbody></table></div>
               <div class="actions"><button id="rjDelete" type="button" disabled data-help="Delete selected judges after confirmation, without deleting their competitor registrations.">Delete selected</button><button id="rjClearReview" type="button" disabled data-help="Clear review flags for selected judges, keeping their notes.">Clear Review Flag</button></div>
-              <p data-help-source="Judge details">Click a judge's name to open Edit Judge directly in the main workspace, keeping navigation visible.               Add Judge uses the same workspace to create a validated Judging volunteer and add only that volunteer. Volunteer-derived edits validate and save both records; competitor-derived certification uses the saved registration rank and tournament-date age. Locked preparation opens read-only details instead. Certification uses the shared levels Unknown, Uncertified, SK/TK, Corner, Regional (Center) and International; each level from SK/TK up requires a minimum rank (G5, D1, D1 and D2 respectively) and judge ranks span G5 through D8. Clear Review Flag keeps existing notes.</p>
+              <p data-help-source="Judge details">Click a judge's name to open Edit Judge directly in the main workspace, keeping navigation visible. Add Judge requires a member Association ID and uses the same workspace to create a validated Judging volunteer. Volunteer-derived edits validate and save both records; competitor-derived certification uses the saved registration rank and tournament-date age. Locked preparation opens read-only details instead. Certification uses the shared levels Unknown, Uncertified, SK/TK, Corner, Regional (Center) and International; each level from SK/TK up requires a minimum rank (G5, D1, D1 and D2 respectively) and judge ranks span G5 through D8. Clear Review Flag keeps existing notes.</p>
               <dialog id="rjDetailsDialog" aria-labelledby="rjDetailsTitle"><h2 id="rjDetailsTitle">Judge Details</h2><dl id="rjDetailsContent"></dl><div class="actions"><button id="rjDetailsEdit" type="button">Edit Judge</button><button id="rjDetailsClose" type="button">Close</button></div></dialog>
               <p data-help-source="Ring Judges preparation">Ring Judges contains judge and SK/TK candidates for the selected tournament, not necessarily the active tournament. Operational use locks edits until Reset Run. Competitor population adds Dan-ranked competitors aged 18+ as judge candidates and adds competitors meeting SK/TK rank and age rules (G5 or higher at age 16+, CDB at age 14+). Their certification remains Unknown, and SK/TK eligibility is noted for verification. Volunteer population adds primary/secondary Judging volunteers who are Dan-ranked and 18+, or who have SK/TK certification and meet its rank and age requirements; supplied certification is copied. Existing linked identities and Association IDs are not duplicated; existing entries are not overwritten. Certification and availability must be verified. Priority is an editable value from 0 to 99; use its column filter to narrow the directory. Judge Assignments and Manual Only are not implemented. Deletion affects only this directory.</p>
               <dialog id="rjDialog" aria-labelledby="rjDialogTitle"><h2 id="rjDialogTitle">Add Judge</h2><form id="rjForm">
                 <label>First Name<input id="rj-firstName" required maxlength="100"></label>
                 <label>Last Name<input id="rj-lastName" required maxlength="100"></label>
-                <label>TSD ID<input id="rj-associationNumber" maxlength="100"></label>
+                <label>TSD ID<input id="rj-associationNumber" required maxlength="100"></label>
                 <label>School<select id="rj-school"></select></label>
                 <label>Rank<select id="rj-rank" required></select></label>
                 <label>Certification<select id="rj-certification"></select></label>
@@ -2435,6 +2437,9 @@
       }
 
       function readMetadataForm() {
+        if (!scopeInputEl.value) {
+          throw new Error('Select an event type: Regional, National, World, or In-House.');
+        }
         for (const input of [ringConfigXInputEl, ringConfigYInputEl]) {
           if (!input.checkValidity()) {
             input.reportValidity();
@@ -2576,7 +2581,7 @@
       let listRequestToken = 0;
       let tournamentRows = [];
       function renderTournamentList() {
-        const scopes = { regional: 'Regional', national: 'National', world: 'World', 'in-house': 'In-House' };
+        const scopes = { regional: 'Regional (Sanctioned)', national: 'National (Sanctioned)', world: 'World (Sanctioned)', 'in-house': 'In-House (Unsanctioned)' };
         tournamentListBodyEl.innerHTML = tournamentRows.map(({ name, meta, error }) =>
           `<tr><td><button class="tournament-name" type="button" data-edit-tournament="${gbEsc(name)}">${gbEsc(name)}</button></td>`
           + (error ? `<td colspan="5">Unable to load metadata: ${gbEsc(error)}</td>` :

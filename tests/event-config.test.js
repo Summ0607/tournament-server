@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
-const { createEventConfigStore, normalizeEventRingConfig, normalizeTournamentScope, hasOperationalUse } = require('../backend/eventConfig');
+const { createEventConfigStore, normalizeEventRingConfig, normalizeTournamentScope, isSanctionedTournamentScope, hasOperationalUse } = require('../backend/eventConfig');
 const DivisionRules = require('../assets/division-rules');
 const { normalizeTournamentDays, scheduleState, isDayBlocked } = require('../backend/tournamentSchedule');
 
@@ -81,7 +81,8 @@ test('two-day event config persists, defaults old events to one day and rejects 
   fs.mkdirSync(path.join(root, 'Event'));
   const store = createEventConfigStore(root);
   assert.equal(store.readEventConfig('Event').tournamentDays, 1);
-  const config = store.writeEventConfig('Event', { tournamentDays: 2 });
+  assert.equal(store.readEventConfig('Event').sanctioned, null);
+  const config = store.writeEventConfig('Event', { scope: 'regional', tournamentDays: 2 });
   assert.equal(store.readEventConfig('Event').tournamentDays, 2);
   for (const invalid of [0, 3, 1.5, 'two', true, [], {}]) {
     assert.throws(() => store.writeEventConfig('Event', { ...config, tournamentDays: invalid }), /tournamentDays/);
@@ -110,6 +111,7 @@ test('event dimensions persist as numbers and survive modification and reload', 
   const store = createEventConfigStore(root);
   const created = store.writeEventConfig(eventName, {
     location: 'Test Venue',
+    scope: 'national',
     date: '2027-01-16',
     ringConfigX: 2,
     ringConfigY: 3
@@ -145,7 +147,7 @@ test('event dimensions persist as numbers and survive modification and reload', 
     assert.equal(Object.hasOwn(JSON.parse(fs.readFileSync(file, 'utf8')), 'ringConfig'), false);
   }
 
-  fs.writeFileSync(file, JSON.stringify({ ringConfigX: 0, ringConfigY: 0, ringConfig: '2 x 3' }));
+  fs.writeFileSync(file, JSON.stringify({ scope: 'national', ringConfigX: 0, ringConfigY: 0, ringConfig: '2 x 3' }));
   assert.equal(store.readEventConfig(eventName).ringConfigX, 0);
   assert.equal(store.readEventConfig(eventName).ringConfigY, 0);
   fs.writeFileSync(file, '{ invalid JSON');
@@ -168,21 +170,30 @@ test('dimensions default to zero and reject invalid input instead of truncating'
   assert.throws(() => normalizeEventRingConfig({ ringConfigY: 51 }), /ringConfigY/);
 });
 
-test('scope metadata persists without inferred defaults and uses the all-settings lock and archive', (t) => {
+test('event type is required and determines sanctioned policy', (t) => {
   const root = fs.mkdtempSync(path.join(__dirname, 'scope-fixture-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'Event'));
   const store = createEventConfigStore(root);
   assert.equal(store.readEventConfig('Event').scope, '');
-  for (const scope of ['', 'regional', 'national', 'world', 'in-house']) {
+  assert.equal(store.readEventConfig('Event').sanctioned, null);
+  for (const scope of ['regional', 'national', 'world', 'in-house']) {
     const config = store.writeEventConfig('Event', { scope });
     assert.equal(store.readEventConfig('Event').scope, scope);
     assert.equal(config.scope, scope);
+    assert.equal(config.sanctioned, scope !== 'in-house');
+    assert.equal(store.readEventConfig('Event').sanctioned, scope !== 'in-house');
+    assert.equal(isSanctionedTournamentScope(scope), scope !== 'in-house');
   }
-  for (const scope of ['Regional', 'international', ' ', 1, true, {}, []]) {
+  for (const scope of ['', undefined, null, 'Regional', 'international', ' ', 1, true, {}, []]) {
     assert.throws(() => normalizeTournamentScope(scope), (error) => error.statusCode === 400);
     assert.throws(() => store.writeEventConfig('Event', { scope }), /scope/);
   }
+  const configFile = path.join(root, 'Event', 'event-config.json');
+  fs.writeFileSync(configFile, JSON.stringify({ scope: '' }));
+  assert.throws(() => store.readEventConfig('Event'), /scope must be/);
+  fs.rmSync(configFile);
+  store.writeEventConfig('Event', { scope: 'in-house' });
   const saved = store.readEventConfig('Event');
   fs.writeFileSync(path.join(root, 'Event', 'ring-assignments.json'), JSON.stringify({
     config: { letterCount: 0, numberCount: 0 }, configLockedAt: '2026-01-01', rings: {}
@@ -199,7 +210,7 @@ function eventFixture(t) {
   const eventDir = path.join(root, 'Event');
   fs.mkdirSync(eventDir);
   const store = createEventConfigStore(root);
-  const config = store.writeEventConfig('Event', { ringConfigX: 4, ringConfigY: 4, tournamentDays: 2, location: 'Venue' });
+  const config = store.writeEventConfig('Event', { scope: 'regional', ringConfigX: 4, ringConfigY: 4, tournamentDays: 2, location: 'Venue' });
   const assignmentsFile = path.join(eventDir, 'ring-assignments.json');
   const writeState = (state) => fs.writeFileSync(assignmentsFile, JSON.stringify(state));
   return { root, eventDir, store, config, assignmentsFile, writeState };
@@ -438,10 +449,14 @@ test('event APIs synchronize an active event, lock every field, and archive/rese
   cookie = login.headers['set-cookie'][0].split(';')[0];
   csrfToken = login.data.csrfToken;
   const metadata = { eventName: 'Event', ringConfigX: 4, ringConfigY: 4, tournamentDays: 2, location: 'Venue', scope: 'national' };
+  assert.equal((await request('/events/create', { ...metadata, eventName: 'Missing Type', scope: '' })).status, 400);
+  assert.equal(fs.existsSync(path.join(root, 'events', 'Missing Type')), false);
   assert.equal((await request('/events/create', { ...metadata, eventName: 'Invalid', scope: 'Regional' })).status, 400);
   assert.equal(fs.existsSync(path.join(root, 'events', 'Invalid')), false);
   assert.equal((await request('/events/create', metadata)).status, 200);
-  assert.equal((await request('/events/config?eventName=Event')).data.eventConfig.scope, 'national');
+  const savedConfig = (await request('/events/config?eventName=Event')).data.eventConfig;
+  assert.equal(savedConfig.scope, 'national');
+  assert.equal(savedConfig.sanctioned, true);
   assert.deepEqual((await request('/events/list')).data.events, ['Event']);
   assert.equal((await request('/events/modify', { ...metadata, scope: 'bad' })).status, 400);
   assert.equal((await request('/events/modify', { eventName: 'Event' })).data.eventConfig.scope, 'national');
