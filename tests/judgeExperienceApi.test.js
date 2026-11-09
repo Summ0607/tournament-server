@@ -185,4 +185,152 @@ test('normal management uses real dates, rejects simulation submissions and acce
     records: [record({ eventDate: today })] });
   assert.equal(response.status, 200);
   assert.equal(response.data.experience[0].logVerified, 0);
+  state = response.data;
+  assert.equal((await request(`/experience/${state.experience[0].id}`, 'DELETE', {
+    revision: state.revision, confirmedWithdrawal: true })).status, 409);
+  response = await request('/experience', 'POST', { associationId: 'MEMBER1', revision: state.revision,
+    confirmedCompleted: true, records: [record({ source: 'MANUAL', eventDate: today, phase: 'P2', role: 'ARBITRATOR' })] });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.experience.find((row) => row.source === 'MANUAL').logVerified, 0);
+});
+
+test('coordinator actual service supports phase details, corrections, withdrawal and normal progression through World service', async (t) => {
+  const { base, request, profile } = await setup(t);
+  let state = await profile('SIM-005');
+  const append = (records) => request('/experience', 'POST', { associationId: 'SIM-005',
+    revision: state.revision, confirmedCompleted: true, records });
+  let result = await append([record({ source: 'MANUAL', sourceId: undefined }),
+    record({ source: 'MANUAL', sourceId: undefined, phase: 'P2' })]);
+  assert.equal(result.status, 200);
+  state = await profile('SIM-005');
+  const p1 = state.experience.find((row) => row.source === 'MANUAL' && row.phase === 'P1');
+  const p2 = state.experience.find((row) => row.source === 'MANUAL' && row.phase === 'P2');
+  assert.equal(p1.logVerified, 0);
+  assert.equal(p2.logVerified, 0);
+  assert.equal(state.eligibility.experienceCount, 1);
+  result = await append([record({ source: 'MANUAL', sourceId: undefined })]);
+  assert.equal(result.data.duplicates, 1);
+  state = await profile('SIM-005');
+  result = await request('/experience-verify', 'POST', { associationId: 'SIM-005',
+    revision: state.revision, ids: [p1.id], verified: true });
+  assert.equal(result.status, 200);
+  state = await profile('SIM-005');
+  assert.equal(state.eligibility.experienceCount, 2);
+  result = await request(`/experience/${p1.id}`, 'PUT', { associationId: 'SIM-011', revision: state.revision,
+    confirmedCompleted: true, record: { location: 'Replacement served', role: 'CORNER_JUDGE', phase: 'P1' } });
+  assert.equal(result.status, 200);
+  assert.equal(result.data.experience.find((row) => row.id === p1.id).logVerified, 0);
+  state = await profile('SIM-005');
+  assert.equal(state.eligibility.experienceCount, 1);
+  result = await request(`/experience/${p1.id}`, 'DELETE', { revision: state.revision, confirmedWithdrawal: true });
+  assert.equal(result.status, 200);
+  assert.equal((await profile('SIM-011')).experience.some((row) => row.id === p1.id), false);
+  state = await profile('SIM-005');
+  result = await request('/experience-verify', 'POST', { associationId: 'SIM-005',
+    revision: state.revision, ids: [p2.id], verified: true });
+  assert.equal(result.status, 200);
+  state = await profile('SIM-005');
+  assert.equal(state.eligibility.experienceCount, 2);
+  assert.equal(state.eligibility.eligible, true);
+  assert.equal((await request(`/${state.judge.id}/award`, 'POST', {
+    revision: state.revision, grantedAt: state.asOf })).status, 409);
+  const passTests = async (targetLevel) => {
+    const response = await request(`/${state.judge.id}`, 'PUT', { revision: state.revision, judge: state.judge,
+      tests: [{ targetLevel, writtenDate: state.asOf, writtenScore: 80, practicalDate: state.asOf, practicalPassed: true }] });
+    assert.equal(response.status, 200);
+    state = await profile('SIM-005');
+  };
+  await passTests('REGIONAL');
+  result = await request(`/${state.judge.id}/award`, 'POST', { revision: state.revision, grantedAt: state.asOf });
+  assert.equal(result.status, 200);
+  state = await profile('SIM-005');
+  assert.equal(state.judge.certification, 'REGIONAL');
+  const clock = await fetch(base + '/api/simulation', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ previousDate: '2026-01-15', date: '2026-02-15' }) });
+  assert.equal(clock.status, 200);
+  state = await profile('SIM-005');
+  assert.equal(state.eligibility.experienceCount, 0);
+  result = await append([record({ source: 'MANUAL', eventId: 'regional-center', eventName: 'Regional Center Service',
+    eventDate: '2026-02-01', role: 'CENTER_JUDGE' })]);
+  assert.equal(result.status, 200);
+  state = await profile('SIM-005');
+  const center = state.experience.find((row) => row.eventId === 'regional-center');
+  result = await request('/experience-verify', 'POST', { associationId: 'SIM-005',
+    revision: state.revision, ids: [center.id], verified: true });
+  assert.equal(result.status, 200);
+  state = await profile('SIM-005');
+  assert.match(state.eligibility.reason, /World Championship/);
+  result = await append([record({ source: 'MANUAL', eventId: 'world-service', eventName: 'World Service',
+    eventDate: '2026-02-10', role: 'CORNER_JUDGE', eventScope: 'WORLD', phase: 'P2' })]);
+  assert.equal(result.status, 200);
+  state = await profile('SIM-005');
+  const world = state.experience.find((row) => row.eventId === 'world-service');
+  result = await request('/experience-verify', 'POST', { associationId: 'SIM-005',
+    revision: state.revision, ids: [world.id], verified: true });
+  assert.equal(result.status, 200);
+  state = await profile('SIM-005');
+  assert.equal(state.eligibility.eligible, true);
+  await passTests('INTERNATIONAL');
+  result = await request(`/${state.judge.id}/award`, 'POST', { revision: state.revision, grantedAt: state.asOf });
+  assert.equal(result.status, 200);
+  assert.equal((await profile('SIM-005')).judge.certification, 'INTERNATIONAL');
+});
+
+test('coordinator service requires attestation and valid identity; stale, conflicting and nonmanual changes are rejected', async (t) => {
+  const { request, profile } = await setup(t);
+  let state = await profile('SIM-003');
+  const manual = record({ source: 'MANUAL', sourceId: undefined, role: 'SCOREKEEPER' });
+  const append = (overrides = {}) => request('/experience', 'POST', { associationId: 'SIM-003',
+    revision: state.revision, records: [manual], confirmedCompleted: true, ...overrides });
+  assert.equal((await append({ confirmedCompleted: false })).status, 400);
+  for (const change of [{ phase: '' }, { eventId: 3 }, { eventDate: '2026-01-16' }, { logVerified: true }]) {
+    assert.equal((await append({ records: [{ ...manual, ...change }] })).status, 400);
+  }
+  assert.equal((await append({ associationId: 'missing' })).status, 404);
+  assert.equal((await append({ records: [manual, { ...manual, phase: 'BAD' }] })).status, 400);
+  assert.equal((await profile('SIM-003')).experience.length, 0);
+  let result = await append();
+  assert.equal(result.status, 200);
+  assert.equal((await append()).status, 409);
+  state = await profile('SIM-003');
+  const id = state.experience[0].id;
+  assert.equal((await append({ records: [{ ...manual, eventName: 'Different name' }] })).status, 409);
+  const correction = (overrides = {}) => request(`/experience/${id}`, 'PUT', {
+    associationId: 'SIM-003', revision: state.revision, confirmedCompleted: true,
+    record: { location: 'Corrected', role: 'TIMEKEEPER', phase: 'P2' }, ...overrides });
+  assert.equal((await correction({ confirmedCompleted: false })).status, 400);
+  assert.equal((await correction({ revision: -1 })).status, 409);
+  assert.equal((await request(`/experience/${id}`, 'DELETE', { revision: -1, confirmedWithdrawal: true })).status, 409);
+  assert.equal((await correction({ record: { ...manual, eventId: 'another-event' } })).status, 400);
+  assert.equal((await correction({ associationId: 'missing' })).status, 404);
+  result = await append({ records: [{ ...manual, phase: 'P2', role: 'TIMEKEEPER' }] });
+  assert.equal(result.status, 200);
+  state = await profile('SIM-003');
+  assert.equal((await correction()).status, 409);
+  assert.equal((await request(`/experience/${id}`, 'DELETE', { revision: state.revision })).status, 400);
+  result = await request('/experience-verify', 'POST', { revision: state.revision, associationId: 'SIM-003',
+    ids: state.experience.map((row) => row.id), verified: true });
+  assert.equal(result.status, 200);
+  state = await profile('SIM-003');
+  assert.equal(state.eligibility.experienceCount, 1);
+  for (const row of state.experience) {
+    result = await request(`/experience/${row.id}`, 'DELETE', { revision: state.revision, confirmedWithdrawal: true });
+    assert.equal(result.status, 200);
+    state = await profile('SIM-003');
+  }
+  assert.equal(state.eligibility.experienceCount, 0);
+  const legacy = await profile('SIM-005');
+  const legacyId = legacy.experience[0].id;
+  for (const method of ['PUT', 'DELETE']) {
+    assert.equal((await request(`/experience/${legacyId}`, method, { revision: legacy.revision })).status, 409);
+    assert.deepEqual(apiRoles(method, `/api/judge-management/experience/${legacyId}`), ['administrator', 'judging-coordinator']);
+  }
+  state = await profile('SIM-003');
+  result = await append({ records: [{ ...manual, eventId: 'in-house', eventName: 'In House Service', eventScope: 'IN_HOUSE', role: 'ARBITRATOR' }] });
+  assert.equal(result.status, 200);
+  const inHouse = result.data.experience.find((row) => row.eventId === 'in-house');
+  result = await request('/experience-verify', 'POST', { associationId: 'SIM-003',
+    revision: result.data.revision, ids: [inHouse.id], verified: true });
+  assert.equal(result.status, 200);
+  assert.equal((await profile('SIM-003')).eligibility.experienceCount, 0);
 });

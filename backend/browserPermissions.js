@@ -56,6 +56,7 @@ rule('GET POST PUT', /^\/api\/(ring-judges|volunteers|volunteer-types)(?:\/[^/]+
 rule('GET PUT', /^\/api\/judge-assignments$/, JUDGING);
 rule('POST', /^\/api\/judge-assignments\/auto$/, JUDGING);
 rule('GET POST PUT', /^\/api\/judge-management(?:\/[^/]+(?:\/award)?|-settings|-import)?$/, ['administrator', 'judging-coordinator']);
+rule('PUT DELETE', /^\/api\/judge-management\/experience\/[1-9]\d*$/, ['administrator', 'judging-coordinator']);
 rule('GET', /^\/api\/rings\/monitor$/, AUDIENCE);
 rule('POST', /^\/api\/tablet\/codes$/, DAY);
 rule('GET', /^\/(?:status|api\/rings(?:\/(?:config|estimates))?)$/, DAY);

@@ -2,6 +2,7 @@ const express = require('express');
 const sqlite3 = require('sqlite3');
 const csv = require('csv-parser');
 const { Readable } = require('node:stream');
+const crypto = require('node:crypto');
 const { normalizeRank } = require('../db/rankNormalization');
 const { normalizeCertification, certificationLevels, judgeRankOptions, JUDGE_RANKS, isJudgeRank } = require('../db/judgeCertification');
 const { validDate } = require('./tournamentAge');
@@ -29,6 +30,7 @@ const key = (value) => value.toLowerCase().replace(/[\s_]+/g, '');
 const run = (db, sql, args = []) => new Promise((resolve, reject) => db.run(sql, args, function (e) { e ? reject(e) : resolve(this); }));
 const all = (db, sql, args = []) => new Promise((resolve, reject) => db.all(sql, args, (e, rows) => e ? reject(e) : resolve(rows)));
 const close = (db) => new Promise((resolve, reject) => db.close((e) => e ? reject(e) : resolve()));
+const manualSourceId = (eventId, role, phase) => `manual:${crypto.createHash('sha256').update(JSON.stringify([eventId, role, phase])).digest('hex')}`;
 function date(value, label) {
   try { return validDate(value); } catch { throw invalid(`${label} must be a valid YYYY-MM-DD date.`); }
 }
@@ -49,10 +51,10 @@ function subtractFiveYears(value) {
   result.setUTCFullYear(result.getUTCFullYear() - 5);
   return result.toISOString().slice(0, 10);
 }
-function testPassed(records, level, type, after = '') {
+function testPassed(records, level, type, after, asOf) {
   return records.some((row) => row.targetLevel === level &&
-    (type === 'written' ? Boolean(row.writtenDate) && row.writtenDate >= after && row.writtenScore >= 80 :
-      Boolean(row.practicalDate) && row.practicalDate >= after && row.practicalPassed === 1));
+    (type === 'written' ? Boolean(row.writtenDate) && row.writtenDate >= after && row.writtenDate <= asOf && row.writtenScore >= 80 :
+      Boolean(row.practicalDate) && row.practicalDate >= after && row.practicalDate <= asOf && row.practicalPassed === 1));
 }
 function evaluateEligibility(judge, tests, experience, today = new Date().toISOString().slice(0, 10)) {
   const currentIndex = levels.indexOf(judge.certification);
@@ -68,7 +70,7 @@ function evaluateEligibility(judge, tests, experience, today = new Date().toISOS
   const grantedAt = judge.grantedAt || '';
   const logExempt = rankIndex >= JUDGE_RANKS.indexOf('D5');
   const records = experience.filter((item) => item.judgeId === judge.id && (item.logVerified || logExempt) &&
-    item.eventScope !== 'IN_HOUSE' && (!grantedAt || item.eventDate >= grantedAt));
+    item.eventDate <= today && item.eventScope !== 'IN_HOUSE' && (!grantedAt || item.eventDate >= grantedAt));
   const minimumRank = target === 'INTERNATIONAL' ? JUDGE_RANKS.indexOf('D2') :
     ['CORNER', 'REGIONAL'].includes(target) ? JUDGE_RANKS.indexOf('D1') : 0;
   const cdbCorner = target === 'CORNER' && judge.rank === 'CDB';
@@ -99,9 +101,9 @@ function evaluateEligibility(judge, tests, experience, today = new Date().toISOS
   const needsReview = recertifying && ['REGIONAL', 'INTERNATIONAL'].includes(target) && Boolean(reason);
   const testAfter = judge.grantedAt || (judge.expiration ? subtractFiveYears(judge.expiration) : '');
   const judgeTests = tests.filter((row) => row.judgeId === judge.id);
-  const writtenPassed = testPassed(judgeTests, target, 'written', testAfter);
+  const writtenPassed = testPassed(judgeTests, target, 'written', testAfter, today);
   const practicalRequired = target !== 'SK_TK';
-  const practicalPassed = !practicalRequired || testPassed(judgeTests, target, 'practical', testAfter);
+  const practicalPassed = !practicalRequired || testPassed(judgeTests, target, 'practical', testAfter, today);
   return { judgeId: judge.id, targetLevel: target || 'SK_TK', eligible: !reason, reason,
     status: needsReview ? 'Coordinator review required' : reason ? 'Not eligible' :
       recertifying ? 'Eligible to recertify' : 'Eligible to test',
@@ -322,12 +324,19 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
     const judge = await member(db, req.body.associationId);
     if (!Array.isArray(req.body.records) || !req.body.records.length || req.body.records.length > 200) throw invalid('Provide 1 to 200 experience records.');
     let added = 0, duplicates = 0;
-    for (const input of req.body.records) {
+    for (const supplied of req.body.records) {
+      const input = { ...supplied };
+      if (input.source === 'MANUAL') {
+        if (req.body.confirmedCompleted !== true) throw invalid('Confirm actual completed service; assignments or check-in alone do not qualify.');
+        if (typeof input.eventId !== 'string' || !input.eventId.trim() || input.eventId.length > 200) throw invalid('eventId is required and must be at most 200 characters.');
+        if (!['P1', 'P2'].includes(input.phase)) throw invalid('Select P1 or P2 for completed service.');
+        input.sourceId = manualSourceId(input.eventId.trim(), input.role, input.phase);
+      }
       const record = validateExperience({ ...input, logVerified: false }, today);
       for (const field of ['eventId', 'sourceId']) {
         if (typeof input[field] !== 'string' || !input[field].trim() || input[field].length > 200) throw invalid(`${field} is required and must be at most 200 characters.`);
       }
-      if (!['SIMULATION', 'TOURNAMENT'].includes(input.source) || input.source === 'SIMULATION' && !allowSimulation) throw invalid('Experience source is not permitted.');
+      if (!['MANUAL', 'SIMULATION', 'TOURNAMENT'].includes(input.source) || input.source === 'SIMULATION' && !allowSimulation) throw invalid('Experience source is not permitted.');
       if (input.logVerified !== undefined && input.logVerified !== false) throw invalid('Submitted experience must await coordinator verification.');
       if (!['', 'P1', 'P2'].includes(input.phase ?? '')) throw invalid('Phase must be blank, P1 or P2.');
       const values = [record.eventName, record.eventDate, record.location, record.role, record.eventScope,
@@ -349,6 +358,37 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
       added++;
     }
     return { added, duplicates };
+  }, true));
+  router.put('/judge-management/experience/:id', endpoint(async (req, db, _aliases, today) => {
+    const [existing] = await all(db, 'SELECT * FROM judge_experience WHERE id = ?', [req.params.id]);
+    if (!existing) throw invalid('Experience record not found.', 404);
+    if (existing.source !== 'MANUAL' || !existing.source_id) throw invalid('Only coordinator-recorded completed service can be corrected here.', 409);
+    if (req.body.confirmedCompleted !== true) throw invalid('Confirm the corrected record describes actual completed service.');
+    if (!req.body.record || typeof req.body.record !== 'object' || Array.isArray(req.body.record)) throw invalid('Corrected service details are required.');
+    for (const [field, stored] of [['eventId', 'event_id'], ['eventName', 'event_name'], ['eventDate', 'event_date'], ['eventScope', 'event_scope']]) {
+      if (req.body.record[field] !== undefined && req.body.record[field] !== existing[stored]) throw invalid('Event identity cannot be changed in a service correction. Withdraw an incorrect event record and enter it again.');
+    }
+    const judge = await member(db, req.body.associationId);
+    const record = validateExperience({ ...req.body.record, eventName: existing.event_name, eventDate: existing.event_date,
+      eventScope: existing.event_scope, logVerified: false }, today);
+    if (!['P1', 'P2'].includes(req.body.record?.phase)) throw invalid('Select P1 or P2.');
+    try {
+      await run(db, `UPDATE judge_experience SET judge_id=?,location=?,role=?,phase=?,source_id=?,log_verified=0 WHERE id=?`,
+        [judge.id, record.location, record.role, req.body.record.phase,
+          manualSourceId(existing.event_id, record.role, req.body.record.phase), existing.id]);
+    } catch (error) {
+      if (error.code === 'SQLITE_CONSTRAINT' && /UNIQUE/.test(error.message)) throw invalid('That judge already has this event, role and phase recorded.', 409);
+      throw error;
+    }
+    return {};
+  }, true));
+  router.delete('/judge-management/experience/:id', endpoint(async (req, db) => {
+    const [existing] = await all(db, 'SELECT source,source_id FROM judge_experience WHERE id=?', [req.params.id]);
+    if (!existing) throw invalid('Experience record not found.', 404);
+    if (existing.source !== 'MANUAL' || !existing.source_id) throw invalid('Only coordinator-recorded completed service can be withdrawn here.', 409);
+    if (req.body.confirmedWithdrawal !== true) throw invalid('Confirm withdrawal of this service and its experience credit.');
+    await run(db, 'DELETE FROM judge_experience WHERE id=?', [req.params.id]);
+    return {};
   }, true));
   router.post('/judge-management/experience-verify', endpoint(async (req, db) => {
     const judge = await member(db, req.body.associationId);
@@ -389,12 +429,13 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
     const [judge] = await all(db, `SELECT id, rank, certification, certification_expiration AS expiration,
       certification_granted_at AS grantedAt, date_of_birth AS dateOfBirth FROM judges WHERE id = ?`, [id]);
     if (!judge) throw invalid('Judge not found.', 404);
+    if (judge.grantedAt && grantDate < judge.grantedAt) throw invalid('Grant date cannot precede the current certification award.');
     const tests = await all(db, `SELECT judge_id AS judgeId, target_level AS targetLevel, written_date AS writtenDate,
       written_score AS writtenScore, practical_date AS practicalDate, practical_passed AS practicalPassed FROM judge_test_attempts WHERE judge_id = ?`, [id]);
     const experience = await all(db, `SELECT judge_id AS judgeId, event_name AS eventName, event_id AS eventId, event_date AS eventDate, role, event_scope AS eventScope,
       log_verified AS logVerified FROM judge_experience WHERE judge_id = ?`, [id]);
-    const eligibility = evaluateEligibility(judge, tests, experience, today);
-    if (!eligibility.eligible || !eligibility.writtenPassed || !eligibility.practicalPassed) throw invalid('The judge must meet eligibility requirements and pass the required written and practical tests before certification can be granted.', 409);
+    const eligibility = evaluateEligibility(judge, tests, experience, grantDate);
+    if (!eligibility.eligible || !eligibility.writtenPassed || !eligibility.practicalPassed) throw invalid('On the grant date, the judge must meet eligibility requirements and have passed the required written and practical tests before certification can be granted.', 409);
     const certification = eligibility.targetLevel;
     await run(db, 'UPDATE judges SET certification = ?, certification_granted_at = ?, certification_expiration = ? WHERE id = ?',
       [certification, grantDate, addFiveYears(grantDate), id]);

@@ -27,11 +27,9 @@ async function judgeSnapshot(file, date) {
     const experience = await all(db, `SELECT judge_id AS judgeId,event_id AS eventId,event_name AS eventName,event_date AS eventDate,
       role,event_scope AS eventScope,log_verified AS logVerified FROM judge_experience`);
     await all(db, 'COMMIT');
-    const historicalTests = tests.filter((row) => (!row.writtenDate || row.writtenDate <= date) && (!row.practicalDate || row.practicalDate <= date));
-    const historicalExperience = experience.filter((row) => row.eventDate <= date);
     return { revision: settings.revision, judges: judges.map((judge) => {
       const { dateOfBirth, ...publicJudge } = judge;
-      return { ...publicJudge, progression: evaluateEligibility(judge, historicalTests, historicalExperience, date) };
+      return { ...publicJudge, progression: evaluateEligibility(judge, tests, experience, date) };
     }) };
   });
 }

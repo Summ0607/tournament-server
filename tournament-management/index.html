@@ -1998,17 +1998,37 @@
               </section>
               <section id="jmTesting" hidden>
                 <div class="jm-toolbar"><button type="button" disabled>Generate Submission Sheet</button><button type="button" id="jmTestingAdd">Add Judge</button></div>
-                <p class="jm-note">Written tests require a score of at least 80%. Practical results are pass/fail. Certification is granted by a coordinator after all requirements are met.</p>
+                <p class="jm-note">Written tests require a score of at least 80%. Practical results are pass/fail. To record a retake, edit the existing judge and add another testing record; retain previous failures and attempts. Certification is granted by a coordinator after all requirements are met.</p>
                 <div class="table-wrap"><table aria-label="Judge testing"><thead><tr><th scope="col">WTSDA ID</th><th scope="col">Judge</th><th scope="col">Level</th><th scope="col">Written Date</th><th scope="col">Score</th><th scope="col">Practical Date</th><th scope="col">Result</th></tr></thead><tbody id="jmTestingBody"><tr><td colspan="7">Loading testing records...</td></tr></tbody></table></div>
               </section>
               <section id="jmEligibility" hidden>
                 <div class="jm-toolbar"><button type="button" id="jmEligibilityAdd">Add Judge</button></div>
-                <p class="jm-note">Eligibility is advisory. Certification changes only when a coordinator records an award date; certification expires five years after that date.</p>
+                <p class="jm-note">Eligibility is advisory. Certification changes only when a coordinator explicitly grants it. Experience and required tests must be completed by the award date; certification expires five years after that date. Reload subsequent-event Judge Assignments after an award to use the upgraded qualification.</p>
                 <div class="table-wrap"><table aria-label="Judge eligibility"><thead><tr><th scope="col">WTSDA ID</th><th scope="col">Judge</th><th scope="col">Rank</th><th scope="col">Current</th><th scope="col">Target</th><th scope="col">Experience</th><th scope="col">Tests</th><th scope="col">Status / Reason</th><th scope="col">Grant Date</th><th scope="col">Action</th></tr></thead><tbody id="jmEligibilityBody"><tr><td colspan="10">Loading eligibility...</td></tr></tbody></table></div>
               </section>
               <section id="jmExperience" hidden>
-                <div class="jm-toolbar"><button type="button" id="jmExperienceAdd">Add Judge</button></div>
+                <div class="jm-toolbar"><button type="button" id="jmExperienceAdd">Add Judge</button><button type="button" id="jmServiceAdd">Record Completed Service</button></div>
                 <p class="jm-note">Only Regional, National and World events are sanctioned. A verified log is required except for Sah Dan (D5) and above.</p>
+                <form id="jmServiceForm" hidden>
+                  <h3 id="jmServiceTitle">Record Completed Service</h3>
+                  <p class="jm-note">Coordinator-recorded actual service, not tablet-confirmed. Record only who actually served, including replacements and arbitrators. Use the same event ID and event date for both phases and all judges. Assignments and check-in alone earn no credit.</p>
+                  <fieldset id="jmServiceFields"><div class="jm-form-grid">
+                    <label>Judge<select id="jmService-associationId" required></select></label>
+                    <label>Existing event<select id="jmServiceEvent"><option value="">New event</option></select></label>
+                    <label>Shared event ID<input id="jmService-eventId" maxlength="200" required></label>
+                    <label>Event name<input id="jmService-eventName" maxlength="200" required></label>
+                    <label>Event date<input id="jmService-eventDate" type="date" required></label>
+                    <label>Event scope<select id="jmService-eventScope" required><option value="">Select scope</option><option value="REGIONAL">Regional</option><option value="NATIONAL">National</option><option value="WORLD">World</option><option value="IN_HOUSE">In-House</option></select></label>
+                    <label>Location<input id="jmService-location" maxlength="200"></label>
+                    <label>Phase<select id="jmService-phase" required><option value="">Select phase</option><option>P1</option><option>P2</option></select></label>
+                    <label>Actual role<select id="jmService-role" required><option value="">Select role</option><option value="SCOREKEEPER">Scorekeeper</option><option value="TIMEKEEPER">Timekeeper</option><option value="CORNER_JUDGE">Corner Judge</option><option value="CENTER_JUDGE">Center Judge</option><option value="ARBITRATOR">Arbitrator</option><option value="JUDGE">Judge (unspecified role)</option></select></label>
+                  </div>
+                  <label><input id="jmServiceCompleted" type="checkbox" required> I confirm this judge actually completed the recorded service, not merely an assignment or check-in.</label>
+                  </fieldset>
+                  <p id="jmServiceError" class="jm-note" role="alert"></p>
+                  <button type="submit" id="jmServiceSave">Submit Pending Experience</button>
+                  <button type="button" id="jmServiceCancel">Cancel</button>
+                </form>
                 <div class="table-wrap"><table aria-label="Judge experience"><thead><tr><th scope="col">WTSDA ID</th><th scope="col">Judge</th><th scope="col">Event</th><th scope="col">Date</th><th scope="col">Location</th><th scope="col">Role</th><th scope="col">Scope</th><th scope="col">Log</th></tr></thead><tbody id="jmExperienceBody"><tr><td colspan="8">Loading experience records...</td></tr></tbody></table></div>
               </section>
               <section id="jmCsvSettings" hidden>

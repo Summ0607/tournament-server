@@ -1627,6 +1627,88 @@ The assignment candidate view independently refreshes authoritative directory
 qualifications, including officials already populated earlier.
 Focused validation: `npm run test:judge-assignments`.
 
+##### Coordinator-recorded actual service (Step 3A)
+
+Open **Judge Management > Experience > Record Completed Service** in the normal
+application or isolated judge simulation. Select the judge by Association ID,
+enter a shared event ID, event name/date/scope, location, P1/P2 and actual role.
+For another judge or phase at an already recorded event, choose **Existing event**
+to reuse its identity. Use the event's canonical date even when P2 is on a second
+day. The coordinator must explicitly attest that the judge actually completed
+that service. Do not enter planned assignments, check-in alone, or absent judges.
+There is no automatic conversion from Step 2 plans.
+
+The form uses the shared experience append API with `source: MANUAL`,
+`confirmedCompleted: true` and a server-generated service identity. New records
+are pending (`logVerified: false`). An identical resubmission does not add another
+record or credit; conflicting event/service details and stale revisions are
+rejected. **Verify** remains a separate coordinator decision. Existing D5-and-above
+log-verification exemptions remain unchanged; recording service never grants
+certification or bypasses tests.
+
+Coordinator-recorded rows are labeled explicitly. **Correct** can change the
+actual judge, role, phase or location, and always resets verification. Use it for
+a mistaken entry or replacement; if both judges actually served, retain both
+records instead. **Withdraw** removes a mistaken service record and its credit.
+Event identity cannot be edited in a correction: withdraw an entry under the
+wrong event and record it again under the correct event. Other API-created and
+legacy records cannot be corrected or withdrawn through these new controls.
+These operations require Administrator or Judging Coordinator access and use
+the same database revision checks as the rest of Judge Management.
+
+Separate roles/phases are retained, but a qualifying championship counts only
+once per judge for the applicable progression requirement. In-House experience
+does not earn sanctioned-championship credit; Corner/Center requirements and
+World experience requirements remain unchanged. Actual-service corrections
+recalculate advisory eligibility; they do not automatically revoke an already
+awarded certification.
+
+This is manual coordinator capture, not tablet-confirmed service. Tablet roster
+delivery, per-phase judge check-in, replacement authorization, and result/service
+reporting remain **Step 3B**, a future coordinated server/app effort. No tablet
+contract or ring-result ingestion has changed, and arbitrator service is entered
+manually here.
+
+Focused validation:
+`node --test tests/judgeExperienceApi.test.js tests/judgeManagementUi.test.js`.
+
+##### Exercising certification upgrades (Step 4)
+
+Use the isolated judge simulation for lifecycle exercises; the same live
+eligibility, testing and award rules apply. Step 3A completed-service entry is
+sufficient; tablet integration (Step 3B) is not required.
+
+1. Record actual service, then verify the qualifying logs in **Experience**.
+   Eligibility recalculates after each change. Multiple phases at one
+   championship do not satisfy a two-championship requirement. Removing
+   verification or correcting/withdrawing service recalculates eligibility too,
+   subject to the existing D5-and-above verification exemption.
+2. Edit the existing judge and add testing records for each attempt. Retain
+   failures and add retakes rather than overwriting history. Written scores
+   require 80% or higher; practical results are pass/fail. Written and practical
+   passes may be recorded on separate attempts. Each must fall within the
+   applicable certification cycle and on/before the effective evaluation date.
+3. **Eligibility** shows **Ready for coordinator award** only when experience
+   prerequisites and required tests are satisfied. Nothing promotes a judge
+   automatically: choose an award date and explicitly confirm **Grant**.
+   The server rechecks qualifications as of that grant date, rejecting future
+   awards, awards before a required test/service, and dates preceding the
+   current certification award. Expiration is five years from the award date.
+4. Reload **Judge Assignments** for the subsequent event. Its candidate pool
+   reads the awarded certification directly from Judge Management, without
+   requiring a CSV reimport or changing a volunteer's claimed certification.
+   Stale assignment drafts must reload after an award. Center/Corner/SK-TK
+   qualification still depends on the event date, age, rank, availability and
+   competition conflicts; readiness to be awarded is not an awarded level.
+
+Focused automated coverage exercises pending/verified experience, separate
+failed attempts and passing retakes, refused premature/backdated awards, an
+explicit Regional upgrade, and manual/automatic Center placement at a later
+event. The service lifecycle coverage also exercises Regional-to-International
+progression requiring Center service plus World judging and coordinator awards.
+Run only the relevant tests:
+`node --test tests/judgeAssignments.test.js tests/judgeManagementRoutes.test.js tests/judgeManagementUi.test.js tests/judgeExperienceApi.test.js`.
+
 For another independent dataset or port:
 
 ```powershell

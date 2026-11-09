@@ -92,11 +92,155 @@ test('API experience remains read-only in edits and coordinator verification use
   assert.match(node('jmExperienceBody').innerHTML, /Regional \(P2\)/);
   workspace.begin('judge-management', judge);
   assert.match(node('jmExperienceRecords').innerHTML, /<fieldset disabled>/);
-  await node('jmExperienceBody').handlers.click({ target: { closest() {
-    return { getAttribute: () => '12' };
+  await node('jmExperienceBody').handlers.click({ target: { closest(selector) {
+    return selector === '[data-jm-verify]' ? { getAttribute: () => '12' } : null;
   } } });
   assert.equal(calls.at(-1).url, '/api/judge-management/experience-verify');
   assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
     associationId: 'SIM-R-041', ids: [12], verified: true, revision: 3
   });
+});
+
+test('coordinator service form guards drafts, attestation, failures, duplicate writes, corrections and withdrawal', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', checked: false, handlers: {},
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {} });
+    return nodes.get(id);
+  };
+  const service = { id: 21, judgeId: 1, eventId: 'event-1', eventName: '<Regional>',
+    eventDate: '2026-01-10', eventScope: 'REGIONAL', phase: 'P1', role: 'CORNER_JUDGE',
+    location: 'Venue', source: 'MANUAL', sourceId: 'manual:1', logVerified: 1 };
+  const state = { asOf: '2026-01-15', revision: 4, aliases: defaults, ranks: judgeRankOptions(),
+    certificationLevels: certificationLevels(), judges: [{ id: 1, associationId: 'ID1', firstName: 'Test',
+      lastName: '<Judge>', certification: 'CORNER', school: '', status: 'Active' }], experience: [service] };
+  let accept = false, fail = false, release;
+  const workspace = create({ document: { getElementById: node }, confirm: () => accept, showPanel() {},
+    request: async (url, options) => {
+      calls.push({ url, options });
+      if (fail) throw new Error('Stale revision: reload before saving');
+      if (release === true) await new Promise((resolve) => { release = resolve; });
+      return state;
+    } });
+  await workspace.load();
+  assert.match(node('jmExperienceBody').innerHTML, /Coordinator-recorded actual service/);
+  assert.match(node('jmExperienceBody').innerHTML, /&lt;Regional&gt;/);
+  assert.match(node('jmService-associationId').innerHTML, /&lt;Judge&gt;/);
+  node('jmServiceAdd').handlers.click();
+  for (const [field, value] of Object.entries({ associationId: 'ID1', eventId: 'event-1', eventName: '<Regional>',
+    eventDate: '2026-01-10', eventScope: 'REGIONAL', location: 'Venue', phase: 'P2', role: 'CORNER_JUDGE' })) {
+    node(`jmService-${field}`).value = value;
+  }
+  assert.equal(workspace.dirty(), true);
+  assert.equal(workspace.canLeave(), false);
+  const submit = () => node('jmServiceForm').handlers.submit({ preventDefault() {} });
+  await submit();
+  assert.match(node('jmServiceError').textContent, /Confirm actual completed service/);
+  assert.equal(calls.length, 1);
+  node('jmServiceCompleted').checked = true;
+  await submit();
+  assert.equal(calls.length, 1);
+  accept = true; fail = true;
+  await submit();
+  assert.match(node('jmNotice').textContent, /Stale revision/);
+  assert.equal(workspace.dirty(), true);
+  assert.equal(node('jmService-phase').value, 'P2');
+  fail = false; release = true;
+  const pending = submit();
+  assert.equal(workspace.busy(), true);
+  assert.equal(node('jmServiceFields').disabled, true);
+  assert.equal(workspace.canLeave(), false);
+  await submit();
+  assert.equal(calls.length, 3);
+  release(); await pending;
+  const body = JSON.parse(calls.at(-1).options.body);
+  assert.equal(calls.at(-1).url, '/api/judge-management/experience');
+  assert.equal(body.records[0].source, 'MANUAL');
+  assert.equal(body.records[0].phase, 'P2');
+  assert.equal(body.confirmedCompleted, true);
+  assert.equal(body.revision, 4);
+  assert.equal(workspace.dirty(), false);
+  assert.equal(node('jmServiceForm').hidden, true);
+  const action = (attribute) => ({ target: { closest: (selector) =>
+    selector === `[${attribute}]` ? { getAttribute: () => '21' } : null } });
+  node('jmExperienceBody').handlers.click(action('data-jm-service-edit'));
+  assert.equal(node('jmService-eventId').disabled, true);
+  assert.equal(node('jmServiceEvent').disabled, true);
+  assert.equal(node('jmServiceCompleted').checked, false);
+  node('jmServiceCompleted').checked = true;
+  await submit();
+  assert.equal(calls.at(-1).url, '/api/judge-management/experience/21');
+  assert.equal(calls.at(-1).options.method, 'PUT');
+  await node('jmExperienceBody').handlers.click(action('data-jm-service-delete'));
+  assert.equal(calls.at(-1).options.method, 'DELETE');
+  assert.equal(JSON.parse(calls.at(-1).options.body).confirmedWithdrawal, true);
+  node('jmServiceAdd').handlers.click();
+  node('jmServiceEvent').value = 'event-1';
+  node('jmServiceEvent').handlers.change();
+  assert.equal(node('jmService-eventId').value, 'event-1');
+  assert.equal(node('jmService-eventName').disabled, true);
+  assert.equal(workspace.canLeave(), true);
+  assert.equal(workspace.dirty(), false);
+});
+
+test('testing retains failed attempts and retakes while eligibility requires an explicit confirmed award', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', handlers: {},
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {},
+      querySelector() { return { value: '2026-01-15' }; } });
+    return nodes.get(id);
+  };
+  const judge = { id: 1, associationId: 'SIM-STEP4', firstName: 'Test', lastName: 'Judge',
+    certification: 'CORNER', rank: 'D2', status: 'Active' };
+  const state = { asOf: '2026-01-15', revision: 1, aliases: defaults, ranks: judgeRankOptions(),
+    certificationLevels: certificationLevels(), judges: [judge], experience: [],
+    tests: [
+      { judgeId: 1, targetLevel: 'REGIONAL', writtenDate: '2026-01-12', writtenScore: 79,
+        practicalDate: '2026-01-12', practicalPassed: 0 },
+      { judgeId: 1, targetLevel: 'REGIONAL', writtenDate: '2026-01-13', writtenScore: 80,
+        practicalDate: null, practicalPassed: null },
+      { judgeId: 1, targetLevel: 'REGIONAL', writtenDate: null, writtenScore: null,
+        practicalDate: '2026-01-15', practicalPassed: 1 }
+    ],
+    eligibility: [{ judgeId: 1, targetLevel: 'REGIONAL', experienceCount: 2, requiredExperience: 2,
+      eligible: true, writtenPassed: true, practicalRequired: true, practicalPassed: false, status: 'Eligible to test' }] };
+  let accept = false, finish;
+  const workspace = create({ document: { getElementById: node }, confirm: () => accept, showPanel() {},
+    request: async (url, options) => {
+      calls.push({ url, options });
+      if (url.endsWith('/award')) await new Promise((resolve) => { finish = resolve; });
+      return state;
+    } });
+  await workspace.load();
+  assert.match(node('jmTestingBody').innerHTML, /79%.*Fail/);
+  assert.match(node('jmTestingBody').innerHTML, /80%/);
+  assert.match(node('jmTestingBody').innerHTML, /2026-01-15.*Pass/);
+  assert.match(node('jmEligibilityBody').innerHTML, /data-jm-award="1" disabled/);
+  workspace.begin('judge-testing', judge);
+  await node('jmForm').handlers.submit({ preventDefault() {} });
+  const savedTests = JSON.parse(calls.at(-1).options.body).tests;
+  assert.equal(savedTests.length, 3);
+  assert.equal(savedTests[0].writtenScore, 79);
+  assert.equal(savedTests[0].practicalPassed, false);
+  assert.equal(savedTests[1].writtenScore, 80);
+  assert.equal(savedTests[2].practicalPassed, true);
+  state.eligibility[0].practicalPassed = true;
+  await workspace.load();
+  assert.match(node('jmEligibilityBody').innerHTML, /Ready for coordinator award/);
+  assert.match(node('jmEligibilityBody').innerHTML, /max="2026-01-15"/);
+  assert.equal(calls.some((call) => call.url.endsWith('/award')), false);
+  const event = { target: { closest() {
+    return { disabled: false, getAttribute: () => '1' };
+  } } };
+  node('jmEligibilityBody').handlers.click(event);
+  assert.equal(calls.some((call) => call.url.endsWith('/award')), false, 'cancel prevents award');
+  accept = true;
+  const pending = node('jmEligibilityBody').handlers.click(event);
+  assert.equal(workspace.busy(), true);
+  node('jmEligibilityBody').handlers.click(event);
+  assert.equal(calls.filter((call) => call.url.endsWith('/award')).length, 1);
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), { revision: 1, grantedAt: '2026-01-15' });
+  finish(); await pending;
+  assert.equal(workspace.busy(), false);
 });
