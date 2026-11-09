@@ -1406,7 +1406,8 @@ invalid rows reject the entire import. Changing data in another session requires
 a reload before saving.
 
 Testing and Experience records are editable from Add/Edit Judge. Written tests
-pass at 80% or higher; practical tests are pass/fail. Each promotion and
+pass at 80% or higher; practical tests are pass/fail. Eligibility considers only
+the individual judge's test results, never another judge's passes. Each promotion and
 recertification requires current written and (for Corner and above) practical
 tests. Experience records include event, date, location, role, sanctioned scope
 and log verification. In-House events do not count. Corner requires one
@@ -1422,6 +1423,52 @@ review and are not automatically demoted. Membership in good standing is
 assumed for judges entered in this directory. Tournament synchronization and
 submission-sheet generation remain unavailable. Add Judge and Import Judges
 are panels within their originating section, not separate browser history entries.
+
+#### Isolated judge lifecycle simulation (Step 1)
+
+This opt-in environment uses fabricated judges and a separate persistent database.
+It does not start the live server, connect to event data, assign rings, generate
+experience from results, or change the computer clock. Normal application startup
+continues to use the live Judge Management database and today's date.
+
+From PowerShell in the repository folder:
+
+```powershell
+npm run judge:simulation -- init --date 2026-01-15
+npm run judge:simulation -- serve
+```
+
+Open `http://127.0.0.1:3450`. The clearly marked simulation page reuses the existing
+Judge Management forms and controller for Judges, Testing, Eligibility, Experience
+and CSV Settings. It is local-only and intentionally has no account sign-in:
+use fabricated data only. Do not expose this port to the network.
+
+Initialization creates `judge-simulation-data` (ignored by Git), with `judges.db`
+and `simulation.json`. It refuses to overwrite an existing directory. Eleven
+fabricated `SIM-` judges cover new/underage candidates, all certification levels,
+passed/failed tests, missing/verified/unverified/In-House experience, promotion-ready
+records, and an expired Regional certification. Dates are relative to the chosen
+starting date. This is a validation dataset, not an HQ-format specification.
+
+Use **Advance date** to move the simulation calendar forward. Judge age checks,
+eligibility, expiration filters, test/experience validation, CSV birth-date
+validation and certification awards use that date. Dates cannot move backward;
+start a separate simulation to repeat from an earlier date. Stop with Ctrl+C and
+rerun `serve` to resume the same records and date; initialization is not repeated.
+Advancing the date does not create events, experience, tests or promotions.
+Existing progression rules are unchanged; championship-credit aggregation and
+event participation/assignment integration remain later steps.
+
+For another independent dataset or port:
+
+```powershell
+npm run judge:simulation -- init --date 2030-01-15 --directory C:\TournamentTests\JudgeScenario2
+npm run judge:simulation -- serve --directory C:\TournamentTests\JudgeScenario2 --port 3451
+```
+
+The parent directory must exist. No live database files should be copied or
+imported into this test environment. Run focused validation with
+`npm run test:judge-simulation`.
 
 #### Judge Management database and offline backup
 

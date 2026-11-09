@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Judge Lifecycle Simulation - Fabricated Data</title>
+  <style>
+    :root { color-scheme: dark; --line: #43516a; --panel: #1b2535; --text-soft: #bcc7d7; }
+    * { box-sizing: border-box; }
+    body { font: 14px system-ui, sans-serif; background: #111827; color: #edf2fa; margin: 20px; }
+    header { border-left: 5px solid #e6af35; padding: 8px 16px; background: var(--panel); }
+    h1 { font-size: 20px; }
+    nav, form#clockForm { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
+    button, input, select, textarea { font: inherit; color: inherit; background: #263248; border: 1px solid var(--line); padding: 6px; border-radius: 4px; }
+    button { cursor: pointer; } button:disabled { opacity: .5; cursor: default; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; }
+    [hidden] { display: none !important; }
+    [role="alert"], [data-state="error"] { color: #ff9a9a; }
+  </style>
+  <script src="/judge-management.js" defer></script>
+  <script src="/judge-simulation.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Judge Lifecycle Simulation - FABRICATED DATA ONLY</h1>
+    <p>Separate persistent database. No live judges, event assignments or tournament results are connected.</p>
+    <form id="clockForm">
+      <label>Simulation date <input id="simulationDate" type="date" required></label>
+      <button id="advanceDate" type="submit">Advance date</button>
+      <span id="currentDate"></span>
+    </form>
+  </header>
+  <p id="simulationError" role="alert"></p>
+  <nav aria-label="Judge Management">
+    <button data-panel="judge-management">Judges</button>
+    <button data-panel="judge-testing">Testing</button>
+    <button data-panel="judge-eligibility">Eligibility</button>
+    <button data-panel="judge-experience">Experience</button>
+    <button data-panel="judge-csv-settings">CSV Settings</button>
+    <button id="reload">Reload</button>
+  </nav>
+  <main id="workspace"></main>
+</body>
+</html>

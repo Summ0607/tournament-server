@@ -96,9 +96,10 @@ function evaluateEligibility(judge, tests, experience, today = new Date().toISOS
   if (!reason && target === 'INTERNATIONAL' && !records.some((row) => row.eventScope === 'WORLD' && ['JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE'].includes(row.role))) reason = 'Verified experience judging at a World Championship is required.';
   const needsReview = recertifying && ['REGIONAL', 'INTERNATIONAL'].includes(target) && Boolean(reason);
   const testAfter = judge.grantedAt || (judge.expiration ? subtractFiveYears(judge.expiration) : '');
-  const writtenPassed = testPassed(tests, target, 'written', testAfter);
+  const judgeTests = tests.filter((row) => row.judgeId === judge.id);
+  const writtenPassed = testPassed(judgeTests, target, 'written', testAfter);
   const practicalRequired = target !== 'SK_TK';
-  const practicalPassed = !practicalRequired || testPassed(tests, target, 'practical', testAfter);
+  const practicalPassed = !practicalRequired || testPassed(judgeTests, target, 'practical', testAfter);
   return { judgeId: judge.id, targetLevel: target || 'SK_TK', eligible: !reason, reason,
     status: needsReview ? 'Coordinator review required' : reason ? 'Not eligible' :
       recertifying ? 'Eligible to recertify' : 'Eligible to test',
@@ -107,7 +108,7 @@ function evaluateEligibility(judge, tests, experience, today = new Date().toISOS
     mayJudge: !(judge.certification === 'CORNER' && judge.rank === 'CDB') };
 }
 
-function validate(input) {
+function validate(input, today) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalid('Judge details are required.');
   const result = {};
   for (const field of fields) {
@@ -142,24 +143,24 @@ function validate(input) {
     ? date(birthUsDate ? `${birthUsDate[3]}-${birthUsDate[1].padStart(2, '0')}-${birthUsDate[2].padStart(2, '0')}` : rawBirthDate, 'Date of birth')
     : '';
   if (result.dateOfBirth) {
-    if (result.dateOfBirth > new Date().toISOString().slice(0, 10)) throw invalid('Date of birth cannot be in the future.');
-    ageOn(result.dateOfBirth, new Date().toISOString().slice(0, 10));
+    if (result.dateOfBirth > today) throw invalid('Date of birth cannot be in the future.');
+    ageOn(result.dateOfBirth, today);
   }
   return result;
 }
 
-function validateTest(input) {
+function validateTest(input, today) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalid('Test details are required.');
   const result = { targetLevel: input.targetLevel };
   if (!testLevels.includes(result.targetLevel)) throw invalid('Select a certification level for this test.');
   result.writtenDate = input.writtenDate ? date(input.writtenDate, 'Written test date') : null;
-  if (result.writtenDate && result.writtenDate > new Date().toISOString().slice(0, 10)) throw invalid('Written test date cannot be in the future.');
+  if (result.writtenDate && result.writtenDate > today) throw invalid('Written test date cannot be in the future.');
   result.writtenScore = input.writtenScore === '' || input.writtenScore === null || input.writtenScore === undefined
     ? null : Number(input.writtenScore);
   if (result.writtenDate && (!Number.isInteger(result.writtenScore) || result.writtenScore < 0 || result.writtenScore > 100)) throw invalid('Written score must be a whole percentage from 0 to 100.');
   if (!result.writtenDate && result.writtenScore !== null) throw invalid('A written score requires a written test date.');
   result.practicalDate = input.practicalDate ? date(input.practicalDate, 'Practical test date') : null;
-  if (result.practicalDate && result.practicalDate > new Date().toISOString().slice(0, 10)) throw invalid('Practical test date cannot be in the future.');
+  if (result.practicalDate && result.practicalDate > today) throw invalid('Practical test date cannot be in the future.');
   result.practicalPassed = input.practicalPassed === '' || input.practicalPassed === null || input.practicalPassed === undefined
     ? null : input.practicalPassed === true || input.practicalPassed === 1 ? 1 : input.practicalPassed === false || input.practicalPassed === 0 ? 0 : NaN;
   if (result.practicalDate && ![0, 1].includes(result.practicalPassed)) throw invalid('Record the practical test result as pass or fail.');
@@ -168,7 +169,7 @@ function validateTest(input) {
   return result;
 }
 
-function validateExperience(input) {
+function validateExperience(input, today) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalid('Experience details are required.');
   if (typeof input.eventName !== 'string' || !input.eventName.trim() || input.eventName.trim().length > 200) throw invalid('Event name is required and must be at most 200 characters.');
   if (typeof input.location !== 'string' || input.location.trim().length > 200) throw invalid('Location must be at most 200 characters.');
@@ -176,7 +177,7 @@ function validateExperience(input) {
   if (!scopes.includes(input.eventScope)) throw invalid('Select a valid event scope.');
   if (typeof input.logVerified !== 'boolean') throw invalid('Confirm whether the experience log was verified.');
   const eventDate = date(input.eventDate, 'Event date');
-  if (eventDate > new Date().toISOString().slice(0, 10)) throw invalid('Event date cannot be in the future.');
+  if (eventDate > today) throw invalid('Event date cannot be in the future.');
   return { eventName: input.eventName.trim(), eventDate,
     location: input.location.trim(), role: input.role, eventScope: input.eventScope, logVerified: Number(input.logVerified) };
 }
@@ -198,10 +199,10 @@ function validateAliases(input) {
   return aliases;
 }
 
-async function replaceRecords(db, judgeId, body) {
+async function replaceRecords(db, judgeId, body, today) {
   if (Object.hasOwn(body, 'tests')) {
     if (!Array.isArray(body.tests) || body.tests.length > 100) throw invalid('Testing records must be an array of at most 100 records.');
-    const tests = body.tests.map(validateTest);
+    const tests = body.tests.map((record) => validateTest(record, today));
     await run(db, 'DELETE FROM judge_test_attempts WHERE judge_id = ?', [judgeId]);
     for (const record of tests) {
       await run(db, `INSERT INTO judge_test_attempts
@@ -212,7 +213,7 @@ async function replaceRecords(db, judgeId, body) {
   }
   if (Object.hasOwn(body, 'experience')) {
     if (!Array.isArray(body.experience) || body.experience.length > 200) throw invalid('Experience records must be an array of at most 200 records.');
-    const records = body.experience.map(validateExperience);
+    const records = body.experience.map((record) => validateExperience(record, today));
     await run(db, 'DELETE FROM judge_experience WHERE judge_id = ?', [judgeId]);
     for (const record of records) {
       await run(db, `INSERT INTO judge_experience
@@ -241,11 +242,12 @@ async function parseCsv(text, aliases) {
   });
 }
 
-function createJudgeManagementRouter({ file }) {
+function createJudgeManagementRouter({ file, currentDate = () => new Date().toISOString().slice(0, 10) }) {
   const router = express.Router();
   async function handle(req, res, operation, write = false) {
     let db;
     try {
+      const today = date(currentDate(), 'Current date');
       db = await new Promise((resolve, reject) => {
         const instance = new sqlite3.Database(file, sqlite3.OPEN_READWRITE, (error) => error ? reject(error) : resolve(instance));
       });
@@ -257,7 +259,7 @@ function createJudgeManagementRouter({ file }) {
         if (!settings) throw new Error('Judge Management settings are missing.');
         if (write && (!Number.isSafeInteger(req.body?.revision) || req.body.revision !== settings.revision)) throw invalid('Judge data changed. Reload before saving.', 409);
         const aliases = Object.keys(JSON.parse(settings.aliases)).length ? validateAliases(JSON.parse(settings.aliases)) : defaults;
-        const extra = await operation(db, aliases);
+        const extra = await operation(db, aliases, today);
         if (write) await run(db, 'UPDATE judge_management_settings SET revision = revision + 1 WHERE id = 1');
         const [next] = await all(db, 'SELECT revision, aliases FROM judge_management_settings WHERE id = 1');
         const judges = await all(db, `SELECT id, association_id AS associationId, first_name AS firstName, last_name AS lastName,
@@ -270,11 +272,10 @@ function createJudgeManagementRouter({ file }) {
         const experience = await all(db, `SELECT id, judge_id AS judgeId, event_name AS eventName, event_date AS eventDate,
           location, role, event_scope AS eventScope, log_verified AS logVerified
           FROM judge_experience ORDER BY event_date DESC, id DESC`);
-        const currentDate = new Date().toISOString().slice(0, 10);
-        const eligibility = judges.map((judge) => evaluateEligibility(judge, tests, experience, currentDate));
+        const eligibility = judges.map((judge) => evaluateEligibility(judge, tests, experience, today));
         const publicJudges = judges.map(({ dateOfBirth, ...judge }) => judge);
         if (write) await run(db, 'COMMIT');
-        res.json({ revision: next.revision, aliases: Object.keys(JSON.parse(next.aliases)).length ? JSON.parse(next.aliases) : defaults,
+        res.json({ asOf: today, revision: next.revision, aliases: Object.keys(JSON.parse(next.aliases)).length ? JSON.parse(next.aliases) : defaults,
           judges: publicJudges, tests, experience, eligibility, certificationLevels: certificationLevels(), ranks: judgeRankOptions(), ...extra });
       } catch (error) {
         if (write) {
@@ -287,34 +288,34 @@ function createJudgeManagementRouter({ file }) {
       res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Unable to access Judge Management data. Check the server log.' });
     } finally { if (db) await close(db); }
   }
-  const endpoint = (operation, write = false) => (req, res) => handle(req, res, (db, aliases) => operation(req, db, aliases), write);
+  const endpoint = (operation, write = false) => (req, res) => handle(req, res, (db, aliases, today) => operation(req, db, aliases, today), write);
   router.get('/judge-management', endpoint(() => ({})));
-  router.post('/judge-management', endpoint(async (req, db) => {
-    const judge = validate(req.body.judge);
+  router.post('/judge-management', endpoint(async (req, db, _aliases, today) => {
+    const judge = validate(req.body.judge, today);
     const values = [...fields.map((f) => judge[f] || (f === 'rank' || f === 'expiration' ? null : '')), judge.dateOfBirth || null];
     let result;
     try { result = await run(db, `INSERT INTO judges (${[...fields.map((f) => columns[f]), dateOfBirthColumn].join(',')}) VALUES (${values.map(() => '?').join(',')})`, values); }
     catch (e) { if (e.code === 'SQLITE_CONSTRAINT' && /UNIQUE/.test(e.message)) throw invalid('Association ID already exists.', 409); throw e; }
-    await replaceRecords(db, result.lastID, req.body);
+    await replaceRecords(db, result.lastID, req.body, today);
     return {};
   }, true));
-  router.put('/judge-management/:id', endpoint(async (req, db) => {
+  router.put('/judge-management/:id', endpoint(async (req, db, _aliases, today) => {
     const [existing] = await all(db, `SELECT ${dateOfBirthColumn} AS dateOfBirth FROM judges WHERE id = ?`, [req.params.id]);
     if (!existing) throw invalid('Judge not found.', 404);
-    const judge = validate({ ...req.body.judge, dateOfBirth: req.body.judge?.dateOfBirth ?? existing.dateOfBirth });
+    const judge = validate({ ...req.body.judge, dateOfBirth: req.body.judge?.dateOfBirth ?? existing.dateOfBirth }, today);
     const values = [...fields.map((f) => judge[f] || (f === 'rank' || f === 'expiration' ? null : '')), judge.dateOfBirth || null];
     let result;
     try { result = await run(db, `UPDATE judges SET ${[...fields.map((f) => `${columns[f]} = ?`), `${dateOfBirthColumn} = ?`].join(',')} WHERE id = ?`, [...values, req.params.id]); }
     catch (e) { if (e.code === 'SQLITE_CONSTRAINT' && /UNIQUE/.test(e.message)) throw invalid('Association ID already exists.', 409); throw e; }
     if (!result.changes) throw invalid('Judge not found.', 404);
-    await replaceRecords(db, Number(req.params.id), req.body);
+    await replaceRecords(db, Number(req.params.id), req.body, today);
     return {};
   }, true));
-  router.post('/judge-management/:id/award', endpoint(async (req, db) => {
+  router.post('/judge-management/:id/award', endpoint(async (req, db, _aliases, today) => {
     const id = Number(req.params.id);
     if (!Number.isSafeInteger(id) || id < 1) throw invalid('Judge not found.', 404);
     const grantDate = date(req.body.grantedAt, 'Grant date');
-    if (grantDate > new Date().toISOString().slice(0, 10)) throw invalid('Grant date cannot be in the future.');
+    if (grantDate > today) throw invalid('Grant date cannot be in the future.');
     const [judge] = await all(db, `SELECT id, rank, certification, certification_expiration AS expiration,
       certification_granted_at AS grantedAt, date_of_birth AS dateOfBirth FROM judges WHERE id = ?`, [id]);
     if (!judge) throw invalid('Judge not found.', 404);
@@ -322,7 +323,7 @@ function createJudgeManagementRouter({ file }) {
       written_score AS writtenScore, practical_date AS practicalDate, practical_passed AS practicalPassed FROM judge_test_attempts WHERE judge_id = ?`, [id]);
     const experience = await all(db, `SELECT judge_id AS judgeId, event_date AS eventDate, role, event_scope AS eventScope,
       log_verified AS logVerified FROM judge_experience WHERE judge_id = ?`, [id]);
-    const eligibility = evaluateEligibility(judge, tests, experience);
+    const eligibility = evaluateEligibility(judge, tests, experience, today);
     if (!eligibility.eligible || !eligibility.writtenPassed || !eligibility.practicalPassed) throw invalid('The judge must meet eligibility requirements and pass the required written and practical tests before certification can be granted.', 409);
     const certification = eligibility.targetLevel;
     await run(db, 'UPDATE judges SET certification = ?, certification_granted_at = ?, certification_expiration = ? WHERE id = ?',
@@ -341,7 +342,7 @@ function createJudgeManagementRouter({ file }) {
     await run(db, 'UPDATE judge_management_settings SET aliases = ? WHERE id = 1', [JSON.stringify(aliases)]);
     return {};
   }, true));
-  router.post('/judge-management-import', endpoint(async (req, db, aliases) => {
+  router.post('/judge-management-import', endpoint(async (req, db, aliases, today) => {
     const rows = await parseCsv(req.body.csv, aliases);
     const seen = new Set(); let added = 0, updated = 0;
     for (const [index, raw] of rows.entries()) {
@@ -354,7 +355,7 @@ function createJudgeManagementRouter({ file }) {
         const [existing] = await all(db, `SELECT ${[...fields.map((f) => `${columns[f]} AS ${f}`), `${dateOfBirthColumn} AS dateOfBirth`].join(',')} FROM judges WHERE association_id = ? COLLATE NOCASE`, [associationId]);
         const merged = { ...(existing || {}) };
         for (const field of csvFields) if (raw[field] && raw[field].trim()) merged[field] = raw[field];
-        const judge = validate(merged);
+        const judge = validate(merged, today);
         const values = [...fields.map((f) => judge[f] || (f === 'rank' || f === 'expiration' ? null : '')), judge.dateOfBirth || null];
         if (existing) {
           await run(db, `UPDATE judges SET ${[...fields.map((f) => `${columns[f]} = ?`), `${dateOfBirthColumn} = ?`].join(',')} WHERE association_id = ? COLLATE NOCASE`, [...values, associationId]);

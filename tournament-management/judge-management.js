@@ -34,7 +34,7 @@
       const text = node('jmSearch').value.trim().toLowerCase();
       const status = node('jmFilterStatus').value, school = node('jmFilterSchool').value;
       const certification = node('jmFilterCertification').value, days = node('jmFilterExpiration').value;
-      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const today = data.asOf ? new Date(`${data.asOf}T00:00:00`) : new Date(); today.setHours(0, 0, 0, 0);
       const end = new Date(today); if (days) end.setDate(end.getDate() + Number(days));
       const rows = data.judges.filter((j) => {
         const expiry = j.expiration ? new Date(`${j.expiration}T00:00:00`) : null;
@@ -60,7 +60,7 @@
         if (!judge) return '';
         const testsPassed = item.writtenPassed && item.practicalPassed;
         const exp = `${item.experienceCount || 0}${item.requiredExperience ? ` / ${item.requiredExperience}` : ''}`;
-        const grantDate = new Date().toISOString().slice(0, 10);
+        const grantDate = data.asOf || new Date().toISOString().slice(0, 10);
         return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(judge.rank)}</td><td>${esc(label(judge.certification))}</td><td>${esc(label(item.targetLevel))}</td><td>${esc(exp)}</td><td>${item.writtenPassed ? 'Written pass' : 'Written required'}; ${item.practicalRequired ? item.practicalPassed ? 'Practical pass' : 'Practical required' : 'No practical required'}</td><td>${esc(item.status)}${item.reason ? `<br>${esc(item.reason)}` : ''}${item.reviewRequired ? '<br>Coordinator review; certification will not be reset automatically.' : ''}${item.mayJudge === false ? '<br>Cannot judge until Dan rank.' : ''}</td><td><input type="date" data-jm-grant-date="${judge.id}" value="${grantDate}" aria-label="Certification grant date for ${esc(judge.firstName)} ${esc(judge.lastName)}"></td><td><button type="button" data-jm-award="${judge.id}" ${item.eligible && testsPassed ? '' : 'disabled'}>Grant</button></td></tr>`;
       }).join('') || '<tr><td colspan="10">No judges to evaluate.</td></tr>';
       node('jmDelete').disabled = busy || !selected.size;

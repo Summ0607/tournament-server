@@ -48,3 +48,27 @@ test('judge workspace saves, protects unsaved edits, filters, escapes and surfac
   assert.equal(workspace.canLeave(), true);
   assert.equal(workspace.dirty(), false);
 });
+
+test('judge expiration filters and award defaults follow the server evaluation date', async () => {
+  const nodes = new Map();
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', innerHTML: '', textContent: '', handlers: {},
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {} });
+    return nodes.get(id);
+  };
+  const state = { asOf: '2040-01-15', revision: 1, aliases: defaults, ranks: judgeRankOptions(),
+    certificationLevels: certificationLevels(),
+    judges: [{ id: 1, associationId: 'SIM-1', firstName: 'Test', lastName: 'Judge',
+      school: '', status: 'Active', certification: 'SK_TK', expiration: '2040-02-01' }],
+    eligibility: [{ judgeId: 1, targetLevel: 'CORNER', eligible: false }] };
+  const workspace = create({ document: { getElementById: node }, confirm: () => true,
+    showPanel() {}, request: async () => state });
+  await workspace.load();
+  assert.match(node('jmEligibilityBody').innerHTML, /value="2040-01-15"/);
+  node('jmFilterExpiration').value = '30';
+  node('jmFilter').handlers.click();
+  assert.match(node('jmBody').innerHTML, /SIM-1/);
+  state.asOf = '2039-01-15';
+  await workspace.load();
+  assert.match(node('jmBody').innerHTML, /No matching judges/);
+});
