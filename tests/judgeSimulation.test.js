@@ -148,3 +148,128 @@ test('simulation exposes only management UI and isolated APIs, rejecting other o
   assert.equal(response.status, 400);
   assert.deepEqual(readSimulation(directory), before);
 });
+
+test('candidates introduced between events retain history through repeated service, duplicate retries and recertification', async (t) => {
+  const directory = await setup(t);
+  const { request } = await start(t, directory);
+  const before = (await request('/api/judge-management')).data;
+  const advance = async (previousDate, date) => {
+    assert.equal((await request('/api/simulation', 'PUT', { previousDate, date })).status, 200);
+  };
+  await advance('2040-01-15', '2040-02-15');
+  let result = await request('/api/judge-management-import', 'POST', { revision: before.revision,
+    csv: 'idNumber,firstName,lastName,rank,level,DOB\nSIM-LATE,Late,Candidate,D1,Uncertified,2010-01-01\n' });
+  assert.equal(result.status, 200);
+  assert.equal(result.data.added, 1);
+  assert.equal(result.data.judges.length, 12);
+  assert.deepEqual(result.data.judges.filter((row) => row.associationId !== 'SIM-LATE'), before.judges);
+  assert.deepEqual(result.data.tests, before.tests);
+  assert.deepEqual(result.data.experience, before.experience);
+  const profile = async () => {
+    const response = await request('/api/judge-management/profile?associationId=SIM-LATE');
+    assert.equal(response.status, 200);
+    return response.data;
+  };
+  let state = await profile();
+  const id = state.judge.id;
+  const tests = [];
+  const attempt = async (record) => {
+    tests.push(record);
+    const response = await request(`/api/judge-management/${id}`, 'PUT', {
+      revision: state.revision, judge: state.judge, tests
+    });
+    assert.equal(response.status, 200);
+    state = await profile();
+    assert.equal(state.tests.length, tests.length);
+  };
+  const award = () => request(`/api/judge-management/${id}/award`, 'POST', {
+    revision: state.revision, grantedAt: state.asOf
+  });
+  await attempt({ targetLevel: 'SK_TK', writtenDate: '2040-02-15', writtenScore: 79 });
+  assert.equal((await award()).status, 409);
+  await attempt({ targetLevel: 'SK_TK', writtenDate: '2040-02-15', writtenScore: 80 });
+  assert.equal((await award()).status, 200);
+  state = await profile();
+  assert.equal(state.judge.certification, 'SK_TK');
+  const service = { eventId: 'late-first', eventName: 'Late Candidate First Championship',
+    eventDate: '2040-03-01', location: 'Fabricated venue', eventScope: 'REGIONAL',
+    phase: 'P1', role: 'SCOREKEEPER', source: 'MANUAL' };
+  const append = (records) => request('/api/judge-management/experience', 'POST', {
+    associationId: 'SIM-LATE', revision: state.revision, confirmedCompleted: true, records
+  });
+  assert.equal((await append([service])).status, 400, 'future service must not be manufactured');
+  await advance('2040-02-15', '2040-03-15');
+  state = await profile();
+  const records = [service, { ...service, phase: 'P2', role: 'TIMEKEEPER' }];
+  const concurrent = await Promise.all([append(records), append(records)]);
+  assert.deepEqual(concurrent.map((response) => response.status).sort(), [200, 409]);
+  state = await profile();
+  assert.equal(state.experience.length, 2);
+  assert.equal(state.eligibility.experienceCount, 0);
+  result = await append(records);
+  assert.equal(result.status, 200);
+  assert.equal(result.data.added, 0);
+  assert.equal(result.data.duplicates, 2);
+  state = await profile();
+  const verify = async (ids) => {
+    const response = await request('/api/judge-management/experience-verify', 'POST', {
+      associationId: 'SIM-LATE', revision: state.revision, ids, verified: true
+    });
+    assert.equal(response.status, 200);
+    state = await profile();
+  };
+  await verify(state.experience.map((row) => row.id));
+  assert.equal(state.eligibility.experienceCount, 1, 'separate phases/roles earn one championship');
+  await attempt({ targetLevel: 'CORNER', writtenDate: '2040-03-14', writtenScore: 80,
+    practicalDate: '2040-03-14', practicalPassed: true });
+  assert.equal((await award()).status, 200);
+  state = await profile();
+  assert.equal(state.judge.certification, 'CORNER');
+  assert.equal(state.judge.expiration, '2045-03-15');
+  assert.equal(state.eligibility.experienceCount, 0, 'old SK/TK service is not new Corner experience');
+  await advance('2040-03-15', '2040-05-15');
+  state = await profile();
+  const next = { ...service, eventId: 'late-second', eventName: 'Late Candidate Second Championship',
+    eventDate: '2040-04-01', role: 'CORNER_JUDGE' };
+  result = await append([next, { ...next, phase: 'P2' }]);
+  assert.equal(result.status, 200);
+  state = await profile();
+  await verify(state.experience.filter((row) => row.eventId === next.eventId).map((row) => row.id));
+  assert.equal(state.eligibility.experienceCount, 1);
+  result = await append([{ ...next, eventId: 'late-third', eventName: 'Late Candidate Third Championship', eventDate: '2040-05-01' }]);
+  assert.equal(result.status, 200);
+  state = await profile();
+  await verify(state.experience.filter((row) => row.eventId === 'late-third').map((row) => row.id));
+  assert.equal(state.eligibility.experienceCount, 2);
+  assert.equal(state.eligibility.eligible, true);
+  assert.equal(state.eligibility.writtenPassed, false);
+  assert.equal((await award()).status, 409, 'repeated events alone do not promote');
+  const retainedExperience = state.experience;
+  await advance('2040-05-15', '2045-03-15');
+  state = await profile();
+  assert.equal(state.eligibility.recertifying, false, 'certificate remains current on expiration date');
+  await advance('2045-03-15', '2045-03-16');
+  state = await profile();
+  assert.equal(state.judge.certification, 'CORNER', 'expiry must not erase the awarded level');
+  assert.equal(state.eligibility.recertifying, true);
+  assert.equal(state.eligibility.targetLevel, 'CORNER', 'recertification does not advance to Regional');
+  assert.equal(state.eligibility.writtenPassed, false, 'pre-Corner tests cannot renew the Corner cycle');
+  assert.equal(state.eligibility.practicalPassed, false);
+  assert.equal((await award()).status, 409);
+  await attempt({ targetLevel: 'CORNER', writtenDate: '2045-03-16', writtenScore: 79,
+    practicalDate: '2045-03-16', practicalPassed: false });
+  assert.equal((await award()).status, 409);
+  await attempt({ targetLevel: 'CORNER', writtenDate: '2045-03-16', writtenScore: 80,
+    practicalDate: '2045-03-16', practicalPassed: true });
+  assert.equal((await award()).status, 200);
+  state = await profile();
+  assert.equal(state.judge.certification, 'CORNER');
+  assert.equal(state.judge.expiration, '2050-03-16');
+  assert.deepEqual(state.experience, retainedExperience);
+  const restarted = await start(t, directory);
+  const persisted = (await restarted.request('/api/judge-management/profile?associationId=SIM-LATE')).data;
+  assert.deepEqual(persisted, state);
+  const preserved = (await restarted.request('/api/judge-management')).data;
+  assert.equal(preserved.judges.length, 12);
+  assert.deepEqual(preserved.judges.filter((row) => row.associationId !== 'SIM-LATE'), before.judges);
+});

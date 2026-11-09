@@ -1709,6 +1709,48 @@ progression requiring Center service plus World judging and coordinator awards.
 Run only the relevant tests:
 `node --test tests/judgeAssignments.test.js tests/judgeManagementRoutes.test.js tests/judgeManagementUi.test.js tests/judgeExperienceApi.test.js`.
 
+##### Repeated events and new candidates (Step 5)
+
+Use the existing isolated dataset without reinitializing or reimporting its
+whole directory. Advance the simulation date between events; add a candidate
+with **Add Judge**, or import a CSV containing only the new candidates (include
+DOB for age checks). Reimporting nonblank certification values for existing
+judges can overwrite awards, so it is not a routine step between events.
+
+Follow each new candidate through the same written/practical attempts,
+coordinator awards, actual-service entry and verification as everyone else.
+Use a new event ID for each championship, and retain the same event ID/date
+across its phases and roles. New candidates are not automatically event
+volunteers or available officials: register their event participation and
+confirm phase availability before planning assignments.
+
+The repeatable isolated scenarios cover:
+
+- Adding a candidate between events without changing the existing judges,
+  tests or experience; advancing through SK/TK and Corner with failed attempts
+  and passing retakes retained; subsequent Corner service at two distinct events.
+- Concurrent/retried service submissions: one stale writer is rejected, and an
+  identical retry after reloading adds neither records nor credit. Separate
+  roles/phases at one championship still count once.
+- Expiration-day boundaries: a certificate is current through its expiration
+  date, then blocks ring placement. The awarded level and history are retained,
+  not silently downgraded. Renewal requires the applicable tests/experience and
+  an explicit coordinator award, preserves the level and sets a new five-year
+  expiration. Insufficient Regional renewal experience triggers coordinator
+  review rather than automatic reset.
+- Staffing shortages at 8, 16 and 20 configured rings: only confirmed available,
+  qualified officials are used. Four officials can staff one Gup ring, not a
+  Black Belt ring; reserving the only Center as arbitrator leaves no operating
+  ring. Incomplete drafts can be saved but do not manufacture officials or
+  experience. Reload assignment drafts after recertification.
+- Restarting the simulation preserves the new candidate's awards, all attempts,
+  service history and simulation date.
+
+Run the Step 5 scenarios and their directly related regressions with
+`node --test tests/judgeSimulation.test.js tests/judgeAssignments.test.js`.
+They create and clean their own isolated databases; no production dataset or
+tablet changes are required. Step 3B remains outstanding.
+
 For another independent dataset or port:
 
 ```powershell

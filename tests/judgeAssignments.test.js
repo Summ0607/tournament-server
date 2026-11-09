@@ -338,3 +338,105 @@ test('verified service and retained retakes require an explicit award before sub
   assert.equal((await readVolunteerDirectory(nextFile)).volunteers[0].certification, 'UNKNOWN',
     'assignment reads the award without rewriting volunteer claims');
 });
+
+test('expired Center qualification and arbitrator reserves expose staffing shortfalls until explicit recertification', async (t) => {
+  const { request } = await setup(t);
+  const associationId = 'SIM-R-009';
+  const profile = async () => {
+    const response = await request(`/judge-management/profile?associationId=${associationId}`);
+    assert.equal(response.status, 200);
+    return response.data;
+  };
+  let state = await profile();
+  const id = state.judge.id;
+  const change = async (extra) => {
+    const response = await request(`/judge-management/${id}`, 'PUT', {
+      revision: state.revision, judge: state.judge, ...extra
+    });
+    assert.equal(response.status, 200);
+    state = await profile();
+  };
+  await change({ judge: { ...state.judge, expiration: '2026-01-15' } });
+  let data = (await request(url)).data;
+  assert.equal(data.judges.find((row) => row.id === associationId).roles.center, true,
+    'certificate remains usable on event-date expiration boundary');
+  await change({ judge: { ...state.judge, expiration: '2026-01-14' } });
+  data = (await request(url)).data;
+  const candidate = data.judges.find((row) => row.id === associationId);
+  assert.equal(candidate.roles.center, false);
+  assert.match(candidate.qualificationIssue, /expires/);
+  assert.equal(state.judge.certification, 'REGIONAL');
+  assert.equal(state.eligibility.recertifying, true);
+  assert.equal(state.eligibility.targetLevel, 'REGIONAL');
+  assert.equal(state.eligibility.reviewRequired, true);
+  const available = [associationId, 'SIM-R-041', 'SIM-R-042', 'SIM-R-145'];
+  const draft = phase(data, available, 'gup');
+  const automatic = (snapshot, overrides = {}) => request('/judge-assignments/auto?eventName=A', 'POST', {
+    revision: snapshot.revision, sourceRevision: snapshot.sourceRevision, phase: { ...draft, ...overrides }
+  });
+  let result = await automatic(data);
+  assert.equal(result.status, 200);
+  assert.equal(result.data.operatingRings, 0, 'unavailable directory Centers cannot fill a volunteer staffing gap');
+  assert.ok(Object.values(result.data.assignments).every((ring) => Object.values(ring).every((list) => !list.length)));
+  const manual = { ...draft, assignments: { [draft.rings[0]]: { center: [associationId], corner: [], sktk: [] } } };
+  assert.equal((await request(url, 'PUT', { revision: data.revision, sourceRevision: data.sourceRevision,
+    phases: { P1: manual, P2: data.phases.P2 } })).status, 400);
+  result = await request(url, 'PUT', { revision: data.revision, sourceRevision: data.sourceRevision,
+    phases: { P1: { ...draft, assignments: result.data.assignments }, P2: data.phases.P2 } });
+  assert.equal(result.status, 200, 'staffing shortfalls remain saveable as incomplete preparation');
+  data = result.data;
+  const award = () => request(`/judge-management/${id}/award`, 'POST', {
+    revision: state.revision, grantedAt: '2026-01-15'
+  });
+  assert.equal((await award()).status, 409);
+  const oldTests = [{ targetLevel: 'REGIONAL', writtenDate: '2020-01-01', writtenScore: 80,
+    practicalDate: '2020-01-01', practicalPassed: true }];
+  await change({ tests: oldTests });
+  assert.equal(state.eligibility.writtenPassed, false);
+  assert.equal((await award()).status, 409);
+  const records = [10, 12].map((day) => ({
+    eventId: `renewal-${day}`, eventName: `Renewal Championship ${day}`, eventDate: `2026-01-${day}`,
+    location: 'Fabricated venue', eventScope: 'REGIONAL', phase: 'P1', role: 'CORNER_JUDGE', source: 'MANUAL'
+  }));
+  result = await request('/judge-management/experience', 'POST', {
+    associationId, revision: state.revision, confirmedCompleted: true, records
+  });
+  assert.equal(result.status, 200);
+  state = await profile();
+  assert.equal(state.eligibility.eligible, false, 'unverified logs do not satisfy Regional recertification');
+  result = await request('/judge-management/experience-verify', 'POST', {
+    associationId, revision: state.revision, ids: state.experience.map((row) => row.id), verified: true
+  });
+  assert.equal(result.status, 200);
+  state = await profile();
+  assert.equal(state.eligibility.eligible, true);
+  assert.equal(state.eligibility.writtenPassed, false);
+  await change({ tests: [...oldTests, { targetLevel: 'REGIONAL', writtenDate: '2026-01-15', writtenScore: 80,
+    practicalDate: '2026-01-15', practicalPassed: true }] });
+  result = await award();
+  assert.equal(result.status, 200);
+  state = await profile();
+  assert.equal(state.judge.certification, 'REGIONAL', 'recertification preserves the level, not International promotion');
+  assert.equal(state.judge.expiration, '2031-01-15');
+  assert.equal(state.tests.length, 2);
+  assert.equal(state.experience.length, 2);
+  assert.equal((await automatic(data)).status, 409, 'renewal invalidates stale preparation snapshots');
+  data = (await request(url)).data;
+  assert.equal(data.judges.find((row) => row.id === associationId).roles.center, true);
+  for (const count of [8, 16, 20]) {
+    result = await automatic(data, { rings: data.rings.slice(0, count) });
+    assert.equal(result.status, 200);
+    assert.equal(result.data.operatingRings, 1, 'four available officials staff only one Gup ring');
+    const used = Object.values(result.data.assignments).flatMap((ring) => Object.values(ring).flat());
+    assert.equal(used.length, 4);
+    assert.equal(new Set(used).size, 4);
+    assert.ok(used.every((member) => available.includes(member)));
+  }
+  result = await automatic(data, { discipline: 'black-belt' });
+  assert.equal(result.data.operatingRings, 0, 'two Corners are insufficient for a BB ring');
+  result = await automatic(data, { arbitrators: [associationId] });
+  assert.equal(result.data.operatingRings, 0, 'reserved arbitrator cannot double as the only Center');
+  result = await automatic(data, { available: [] });
+  assert.equal(result.data.operatingRings, 0);
+  assert.deepEqual((await profile()).experience, state.experience, 'planning never creates service or credit');
+});
