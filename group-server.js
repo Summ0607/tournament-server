@@ -39,6 +39,9 @@ const { createAccountSessions } = require('./backend/accountSessions');
 const { createAccountWeb } = require('./backend/accountWeb');
 const { createTabletStore } = require('./backend/tabletAuthorization');
 const { createAppReleaseRouter } = require('./backend/appRelease');
+const { initializeJudgeDatabase } = require('./db/judgeManagement');
+const { DEFAULT_JUDGE_DATABASE } = require('./db/judgeManagement');
+const { createJudgeManagementRouter } = require('./backend/judgeManagementRoutes');
 
 const app = express();
 let httpsServer;
@@ -213,6 +216,7 @@ app.use((req, res, next) => {
   return accountWeb(req, res, next);
 });
 app.use(express.json({ limit: '50mb' }));
+app.use('/api', createJudgeManagementRouter({ file: DEFAULT_JUDGE_DATABASE }));
 app.use('/api/server-control', createServerControl({
   allowedHosts: httpsConfig ? httpsOrigins(httpsConfig, ACTIVE_SURFACE).map((origin) => new URL(origin).host) : [],
   enabled: process.env.TOURNAMENT_MANAGED_SERVER === '1' && typeof process.send === 'function',
@@ -1330,6 +1334,7 @@ app.use('/api', createRingRouter({
 }));
 
 async function startServer() {
+  await initializeJudgeDatabase();
   accountStore = await createAccountSessions({ file: httpsConfig.accountDatabase });
   tabletStore = await createTabletStore({ file: `${httpsConfig.accountDatabase}.devices` });
   accountWeb = createAccountWeb({ store: accountStore, config: httpsConfig, surface: ACTIVE_SURFACE, tabletStore,

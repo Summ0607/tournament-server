@@ -178,7 +178,7 @@ test('browser page aliases require sign-in and deny disallowed roles; raw reposi
   }
   const forbidden = await request(tlsServer, { pathname: '/head-table/', headers });
   assert.match(forbidden.raw, /href="\/".*permitted home page/i);
-  for (const pathname of ['/db/tournament.db', '/events/active.json', '/backend/accountSessions.js',
+  for (const pathname of ['/db/tournament.db', '/judge-management-data/judges.db', '/judge-management-data/judges.db-wal', '/events/active.json', '/backend/accountSessions.js',
     '/Results/result.json', '/app-releases/current.json', '/package.json', '/README.md', '/app-debug.apk',
     '/node_modules/express/package.json', '/group-server.js', '/assets/../backend/accountSessions.js']) {
     assert.equal((await request(tlsServer, { pathname, headers })).status, pathname.includes('/../') ? 400 : 404, pathname);
@@ -200,6 +200,10 @@ test('all five roles have enforced API permissions, including union of roles and
     ['GET', '/api/groups', ['administrator', 'event-coordinator', 'tournament-operator']],
     ['GET', '/api/rings/monitor', ['administrator', 'event-coordinator', 'tournament-operator', 'viewer']],
     ['GET', '/api/ring-judges', ['administrator', 'event-coordinator', 'judging-coordinator']],
+    ['GET', '/api/judge-management', ['administrator', 'judging-coordinator']],
+    ['POST', '/api/judge-management/12/award', ['administrator', 'judging-coordinator']],
+    ['POST', '/api/judge-management-import', ['administrator', 'judging-coordinator']],
+    ['PUT', '/api/judge-management-settings', ['administrator', 'judging-coordinator']],
     ['POST', '/api/volunteers/import', ['administrator', 'event-coordinator', 'judging-coordinator']],
     ['POST', '/api/rings/ring-a-1/queue', ['administrator', 'event-coordinator', 'tournament-operator']],
     ['POST', '/api/rings/ring-a-1/heartbeat', ['administrator', 'event-coordinator', 'tournament-operator']],

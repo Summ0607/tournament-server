@@ -163,6 +163,7 @@ ring-assignments.json
 /visual-definitions.json
 /schools.json
 /ranks.json
+/judge-management-data/
 
 # Executables
 *.apk

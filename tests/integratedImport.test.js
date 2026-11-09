@@ -137,6 +137,7 @@ async function loadPage(options = {}) {
     CompetitionSettingsWorkspace: require('../tournament-management/competition-settings'),
     TournamentResultsWorkspace: require('../tournament-management/results'),
     RingJudgesWorkspace: require('../tournament-management/ring-judges'),
+    JudgeManagementWorkspace: require('../tournament-management/judge-management'),
     VolunteersWorkspace: require('../tournament-management/volunteers'),
     DivisionRules: require('../assets/division-rules'),
     Date: class extends Date {
@@ -183,6 +184,11 @@ async function loadPage(options = {}) {
       requests.push({ path: request.pathname, name, init });
       let data;
       switch (request.pathname) {
+        case '/api/judge-management':
+          data = { revision: 0, judges: [], aliases: require('../backend/judgeManagementRoutes').defaults,
+            certificationLevels: require('../db/judgeCertification').certificationLevels(),
+            ranks: require('../db/judgeCertification').judgeRankOptions() };
+          break;
         case '/api/volunteers':
           data = { revision: null, types: [{ id: 'judging', name: 'Judging' }], volunteers: [], configurationLocked: false };
           break;
@@ -714,7 +720,7 @@ test('Judge Management sections open independently and expand their navigation g
 test('Judge Management email entry and CSV mapping are explicitly disabled', () => {
   assert.match(html, /<label>Email \(not available yet\)<input type="email" disabled><\/label>/);
   assert.match(html, /<label>Email \(not available yet\)<input disabled placeholder="email, email_address"><\/label>/);
-  assert.match(html, /<label>Search name or WTSDA ID<input type="search"><\/label>/);
+  assert.match(html, /<label>Search name or WTSDA ID<input id="jmSearch" type="search"><\/label>/);
 });
 
 test('Judge Management preview opens Add and Import screens and returns to their source', async () => {

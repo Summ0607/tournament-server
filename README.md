@@ -197,15 +197,16 @@ created or promoted.
 | --- | --- |
 | Administrator | All functions, users/settings, global definitions, simulator and local Server Maintenance |
 | Event Coordinator | Tournament preparation and day-of functions; Clinic Management (Under Development) |
-| Judging Coordinator | Volunteers/types, Ring Judges and judge assignments; Judge Management layout previews |
+| Judging Coordinator | Volunteers/types, Ring Judges and judge assignments; Judge Management |
 | Tournament Operator | Ring Assignment (tablet QR authorization), Division Assignments, Head Table and Audience Viewer only |
 | Viewer | Read-only Audience Viewer only; not Head Table |
 
 Use **Administration → Users** to assign Event Coordinator or Viewer explicitly;
 Event Coordinator is an additional role, not a rename of Tournament Operator.
-Clinic Management is a placeholder. Judge Management contains layout previews,
-not operational judge management workflows. Global Schools, Ranks and Visual
-Definitions editing remains Administrator-only.
+Clinic Management is a placeholder. Judge Management supports its independent
+judge directory, CSV import, testing and experience records, eligibility review,
+and coordinator-granted certifications.
+Global Schools, Ranks and Visual Definitions editing remains Administrator-only.
 
 Opening a protected page while signed out redirects to `/account/login`; a new
 sign-in opens the account's role-based home rather than the previous page. APIs
@@ -1375,17 +1376,96 @@ Its hierarchy is:
     **Division Assignments** (existing Ring Assignment)
   - **Head Table**
   - **Printing** and **CSV Settings** — Planned
-- **Judge Management** → **Judges**, **Testing**, **Eligibility**, **Experience**, **CSV Settings** — layout previews
+- **Judge Management** → **Judges**, **Testing**, **Eligibility**, **Experience**, **CSV Settings**
 - **Clinic Management**, **Event History** — Planned
 - **Administration**: **Server Maintenance** (`/admin/`) and **Simulator** (`/simulator/`)
 - **Your Account** — Planned
 
-Judge Management previews also include Add Judge and Import Judges layouts.
-Judge records, filters, saving, importing, sync, and submission-sheet generation
-are not implemented; unavailable controls are disabled and no sample records are
-shown. Judge email entry and its CSV mapping are explicitly disabled for now.
-Add Judge and Import Judges are preview panels within their originating
-section rather than separate browser history entries.
+Judges supports adding, editing, filtering, and deleting records in the separate
+Judge Management directory. Email and Merge Records remain disabled. CSV Settings
+saves visible header aliases; the importer requires Association ID, first name,
+and last name headers, matches IDs without regard to ASCII letter case, and
+updates only nonblank imported values. DOB/date-of-birth headers are recognized
+for private age checks but are not displayed or returned by the judge-list API.
+Same-name judges with different IDs remain separate. Duplicate or missing IDs and
+invalid rows reject the entire import. Changing data in another session requires
+a reload before saving.
+
+Testing and Experience records are editable from Add/Edit Judge. Written tests
+pass at 80% or higher; practical tests are pass/fail. Each promotion and
+recertification requires current written and (for Corner and above) practical
+tests. Experience records include event, date, location, role, sanctioned scope
+and log verification. In-House events do not count. Corner requires one
+qualifying Championship experience record; Regional Center requires two; an
+International judge requires Center Judge experience and a World Championship
+judging record. Sah Dan (D5) and above are exempt from log verification.
+
+Eligibility is advisory and does not award certification automatically. An
+authorized coordinator must record the award date; the database sets the
+expiration five years after that date. Expired Regional Center and International
+recertifications that lack required experience are flagged for coordinator
+review and are not automatically demoted. Membership in good standing is
+assumed for judges entered in this directory. Tournament synchronization and
+submission-sheet generation remain unavailable. Add Judge and Import Judges
+are panels within their originating section, not separate browser history entries.
+
+#### Judge Management database and offline backup
+
+The server initializes `judge-management-data/judges.db` on startup, independently
+of any tournament. It contains no sample records. Association IDs are required
+and unique without regard to ASCII letter case; rank and certification codes use
+the shared judge definitions. The database is ignored by Git and direct browser
+requests for it are blocked. Restrict Windows access to the data folder and
+backups to authorized users; Git exclusion is not a substitute for file permissions.
+The database stores judge testing attempts, Championship experience and private
+dates of birth for age-based eligibility. Birth dates are omitted from browser
+views and the judge-list API response. To supply DOB without a visible DOB field,
+include an optional `DOB`, `date_of_birth`, `dateOfBirth` or `birthDate` column
+in a CSV import. Existing blank CSV values preserve saved data. Certification
+history is changed only by the coordinator award action; all expiration dates
+are five years from the recorded grant date.
+
+To back up, **stop all three server services and any other process accessing this
+database** and allow them to finish shutting down. Copy the file to a protected
+location outside the repository, using a new name (do not overwrite an existing
+backup). From PowerShell in the server folder:
+
+```powershell
+$source = Join-Path (Get-Location) 'judge-management-data\judges.db'
+$backup = 'C:\TournamentPrivate\JudgeBackups\judges-backup.db'
+foreach ($suffix in @('-wal', '-shm', '-journal')) {
+  if (Test-Path -LiteralPath ($source + $suffix)) { throw 'Database sidecar exists; investigate before backup.' }
+}
+if (Test-Path -LiteralPath $backup) { throw 'Choose a new backup file name.' }
+Copy-Item -LiteralPath $source -Destination $backup -ErrorAction Stop
+node db\verifyJudgeDatabase.js $backup
+if ($LASTEXITCODE -ne 0) { throw 'Backup verification failed. Do not use this backup.' }
+```
+
+Create and protect the backup directory in advance. Keep backups on separate,
+protected storage according to the organization's retention policy.
+
+To restore, stop all services and other database users. Verify the backup first.
+Move the current database to a **new, unused** safety-copy name, then copy the
+verified backup to the original path. Never overwrite the safety copy. Restart
+services only after verifying the restored file:
+
+```powershell
+$target = Join-Path (Get-Location) 'judge-management-data\judges.db'
+$backup = 'C:\TournamentPrivate\JudgeBackups\judges-backup.db'
+$safety = 'C:\TournamentPrivate\JudgeBackups\judges-before-restore.db'
+foreach ($suffix in @('-wal', '-shm', '-journal')) {
+  if (Test-Path -LiteralPath ($target + $suffix)) { throw 'Database sidecar exists; investigate before restore.' }
+}
+node db\verifyJudgeDatabase.js $backup
+if ($LASTEXITCODE -ne 0) { throw 'Backup verification failed; restore cancelled.' }
+if (!(Test-Path -LiteralPath $target)) { throw 'Current database not found; investigate before restoring.' }
+if (Test-Path -LiteralPath $safety) { throw 'Choose a new safety-copy name.' }
+Move-Item -LiteralPath $target -Destination $safety -ErrorAction Stop
+Copy-Item -LiteralPath $backup -Destination $target -ErrorAction Stop
+node db\verifyJudgeDatabase.js $target
+if ($LASTEXITCODE -ne 0) { throw 'Restore verification failed; keep services stopped and recover the safety copy.' }
+```
 
 Navigation labels omit Planned/Under Development tags; the destination pages
 explain their status. Planned destinations expose no operational tools
