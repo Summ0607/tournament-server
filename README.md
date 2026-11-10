@@ -1474,7 +1474,11 @@ code; refreshing the page alone does not update the server.
    these assignment phases.
 2. Select directory members as **Judging volunteer**, **Competitor**, or both,
    then **Add selected participants** and confirm. No member attends by default;
-   the bulk volunteer button is an explicit selection that still requires saving.
+   the bulk volunteer button selects only visible remaining members and still
+   requires saving. Search by name, Association ID, rank or school, or filter by
+   existing participation/new selections. Filtering retains all new role/age
+   inputs, including hidden selections; the selection count and clear action
+   explicitly include hidden rows.
    Members with both roles share their Association-ID event identity.
 3. Ages are calculated on the event date from private directory DOBs. DOB is
    neither returned in this roster nor stored in event participant tables.
@@ -1486,8 +1490,25 @@ code; refreshing the page alone does not update the server.
    did not volunteer can be potential officials, not automatically available.
 5. In **P1/P2 Judge Assignments**, confirm agreement/availability independently
    for each phase, select its rings and discipline, reserve arbitrators, auto
-   assign or adjust manually, then **Save both phases**. Qualified BB competitors
+   assign or adjust manually, then **Save assignment changes**. Qualified BB competitors
    may serve in the Gup phase, not the BB phase where they compete.
+
+The labeled **Selected event summary** remains above the workspace, showing event
+date, scope, days, rings, volunteer/competitor counts and distinct participants.
+It refreshes on navigation and volunteer changes; participation is not phase
+availability. The active navigation button and next-action guidance identify the
+current screen. Event creation, clock controls, CSV import and extended
+instructions are collapsible; the simulation date remains visible.
+
+Lifecycle tables use bounded scrolling with sticky whole headers (including both
+Ring Judges header/filter rows). Judges includes rank and a result count; Testing,
+Experience and Eligibility have independent searches/counts and clear actions.
+Eligibility can filter by award readiness; Experience by verification. These are
+display-only filters and never award, verify or write service. Chosen grant dates
+survive filtering; an explicit reload restores the evaluation-date defaults. Existing Volunteer
+and Ring Judges filters remain available. Assignment service review filters both
+planned/actual tables by search and phase without changing the selected row's
+service identity.
 
 Event creation and participant selection are simulator-only APIs
 (`/api/simulation/events` and `/api/simulation/participation`). Adds are atomic,
@@ -1709,6 +1730,16 @@ reservation in that phase. Changing a phase's discipline clears its assignments
 and arbitrators after confirmation. The other phase is unaffected.
 Incomplete staffing may be saved as a draft; invalid assignments cannot.
 Unsaved edits are guarded on navigation, event changes and page close.
+The Rings and Confirm phase availability sections retain their expanded/collapsed
+state during edits, and the availability list retains its scroll position.
+The planner distinguishes total candidates from confirmed availability and
+provides a display-only candidate search. Select/clear-all controls change only
+the current phase's rings (clearing rings and positions requires confirmation).
+Arbitrator reservations use a persistent checkbox list with Association IDs;
+multiple reservations do not require reopening a dropdown. Saving remains
+explicit: **Save assignment changes** is accented only with unsaved edits and
+saves both incomplete phase drafts. Auto assign is highlighted separately and
+still produces an unsaved draft.
 Changes to profiles, volunteers, registration or event configuration invalidate
 stale saves. Planning locks when operational event use begins; Reset Run returns
 the event to preparation. Runtime phase switching, substitutions, contact

@@ -1,5 +1,5 @@
 (function (root) {
-  function create({ document, request, selectedEvent, confirm, print = () => root.print() }) {
+  function create({ document, request, selectedEvent, confirm, print = () => root.print(), onChange = async () => {} }) {
     const node = (id) => document.getElementById(id);
     const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fields = ['firstName', 'lastName', 'age', 'associationNumber', 'school', 'rank', 'certification', 'primaryType', 'secondaryType', 'parentName', 'contactNumber'];
@@ -113,6 +113,7 @@
         data = result; selected.clear();
         if (form) { editing = false; node('vmDialog').close(); }
         notice(url.endsWith('/import') ? `Imported: ${result.added} added, ${result.updated} updated.${result.unrecognizedCertifications ? ` ${result.unrecognizedCertifications} unrecognized certification value(s) stored as Unknown.` : ''}` : 'Volunteer management saved.');
+        await onChange();
       } catch (error) { if (current === token) { if (form) node('vmError').textContent = error.message; else notice(error.message, true); } }
       finally { writing = false; if (current === token) render(); }
     }

@@ -52,6 +52,62 @@ test('phase planner confirms competitor agreement, preserves other phase, saves 
   assert.match(node('jaContent').innerHTML, /Select a tournament/);
 });
 
+test('planner preserves expanded sections and availability scroll across selections, phases and saves', async () => {
+  const nodes = new Map();
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', handlers: {}, open: false, scrollTop: 0,
+      setAttribute() {}, addEventListener(name, fn) { this.handlers[name] = fn; } });
+    return nodes.get(id);
+  };
+  Object.defineProperty(node('jaContent'), 'innerHTML', {
+    set(html) {
+      for (const id of ['jaRings', 'jaAvailability']) {
+        node(id).open = html.includes(`<details id="${id}" open>`);
+      }
+      node('jaAvailabilityList').scrollTop = 0;
+    }
+  });
+  const empty = (discipline) => ({ discipline, rings: [], available: [], arbitrators: [], assignments: {} });
+  let state = { revision: null, sourceRevision: 's1', configurationLocked: false, rings: ['A1', 'A2'],
+    phases: { P1: empty('black-belt'), P2: empty('gup') },
+    judges: ['ONE', 'TWO'].map((id) => ({ id, name: id, potential: false, sources: ['volunteer'],
+      roles: { corner: true, sktk: true }, certification: 'CORNER' })) };
+  const workspace = create({ document: { getElementById: node }, selectedEvent: () => 'Event', confirm: () => true,
+    request: async (_url, options) => {
+      if (options?.method === 'PUT') state = { ...state, revision: 'saved', phases: JSON.parse(options.body).phases };
+      return structuredClone(state);
+    } });
+  await workspace.load();
+  assert.equal(node('jaRings').open, false);
+  node('jaRings').open = true;
+  node('jaAvailability').open = true;
+  node('jaAvailabilityList').scrollTop = 235;
+  const change = (attribute, value) => node('jaContent').handlers.change({
+    target: { checked: true, getAttribute: (name) => name === attribute ? value : null }
+  });
+  for (const ring of ['A1', 'A2']) {
+    change('data-ja-ring', ring);
+    assert.equal(node('jaRings').open, true);
+    assert.equal(node('jaAvailability').open, true);
+  }
+  for (const member of ['ONE', 'TWO']) {
+    change('data-ja-available', member);
+    assert.equal(node('jaAvailability').open, true);
+    assert.equal(node('jaAvailabilityList').scrollTop, 235);
+  }
+  node('jaPhase').value = 'P2'; node('jaPhase').handlers.change();
+  assert.equal(node('jaRings').open, true);
+  assert.equal(node('jaAvailability').open, true);
+  node('jaRings').open = false;
+  await node('jaSave').handlers.click();
+  assert.equal(node('jaRings').open, false, 'a deliberately closed section stays closed');
+  assert.equal(node('jaAvailability').open, true);
+  assert.equal(node('jaAvailabilityList').scrollTop, 235);
+  assert.deepEqual(state.phases.P1.rings, ['A1', 'A2']);
+  assert.deepEqual(state.phases.P1.available, ['ONE', 'TWO']);
+  assert.deepEqual(state.phases.P2.available, []);
+});
+
 test('main shell wires selected-event preparation, not live-only routing, with departure guards', () => {
   const fs = require('node:fs'), path = require('node:path');
   const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
@@ -69,6 +125,77 @@ test('main shell wires selected-event preparation, not live-only routing, with d
   assert.doesNotMatch(html, /judge-service-review\.js/, 'assignment review remains opt-in in the isolated simulator');
 });
 
+test('planner search is display-only, counts confirmed availability, supports persistent multiple reserves and explicit draft saves', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', innerHTML: '', textContent: '', handlers: {},
+      setAttribute(name, value) { this[name] = value; }, addEventListener(name, fn) { this.handlers[name] = fn; } });
+    return nodes.get(id);
+  };
+  const phase = () => ({ discipline: 'gup', rings: [], available: ['ONE', 'TWO'], arbitrators: [], assignments: {} });
+  let state = { revision: 'v1', sourceRevision: 's1', configurationLocked: false, rings: ['A1', 'A2'],
+    phases: { P1: phase(), P2: phase() }, judges: ['ONE', 'TWO'].map((id) => ({
+      id, associationId: id, name: `<${id}>`, sources: ['volunteer'], rank: 'D5', certification: 'REGIONAL',
+      roles: { corner: true, sktk: true, center: true, arbitrator: true }
+    })) };
+  const workspace = create({ document: { getElementById: node }, selectedEvent: () => 'Event', confirm: () => true,
+    request: async (url, options) => {
+      calls.push({ url, options });
+      if (options) state = { ...state, revision: 'v2', phases: JSON.parse(options.body).phases };
+      return structuredClone(state);
+    } });
+  await workspace.load();
+  assert.equal(node('jaSave').disabled, true);
+  node('jaSearch').value = 'ONE'; node('jaSearch').handlers.input();
+  assert.match(node('jaCandidateCount').textContent, /1 of 2 candidates shown; 2 confirmed available/);
+  assert.equal(workspace.dirty(), false);
+  assert.match(node('jaContent').innerHTML, /&lt;ONE&gt; \(ONE; REGIONAL\)/, 'reserves show name and Association ID');
+  const reserve = (id, checked = true) => node('jaContent').handlers.change({ target: {
+    checked, getAttribute: (name) => name === 'data-ja-arbitrator' ? id : null
+  } });
+  node('jaArbitrators').open = true;
+  node('jaArbitratorList').scrollTop = 90;
+  reserve('ONE'); reserve('ONE'); reserve('TWO');
+  assert.equal(node('jaSave')['data-unsaved'], 'true');
+  assert.equal(node('jaSave').disabled, false);
+  assert.match(node('jaSaveState').textContent, /Unsaved changes/);
+  assert.match(node('jaContent').innerHTML, /id="jaArbitrators" open/);
+  assert.equal(node('jaArbitratorList').scrollTop, 90);
+  await node('jaSave').handlers.click();
+  assert.deepEqual(state.phases.P1.arbitrators, ['ONE', 'TWO'], 'no duplicate reservations');
+  assert.deepEqual(state.phases.P2.arbitrators, []);
+  assert.equal(node('jaSave')['data-unsaved'], 'false');
+  assert.match(node('jaSaveState').textContent, /All assignment changes saved/);
+  reserve('ONE', false);
+  node('jaClearSearch').handlers.click();
+  assert.match(node('jaCandidateCount').textContent, /2 of 2 candidates/);
+  const click = (attribute) => node('jaContent').handlers.click({ target: {
+    hasAttribute: (name) => name === attribute, getAttribute: () => null
+  } });
+  click('data-ja-all-rings');
+  await node('jaSave').handlers.click();
+  assert.deepEqual(state.phases.P1.rings, ['A1', 'A2']);
+  assert.deepEqual(state.phases.P1.arbitrators, ['TWO']);
+  click('data-ja-clear-rings');
+  await node('jaSave').handlers.click();
+  assert.deepEqual(state.phases.P1.rings, []);
+  assert.deepEqual(state.phases.P1.available, ['ONE', 'TWO']);
+  assert.equal(calls.filter((call) => call.options).length, 3, 'only explicit saves write');
+});
+
+test('lifecycle tables share bounded sticky whole headers without overlapping Ring Judges filter rows', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
+  const styles = html.match(/<style id="judgeWorkspaceStyles">([\s\S]*?)<\/style>/)[1];
+  for (const id of ['judgeManagementView', 'volunteersView', 'ringJudgesView', 'judgeAssignmentsView']) {
+    assert.ok(styles.includes(`#${id} .table-wrap thead`));
+    assert.ok(styles.includes(`#${id} .table-wrap th`));
+  }
+  assert.match(styles, /thead \{ position: sticky; top: 0;/);
+  assert.match(styles, /th \{ position: static;/);
+  assert.match(styles, /@media print.*max-height: none; overflow: visible;/);
+});
+
 const { buildReview, create: createServiceReview } = require('../tournament-management/judge-service-review');
 function reviewFixture() {
   const config = { eventName: 'Review', name: '<Regional>', date: '2040-01-15', scope: 'regional', location: 'Venue' };
@@ -80,6 +207,41 @@ function reviewFixture() {
     ({ id, associationId: `MEMBER${id}`, firstName: 'Test', lastName: '<Judge>' })), experience: [] };
   return { config, plan, directory };
 }
+test('service review filters retain original action indexes and independent planned/actual counts', async () => {
+  const fixture = reviewFixture(), nodes = new Map(), opened = [], calls = [];
+  fixture.directory.experience = [{ judgeId: 3, eventId: 'simulation-event:Review', eventName: fixture.config.name,
+    eventDate: fixture.config.date, eventScope: 'REGIONAL', phase: 'P2', role: 'TIMEKEEPER', logVerified: false }];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', handlers: {}, setAttribute() {},
+      addEventListener(name, fn) { this.handlers[name] = fn; } });
+    return nodes.get(id);
+  };
+  const workspace = createServiceReview({ document: { getElementById: node }, selectedEvent: () => 'Review',
+    beginService: async (seed) => opened.push(seed), viewExperience() {},
+    request: async (url, options) => {
+      calls.push({ url, options });
+      return structuredClone(url === '/api/simulation/events' ? { events: [fixture.config] }
+        : url === '/api/judge-management' ? fixture.directory : fixture.plan);
+    } });
+  await workspace.load();
+  node('srSearch').value = 'MEMBER3'; node('srSearch').handlers.input();
+  node('srPhase').value = 'P2'; node('srPhase').handlers.change();
+  assert.equal(node('srCount').textContent, '1 of 6 planned positions; 1 of 1 actual service records shown');
+  assert.match(node('srBody').innerHTML, /data-service-review="5"/);
+  assert.doesNotMatch(node('srBody').innerHTML, /data-service-review="0"/);
+  await node('srBody').handlers.click({ target: { closest() {
+    return { disabled: false, getAttribute: () => '5' };
+  } } });
+  assert.equal(opened[0].associationId, 'MEMBER3');
+  assert.equal(opened[0].phase, 'P2');
+  assert.equal(opened[0].role, '', 'SK/TK still requires the actual role');
+  node('srSearch').value = 'not-found'; node('srSearch').handlers.input();
+  assert.match(node('srBody').innerHTML, /No matching planned service/);
+  assert.match(node('srActual').innerHTML, /No matching actual service/);
+  node('srClear').handlers.click();
+  assert.equal(node('srCount').textContent, '6 of 6 planned positions; 1 of 1 actual service records shown');
+  assert.ok(calls.every((call) => call.options === undefined), 'filtering and reviewing do not write service');
+});
 test('service review maps saved plans without credit, preserves event identities and distinguishes recorded actuals', () => {
   const { config, plan, directory } = reviewFixture();
   const before = structuredClone({ plan, directory });

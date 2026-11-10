@@ -49,20 +49,29 @@
     function render() {
       node('srReload').disabled = busy;
       node('srExperience').disabled = busy;
-      if (!data) { node('srBody').innerHTML = ''; node('srActual').innerHTML = ''; return; }
-      node('srBody').innerHTML = data.rows.map((row, index) => `<tr><td>${esc(row.phase)}</td><td>${esc(row.ring || 'Reserve')}</td>
+      if (!data) { node('srBody').innerHTML = ''; node('srActual').innerHTML = ''; node('srCount').textContent = ''; return; }
+      const query = (node('srSearch').value || '').trim().toLowerCase(), phase = node('srPhase').value;
+      const matches = (row, values) => (!phase || phase === row.phase) && values.join(' ').toLowerCase().includes(query);
+      const planned = data.rows.map((row, index) => ({ row, index })).filter(({ row }) =>
+        matches(row, [row.name, row.associationId, row.ring || 'Reserve', labels[row.role]]));
+      node('srBody').innerHTML = planned.map(({ row, index }) => `<tr><td>${esc(row.phase)}</td><td>${esc(row.ring || 'Reserve')}</td>
         <td>${esc(labels[row.role])}</td><td>${esc(row.name)} (${esc(row.associationId)})</td>
         <td>${row.matching.length ? row.matching.map((record) => `${esc(record.role)}: ${record.logVerified ? 'Verified' : 'Pending verification'}`).join('<br>') :
           'No matching actual service recorded'}</td>
         <td><button type="button" data-service-review="${index}" ${busy || row.missing || data.future ? 'disabled' : ''}>Review actual service</button></td></tr>`).join('') ||
-        '<tr><td colspan="6">No saved ring assignments or arbitrator reserves. Save phase plans first; incomplete plans can still be reviewed.</td></tr>';
+        `<tr><td colspan="6">${data.rows.length ? 'No matching planned service. Clear filters to see all.' : 'No saved ring assignments or arbitrator reserves. Save phase plans first; incomplete plans can still be reviewed.'}</td></tr>`;
       const judges = new Map(directory.judges.map((judge) => [judge.id, judge]));
-      node('srActual').innerHTML = data.actual.map((record) => {
+      const actual = data.actual.filter((record) => {
+        const judge = judges.get(record.judgeId);
+        return matches(record, [judge?.associationId, judge?.lastName, judge?.firstName, record.role, record.role.replace(/_/g, ' ')]);
+      });
+      node('srCount').textContent = `${planned.length} of ${data.rows.length} planned positions; ${actual.length} of ${data.actual.length} actual service records shown`;
+      node('srActual').innerHTML = actual.map((record) => {
         const judge = judges.get(record.judgeId);
         return `<tr><td>${esc(judge?.associationId || 'Missing judge')}</td><td>${esc(judge?.lastName)}, ${esc(judge?.firstName)}</td>
           <td>${esc(record.phase || 'Not specified')}</td><td>${esc(record.role)}</td>
           <td>${record.logVerified ? 'Verified' : 'Pending verification'}</td></tr>`;
-      }).join('') || '<tr><td colspan="5">No actual service recorded for this event.</td></tr>';
+      }).join('') || `<tr><td colspan="5">${data.actual.length ? 'No matching actual service. Clear filters to see all.' : 'No actual service recorded for this event.'}</td></tr>`;
     }
     async function load() {
       const run = ++token;
@@ -83,6 +92,11 @@
       finally { if (run === token) { busy = false; render(); } }
     }
     node('srReload').addEventListener('click', () => { if (!busy) return load(); });
+    node('srSearch').addEventListener('input', render);
+    node('srPhase').addEventListener('change', render);
+    node('srClear').addEventListener('click', () => {
+      node('srSearch').value = ''; node('srPhase').value = ''; render();
+    });
     node('srExperience').addEventListener('click', () => { if (!busy) return viewExperience(); });
     node('srBody').addEventListener('click', async (event) => {
       const button = event.target.closest('[data-service-review]');

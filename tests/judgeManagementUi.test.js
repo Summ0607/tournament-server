@@ -4,6 +4,13 @@ const { create } = require('../tournament-management/judge-management');
 const { defaults } = require('../backend/judgeManagementRoutes');
 const { certificationLevels, judgeRankOptions } = require('../db/judgeCertification');
 
+test('completed-service attestation uses the shared inline checkbox layout', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
+  assert.match(html, /<label class="jm-check"><input id="jmServiceCompleted" type="checkbox" required> I confirm/);
+  assert.match(html, /#judgeManagementView label\.jm-check \{[^}]*flex-direction: row;[^}]*align-items: center;/);
+});
+
 test('judge workspace saves, protects unsaved edits, filters, escapes and surfaces errors', async () => {
   const nodes = new Map(), calls = [], panels = [];
   const node = (id) => {
@@ -47,6 +54,55 @@ test('judge workspace saves, protects unsaved edits, filters, escapes and surfac
   accept = true;
   assert.equal(workspace.canLeave(), true);
   assert.equal(workspace.dirty(), false);
+});
+
+test('lifecycle table filters retain independent counts, visible rank and explicit award/verification actions', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', innerHTML: '', textContent: '', handlers: {},
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {} });
+    return nodes.get(id);
+  };
+  const state = { asOf: '2026-01-15', revision: 1, aliases: defaults, ranks: judgeRankOptions(),
+    certificationLevels: certificationLevels(),
+    judges: [1, 2].map((id) => ({ id, associationId: `MEMBER${id}`, firstName: 'Test', lastName: id === 1 ? '<Ready>' : 'Pending',
+      school: 'School', rank: id === 1 ? 'D1' : 'CDB', certification: 'SK_TK', status: 'Active' })),
+    tests: [{ judgeId: 1, targetLevel: 'CORNER', writtenScore: 80 }, { judgeId: 2, targetLevel: 'SK_TK', writtenScore: 79 }],
+    experience: [1, 2].map((id) => ({ id, judgeId: id, eventName: 'Regional', role: 'TIMEKEEPER', eventScope: 'REGIONAL', logVerified: id === 1 })),
+    eligibility: [1, 2].map((id) => ({ judgeId: id, targetLevel: 'CORNER', eligible: true, writtenPassed: id === 1, practicalPassed: true })) };
+  const workspace = create({ document: { getElementById: node }, confirm: () => true, showPanel() {},
+    request: async (url, options) => { calls.push({ url, options }); return state; } });
+  await workspace.load();
+  assert.match(node('jmBody').innerHTML, /Cho Dan/);
+  assert.match(node('jmCount').textContent, /2 of 2 judges/);
+  node('jmEligibilityBody').handlers.change({ target: { getAttribute: () => '1', value: '2026-01-01' } });
+  node('jmEligibilityReady').value = 'ready'; node('jmEligibilityReady').handlers.change();
+  assert.match(node('jmEligibilityBody').innerHTML, /&lt;Ready&gt;/);
+  assert.doesNotMatch(node('jmEligibilityBody').innerHTML, /MEMBER2/);
+  assert.equal(node('jmEligibilityCount').textContent, '1 of 2 judges');
+  node('jmEligibilityReady').value = 'not-ready'; node('jmEligibilityReady').handlers.change();
+  assert.match(node('jmEligibilityBody').innerHTML, /MEMBER2/);
+  node('jmEligibilitySearch').value = 'missing'; node('jmEligibilitySearch').handlers.input();
+  assert.match(node('jmEligibilityBody').innerHTML, /colspan="10">No matching/);
+  node('jmEligibilityClear').handlers.click();
+  assert.equal(node('jmEligibilityCount').textContent, '2 of 2 judges');
+  assert.match(node('jmEligibilityBody').innerHTML, /data-jm-grant-date="1" value="2026-01-01"/, 'filters retain the chosen award date');
+  node('jmTestingSearch').value = 'MEMBER1'; node('jmTestingSearch').handlers.input();
+  assert.equal(node('jmTestingCount').textContent, '1 of 2 test records');
+  assert.doesNotMatch(node('jmTestingBody').innerHTML, /MEMBER2/);
+  node('jmExperienceVerified').value = 'pending'; node('jmExperienceVerified').handlers.change();
+  node('jmExperienceSearch').value = 'timekeeper'; node('jmExperienceSearch').handlers.input();
+  assert.equal(node('jmExperienceCount').textContent, '1 of 2 service records');
+  assert.match(node('jmExperienceBody').innerHTML, /MEMBER2/);
+  node('jmExperienceClear').handlers.click();
+  node('jmTestingClear').handlers.click();
+  assert.equal(node('jmExperienceCount').textContent, '2 of 2 service records');
+  assert.equal(node('jmTestingCount').textContent, '2 of 2 test records');
+  assert.equal(workspace.dirty(), false);
+  assert.equal(calls.length, 1, 'filters never save, award or verify');
+  assert.equal(calls[0].options, undefined);
+  await workspace.load();
+  assert.match(node('jmEligibilityBody').innerHTML, /data-jm-grant-date="1" value="2026-01-15"/, 'explicit reload restores the evaluation date');
 });
 
 test('judge expiration filters and award defaults follow the server evaluation date', async () => {

@@ -21,19 +21,32 @@
     const eligible = (judge, role, draft) => judge.roles[role] &&
       !(draft.discipline === 'black-belt' && judge.sources.includes('competitor') && /^D[1-8]$/.test(judge.rank));
     function render() {
+      const ringsOpen = Boolean(node('jaRings')?.open);
+      const availabilityOpen = Boolean(node('jaAvailability')?.open);
+      const availabilityScroll = node('jaAvailabilityList')?.scrollTop || 0;
+      const arbitratorsOpen = Boolean(node('jaArbitrators')?.open);
+      const arbitratorsScroll = node('jaArbitratorList')?.scrollTop || 0;
+      const focused = document.activeElement?.id;
       node('jaSave').disabled = busy || !current() || !dirty() || data.configurationLocked;
+      node('jaSave').setAttribute('data-unsaved', String(Boolean(current() && dirty())));
+      node('jaSaveState').textContent = !current() ? '' : busy ? 'Working...' : dirty()
+        ? 'Unsaved changes - save before leaving.' : data.revision ? 'All assignment changes saved.' : 'No saved plans yet. Select rings and availability, then save.';
       node('jaAuto').disabled = busy || !current() || data.configurationLocked;
+      node('jaAuto').setAttribute('data-action', 'primary');
       node('jaReload').disabled = busy;
       node('jaPhase').disabled = busy;
-      if (!current()) { node('jaContent').innerHTML = '<p>Select a tournament.</p>'; return; }
+      if (!current()) { node('jaContent').innerHTML = '<p>Select a tournament.</p>'; node('jaCandidateCount').textContent = ''; return; }
       const draft = data.phases[phase], byId = new Map(data.judges.map((judge) => [judge.id, judge]));
+      const query = (node('jaSearch').value || '').trim().toLowerCase();
+      const visible = data.judges.filter((judge) => `${judge.name} ${judge.associationId} ${judge.rank} ${judge.certification}`.toLowerCase().includes(query));
+      node('jaCandidateCount').textContent = `${visible.length} of ${data.judges.length} candidates shown; ${draft.available.length} confirmed available in ${phase}`;
       const locked = data.configurationLocked || busy;
       const disabled = locked ? 'disabled' : '';
       const used = new Set([...draft.arbitrators, ...Object.values(draft.assignments).flatMap((ring) => roles.flatMap((role) => ring[role]))]);
       const options = (role) => '<option value="">Select official</option>' + data.judges.filter((judge) =>
         draft.available.includes(judge.id) && !used.has(judge.id) && eligible(judge, role, draft))
-        .map((judge) => `<option value="${esc(judge.id)}">${esc(judge.name)} (${esc(judge.certification)})</option>`).join('');
-      const person = (id) => byId.get(id)?.name || `Missing member: ${id}`;
+        .map((judge) => `<option value="${esc(judge.id)}">${esc(judge.name)} (${esc(judge.associationId)}; ${esc(judge.certification)})</option>`).join('');
+      const person = (id) => byId.has(id) ? `${byId.get(id).name} (${byId.get(id).associationId})` : `Missing member: ${id}`;
       const minCorner = draft.discipline === 'black-belt' ? 4 : 2;
       const operating = draft.rings.filter((ring) => {
         const assigned = draft.assignments[ring];
@@ -41,21 +54,29 @@
           roles.every((role) => assigned[role].every((id) => draft.available.includes(id) && byId.has(id) && eligible(byId.get(id), role, draft)));
       }).length;
       node('jaContent').innerHTML = `<p><strong>${operating}/${draft.rings.length} rings meet minimum staffing.</strong>
-        Target: 1 Center, 4 Corners, 2 SK/TK per ring. ${data.configurationLocked ? 'Locked after operational use.' : ''}</p>
+        Minimum: 1 Center, ${minCorner} Corners, 1 SK/TK. Preferred: 1 Center, 4 Corners, 2 SK/TK per ring. ${data.configurationLocked ? 'Locked after operational use.' : ''}</p>
         <label>Phase discipline <select id="jaDiscipline" ${disabled}><option value="black-belt" ${draft.discipline === 'black-belt' ? 'selected' : ''}>Black Belt</option><option value="gup" ${draft.discipline === 'gup' ? 'selected' : ''}>Gup</option></select></label>
-        <details><summary>Rings (${draft.rings.length})</summary>${[...new Set([...data.rings, ...draft.rings])].map((ring) =>
-          `<label><input type="checkbox" data-ja-ring="${esc(ring)}" ${draft.rings.includes(ring) ? 'checked' : ''} ${disabled}> ${esc(ring)}</label>`).join('')}</details>
-        <details><summary>Confirm phase availability (${draft.available.length}); competitor candidates require agreement</summary>
+        <details id="jaRings"${ringsOpen ? ' open' : ''}><summary>Select rings (${draft.rings.length} selected)</summary><button type="button" data-ja-all-rings ${disabled}>Select all rings</button> <button type="button" data-ja-clear-rings ${disabled}>Clear rings</button><div>${[...new Set([...data.rings, ...draft.rings])].map((ring, index) =>
+          `<label><input id="jaRing-${index}" type="checkbox" data-ja-ring="${esc(ring)}" ${draft.rings.includes(ring) ? 'checked' : ''} ${disabled}> ${esc(ring)}</label>`).join('')}</div></details>
+        <details id="jaAvailability"${availabilityOpen ? ' open' : ''}><summary>Confirm phase availability - ${data.judges.length} candidates; ${draft.available.length} confirmed available</summary>
+        <p>Check only officials who agreed to serve in ${phase}. Filtering does not change availability or assignments.</p>
         ${draft.available.filter((id) => !byId.has(id)).map((id) => `<label><input type="checkbox" checked data-ja-available="${esc(id)}" ${disabled}> Missing candidate ${esc(id)}; uncheck to remove stale availability.</label>`).join('')}
-        <div class="table-wrap"><table><thead><tr><th>Available</th><th>Official / source</th><th>Certification</th><th>Progression / review</th></tr></thead><tbody>${data.judges.map((judge) =>
-          `<tr><td><input aria-label="Confirm ${esc(judge.name)}" type="checkbox" data-ja-available="${esc(judge.id)}" ${draft.available.includes(judge.id) ? 'checked' : ''} ${disabled}></td>
-          <td>${esc(judge.name)} (${esc(judge.associationId)})<br>${judge.potential ? 'Potential competitor; not a registered volunteer' : 'Judging volunteer'}${judge.sources.includes('competitor') ? '; competing BB officials unavailable in BB phase' : ''}</td>
+        <div id="jaAvailabilityList" class="table-wrap"><table aria-label="Phase availability"><thead><tr><th>Available</th><th>Official / source</th><th>Certification</th><th>Progression / review</th></tr></thead><tbody>${visible.map((judge, index) =>
+          `<tr><td><input id="jaAvailable-${index}" aria-label="Confirm ${esc(judge.name)} (${esc(judge.associationId)})" type="checkbox" data-ja-available="${esc(judge.id)}" ${draft.available.includes(judge.id) ? 'checked' : ''} ${disabled}></td>
+          <td>${esc(judge.name)} (${esc(judge.associationId)})<br>Rank: ${esc(judge.rank || 'unknown')}. ${judge.potential ? 'Potential competitor; not a registered volunteer' : 'Judging volunteer'}${judge.sources.includes('competitor') ? '; competing BB officials unavailable in BB phase' : ''}</td>
           <td>${esc(judge.certification)}; expires ${esc(judge.expiration || 'unknown')}</td>
           <td>${esc(judge.qualificationIssue || (!Object.values(judge.roles).some(Boolean) ? Object.values(judge.roleIssues || {}).filter(Boolean).join(' ') : '') || judge.progression?.reason || judge.progression?.status || 'No profile match')}
-          ${judge.progression ? `<br>Target ${esc(judge.progression.targetLevel)}; experience ${judge.progression.experienceCount}/${judge.progression.requiredExperience}` : ''}</td></tr>`).join('')}</tbody></table></div></details>
+          <br>Allowed roles: ${esc(Object.keys(judge.roles).filter((role) => eligible(judge, role, draft)).map((role) => labels[role] || 'Arbitrator').join(', ') || 'None')}.
+          ${Object.values(judge.roleIssues || {}).some(Boolean) ? `<details><summary>Role restrictions</summary>${esc([...new Set(Object.values(judge.roleIssues).filter(Boolean))].join(' '))}</details>` : ''}
+          ${judge.progression ? `<br>Target ${esc(judge.progression.targetLevel)}; experience ${judge.progression.experienceCount}/${judge.progression.requiredExperience}` : ''}</td></tr>`).join('') || '<tr><td colspan="4">No matching candidates. Clear search to see the full list.</td></tr>'}</tbody></table></div></details>
         <section><h3>Arbitrators (${draft.arbitrators.length}; reserve 2-4 as needed)</h3>
         ${draft.arbitrators.map((id) => `<p>${esc(person(id))} <button type="button" data-ja-unarb="${esc(id)}" ${disabled}>Remove</button></p>`).join('')}
-        <select id="jaArbitrator" aria-label="Add arbitrator" ${disabled}>${options('arbitrator')}</select></section>
+        <details id="jaArbitrators"${arbitratorsOpen ? ' open' : ''}><summary>Add or remove arbitrator reservations</summary>
+        <p>Select multiple qualified, confirmed-available officials below. Reservations apply only to ${phase} and exclude ring positions.</p>
+        <div id="jaArbitratorList" class="table-wrap">${visible.filter((judge) => draft.arbitrators.includes(judge.id) ||
+          draft.available.includes(judge.id) && !used.has(judge.id) && eligible(judge, 'arbitrator', draft)).map((judge, index) =>
+          `<label><input id="jaArbitrator-${index}" type="checkbox" data-ja-arbitrator="${esc(judge.id)}" ${draft.arbitrators.includes(judge.id) ? 'checked' : ''} ${disabled}> ${esc(judge.name)} (${esc(judge.associationId)}; ${esc(judge.certification)})</label>`).join('') ||
+          '<p>No matching eligible officials available for reservation. Clear search or confirm qualified availability first; officials already assigned to rings must be removed from those positions before reserving.</p>'}</div></details></section>
         <div class="ja-grid">${draft.rings.map((ringId) => {
           const ring = draft.assignments[ringId] || { center: [], corner: [], sktk: [] };
           return `<article class="ja-card"><h3>Ring ${esc(ringId)}</h3>${roles.map((role) =>
@@ -65,9 +86,13 @@
             ${ring[role].length < (role === 'center' ? 1 : role === 'corner' ? 4 : 2) ?
               `<select aria-label="Add ${labels[role]} to ${esc(ringId)}" data-ja-add="${esc(ringId)}" data-role="${role}" ${disabled}>${options(role)}</select>` : ''}`).join('')}</article>`;
         }).join('')}</div>`;
+      node('jaAvailabilityList').scrollTop = availabilityScroll;
+      node('jaArbitratorList').scrollTop = arbitratorsScroll;
+      if (focused?.startsWith('ja')) node(focused)?.focus?.({ preventScroll: true });
     }
     async function load() {
       const target = selectedEvent(), run = ++token;
+      if (target !== eventName) node('jaSearch').value = '';
       data = null; eventName = ''; render();
       if (!target) return;
       notice('Loading judge profiles and event candidates...');
@@ -79,6 +104,8 @@
       } catch (error) { if (run === token) notice(error.message, true); }
     }
     node('jaPhase').addEventListener('change', () => { phase = node('jaPhase').value; render(); });
+    node('jaSearch').addEventListener('input', () => { if (node('jaAvailability')) node('jaAvailability').open = true; render(); });
+    node('jaClearSearch').addEventListener('click', () => { node('jaSearch').value = ''; render(); });
     node('jaReload').addEventListener('click', () => { if (canLeave()) return load(); });
     node('jaContent').addEventListener('change', (event) => {
       if (!current() || busy || data.configurationLocked) return;
@@ -101,8 +128,13 @@
           draft.arbitrators = draft.arbitrators.filter((item) => item !== id);
           for (const ring of Object.values(draft.assignments)) for (const role of roles) ring[role] = ring[role].filter((item) => item !== id);
         }
-      } else if (target.id === 'jaArbitrator' && target.value) draft.arbitrators.push(target.value);
-      else if (get('data-ja-add') && target.value) {
+      } else if (get('data-ja-arbitrator')) {
+        const id = get('data-ja-arbitrator');
+        if (target.checked) {
+          if (!draft.arbitrators.includes(id)) draft.arbitrators.push(id);
+        }
+        else draft.arbitrators = draft.arbitrators.filter((item) => item !== id);
+      } else if (get('data-ja-add') && target.value) {
         const ring = get('data-ja-add'), role = get('data-role');
         draft.assignments[ring] ||= { center: [], corner: [], sktk: [] };
         draft.assignments[ring][role].push(target.value);
@@ -112,6 +144,15 @@
     node('jaContent').addEventListener('click', (event) => {
       if (!current() || busy || data.configurationLocked) return;
       const target = event.target, draft = data.phases[phase];
+      if (target.hasAttribute?.('data-ja-all-rings')) {
+        draft.rings = [...data.rings];
+        for (const ring of Object.keys(draft.assignments)) if (!draft.rings.includes(ring)) delete draft.assignments[ring];
+        notice('Unsaved ring selection.'); render(); return;
+      }
+      if (target.hasAttribute?.('data-ja-clear-rings')) {
+        if (!confirm('Clear selected rings and their assignments for this phase?')) return;
+        draft.rings = []; draft.assignments = {}; notice('Unsaved ring selection.'); render(); return;
+      }
       const arb = target.getAttribute('data-ja-unarb'), id = target.getAttribute('data-ja-remove');
       if (arb) draft.arbitrators = draft.arbitrators.filter((item) => item !== arb);
       else if (id) {

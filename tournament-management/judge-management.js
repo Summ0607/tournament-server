@@ -14,6 +14,7 @@
     const serviceDraft = () => ({ ...Object.fromEntries(serviceFields.map((field) => [field, node(`jmService-${field}`).value])),
       confirmedCompleted: Boolean(node('jmServiceCompleted').checked) });
     const selected = new Set();
+    const grantDates = new Map();
     const draft = () => Object.fromEntries(fields.map((f) => [f, node(`jm-${f}`).value]));
     const visibleAliases = () => Object.fromEntries(fields.map((f) => [f, node(`jmAlias-${f}`).value.split(',').map((v) => v.trim())]));
     const cleaned = (rows, required) => rows.filter((row) => required.some((field) => row[field] !== '' && row[field] !== null));
@@ -34,6 +35,8 @@
     function label(code) {
       return data?.certificationLevels.find((item) => item.code === code)?.label || pretty(code);
     }
+    const matches = (search, values) => values.join(' ').toLowerCase().includes((node(search).value || '').trim().toLowerCase());
+    const identity = (judge) => [judge.firstName, judge.lastName, judge.associationId];
     function render() {
       if (!data) return;
       const text = node('jmSearch').value.trim().toLowerCase();
@@ -47,28 +50,48 @@
           (!status || j.status === status) && (!school || j.school === school) &&
           (!certification || j.certification === certification) && (!days || expiry && expiry <= end);
       });
-      node('jmBody').innerHTML = rows.map((j) => `<tr><td><input type="checkbox" data-jm-select="${j.id}" aria-label="Select ${esc(j.firstName)} ${esc(j.lastName)}" ${selected.has(j.id) ? 'checked' : ''}></td><td><button type="button" data-jm-edit="${j.id}">Edit</button></td><td>${esc(j.associationId)}</td><td>${esc(j.lastName)}</td><td>${esc(j.firstName)}</td><td>${esc(j.school)}</td><td>${esc(label(j.certification))}</td><td>${esc(j.expiration)}</td><td>${esc(j.status)}</td></tr>`).join('') || '<tr><td colspan="9">No matching judges.</td></tr>';
+      node('jmBody').innerHTML = rows.map((j) => `<tr><td><input type="checkbox" data-jm-select="${j.id}" aria-label="Select ${esc(j.firstName)} ${esc(j.lastName)}" ${selected.has(j.id) ? 'checked' : ''}></td><td><button type="button" data-jm-edit="${j.id}">Edit</button></td><td>${esc(j.associationId)}</td><td>${esc(j.lastName)}</td><td>${esc(j.firstName)}</td><td>${esc(j.school)}</td><td>${esc((data.ranks || []).find((rank) => rank.code === j.rank)?.label || j.rank || '')}</td><td>${esc(label(j.certification))}</td><td>${esc(j.expiration)}</td><td>${esc(j.status)}</td></tr>`).join('') || '<tr><td colspan="10">No matching judges.</td></tr>';
+      node('jmCount').textContent = `${rows.length} of ${data.judges.length} judges`;
       const judges = new Map(data.judges.map((judge) => [judge.id, judge]));
-      node('jmTestingBody').innerHTML = (data.tests || []).map((record) => {
+      const testing = (data.tests || []).filter((record) => {
+        const judge = judges.get(record.judgeId);
+        return judge && matches('jmTestingSearch', [...identity(judge), label(record.targetLevel)]);
+      });
+      node('jmTestingCount').textContent = `${testing.length} of ${(data.tests || []).length} test records`;
+      node('jmTestingBody').innerHTML = testing.map((record) => {
         const judge = judges.get(record.judgeId);
         if (!judge) return '';
         const practical = record.practicalDate ? (record.practicalPassed === 1 ? 'Pass' : 'Fail') : '-';
         return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(label(record.targetLevel))}</td><td>${esc(record.writtenDate || '-')}</td><td>${record.writtenScore == null ? '-' : `${esc(record.writtenScore)}%`}</td><td>${esc(record.practicalDate || '-')}</td><td>${practical}</td></tr>`;
-      }).join('') || '<tr><td colspan="7">No testing records.</td></tr>';
-      node('jmExperienceBody').innerHTML = (data.experience || []).map((record) => {
+      }).join('') || '<tr><td colspan="7">No matching testing records.</td></tr>';
+      const experience = (data.experience || []).filter((record) => {
+        const judge = judges.get(record.judgeId), verification = node('jmExperienceVerified').value;
+        return judge && matches('jmExperienceSearch', [...identity(judge), record.eventName, record.eventId, record.role, pretty(record.role), record.phase]) &&
+          (!verification || (verification === 'verified' ? Boolean(record.logVerified) : !record.logVerified));
+      });
+      node('jmExperienceCount').textContent = `${experience.length} of ${(data.experience || []).length} service records`;
+      node('jmExperienceBody').innerHTML = experience.map((record) => {
         const judge = judges.get(record.judgeId);
         if (!judge) return '';
         const manual = record.source === 'MANUAL' && record.sourceId;
         return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(record.eventName)}${record.phase ? ` (${esc(record.phase)})` : ''}<br>${esc(record.eventId || '')}${manual ? '<br>Coordinator-recorded actual service' : ''}</td><td>${esc(record.eventDate)}</td><td>${esc(record.location)}</td><td>${esc(pretty(record.role))}</td><td>${esc(pretty(record.eventScope))}</td><td>${record.logVerified ? 'Verified' : 'Not verified'} <button type="button" data-jm-verify="${record.id}" data-judge="${judge.id}">${record.logVerified ? 'Unverify' : 'Verify'}</button>${manual ? ` <button type="button" data-jm-service-edit="${record.id}">Correct</button> <button type="button" data-jm-service-delete="${record.id}">Withdraw</button>` : ''}</td></tr>`;
-      }).join('') || '<tr><td colspan="8">No experience records.</td></tr>';
-      node('jmEligibilityBody').innerHTML = (data.eligibility || []).map((item) => {
+      }).join('') || '<tr><td colspan="8">No matching experience records.</td></tr>';
+      const eligibility = (data.eligibility || []).filter((item) => {
+        const judge = judges.get(item.judgeId), readiness = node('jmEligibilityReady').value;
+        const ready = Boolean(item.eligible && item.writtenPassed && item.practicalPassed);
+        return judge && matches('jmEligibilitySearch', identity(judge)) &&
+          (!readiness || (readiness === 'ready' ? ready : !ready));
+      });
+      node('jmEligibilityCount').textContent = `${eligibility.length} of ${(data.eligibility || []).length} judges`;
+      node('jmEligibilityBody').innerHTML = eligibility.map((item) => {
         const judge = judges.get(item.judgeId);
         if (!judge) return '';
         const testsPassed = item.writtenPassed && item.practicalPassed;
         const exp = `${item.experienceCount || 0}${item.requiredExperience ? ` / ${item.requiredExperience}` : ''}`;
         const grantDate = data.asOf || new Date().toISOString().slice(0, 10);
-        return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(judge.rank)}</td><td>${esc(label(judge.certification))}</td><td>${esc(label(item.targetLevel))}</td><td>${esc(exp)}</td><td>${item.writtenPassed ? 'Written pass' : 'Written required'}; ${item.practicalRequired ? item.practicalPassed ? 'Practical pass' : 'Practical required' : 'No practical required'}</td><td>${esc(item.eligible && testsPassed ? 'Ready for coordinator award' : item.status)}${item.reason ? `<br>${esc(item.reason)}` : ''}${item.reviewRequired ? '<br>Coordinator review; certification will not be reset automatically.' : ''}${item.mayJudge === false ? '<br>Cannot judge until Dan rank.' : ''}</td><td><input type="date" data-jm-grant-date="${judge.id}" value="${grantDate}" max="${grantDate}" aria-label="Certification grant date for ${esc(judge.firstName)} ${esc(judge.lastName)}"></td><td><button type="button" data-jm-award="${judge.id}" ${busy || !item.eligible || !testsPassed ? 'disabled' : ''}>Grant</button></td></tr>`;
-      }).join('') || '<tr><td colspan="10">No judges to evaluate.</td></tr>';
+        const selectedDate = grantDates.get(judge.id) ?? grantDate;
+        return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(judge.rank)}</td><td>${esc(label(judge.certification))}</td><td>${esc(label(item.targetLevel))}</td><td>${esc(exp)}</td><td>${item.writtenPassed ? 'Written pass' : 'Written required'}; ${item.practicalRequired ? item.practicalPassed ? 'Practical pass' : 'Practical required' : 'No practical required'}</td><td>${esc(item.eligible && testsPassed ? 'Ready for coordinator award' : item.status)}${item.reason ? `<br>${esc(item.reason)}` : ''}${item.reviewRequired ? '<br>Coordinator review; certification will not be reset automatically.' : ''}${item.mayJudge === false ? '<br>Cannot judge until Dan rank.' : ''}</td><td><input type="date" data-jm-grant-date="${judge.id}" value="${esc(selectedDate)}" max="${grantDate}" aria-label="Certification grant date for ${esc(judge.firstName)} ${esc(judge.lastName)}"></td><td><button type="button" data-jm-award="${judge.id}" ${busy || !item.eligible || !testsPassed ? 'disabled' : ''}>Grant</button></td></tr>`;
+      }).join('') || '<tr><td colspan="10">No matching judges to evaluate.</td></tr>';
       node('jmDelete').disabled = busy || !selected.size;
       node('jmServiceFields').disabled = busy;
       for (const id of ['jmServiceAdd', 'jmServiceSave', 'jmServiceCancel']) node(id).disabled = busy;
@@ -94,6 +117,7 @@
         </div><button type="button" data-remove-test="${index}">Remove Record</button></div>`).join('');
     }
     function setData(value) {
+      grantDates.clear();
       data = value;
       selected.clear();
       options('jm-rank', data.ranks.map((r) => ({ value: r.code, label: r.label })), '-- Select --');
@@ -174,6 +198,16 @@
         : target.value;
     }
     node('jmFilter').addEventListener('click', render);
+    for (const section of ['Testing', 'Eligibility', 'Experience']) {
+      node(`jm${section}Search`).addEventListener('input', render);
+      node(`jm${section}Clear`).addEventListener('click', () => {
+        node(`jm${section}Search`).value = '';
+        if (section === 'Eligibility') node('jmEligibilityReady').value = '';
+        if (section === 'Experience') node('jmExperienceVerified').value = '';
+        render();
+      });
+    }
+    for (const id of ['jmEligibilityReady', 'jmExperienceVerified']) node(id).addEventListener('change', render);
     node('jmBody').addEventListener('click', (event) => {
       const target = event.target.closest('[data-jm-edit]');
       if (target) begin('judge-management', data.judges.find((j) => j.id === Number(target.getAttribute('data-jm-edit'))));
@@ -186,6 +220,10 @@
     });
     node('jmDelete').addEventListener('click', () => {
       if (selected.size && confirm(`Permanently delete ${selected.size} selected judge(s)?`)) return write('/api/judge-management/delete', 'POST', { ids: [...selected] }, 'Selected judges deleted.');
+    });
+    node('jmEligibilityBody').addEventListener('change', (event) => {
+      const id = Number(event.target.getAttribute('data-jm-grant-date'));
+      if (data?.judges.some((judge) => judge.id === id)) grantDates.set(id, event.target.value);
     });
     node('jmEligibilityBody').addEventListener('click', (event) => {
       const target = event.target.closest('[data-jm-award]');
