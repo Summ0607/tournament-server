@@ -17,14 +17,23 @@
     th, td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; }
     [hidden] { display: none !important; }
     [role="alert"], [data-state="error"] { color: #ff9a9a; }
+    .table-wrap { overflow: auto; max-height: 65vh; }
+    .ja-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 12px; }
+    .ja-card { padding: 12px; border: 1px solid var(--line); }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+    #eventPreparation label { display: inline-flex; gap: 6px; margin: 8px; align-items: center; }
+    #rjDialog, #vmDialog, #rjDetailsDialog { color: inherit; background: var(--panel); max-width: 90vw; }
   </style>
   <script src="/judge-management.js" defer></script>
+  <script src="/volunteers.js" defer></script>
+  <script src="/ring-judges.js" defer></script>
+  <script src="/judge-assignments.js" defer></script>
   <script src="/judge-simulation.js" defer></script>
 </head>
 <body>
   <header>
     <h1>Judge Lifecycle Simulation - FABRICATED DATA ONLY</h1>
-    <p>Separate persistent database. No live judges, event assignments or tournament results are connected.</p>
+    <p>Separate persistent judges and event preparation databases. No live data or tablet connections. Assignments never automatically earn experience.</p>
     <form id="clockForm">
       <label>Simulation date <input id="simulationDate" type="date" required></label>
       <button id="advanceDate" type="submit">Advance date</button>
@@ -40,6 +49,37 @@
     <button data-panel="judge-csv-settings">CSV Settings</button>
     <button id="reload">Reload</button>
   </nav>
+  <nav aria-label="Isolated event preparation">
+    <label>Selected simulation event <select id="simulationEvent"><option value="">Select an event</option></select></label>
+    <button data-panel="event-preparation">Events / Participants</button>
+    <button data-panel="volunteers">Volunteers</button>
+    <button data-panel="volunteer-types">Volunteer Types</button>
+    <button data-panel="ring-judges">Ring Judges</button>
+    <button data-panel="judge-assignments">P1/P2 Judge Assignments</button>
+  </nav>
+  <section id="eventPreparation" hidden>
+    <h2>Isolated events and participation</h2>
+    <form id="simulationEventForm"><fieldset id="simulationEventFields">
+      <legend>Create a separate fabricated event</legend>
+      <label>Name <input id="seName" required maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9 _\-]*"></label>
+      <label>Date <input id="seDate" type="date" required></label>
+      <label>Scope <select id="seScope"><option value="regional">Regional</option><option value="national">National</option><option value="world">World</option><option value="in-house">In-House</option></select></label>
+      <label>Days <select id="seDays"><option>1</option><option>2</option></select></label>
+      <label>Rings <select id="seRings"><option>8</option><option>16</option><option>20</option></select></label>
+      <button type="submit">Create isolated event</button>
+    </fieldset></form>
+    <p id="seNotice" role="status"></p>
+    <form id="simulationParticipationForm"><fieldset id="simulationParticipationFields">
+      <legend>Add event participants from the isolated judge directory</legend>
+      <p>Explicitly choose Judging volunteers, competitors, or both. Unchecked directory members do not attend.
+        Existing roles are retained; use Volunteers for volunteer edits/deletion. Competitor editing/removal is not included here.
+        Ages are calculated for the event date; if DOB is unavailable, supply the age manually.
+        Adding participants does not confirm phase availability or create experience.</p>
+      <div class="actions"><button type="button" id="seSelectVolunteers">Select all remaining as volunteers</button><button type="button" id="seClear">Clear new selections</button>
+        <button type="submit" id="seAddParticipants">Add selected participants</button></div>
+      <div class="table-wrap"><table aria-label="Simulation event participants"><thead><tr><th>Judge / Association ID</th><th>Rank / certification</th><th>Event age</th><th>Judging volunteer</th><th>Competitor</th></tr></thead><tbody id="seParticipants"></tbody></table></div>
+    </fieldset></form>
+  </section>
   <main id="workspace"></main>
 </body>
 </html>

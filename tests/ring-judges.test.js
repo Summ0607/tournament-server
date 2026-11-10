@@ -416,6 +416,14 @@ test('directory-linked Ring Judges certification is read-only and directs correc
   assert.equal(p.node('rj-certification').value, 'CORNER');
   assert.match(p.node('rjSourceHelp').textContent, /Certification comes from Judge Management/);
   assert.doesNotMatch(p.node('rjNotice').textContent, /Planned/);
+  p.node('rjCancel').handlers.click();
+  await p.node('rjPopulate').handlers.click();
+  assert.match(p.confirmations.at(-1), /Matched Judge Management certification is used/);
+  assert.doesNotMatch(p.confirmations.at(-1), /Certification stays Unknown/);
+  const legacy = frontend();
+  await legacy.workspace.load();
+  await legacy.node('rjPopulate').handlers.click();
+  assert.match(legacy.confirmations.at(-1), /Certification stays Unknown/);
 });
 test('single-click and keyboard activation open Edit Judge directly without the details screen', async () => {
   const p = frontend({ reviewNotes: '<Follow up>\nSecond line' }), n = p.node;

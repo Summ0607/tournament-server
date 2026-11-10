@@ -5,6 +5,11 @@ const { initializeJudgeDatabase } = require('../db/judgeManagement');
 const { createJudgeManagementRouter } = require('./judgeManagementRoutes');
 const { validDate } = require('./tournamentAge');
 const { writeJsonAtomicSync } = require('./atomicJsonFile');
+const { createSimulationEventRouter } = require('./judgeSimulationEvents');
+const { createEventConfigStore } = require('./eventConfig');
+const { createVolunteerRouter } = require('./volunteerRoutes');
+const { createRingJudgeRouter } = require('./ringJudgeRoutes');
+const { createJudgeAssignmentRouter } = require('./judgeAssignmentRoutes');
 
 const DEFAULT_DIRECTORY = path.join(__dirname, '..', 'judge-simulation-data');
 const FORMAT = 'judge-lifecycle-simulation-v1';
@@ -103,12 +108,18 @@ function createSimulationApp(directory) {
     next();
   }, createJudgeManagementRouter({ file: path.join(directory, 'judges.db'),
     currentDate: () => readSimulation(directory).date, allowSimulation: true }));
+  const eventsRoot = path.join(directory, 'events'), judgeFile = path.join(directory, 'judges.db');
+  app.use('/api', createSimulationEventRouter({ directory }));
+  const { configurationStatus } = createEventConfigStore(eventsRoot);
+  app.use('/api', createVolunteerRouter({ eventsRoot, configurationStatus }));
+  app.use('/api', createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }));
+  app.use('/api', createJudgeAssignmentRouter({ eventsRoot, judgeFile }));
   app.get('/', (_req, res) => res.sendFile(path.join(assets, 'judge-simulation.html')));
   app.get('/management-template', (_req, res) => res.sendFile(path.join(assets, 'index.html')));
-  for (const name of ['judge-management.js', 'judge-simulation.js']) {
+  for (const name of ['judge-management.js', 'judge-simulation.js', 'volunteers.js', 'ring-judges.js', 'judge-assignments.js']) {
     app.get(`/${name}`, (_req, res) => res.sendFile(path.join(assets, name)));
   }
-  app.use((_req, res) => res.status(404).json({ error: 'Only isolated Judge Management is available here.' }));
+  app.use((_req, res) => res.status(404).json({ error: 'Only isolated Judge Management and event preparation are available here.' }));
   return app;
 }
 
@@ -165,7 +176,7 @@ async function main(args) {
     readSimulation(directory);
     await initializeJudgeDatabase(path.join(directory, 'judges.db'));
     await listen(createSimulationApp(directory), port);
-    console.log(`FABRICATED Judge Management only: http://127.0.0.1:${port}\nDatabase: ${path.join(directory, 'judges.db')}\nNo live data or event services are connected. Stop with Ctrl+C; records and date persist.`);
+    console.log(`FABRICATED judge lifecycle and event preparation: http://127.0.0.1:${port}\nDatabase: ${path.join(directory, 'judges.db')}\nIsolated events: ${path.join(directory, 'events')}\nNo live data or tablet services are connected. Stop with Ctrl+C; records, events and date persist.`);
   }
 }
 

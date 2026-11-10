@@ -247,7 +247,7 @@
     node('rjDetailsClose').addEventListener('click', close);
     node('rjDetailsDialog').addEventListener('cancel', (event) => { event.preventDefault(); close(); });
     node('rjPopulate').addEventListener('click', () => {
-      if (!locked() && confirm(`Add Dan-ranked competitors aged 18+ and other competitors who meet SK/TK age and rank requirements to Ring Judges for ${scope}? Certification stays Unknown and SK/TK eligibility is noted. Existing entries will not be overwritten.`)) return write('/populate', 'POST', {});
+      if (!locked() && confirm(`Add Dan-ranked competitors aged 18+ and other competitors who meet SK/TK age and rank requirements to Ring Judges for ${scope}? ${data.certificationReadOnly ? 'Matched Judge Management certification is used; candidates still require agreement and phase availability confirmation.' : 'Certification stays Unknown and SK/TK eligibility is noted.'} Existing entries will not be overwritten.`)) return write('/populate', 'POST', {});
     });
     node('rjPopulateVolunteers').addEventListener('click', () => {
       if (!locked() && confirm(`Add primary or secondary Judging volunteers who are Dan-ranked and aged 18+, or have SK/TK certification and meet its rank and age requirements, for ${scope}? Existing entries will not be overwritten.`)) return write('/populate-volunteers', 'POST', {});

@@ -1427,8 +1427,8 @@ are panels within their originating section, not separate browser history entrie
 #### Isolated judge lifecycle simulation (Step 1)
 
 This opt-in environment uses fabricated judges and a separate persistent database.
-It does not start the live server, connect to event data, assign rings, generate
-experience from results, or change the computer clock. Normal application startup
+It does not start the live server, connect to live event data, run rings/tablets,
+generate experience from results, or change the computer clock. Normal application startup
 continues to use the live Judge Management database and today's date.
 
 From PowerShell in the repository folder:
@@ -1457,7 +1457,56 @@ start a separate simulation to repeat from an earlier date. Stop with Ctrl+C and
 rerun `serve` to resume the same records and date; initialization is not repeated.
 Advancing the date does not create events, experience, tests or promotions.
 The regional population/API work below adds distinct-event credit counting.
-Event participation/assignment integration remains a later step.
+Isolated event participation and phase planning are available as described below.
+
+##### Interactive isolated event preparation
+
+The simulator now reuses the production **Volunteers**, **Volunteer Types**,
+**Ring Judges** and **P1/P2 Judge Assignments** controllers and business APIs,
+with every event stored under the selected simulation directory's `events`
+folder. Nothing reads or writes live tournament databases or the live judge
+directory. Restart an already-running simulation server to load updated server
+code; refreshing the page alone does not update the server.
+
+1. Open **Events / Participants**, create a named event with a date, explicit
+   scope, one/two days, and 8, 16 or 20 rings, or select a previously saved event.
+   One-day events still have independently planned P1 and P2; days do not define
+   these assignment phases.
+2. Select directory members as **Judging volunteer**, **Competitor**, or both,
+   then **Add selected participants** and confirm. No member attends by default;
+   the bulk volunteer button is an explicit selection that still requires saving.
+   Members with both roles share their Association-ID event identity.
+3. Ages are calculated on the event date from private directory DOBs. DOB is
+   neither returned in this roster nor stored in event participant tables.
+   Missing DOB requires a manually entered event-date age. Volunteer claims start
+   at Unknown; qualification decisions still use the authoritative directory.
+   Under-18 fabricated volunteers receive a clearly labeled fabricated guardian.
+4. Review/edit volunteers or volunteer types, and populate **Ring Judges** from
+   volunteers/competitors using the normal controls. Certified competitors who
+   did not volunteer can be potential officials, not automatically available.
+5. In **P1/P2 Judge Assignments**, confirm agreement/availability independently
+   for each phase, select its rings and discipline, reserve arbitrators, auto
+   assign or adjust manually, then **Save both phases**. Qualified BB competitors
+   may serve in the Gup phase, not the BB phase where they compete.
+
+Event creation and participant selection are simulator-only APIs
+(`/api/simulation/events` and `/api/simulation/participation`). Adds are atomic,
+revision-checked, append-only, and retry-safe; existing participant roles are not
+silently overwritten. Use Volunteers for volunteer corrections/removal;
+competitor editing/removal and event reconfiguration are not provided here.
+Unsaved selections and drafts are guarded when changing views/events, reloading,
+advancing the date or closing the page. Event preparation persists across restart.
+Event qualifications use the selected event date; Judge Management uses the
+simulation calendar date.
+
+This connects preparation for review only. Assignments never create experience,
+verify actual service or award certification. Assignment-to-completed-service
+review integration remains separate; existing manual **Record Completed Service**
+continues to work. Tablet roster delivery/check-in/replacements/reporting
+(Step 3B), operational ring execution and automated contact remain outstanding.
+
+Focused validation:
+`node --test tests/judgeSimulation.test.js tests/judgeAssignments.test.js`.
 
 ##### Regional population and shared experience API
 
@@ -1476,8 +1525,9 @@ It is entirely fabricated, based on a January 15, 2026 simulation start:
 Eight certified records are deliberately expired (four Corner and four SK/TK).
 Other certified records start current. The pool supports staffing scenarios from
 8 through 20 rings, with reserve officials and candidates; it does not assert
-attendance or assign arbitrators. Event participation will come from volunteers
-matched to this directory by Association ID. No out-of-region scenarios are used.
+attendance or assign arbitrators. Explicitly selected volunteers and potential
+competitor officials are matched to this directory by Association ID.
+No out-of-region scenarios are used.
 
 To review a clean 200-person directory without the original 11 scenario records:
 
