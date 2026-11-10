@@ -117,8 +117,8 @@
       try {
         const result = await request('/api/judge-management');
         if (current !== token) return;
-        setData(result); notice('');
-      } catch (error) { if (current === token) notice(error.message, true); }
+        setData(result); notice(''); return true;
+      } catch (error) { if (current === token) notice(error.message, true); return false; }
     }
     function begin(source, judge = null) {
       if (busy || !data) return;
@@ -219,21 +219,41 @@
           { associationId: judge.associationId, ids: [record.id], verified: !record.logVerified }, 'Experience verification updated.');
       }
     });
-    function openService(record = null) {
+    function openService(record = null, planned = null) {
       if (!data || !canLeave()) return;
       serviceId = record?.id || null;
       const judge = data.judges.find((item) => item.id === record?.judgeId);
       for (const field of serviceFields) node(`jmService-${field}`).value =
         field === 'associationId' ? judge?.associationId || '' : record?.[field] || '';
       node('jmServiceEvent').value = record?.eventId || '';
-      node('jmServiceEvent').disabled = Boolean(record);
-      for (const field of ['eventId', 'eventName', 'eventDate', 'eventScope']) node(`jmService-${field}`).disabled = Boolean(record);
+      node('jmServiceEvent').disabled = Boolean(record || planned);
+      for (const field of ['eventId', 'eventName', 'eventDate', 'eventScope']) node(`jmService-${field}`).disabled = Boolean(record || planned);
       node('jmService-eventDate').max = data.asOf || '';
       node('jmServiceCompleted').checked = false;
       node('jmServiceError').textContent = '';
       node('jmServiceTitle').textContent = record ? 'Correct Completed Service (verification will reset)' : 'Record Completed Service';
+      node('jmServiceContext').textContent = '';
+      node('jmServiceContext').hidden = true;
       node('jmServiceForm').hidden = false; serviceOpen = true;
       serviceBaseline = JSON.stringify(serviceDraft());
+      if (planned) {
+        for (const field of serviceFields) node(`jmService-${field}`).value = planned[field] || '';
+        node('jmServiceEvent').value = planned.eventId;
+        node('jmServiceTitle').textContent = 'Review Planned Assignment - Confirm Actual Service';
+        node('jmServiceContext').textContent = `${planned.context}. This is a saved plan, not proof of service. ` +
+          'Confirm the actual judge (or replacement), phase and role; leave absent officials unrecorded. ' +
+          'For SK/TK, explicitly choose Scorekeeper or Timekeeper. Ring context is not stored in the experience record.';
+        node('jmServiceContext').hidden = false;
+      }
+    }
+    async function beginService(planned, expectedRevision) {
+      if (busy || !canLeave()) return false;
+      if (!await load()) throw new Error('Unable to reload Judge Management. Retry before recording service.');
+      if (data.revision !== expectedRevision) throw new Error('Judge data or service changed. Reload assignment service review before recording.');
+      if (!data.judges.some((judge) => judge.associationId === planned.associationId)) throw new Error('Planned judge no longer exists in Judge Management.');
+      openService(null, planned);
+      showPanel('judge-experience');
+      return true;
     }
     node('jmServiceAdd').addEventListener('click', () => openService());
     node('jmServiceCancel').addEventListener('click', canLeave);
@@ -294,7 +314,7 @@
       finally { busy = false; }
       return write('/api/judge-management-import', 'POST', { csv: text }, (result) => `Import complete: ${result.added} added, ${result.updated} updated.`);
     });
-    return { load, begin, canLeave, dirty, busy: () => busy, leave: () => { ++token; }, cancel: () => { if (canLeave()) showPanel(origin); } };
+    return { load, begin, beginService, canLeave, dirty, busy: () => busy, leave: () => { ++token; }, cancel: () => { if (canLeave()) showPanel(origin); } };
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { create };
   else root.JudgeManagementWorkspace = { create };

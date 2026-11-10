@@ -28,6 +28,7 @@
   <script src="/volunteers.js" defer></script>
   <script src="/ring-judges.js" defer></script>
   <script src="/judge-assignments.js" defer></script>
+  <script src="/judge-service-review.js" defer></script>
   <script src="/judge-simulation.js" defer></script>
 </head>
 <body>
@@ -56,7 +57,27 @@
     <button data-panel="volunteer-types">Volunteer Types</button>
     <button data-panel="ring-judges">Ring Judges</button>
     <button data-panel="judge-assignments">P1/P2 Judge Assignments</button>
+    <button data-panel="service-review">Assignment Service Review</button>
   </nav>
+  <section id="serviceReview" hidden>
+    <h2>Saved assignments - actual service review</h2>
+    <p>Assignments are suggestions for review, not evidence that anyone served. Leave absent officials unrecorded.
+      Review actual service opens the normal manual entry form: confirm the actual judge (including a replacement),
+      phase and role, then explicitly attest completion. SK/TK must be recorded as Scorekeeper or Timekeeper.
+      Save each completed service as pending experience; verification remains separate. No batch credit or automatic awards.</p>
+    <p>The second table includes actual event service even when it differs from the plan.
+      Use Experience to correct, withdraw or verify records. A replacement does not automatically remove an original record:
+      correct or withdraw an erroneous original, or retain both only if both actually served.
+      Ring labels provide review context only; experience remains event/phase/role based. Existing D5+ log-verification exemptions remain unchanged.</p>
+    <div class="actions"><button type="button" id="srReload">Reload saved plans and service</button>
+      <button type="button" id="srExperience">Open Experience / corrections / verification</button></div>
+    <p id="srNotice" role="status"></p>
+    <div class="table-wrap"><table aria-label="Planned service review"><thead><tr><th>Phase</th><th>Ring</th><th>Planned role</th>
+      <th>Planned judge</th><th>Matching actual service</th><th>Action</th></tr></thead><tbody id="srBody"></tbody></table></div>
+    <h3>Recorded actual service for this event (including deviations)</h3>
+    <div class="table-wrap"><table aria-label="Recorded actual event service"><thead><tr><th>Association ID</th><th>Judge</th>
+      <th>Phase</th><th>Actual role</th><th>Verification</th></tr></thead><tbody id="srActual"></tbody></table></div>
+  </section>
   <section id="eventPreparation" hidden>
     <h2>Isolated events and participation</h2>
     <form id="simulationEventForm"><fieldset id="simulationEventFields">

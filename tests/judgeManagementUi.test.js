@@ -183,6 +183,58 @@ test('coordinator service form guards drafts, attestation, failures, duplicate w
   assert.equal(workspace.dirty(), false);
 });
 
+test('assignment seed opens guarded actual-service draft with no implicit role, attestation, verification or write', async () => {
+  const nodes = new Map(), calls = [], panels = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', checked: false, handlers: {},
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {} });
+    return nodes.get(id);
+  };
+  const state = { asOf: '2040-01-15', revision: 4, aliases: defaults, ranks: judgeRankOptions(),
+    certificationLevels: certificationLevels(), judges: [{ id: 1, associationId: 'ID1', firstName: 'Test',
+      lastName: 'Judge', certification: 'SK_TK', school: '', status: 'Active' }], experience: [] };
+  let accept = false, fail = false;
+  const workspace = create({ document: { getElementById: node }, confirm: () => accept,
+    showPanel: (panel) => panels.push(panel), request: async (url, options) => {
+      calls.push({ url, options });
+      if (fail) throw new Error('Directory unavailable');
+      return state;
+    } });
+  const seed = { associationId: 'ID1', eventId: 'simulation-event:Review', eventName: 'Review',
+    eventDate: '2040-01-15', eventScope: 'REGIONAL', phase: 'P2', role: '', location: 'Venue', context: 'P2, Ring A1, planned SK/TK' };
+  await assert.rejects(workspace.beginService(seed, 3), /Judge data or service changed/);
+  assert.equal(node('jmServiceForm').hidden, true);
+  assert.equal(await workspace.beginService(seed, 4), true);
+  assert.equal(panels.at(-1), 'judge-experience');
+  assert.equal(node('jmService-role').value, '');
+  assert.equal(node('jmService-phase').value, 'P2');
+  assert.equal(node('jmService-eventId').disabled, true);
+  assert.equal(node('jmServiceCompleted').checked, false);
+  assert.match(node('jmServiceContext').textContent, /Ring A1.*not proof of service/);
+  assert.equal(workspace.dirty(), true);
+  assert.equal(workspace.canLeave(), false);
+  assert.ok(calls.every((call) => call.options === undefined));
+  await node('jmServiceForm').handlers.submit({ preventDefault() {} });
+  assert.match(node('jmServiceError').textContent, /Confirm actual completed service/);
+  node('jmService-role').value = 'TIMEKEEPER';
+  node('jmServiceCompleted').checked = true;
+  accept = true;
+  await node('jmServiceForm').handlers.submit({ preventDefault() {} });
+  const body = JSON.parse(calls.at(-1).options.body);
+  assert.equal(body.confirmedCompleted, true);
+  assert.equal(body.records[0].role, 'TIMEKEEPER');
+  assert.equal(body.records[0].source, 'MANUAL');
+  assert.equal(body.records[0].eventId, seed.eventId);
+  assert.equal(body.records[0].phase, 'P2');
+  assert.equal(body.records[0].logVerified, undefined);
+  assert.equal(workspace.dirty(), false);
+  node('jmServiceAdd').handlers.click();
+  assert.equal(node('jmServiceContext').hidden, true, 'ordinary manual entry has no stale plan context');
+  assert.equal(node('jmService-eventId').disabled, false);
+  fail = true;
+  await assert.rejects(workspace.beginService(seed, 4), /Unable to reload Judge Management/);
+});
+
 test('testing retains failed attempts and retakes while eligibility requires an explicit confirmed award', async () => {
   const nodes = new Map(), calls = [];
   const node = (id) => {

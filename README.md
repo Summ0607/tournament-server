@@ -1500,13 +1500,56 @@ Event qualifications use the selected event date; Judge Management uses the
 simulation calendar date.
 
 This connects preparation for review only. Assignments never create experience,
-verify actual service or award certification. Assignment-to-completed-service
-review integration remains separate; existing manual **Record Completed Service**
-continues to work. Tablet roster delivery/check-in/replacements/reporting
+verify actual service or award certification. The coordinator-reviewed handoff
+below reuses manual **Record Completed Service**. Tablet roster delivery/check-in/replacements/reporting
 (Step 3B), operational ring execution and automated contact remain outstanding.
 
 Focused validation:
 `node --test tests/judgeSimulation.test.js tests/judgeAssignments.test.js`.
+
+##### Assignment-to-actual-service review (follow-up Step 3)
+
+In the isolated simulator, select an event and open **Assignment Service Review**.
+It reads **saved** P1/P2 assignments and arbitrator reserves, alongside actual
+service already recorded for that event. Unsaved planner drafts must be saved
+first. Loading/reloading review never writes experience, attendance or awards.
+
+Choose **Review actual service** beside a planned official. The normal Experience
+form opens with judge, event, phase and suggested role filled in, but completion
+is **unchecked**. Confirm the actual judge (or replacement), phase and role;
+SK/TK intentionally leaves the actual role blank so the coordinator must select
+Scorekeeper or Timekeeper. Leave an absent official unrecorded; absence decisions
+are not persisted as a separate attendance log. Ring labels are context only,
+not new fields in the experience/result contract.
+
+The shared event ID is deterministic (`simulation-event:<event folder name>`),
+or reuses the event ID already recorded for that name/date. Both phases use the
+canonical event date even at a two-day event. Unlinked legacy experience or
+conflicting event identities block the handoff with an explicit reconciliation
+message; no duplicate identity is silently invented. Event metadata is locked
+in the prefilled form, while actual judge, role, phase and location remain editable.
+Future-event service is blocked until the simulation clock reaches the event
+date; completion must still be explicitly attested. Plan/source and directory
+revisions are rechecked before opening the form; stale writes also retain the
+normal service API protection.
+
+Submit **Pending Experience** only after attesting actual completion. Verification
+remains a separate action in Experience, with existing D5+ exemptions unchanged.
+Identical retries add no duplicate credit. Use **Open Experience / corrections /
+verification** to correct or withdraw mistakes, including a replacement entered
+against the wrong judge; corrections reset verification. Recording a replacement
+does not automatically delete another official's service: retain both only when
+both actually served. The recorded-actuals table shows deviations from the plan.
+Return to Assignment Service Review to reload matching pending/verified status.
+Verification and distinct-championship progression rules remain unchanged.
+
+This is a simulator-only UI handoff to existing shared manual-service APIs,
+not bulk certification credit, tablet-confirmed attendance, replacement
+authorization, automatic result ingestion or operational ring execution.
+No new tablet/server contract or live preparation route is introduced.
+
+Focused validation:
+`node --test tests/judgeSimulation.test.js tests/judgeAssignmentsUi.test.js tests/judgeManagementUi.test.js tests/judgeExperienceApi.test.js`.
 
 ##### Regional population and shared experience API
 

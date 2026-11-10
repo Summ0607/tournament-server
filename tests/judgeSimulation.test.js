@@ -140,7 +140,7 @@ test('simulation exposes only isolated management/preparation UI and APIs, rejec
   assert.match(html, /FABRICATED DATA ONLY/);
   const template = await (await fetch(base + '/management-template')).text();
   assert.match(template, /id="judgeManagementView"/);
-  for (const asset of ['/judge-simulation.js', '/judge-management.js', '/volunteers.js', '/ring-judges.js', '/judge-assignments.js']) {
+  for (const asset of ['/judge-simulation.js', '/judge-management.js', '/volunteers.js', '/ring-judges.js', '/judge-assignments.js', '/judge-service-review.js']) {
     assert.equal((await fetch(base + asset)).status, 200);
   }
   const before = readSimulation(directory);
@@ -226,6 +226,56 @@ test('isolated preparation persists explicit participants, shared identities and
   assert.equal((await restarted.request('/api/simulation/events')).data.events.length, 3);
   assert.deepEqual((await restarted.request(url)).data, state);
   assert.deepEqual((await restarted.request(planUrl)).data.phases, plan.phases);
+  const { buildReview } = require('../tournament-management/judge-service-review');
+  let review = buildReview(state.config, plan, initial);
+  assert.ok(review.rows.length > 0);
+  assert.deepEqual(review.actual, []);
+  const planned = review.rows.find((row) => row.associationId !== 'SIM-005');
+  const service = { ...planned.seed, role: 'CORNER_JUDGE', source: 'MANUAL' };
+  const append = (revision, confirmedCompleted = true) => request('/api/judge-management/experience', 'POST', {
+    revision, associationId: 'SIM-005', confirmedCompleted, records: [service]
+  });
+  assert.equal((await append(initial.revision, false)).status, 400, 'reviewing the plan does not attest completion');
+  response = await append(initial.revision);
+  assert.equal(response.status, 200);
+  let actualState = response.data;
+  const entry = actualState.experience.find((record) => record.eventId === review.event.eventId);
+  const replacement = initial.judges.find((judge) => judge.associationId === 'SIM-005');
+  assert.equal(entry.judgeId, replacement.id, 'credit goes to actual replacement, not planned official');
+  assert.equal(entry.logVerified, 0);
+  assert.equal(actualState.experience.length, initial.experience.length + 1, 'other planned officials gain no records');
+  assert.deepEqual(actualState.judges, initial.judges, 'review never awards certification');
+  assert.equal(actualState.eligibility.find((row) => row.judgeId === replacement.id).experienceCount,
+    initial.eligibility.find((row) => row.judgeId === replacement.id).experienceCount, 'pending service gives no additional credit');
+  assert.equal((await append(initial.revision)).status, 409);
+  response = await append(actualState.revision);
+  assert.equal(response.data.duplicates, 1);
+  actualState = response.data;
+  review = buildReview(state.config, plan, actualState);
+  assert.equal(review.actual.length, 1);
+  assert.equal(review.rows.find((row) => row.associationId === planned.associationId && row.phase === planned.phase &&
+    row.role === planned.role).matching.length, 0);
+  response = await request('/api/judge-management/experience-verify', 'POST', {
+    revision: actualState.revision, associationId: 'SIM-005', ids: [entry.id], verified: true
+  });
+  assert.equal(response.status, 200);
+  actualState = response.data;
+  assert.equal(actualState.eligibility.find((row) => row.judgeId === replacement.id).experienceCount,
+    initial.eligibility.find((row) => row.judgeId === replacement.id).experienceCount + 1);
+  response = await request(`/api/judge-management/experience/${entry.id}`, 'PUT', {
+    revision: actualState.revision, associationId: 'SIM-004', confirmedCompleted: true,
+    record: { ...service, role: 'TIMEKEEPER' }
+  });
+  assert.equal(response.status, 200);
+  actualState = response.data;
+  assert.equal(actualState.experience.find((row) => row.id === entry.id).logVerified, 0, 'corrected replacement resets verification');
+  assert.equal(buildReview(state.config, plan, actualState).actual[0].role, 'TIMEKEEPER');
+  response = await request(`/api/judge-management/experience/${entry.id}`, 'DELETE', {
+    revision: actualState.revision, confirmedWithdrawal: true
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.data.experience, initial.experience, 'withdrawal restores actual service history');
+  assert.deepEqual((await request(planUrl)).data.phases, plan.phases, 'actual service never rewrites planned assignments');
 });
 
 test('simulation participation rejects invalid, stale and concurrent writes atomically, supports explicit missing-DOB age', async (t) => {

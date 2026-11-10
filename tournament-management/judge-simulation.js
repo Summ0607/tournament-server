@@ -36,6 +36,7 @@
     function showPanel(panel) {
       if (panels[panel]) currentPanel = panel;
       node('eventPreparation').hidden = panel !== 'event-preparation';
+      node('serviceReview').hidden = panel !== 'service-review';
       const visibleView = panels[panel] || panel === 'jmAdd' || panel === 'jmImport' ? 'judgeManagementView'
         : panel === 'ring-judges' ? 'ringJudgesView' : panel === 'judge-assignments' ? 'judgeAssignmentsView'
           : panel.startsWith('volunteer') ? 'volunteersView' : '';
@@ -46,7 +47,10 @@
     const volunteers = VolunteersWorkspace.create({ document, request, selectedEvent, confirm });
     const ringJudges = RingJudgesWorkspace.create({ document, request, selectedEvent, confirm });
     const assignments = JudgeAssignmentsWorkspace.create({ document, request, selectedEvent, confirm });
-    const controllers = [workspace, volunteers, ringJudges, assignments];
+    const serviceReview = JudgeServiceReviewWorkspace.create({ document, request, selectedEvent,
+      beginService: (draft, revision) => workspace.beginService(draft, revision),
+      viewExperience: () => loadPanel('judge-experience') });
+    const controllers = [workspace, volunteers, ringJudges, assignments, serviceReview];
     const newSelections = () => [...node('seParticipants').querySelectorAll('tr')].map((row) => ({
       associationId: row.dataset.member, volunteer: row.querySelector('[data-volunteer]').checked &&
         !row.querySelector('[data-volunteer]').disabled,
@@ -103,6 +107,7 @@
       currentPanel = panel;
       showPanel(panel);
       if (panel === 'event-preparation') await loadParticipation();
+      else if (panel === 'service-review') await serviceReview.load();
       else if (panel === 'ring-judges') await ringJudges.load();
       else if (panel === 'judge-assignments') await assignments.load();
       else if (panel.startsWith('volunteer')) await volunteers.load(panel);

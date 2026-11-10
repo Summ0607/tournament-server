@@ -116,7 +116,7 @@ function createSimulationApp(directory) {
   app.use('/api', createJudgeAssignmentRouter({ eventsRoot, judgeFile }));
   app.get('/', (_req, res) => res.sendFile(path.join(assets, 'judge-simulation.html')));
   app.get('/management-template', (_req, res) => res.sendFile(path.join(assets, 'index.html')));
-  for (const name of ['judge-management.js', 'judge-simulation.js', 'volunteers.js', 'ring-judges.js', 'judge-assignments.js']) {
+  for (const name of ['judge-management.js', 'judge-simulation.js', 'volunteers.js', 'ring-judges.js', 'judge-assignments.js', 'judge-service-review.js']) {
     app.get(`/${name}`, (_req, res) => res.sendFile(path.join(assets, name)));
   }
   app.use((_req, res) => res.status(404).json({ error: 'Only isolated Judge Management and event preparation are available here.' }));
