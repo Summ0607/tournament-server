@@ -584,10 +584,10 @@ Unknown, Uncertified, SK/TK, Corner, Regional (Center) and International.
 Judge ranks span G5–D8, and each level from SK/TK up enforces a minimum rank
 (SK/TK: G5, Corner and Regional: D1, International: D2). **Clear Review Flag**, beside
 Delete, clears selected judges' flags after confirmation and preserves notes.
-**Populate Judges from Competitors** adds Dan-ranked competitors (D1–D8)
-aged 18+ as judge candidates, and competitors eligible for SK/TK: G5 or higher
-at age 16+, or Cho Dan Bo at age 14+, on the tournament date. Their certification
-remains Unknown; SK/TK eligibility is noted for verification. Existing linked
+**Populate Judges from Competitors** adds certified, event-date-qualified
+competitors matched to Judge Management by Association ID, including eligible
+SK/TK candidates. Certification is refreshed from that directory and is read-only
+here; make certification corrections in Judge Management. Existing linked
 competitors or matching case-insensitive Association IDs are skipped; existing
 edits are not overwritten. Population does not certify a judge or establish
 availability. Missing or stale tournament ages for eligible ranks prevent
@@ -595,18 +595,18 @@ population and are reported for correction.
 Every judge must have an Association ID. Population excludes any record without
 one, and In-House non-member volunteers cannot be added as judges.
 
-Certification defaults to Unknown. Saved directories with legacy free-text
+Unmatched certification is shown as Unknown. Saved directories with legacy free-text
 certification are normalized on load; unrecognized values or rank/certification
 mismatches reset to Unknown or flag the judge for review with an explanatory
 note. **Flagged for Review** and
 review notes capture follow-up observations, not automatic assignment exclusions.
 Judges have an editable Priority from 0 to 99, defaulting to 4; the directory can
-be filtered by priority. Manual Only is omitted; **Judge Assignments** remains
-Planned.
+be filtered by priority. Manual Only is omitted; **Judge Assignments** supports
+independent P1/P2 preparation with explicitly confirmed availability.
 **Populate Judges from Volunteers** includes member volunteers with an
 Association ID and primary or secondary Judging choice: those aged 18+ with Dan
 rank, and SK/TK-certified volunteers meeting the rank and age rules above.
-Supplied certification is copied.
+Certification comes from Judge Management, not a volunteer's claimed level.
 Linked volunteer IDs and nonblank Association IDs prevent repeated population;
 existing judge edits are not overwritten. Keep a type named **Judging** for this
 workflow; if it is renamed or deleted, population reports the missing type.
@@ -1386,7 +1386,7 @@ Its hierarchy is:
   - **Results** — read-only selected-tournament standings with live/simulation source selection
   - **Team Management** → **Teams** / **Settings** — manual, tournament-scoped
   - **Ring Management**: **Ring Judges** — selected-tournament preparation directory;
-    **Judge Assignments** — Planned;
+    **Judge Assignments** — P1/P2 preparation;
     **Division Assignments** (existing Ring Assignment)
   - **Head Table**
   - **Printing** and **CSV Settings** — Planned
@@ -1406,7 +1406,8 @@ invalid rows reject the entire import. Changing data in another session requires
 a reload before saving.
 
 Testing and Experience records are editable from Add/Edit Judge. Written tests
-pass at 80% or higher; practical tests are pass/fail. Each promotion and
+pass at 80% or higher; practical tests are pass/fail. Eligibility considers only
+the individual judge's test results, never another judge's passes. Each promotion and
 recertification requires current written and (for Corner and above) practical
 tests. Experience records include event, date, location, role, sanctioned scope
 and log verification. In-House events do not count. Corner requires one
@@ -1422,6 +1423,468 @@ review and are not automatically demoted. Membership in good standing is
 assumed for judges entered in this directory. Tournament synchronization and
 submission-sheet generation remain unavailable. Add Judge and Import Judges
 are panels within their originating section, not separate browser history entries.
+
+#### Isolated judge lifecycle simulation (Step 1)
+
+This opt-in environment uses fabricated judges and a separate persistent database.
+It does not start the live server, connect to live event data, run rings/tablets,
+generate experience from results, or change the computer clock. Normal application startup
+continues to use the live Judge Management database and today's date.
+
+From PowerShell in the repository folder:
+
+```powershell
+npm run judge:simulation -- init --date 2026-01-15
+npm run judge:simulation -- serve
+```
+
+Open `http://127.0.0.1:3450`. The clearly marked simulation page reuses the existing
+Judge Management forms and controller for Judges, Testing, Eligibility, Experience
+and CSV Settings. It is local-only and intentionally has no account sign-in:
+use fabricated data only. Do not expose this port to the network.
+
+Initialization creates `judge-simulation-data` (ignored by Git), with `judges.db`
+and `simulation.json`. It refuses to overwrite an existing directory. Eleven
+fabricated `SIM-` judges cover new/underage candidates, all certification levels,
+passed/failed tests, missing/verified/unverified/In-House experience, promotion-ready
+records, and an expired Regional certification. Dates are relative to the chosen
+starting date. This is a validation dataset, not an HQ-format specification.
+
+Use **Advance date** to move the simulation calendar forward. Judge age checks,
+eligibility, expiration filters, test/experience validation, CSV birth-date
+validation and certification awards use that date. Dates cannot move backward;
+start a separate simulation to repeat from an earlier date. Stop with Ctrl+C and
+rerun `serve` to resume the same records and date; initialization is not repeated.
+Advancing the date does not create events, experience, tests or promotions.
+The regional population/API work below adds distinct-event credit counting.
+Isolated event participation and phase planning are available as described below.
+
+##### Interactive isolated event preparation
+
+The simulator now reuses the production **Volunteers**, **Volunteer Types**,
+**Ring Judges** and **P1/P2 Judge Assignments** controllers and business APIs,
+with every event stored under the selected simulation directory's `events`
+folder. Nothing reads or writes live tournament databases or the live judge
+directory. Restart an already-running simulation server to load updated server
+code; refreshing the page alone does not update the server.
+
+1. Open **Events / Participants**, create a named event with a date, explicit
+   scope, one/two days, and 8, 16 or 20 rings, or select a previously saved event.
+   One-day events still have independently planned P1 and P2; days do not define
+   these assignment phases.
+2. Select directory members as **Judging volunteer**, **Competitor**, or both,
+   then **Add selected participants** and confirm. No member attends by default;
+   the bulk volunteer button selects only visible remaining members and still
+   requires saving. Search by name, Association ID, rank or school, or filter by
+   existing participation/new selections. Filtering retains all new role/age
+   inputs, including hidden selections; the selection count and clear action
+   explicitly include hidden rows.
+   Members with both roles share their Association-ID event identity.
+3. Ages are calculated on the event date from private directory DOBs. DOB is
+   neither returned in this roster nor stored in event participant tables.
+   Missing DOB requires a manually entered event-date age. Volunteer claims start
+   at Unknown; qualification decisions still use the authoritative directory.
+   Under-18 fabricated volunteers receive a clearly labeled fabricated guardian.
+4. Review/edit volunteers or volunteer types, and populate **Ring Judges** from
+   volunteers/competitors using the normal controls. Certified competitors who
+   did not volunteer can be potential officials, not automatically available.
+5. In **P1/P2 Judge Assignments**, confirm agreement/availability independently
+   for each phase, select its rings and discipline, reserve arbitrators, auto
+   assign or adjust manually, then **Save assignment changes**. Qualified BB competitors
+   may serve in the Gup phase, not the BB phase where they compete.
+
+The labeled **Selected event summary** remains above the workspace, showing event
+date, scope, days, rings, volunteer/competitor counts and distinct participants.
+It refreshes on navigation and volunteer changes; participation is not phase
+availability. The active navigation button and next-action guidance identify the
+current screen. Event creation, clock controls, CSV import and extended
+instructions are collapsible; the simulation date remains visible.
+
+Lifecycle tables use bounded scrolling with sticky whole headers (including both
+Ring Judges header/filter rows). Judges includes rank and a result count; Testing,
+Experience and Eligibility have independent searches/counts and clear actions.
+Eligibility can filter by award readiness; Experience by verification. These are
+display-only filters and never award, verify or write service. Chosen grant dates
+survive filtering; an explicit reload restores the evaluation-date defaults. Existing Volunteer
+and Ring Judges filters remain available. Assignment service review filters both
+planned/actual tables by search and phase without changing the selected row's
+service identity.
+
+Event creation and participant selection are simulator-only APIs
+(`/api/simulation/events` and `/api/simulation/participation`). Adds are atomic,
+revision-checked, append-only, and retry-safe; existing participant roles are not
+silently overwritten. Use Volunteers for volunteer corrections/removal;
+competitor editing/removal and event reconfiguration are not provided here.
+Unsaved selections and drafts are guarded when changing views/events, reloading,
+advancing the date or closing the page. Event preparation persists across restart.
+Event qualifications use the selected event date; Judge Management uses the
+simulation calendar date.
+
+This connects preparation for review only. Assignments never create experience,
+verify actual service or award certification. The coordinator-reviewed handoff
+below reuses manual **Record Completed Service**. Tablet roster delivery/check-in/replacements/reporting
+(Step 3B), operational ring execution and automated contact remain outstanding.
+
+Focused validation:
+`node --test tests/judgeSimulation.test.js tests/judgeAssignments.test.js`.
+
+##### Assignment-to-actual-service review (follow-up Step 3)
+
+In the isolated simulator, select an event and open **Assignment Service Review**.
+It reads **saved** P1/P2 assignments and arbitrator reserves, alongside actual
+service already recorded for that event. Unsaved planner drafts must be saved
+first. Loading/reloading review never writes experience, attendance or awards.
+
+Choose **Review actual service** beside a planned official. The normal Experience
+form opens with judge, event, phase and suggested role filled in, but completion
+is **unchecked**. Confirm the actual judge (or replacement), phase and role;
+SK/TK intentionally leaves the actual role blank so the coordinator must select
+Scorekeeper or Timekeeper. Leave an absent official unrecorded; absence decisions
+are not persisted as a separate attendance log. Ring labels are context only,
+not new fields in the experience/result contract.
+
+The shared event ID is deterministic (`simulation-event:<event folder name>`),
+or reuses the event ID already recorded for that name/date. Both phases use the
+canonical event date even at a two-day event. Unlinked legacy experience or
+conflicting event identities block the handoff with an explicit reconciliation
+message; no duplicate identity is silently invented. Event metadata is locked
+in the prefilled form, while actual judge, role, phase and location remain editable.
+Future-event service is blocked until the simulation clock reaches the event
+date; completion must still be explicitly attested. Plan/source and directory
+revisions are rechecked before opening the form; stale writes also retain the
+normal service API protection.
+
+Submit **Pending Experience** only after attesting actual completion. Verification
+remains a separate action in Experience, with existing D5+ exemptions unchanged.
+Identical retries add no duplicate credit. Use **Open Experience / corrections /
+verification** to correct or withdraw mistakes, including a replacement entered
+against the wrong judge; corrections reset verification. Recording a replacement
+does not automatically delete another official's service: retain both only when
+both actually served. The recorded-actuals table shows deviations from the plan.
+Return to Assignment Service Review to reload matching pending/verified status.
+Verification and distinct-championship progression rules remain unchanged.
+
+This is a simulator-only UI handoff to existing shared manual-service APIs,
+not bulk certification credit, tablet-confirmed attendance, replacement
+authorization, automatic result ingestion or operational ring execution.
+No new tablet/server contract or live preparation route is introduced.
+
+Focused validation:
+`node --test tests/judgeSimulation.test.js tests/judgeAssignmentsUi.test.js tests/judgeManagementUi.test.js tests/judgeExperienceApi.test.js`.
+
+##### Regional population and shared experience API
+
+The reusable import file is
+[`regional-judges-200.csv`](test-data/judge-simulation/regional-judges-200.csv).
+It is entirely fabricated, based on a January 15, 2026 simulation start:
+
+| Certification | Count |
+| --- | ---: |
+| International (D5, arbitrator candidates) | 8 |
+| Regional Center | 32 |
+| Corner | 100 |
+| SK/TK | 48 |
+| Uncertified candidates | 12 |
+
+Eight certified records are deliberately expired (four Corner and four SK/TK).
+Other certified records start current. The pool supports staffing scenarios from
+8 through 20 rings, with reserve officials and candidates; it does not assert
+attendance or assign arbitrators. Explicitly selected volunteers and potential
+competitor officials are matched to this directory by Association ID.
+No out-of-region scenarios are used.
+
+To review a clean 200-person directory without the original 11 scenario records:
+
+```powershell
+npm run judge:simulation -- init --date 2026-01-15 --directory C:\Karate4\tournament-server\judge-simulation-data\regional --population empty
+npm run judge:simulation -- serve --directory C:\Karate4\tournament-server\judge-simulation-data\regional --port 3451
+```
+
+Open `http://127.0.0.1:3451`, choose **Judges > Import Judges**, and import the CSV
+above. It uses the normal header-alias import, not a special database insert.
+The original dataset/server is not overwritten. For a different starting date,
+generate a new CSV (output must not already exist):
+
+```powershell
+npm run judge:simulation-data -- csv --date 2030-01-15 --output C:\TournamentTests\regional-judges-2030.csv
+```
+
+After importing, submit starting experience for selected judges, or omit `--ids`
+to process all 200:
+
+```powershell
+npm run judge:simulation-data -- experience --url http://127.0.0.1:3451 --ids SIM-R-041,SIM-R-042,SIM-R-043
+npm run judge:simulation-data -- experience --url http://127.0.0.1:3451
+```
+
+The script requires the isolated local simulation, preflights selected profiles,
+and then uses the shared API. It never writes SQLite directly, changes
+certifications, records tests, or verifies its own submissions. New candidates
+start without experience; other selected officials receive zero to three
+historical Regional events based on their ID and current certification role.
+All submissions start pending. Use **Experience > Verify**, then edit testing
+records and use the explicit coordinator **Grant** action when requirements
+are met. Reimporting the CSV preserves testing and experience, but its nonblank
+certification values will overwrite later awards: treat it as an initial
+population file, not a routine synchronization source after promotions.
+
+Starting-event dates are anchored to the environment's initial date (older
+environments without `initialDate` use their current date). Identical reruns
+report duplicates without creating new records. If a judge's certification has
+changed, generated roles may conflict with previous source records; the API
+reports the conflict rather than silently replacing history. The script commits
+per judge, reports errors and stops; rerun after correcting the cause.
+
+Production and simulation expose the same authorized management endpoints:
+
+- `GET /api/judge-management/profile?associationId=...` returns
+  `{asOf, revision, judge, tests, experience, eligibility}` for one member,
+  case-insensitively. DOB remains private; unknown members return 404.
+- `POST /api/judge-management/experience` accepts
+  `{revision, associationId, records}` and appends service records. Each record
+  requires `eventId`, `eventName`, `eventDate`, `location`, `role`, `eventScope`,
+  `source` (`TOURNAMENT`, or `SIMULATION` only in the isolated environment),
+  `sourceId`, and optional `phase` (`P1`, `P2`, or blank).
+  `eventDate` is the canonical event date, not the individual phase's service date;
+  both phases of a two-day event must share it and the same `eventId`.
+  `sourceId` is stable per judge/service; exact retries are duplicates, changed
+  payloads or conflicting event identities return 409. Submitted verification
+  cannot be true. Batches are transactional, with at most 200 records.
+- `POST /api/judge-management/experience-verify` accepts
+  `{revision, associationId, ids, verified}` for explicit coordinator review.
+  IDs must belong to that judge; a failed batch makes no changes.
+
+Both POST responses use the existing management response/revision contract;
+append adds `added` and `duplicates`. Refresh the profile before further writes
+to obtain the current revision. Normal browser authorization restricts these
+endpoints to Administrator and Judging Coordinator.
+
+Eligibility now counts distinct sanctioned events, not service rows: serving
+P1, P2, or multiple roles earns no more than one championship credit. Role details
+remain separate. Regional progression requires Corner service; International
+requires Center service and World judging experience. Existing verification
+exemptions for D5 and above remain in effect. API-created service records are
+read-only in the general edit form; verification is available in Experience.
+Legacy manual records remain editable and use event name/date as their identity.
+Schema version 5 migrates existing history without dropping records.
+
+This shared append/verification interface is ready for future completed-service
+processing; result ingestion does not yet create experience automatically.
+
+##### Judge assignments: event participation and P1/P2 preparation (Step 2)
+
+Select a tournament, then **Ring Management > Judge Assignments**. This is a
+preparation workspace for the selected event, not an active-event-only page.
+Plan and save P1 and P2 independently before a one- or two-day event. Each phase
+has its own Black Belt/Gup discipline, configured rings, confirmed available
+officials, reserved arbitrators, and ring positions. These phases do not change
+the event's day schedule or switch automatically during competition.
+
+The candidate pool combines Judging volunteers (first or second choice) with
+certified event competitors matched to the standalone directory by
+case-insensitive Association ID. Nonmember volunteers and unmatched competitors
+are excluded; unmatched Judging volunteers remain visible for correction.
+Two people with the same name but different IDs remain distinct. A volunteer
+who is also a competitor appears once. Directory certification, expiration and
+progression are authoritative; a volunteer's claimed certification cannot
+override them. Age uses the event's dated registration/volunteer record;
+missing/stale age, identity or rank conflicts, missing/expired certification,
+and future awards block placement and require correction.
+
+Competitors who did not volunteer are marked **potential**; checking their
+availability asks the coordinator to confirm agreement for that phase. No
+separate volunteer registration is required. No candidate, including a
+registered volunteer, is automatically marked available for either phase.
+Black-belt competitors cannot be placed in a Black Belt phase, even if they also
+volunteered; they may serve in a Gup phase after agreement. Other timing conflicts
+and communications remain coordinator responsibilities; email, IM and contact
+automation are not implemented.
+
+Role eligibility enforces current certification and rank on the event date:
+Regional/International for Center and arbitrator; Corner or above for Corner;
+SK/TK or above for SK/TK. Center/arbitrator require age 18, Corner age 16 (15
+In-House), and SK/TK follows the shared age rules (16, CDB 14, In-House 11).
+Corner certification at CDB does not authorize Corner service until Dan rank.
+Readiness for promotion never substitutes for an awarded certification.
+
+Confirm availability, select rings, reserve qualified arbitrators (typically
+2-4), then choose **Auto assign phase**. Required staffing is satisfied first
+while maximizing fully staffed rings: one Center, four Corners and one SK/TK
+for Black Belt, or one Center, two Corners and one SK/TK for Gup. Remaining
+qualified available officials fill toward the preferred seven-person ring
+(one Center, four Corners, two SK/TK). Shortfalls remain visible; the planner
+does not invent volunteers or use unqualified candidates.
+
+Within those staffing constraints, missing progression experience prefers
+SK/TK officials in SK/TK, Corner officials in Corner and Regional officials in
+Center. Missing World experience cannot be satisfied by placement at a Regional
+event. A placement is only a potential learning opportunity: it does not create
+experience, verify service, pass tests or grant certification. Manual adjustments
+use the same qualification/availability checks. Arbitrators are reserved across
+the phase; they cannot also occupy a ring position in that phase.
+
+Save persists **both** phase plans in the selected event's
+`judge-assignments.json`. An official may serve once per phase, and in both phases.
+Removing phase availability clears that official's positions/arbitrator
+reservation in that phase. Changing a phase's discipline clears its assignments
+and arbitrators after confirmation. The other phase is unaffected.
+Incomplete staffing may be saved as a draft; invalid assignments cannot.
+Unsaved edits are guarded on navigation, event changes and page close.
+The Rings and Confirm phase availability sections retain their expanded/collapsed
+state during edits, and the availability list retains its scroll position.
+The planner distinguishes total candidates from confirmed availability and
+provides a display-only candidate search. Select/clear-all controls change only
+the current phase's rings (clearing rings and positions requires confirmation).
+Arbitrator reservations use a persistent checkbox list with Association IDs;
+multiple reservations do not require reopening a dropdown. Saving remains
+explicit: **Save assignment changes** is accented only with unsaved edits and
+saves both incomplete phase drafts. Auto assign is highlighted separately and
+still produces an unsaved draft.
+Changes to profiles, volunteers, registration or event configuration invalidate
+stale saves. Planning locks when operational event use begins; Reset Run returns
+the event to preparation. Runtime phase switching, substitutions, contact
+messaging and automatic experience capture remain later work.
+
+Ring Judges' competitor population now uses certified directory matches when
+running the normal server. Its review note identifies potential candidates.
+The assignment candidate view independently refreshes authoritative directory
+qualifications, including officials already populated earlier.
+Focused validation: `npm run test:judge-assignments`.
+
+##### Coordinator-recorded actual service (Step 3A)
+
+Open **Judge Management > Experience > Record Completed Service** in the normal
+application or isolated judge simulation. Select the judge by Association ID,
+enter a shared event ID, event name/date/scope, location, P1/P2 and actual role.
+For another judge or phase at an already recorded event, choose **Existing event**
+to reuse its identity. Use the event's canonical date even when P2 is on a second
+day. The coordinator must explicitly attest that the judge actually completed
+that service. Do not enter planned assignments, check-in alone, or absent judges.
+There is no automatic conversion from Step 2 plans.
+
+The form uses the shared experience append API with `source: MANUAL`,
+`confirmedCompleted: true` and a server-generated service identity. New records
+are pending (`logVerified: false`). An identical resubmission does not add another
+record or credit; conflicting event/service details and stale revisions are
+rejected. **Verify** remains a separate coordinator decision. Existing D5-and-above
+log-verification exemptions remain unchanged; recording service never grants
+certification or bypasses tests.
+
+Coordinator-recorded rows are labeled explicitly. **Correct** can change the
+actual judge, role, phase or location, and always resets verification. Use it for
+a mistaken entry or replacement; if both judges actually served, retain both
+records instead. **Withdraw** removes a mistaken service record and its credit.
+Event identity cannot be edited in a correction: withdraw an entry under the
+wrong event and record it again under the correct event. Other API-created and
+legacy records cannot be corrected or withdrawn through these new controls.
+These operations require Administrator or Judging Coordinator access and use
+the same database revision checks as the rest of Judge Management.
+
+Separate roles/phases are retained, but a qualifying championship counts only
+once per judge for the applicable progression requirement. In-House experience
+does not earn sanctioned-championship credit; Corner/Center requirements and
+World experience requirements remain unchanged. Actual-service corrections
+recalculate advisory eligibility; they do not automatically revoke an already
+awarded certification.
+
+This is manual coordinator capture, not tablet-confirmed service. Tablet roster
+delivery, per-phase judge check-in, replacement authorization, and result/service
+reporting remain **Step 3B**, a future coordinated server/app effort. No tablet
+contract or ring-result ingestion has changed, and arbitrator service is entered
+manually here.
+
+Focused validation:
+`node --test tests/judgeExperienceApi.test.js tests/judgeManagementUi.test.js`.
+
+##### Exercising certification upgrades (Step 4)
+
+Use the isolated judge simulation for lifecycle exercises; the same live
+eligibility, testing and award rules apply. Step 3A completed-service entry is
+sufficient; tablet integration (Step 3B) is not required.
+
+1. Record actual service, then verify the qualifying logs in **Experience**.
+   Eligibility recalculates after each change. Multiple phases at one
+   championship do not satisfy a two-championship requirement. Removing
+   verification or correcting/withdrawing service recalculates eligibility too,
+   subject to the existing D5-and-above verification exemption.
+2. Edit the existing judge and add testing records for each attempt. Retain
+   failures and add retakes rather than overwriting history. Written scores
+   require 80% or higher; practical results are pass/fail. Written and practical
+   passes may be recorded on separate attempts. Each must fall within the
+   applicable certification cycle and on/before the effective evaluation date.
+3. **Eligibility** shows **Ready for coordinator award** only when experience
+   prerequisites and required tests are satisfied. Nothing promotes a judge
+   automatically: choose an award date and explicitly confirm **Grant**.
+   The server rechecks qualifications as of that grant date, rejecting future
+   awards, awards before a required test/service, and dates preceding the
+   current certification award. Expiration is five years from the award date.
+4. Reload **Judge Assignments** for the subsequent event. Its candidate pool
+   reads the awarded certification directly from Judge Management, without
+   requiring a CSV reimport or changing a volunteer's claimed certification.
+   Stale assignment drafts must reload after an award. Center/Corner/SK-TK
+   qualification still depends on the event date, age, rank, availability and
+   competition conflicts; readiness to be awarded is not an awarded level.
+
+Focused automated coverage exercises pending/verified experience, separate
+failed attempts and passing retakes, refused premature/backdated awards, an
+explicit Regional upgrade, and manual/automatic Center placement at a later
+event. The service lifecycle coverage also exercises Regional-to-International
+progression requiring Center service plus World judging and coordinator awards.
+Run only the relevant tests:
+`node --test tests/judgeAssignments.test.js tests/judgeManagementRoutes.test.js tests/judgeManagementUi.test.js tests/judgeExperienceApi.test.js`.
+
+##### Repeated events and new candidates (Step 5)
+
+Use the existing isolated dataset without reinitializing or reimporting its
+whole directory. Advance the simulation date between events; add a candidate
+with **Add Judge**, or import a CSV containing only the new candidates (include
+DOB for age checks). Reimporting nonblank certification values for existing
+judges can overwrite awards, so it is not a routine step between events.
+
+Follow each new candidate through the same written/practical attempts,
+coordinator awards, actual-service entry and verification as everyone else.
+Use a new event ID for each championship, and retain the same event ID/date
+across its phases and roles. New candidates are not automatically event
+volunteers or available officials: register their event participation and
+confirm phase availability before planning assignments.
+
+The repeatable isolated scenarios cover:
+
+- Adding a candidate between events without changing the existing judges,
+  tests or experience; advancing through SK/TK and Corner with failed attempts
+  and passing retakes retained; subsequent Corner service at two distinct events.
+- Concurrent/retried service submissions: one stale writer is rejected, and an
+  identical retry after reloading adds neither records nor credit. Separate
+  roles/phases at one championship still count once.
+- Expiration-day boundaries: a certificate is current through its expiration
+  date, then blocks ring placement. The awarded level and history are retained,
+  not silently downgraded. Renewal requires the applicable tests/experience and
+  an explicit coordinator award, preserves the level and sets a new five-year
+  expiration. Insufficient Regional renewal experience triggers coordinator
+  review rather than automatic reset.
+- Staffing shortages at 8, 16 and 20 configured rings: only confirmed available,
+  qualified officials are used. Four officials can staff one Gup ring, not a
+  Black Belt ring; reserving the only Center as arbitrator leaves no operating
+  ring. Incomplete drafts can be saved but do not manufacture officials or
+  experience. Reload assignment drafts after recertification.
+- Restarting the simulation preserves the new candidate's awards, all attempts,
+  service history and simulation date.
+
+Run the Step 5 scenarios and their directly related regressions with
+`node --test tests/judgeSimulation.test.js tests/judgeAssignments.test.js`.
+They create and clean their own isolated databases; no production dataset or
+tablet changes are required. Step 3B remains outstanding.
+
+For another independent dataset or port:
+
+```powershell
+npm run judge:simulation -- init --date 2030-01-15 --directory C:\TournamentTests\JudgeScenario2
+npm run judge:simulation -- serve --directory C:\TournamentTests\JudgeScenario2 --port 3451
+```
+
+The parent directory must exist. No live database files should be copied or
+imported into this test environment. Run focused validation with
+`npm run test:judge-simulation`.
 
 #### Judge Management database and offline backup
 
@@ -1519,8 +1982,9 @@ indicator identifies the event used by day-of workflows.
 On day-of views the banner switches explicitly to **Active Event** and uses that
 event's configured date. Selecting a different event for preparation does not
 change the day-of context; activation is available only through the **Active Tournament**
-selector on Division Assignments, Head Table, and Judge Assignments.
-Ring Judges instead uses the selected preparation tournament and never activates it.
+selector on Division Assignments and Head Table.
+Ring Judges and Judge Assignments instead use the selected preparation tournament
+and never activate it.
 Selecting the current active tournament makes no request and needs no confirmation.
 Selecting another asks “Switch live operations to [name]?” and explains that
 connected tablets will use the new tournament. Cancel or failed activation preserves

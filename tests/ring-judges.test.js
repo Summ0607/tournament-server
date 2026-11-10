@@ -205,7 +205,7 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   assert.equal((await fetch(`${url}?eventName=A`)).status, 500);
   assert.equal((await write('/populate', { revision: data.revision })).status, 500);
 });
-function frontend(change = {}, rows = null) {
+function frontend(change = {}, rows = null, metadata = {}) {
   const nodes = new Map(), confirmations = [];
   const node = (id) => {
     if (!nodes.has(id)) nodes.set(id, { value: '', checked: false, handlers: {}, addEventListener(key, fn) { this.handlers[key] = fn; },
@@ -234,7 +234,7 @@ function frontend(change = {}, rows = null) {
       }
       return { judges, revision: 'r1', volunteerDirectory: { revision: null, tournamentDate: '2027-01-09',
         types: [{ id: 'judging', name: 'Judging' }, { id: 'medical', name: 'Medical' }], volunteers: [] },
-        configurationLocked: locked, certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), added: 0, skipped: 1 };
+        configurationLocked: locked, certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), added: 0, skipped: 1, ...metadata };
     } });
   return { workspace, node, requests, confirmations, setEvent: (v) => { event = v; },
     confirm: (v) => { allowed = v; }, fail: (v) => { failure = v; }, lock: () => { locked = true; },
@@ -407,6 +407,23 @@ test('judge editor collects a volunteer for Add and locks competitor rank while 
 const nameEvent = (detail = 1) => ({
   detail, preventDefault() {},
   target: { closest: () => ({ getAttribute: () => 'one' }) }
+});
+test('directory-linked Ring Judges certification is read-only and directs corrections to Judge Management', async () => {
+  const p = frontend({ certification: 'CORNER' }, null, { certificationReadOnly: true });
+  await p.workspace.load();
+  p.node('rjBody').handlers.click(nameEvent());
+  assert.equal(p.node('rj-certification').disabled, true);
+  assert.equal(p.node('rj-certification').value, 'CORNER');
+  assert.match(p.node('rjSourceHelp').textContent, /Certification comes from Judge Management/);
+  assert.doesNotMatch(p.node('rjNotice').textContent, /Planned/);
+  p.node('rjCancel').handlers.click();
+  await p.node('rjPopulate').handlers.click();
+  assert.match(p.confirmations.at(-1), /Matched Judge Management certification is used/);
+  assert.doesNotMatch(p.confirmations.at(-1), /Certification stays Unknown/);
+  const legacy = frontend();
+  await legacy.workspace.load();
+  await legacy.node('rjPopulate').handlers.click();
+  assert.match(legacy.confirmations.at(-1), /Certification stays Unknown/);
 });
 test('single-click and keyboard activation open Edit Judge directly without the details screen', async () => {
   const p = frontend({ reviewNotes: '<Follow up>\nSecond line' }), n = p.node;

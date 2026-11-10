@@ -21,6 +21,7 @@ const { createRankRouter } = require('./backend/rankRoutes');
 const { createCompetitionSettingRouter } = require('./backend/competitionSettingRoutes');
 const { createTournamentResultRouter } = require('./backend/tournamentResultRoutes');
 const { createRingJudgeRouter } = require('./backend/ringJudgeRoutes');
+const { createJudgeAssignmentRouter } = require('./backend/judgeAssignmentRoutes');
 const { createVolunteerRouter } = require('./backend/volunteerRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
 const { divisionDurationMs } = require('./backend/ringEstimates');
@@ -976,7 +977,8 @@ app.use('/api', createSchoolRouter(path.join(ROOT_DIR, 'schools.json')));
 app.use('/api', createRankRouter(path.join(ROOT_DIR, 'ranks.json')));
 app.use('/api', createCompetitionSettingRouter({ eventsRoot: EVENTS_ROOT, configurationStatus }));
 app.use('/api', createTournamentResultRouter({ eventsRoot: EVENTS_ROOT, runsRoot: path.join(ROOT_DIR, 'simulator-runs') }));
-app.use('/api', createRingJudgeRouter({ eventsRoot: EVENTS_ROOT, configurationStatus }));
+app.use('/api', createRingJudgeRouter({ eventsRoot: EVENTS_ROOT, configurationStatus, judgeFile: DEFAULT_JUDGE_DATABASE }));
+app.use('/api', createJudgeAssignmentRouter({ eventsRoot: EVENTS_ROOT }));
 app.use('/api', createVolunteerRouter({ eventsRoot: EVENTS_ROOT, configurationStatus }));
 app.use('/api', createDivisionRouter({
   competitorStore: (eventName) => createCompetitorStore(resolveEventDbPath(eventName, { strict: !!String(eventName || '').trim() })),

@@ -31,7 +31,7 @@ test('standalone judge database initializes safely and enforces member IDs and s
   await Promise.all([initializeJudgeDatabase(file), initializeJudgeDatabase(file)]);
   const db = await open(file);
   try {
-    assert.equal((await get(db, 'PRAGMA user_version')).user_version, 4);
+    assert.equal((await get(db, 'PRAGMA user_version')).user_version, 5);
     const judgeColumns = await new Promise((resolve, reject) =>
       db.all('PRAGMA table_info(judges)', (error, rows) => error ? reject(error) : resolve(rows)));
     assert.ok(judgeColumns.some((column) => column.name === 'date_of_birth'));
@@ -98,4 +98,35 @@ test('version 1 backups remain verifiable and upgrade without losing judge data'
   const upgraded = await open(file);
   try { assert.equal((await get(upgraded, 'SELECT count(*) AS count FROM judges')).count, 1); }
   finally { await close(upgraded); }
+});
+
+test('version 4 experience migrates with stable identities, original verification and timestamps', async (t) => {
+  const file = temporary(t);
+  await initializeJudgeDatabase(file);
+  const db = await open(file);
+  try {
+    await run(db, "INSERT INTO judges(id,association_id,first_name,last_name) VALUES(1,'LEGACY','Old','Judge')");
+    await run(db, 'DROP TABLE judge_experience');
+    await run(db, `CREATE TABLE judge_experience(
+      id INTEGER PRIMARY KEY,judge_id INTEGER,event_name TEXT,event_date TEXT,location TEXT,
+      role TEXT,event_scope TEXT,log_verified INTEGER,created_at TEXT)`);
+    await run(db, `INSERT INTO judge_experience VALUES
+      (7,1,'Regional Championship','2025-01-01','Venue','CORNER_JUDGE','REGIONAL',1,'2025-01-02')`);
+    await run(db, 'PRAGMA user_version=4');
+  } finally { await close(db); }
+  await initializeJudgeDatabase(file);
+  await initializeJudgeDatabase(file);
+  const upgraded = await open(file);
+  try {
+    const row = await get(upgraded, 'SELECT * FROM judge_experience');
+    assert.equal(row.id, 7);
+    assert.equal(row.judge_id, 1);
+    assert.equal(row.log_verified, 1);
+    assert.equal(row.created_at, '2025-01-02');
+    assert.equal(row.event_id, 'legacy:regional championship:2025-01-01');
+    assert.equal(row.source, 'MANUAL');
+    assert.equal(row.source_id, null);
+    assert.equal(row.phase, '');
+    assert.equal((await get(upgraded, 'PRAGMA user_version')).user_version, 5);
+  } finally { await close(upgraded); }
 });

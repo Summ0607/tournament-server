@@ -53,7 +53,10 @@ rule('GET', /^\/api\/(schools|ranks)$/, Object.keys(ROLE_LABELS).filter((role) =
 rule('POST PUT', /^\/api\/(visual-definitions|schools|ranks)(?:\/[^/]+)?$/, ['administrator']);
 rule('GET POST PUT', /^\/api\/competition-settings\/[^/]+(?:\/[^/]+)?$/, EVENT);
 rule('GET POST PUT', /^\/api\/(ring-judges|volunteers|volunteer-types)(?:\/[^/]+)?$/, JUDGING);
+rule('GET PUT', /^\/api\/judge-assignments$/, JUDGING);
+rule('POST', /^\/api\/judge-assignments\/auto$/, JUDGING);
 rule('GET POST PUT', /^\/api\/judge-management(?:\/[^/]+(?:\/award)?|-settings|-import)?$/, ['administrator', 'judging-coordinator']);
+rule('PUT DELETE', /^\/api\/judge-management\/experience\/[1-9]\d*$/, ['administrator', 'judging-coordinator']);
 rule('GET', /^\/api\/rings\/monitor$/, AUDIENCE);
 rule('POST', /^\/api\/tablet\/codes$/, DAY);
 rule('GET', /^\/(?:status|api\/rings(?:\/(?:config|estimates))?)$/, DAY);

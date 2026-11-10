@@ -80,6 +80,7 @@
       volunteerFields.forEach((key) => { node(`rj-${key}`).disabled = locked() || node('rjVolunteerFields').hidden; });
       const linked = data?.judges.find((row) => row.id === id);
       node('rj-rank').disabled = locked() || Boolean(linked?.competitorId);
+      node('rj-certification').disabled = locked() || Boolean(data?.certificationReadOnly);
     }
     function render() {
       renderFilters();
@@ -124,6 +125,7 @@
       node('rjSourceHelp').textContent = competitor
         ? "Certification is checked against the competitor's saved rank and tournament-date age. Correct rank through registration."
         : 'Save validates this volunteer and updates both the volunteer and this judge. Judging must be First or Second Choice.';
+      if (data.certificationReadOnly) node('rjSourceHelp').textContent += ' Certification comes from Judge Management and is resolved by Association ID when saved; correct it there, not here.';
       node('rj-rank').innerHTML = '<option value="">--</option>' + (data.judgeRanks || []).map((rank) => `<option value="${esc(rank.code)}">${esc(rank.label)}</option>`).join('');
       if (row && !(data.judgeRanks || []).some((rank) => rank.code === row.rank)) {
         node('rj-rank').innerHTML += `<option value="${esc(row.rank)}" disabled>${esc(row.rank)} (outside allowed range)</option>`;
@@ -139,6 +141,7 @@
         for (const key of ['firstName', 'lastName', 'associationNumber', 'school', 'rank', 'certification']) {
           node(`rj-${key}`).value = volunteer[key];
         }
+        if (data.certificationReadOnly) node('rj-certification').value = row?.certification || 'UNKNOWN';
       }
       if (row && !volunteer && row.firstName === undefined && row.lastName === undefined) {
         // Legacy judges stored only a display name; populated names use "Last, First".
@@ -167,7 +170,7 @@
         if (current !== token || scope !== selectedEvent()) return;
         schools = directory.schools;
         data = result; data.judges.sort((a, b) => a.name.localeCompare(b.name)); render();
-        notice(data.configurationLocked ? data.configurationLockReason || 'Ring Judges are locked. Reset Run before editing.' : 'Preparation directory only. Population does not certify judges or confirm availability; judge assignments remain Planned.');
+        notice(data.configurationLocked ? data.configurationLockReason || 'Ring Judges are locked. Reset Run before editing.' : 'Preparation directory only. Population does not certify judges or confirm availability; plan availability and staffing in Judge Assignments.');
       } catch (error) { if (current === token) notice(error.message, true); }
     }
     async function write(suffix, method, body, form = false) {
@@ -244,7 +247,7 @@
     node('rjDetailsClose').addEventListener('click', close);
     node('rjDetailsDialog').addEventListener('cancel', (event) => { event.preventDefault(); close(); });
     node('rjPopulate').addEventListener('click', () => {
-      if (!locked() && confirm(`Add Dan-ranked competitors aged 18+ and other competitors who meet SK/TK age and rank requirements to Ring Judges for ${scope}? Certification stays Unknown and SK/TK eligibility is noted. Existing entries will not be overwritten.`)) return write('/populate', 'POST', {});
+      if (!locked() && confirm(`Add Dan-ranked competitors aged 18+ and other competitors who meet SK/TK age and rank requirements to Ring Judges for ${scope}? ${data.certificationReadOnly ? 'Matched Judge Management certification is used; candidates still require agreement and phase availability confirmation.' : 'Certification stays Unknown and SK/TK eligibility is noted.'} Existing entries will not be overwritten.`)) return write('/populate', 'POST', {});
     });
     node('rjPopulateVolunteers').addEventListener('click', () => {
       if (!locked() && confirm(`Add primary or secondary Judging volunteers who are Dan-ranked and aged 18+, or have SK/TK certification and meet its rank and age requirements, for ${scope}? Existing entries will not be overwritten.`)) return write('/populate-volunteers', 'POST', {});

@@ -210,12 +210,13 @@ test('volunteer editor switches types, protects drafts, filters and surfaces imp
       setAttribute() {}, showModal() { this.open = true; }, close() { this.open = false; }, focus() {} });
     return nodes.get(id);
   };
-  let allowed = false, failure = false;
+  let allowed = false, failure = false, changed = 0;
   const data = { revision: null, eventScope: 'regional', rankOptions: judgeRankOptions(), certificationLevels: certificationLevels(),
     types: [{ id: 'setup', name: 'Setup' }, { id: 'judging', name: 'Judging' },
       { id: 'medical', name: 'Medical' }, { id: 'operations', name: 'Operations Mgmt' }],
     volunteers: [{ id: 'one', ...volunteer }] };
-  const workspace = create({ document: { getElementById: node }, selectedEvent: () => 'A', confirm: () => allowed, request: async (url, options) => {
+  const workspace = create({ document: { getElementById: node }, selectedEvent: () => 'A', confirm: () => allowed,
+    onChange: async () => { changed++; }, request: async (url, options) => {
     requests.push({ url, options }); if (failure) throw new Error('Import failed'); return data;
   } });
   await workspace.load('volunteers'); node('vmAdd').handlers.click();
@@ -245,6 +246,7 @@ test('volunteer editor switches types, protects drafts, filters and surfaces imp
   failure = true; await node('vmImport').handlers.click();
   assert.match(node('vmNotice').textContent, /Import failed/);
   assert.equal(workspace.busy(), false);
+  assert.equal(changed, 0, 'loading, filtering and failed writes do not refresh saved participation');
   failure = false; await workspace.load('volunteer-types');
   node('vmAdd').handlers.click();
   assert.equal(node('vm-firstName').disabled, true);
@@ -253,6 +255,7 @@ test('volunteer editor switches types, protects drafts, filters and surfaces imp
   await node('vmForm').handlers.submit({ preventDefault() {} });
   assert.equal(requests.at(-1).url, '/api/volunteer-types?eventName=A');
   assert.equal(JSON.parse(requests.at(-1).options.body).name, 'Welcome');
+  assert.equal(changed, 1, 'saved changes refresh the selected-event summary');
 });
 
 test('volunteer contact and guardian validation preserves legacy reads and enforces minor saves', () => {

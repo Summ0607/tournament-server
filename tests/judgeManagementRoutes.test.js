@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const express = require('express');
 const { initializeJudgeDatabase } = require('../db/judgeManagement');
-const { createJudgeManagementRouter } = require('../backend/judgeManagementRoutes');
+const { createJudgeManagementRouter, evaluateEligibility } = require('../backend/judgeManagementRoutes');
 
 test('judge records, ID-based imports, CSV aliases and revision conflicts are safe', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-routes-'));
@@ -175,4 +175,29 @@ test('age eligibility uses stored DOB and the CDB 14-year threshold without expo
   assert.equal(state.eligibility.find((item) => item.judgeId === thirteen.id).eligible, false);
   assert.match(state.eligibility.find((item) => item.judgeId === thirteen.id).reason, /age 14 or older/);
   assert.ok(state.judges.every((judge) => !Object.hasOwn(judge, 'dateOfBirth')));
+});
+
+test('effective-date eligibility evaluates written/practical attempts independently and excludes future service', () => {
+  const judge = { id: 1, certification: 'CORNER', rank: 'D2', expiration: '2030-01-01', grantedAt: '2025-01-01' };
+  const tests = [{ judgeId: 1, targetLevel: 'REGIONAL', writtenDate: '2026-01-10', writtenScore: 80,
+    practicalDate: '2026-01-15', practicalPassed: 1 }];
+  const experience = ['2026-01-09', '2026-01-14'].map((eventDate, index) => ({
+    judgeId: 1, eventId: `event-${index}`, eventDate, role: 'CORNER_JUDGE', eventScope: 'REGIONAL', logVerified: 1
+  }));
+  let result = evaluateEligibility(judge, tests, experience, '2026-01-10');
+  assert.equal(result.experienceCount, 1);
+  assert.equal(result.eligible, false);
+  assert.equal(result.writtenPassed, true, 'later practical date must not hide an already-passed written test');
+  assert.equal(result.practicalPassed, false);
+  result = evaluateEligibility(judge, tests, experience, '2026-01-14');
+  assert.equal(result.eligible, true);
+  assert.equal(result.practicalPassed, false);
+  result = evaluateEligibility(judge, tests, experience, '2026-01-15');
+  assert.equal(result.eligible, true);
+  assert.equal(result.writtenPassed, true);
+  assert.equal(result.practicalPassed, true);
+  const reversed = [{ ...tests[0], writtenDate: '2026-01-16', practicalDate: '2026-01-10' }];
+  result = evaluateEligibility(judge, reversed, experience, '2026-01-15');
+  assert.equal(result.writtenPassed, false);
+  assert.equal(result.practicalPassed, true);
 });
