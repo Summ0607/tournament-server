@@ -15,6 +15,9 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
   app.get(['/tablet-pairing', '/tablet-pairing/'], (_req, res) => {
     res.sendFile(path.join(rootDir, 'tablet-pairing', 'index.html'));
   });
+  app.get(['/division-qr', '/division-qr/'], (_req, res) => {
+    res.sendFile(path.join(rootDir, 'division-qr', 'index.html'));
+  });
   const canonicalProgressPath = isAdminProgressSurface ? '/administration-progress/' : '/event-progress/';
   const canonicalProgressHtml = isAdminProgressSurface ? '/administration-progress.html' : '/event-progress.html';
   const alternateProgressPath = isAdminProgressSurface ? '/event-progress/' : '/administration-progress/';

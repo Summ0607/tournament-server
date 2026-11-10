@@ -297,6 +297,28 @@ the ring identity, group loading, heartbeat and test score submission. Reopen th
 app and briefly disconnect/reconnect Wi-Fi; authorization should persist. Verify
 replacement and expired-code rejection with test data, not live results.
 
+### Division QR codes and tablet division packages
+
+Under **Ring Management**, open **Division QR Codes**, directly below **Division
+Assignments** (direct access at `/division-qr/`, optionally with
+`?event=<name>&division=<number>`). Administrators, Event Coordinators and
+Tournament Operators can display one saved division's QR code, **Print selected
+division**, or **Print all divisions** as one labeled sheet per division. Each
+code is self-contained: it carries the compressed, checksummed division roster
+(`type: tournament-division-qr`), so a tablet can load the division by scanning
+alone, with no network connection. Codes can be printed in advance for any saved
+event. Tablet divisions are limited to **12 competitors per code**; oversize
+divisions are reported (and block all-division printing) without changing
+group-builder sizing rules — split the division, then reprint. Packaged rosters
+carry only competitor id, name, studio, rank, age and height — never contact or
+registration details.
+
+Paired tablets can instead fetch the same content over the network from
+`GET /api/rings/<ringId>/division-package`, which returns the ring's current and
+queued divisions (`type: tournament-division-package`) under the same
+12-competitor limit. `POST /api/divisions/qr-codes` generates the printable
+codes for the browser page. Validate with `npm run test:division-package`.
+
 `backend/accountSessions.js` stores accounts and browser sessions in SQLite at an
 explicit absolute path **outside this repository**. Browser access is allowlisted,
 but private account/certificate material must still never be placed in the repository.

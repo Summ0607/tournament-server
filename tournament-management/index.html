@@ -1560,6 +1560,7 @@
               <button class="sidebar-item" type="button" data-nav-id="judge-assignments" data-nav-label="Judge Assignments" data-nav-parents="tournament rings">Judge Assignments</button>
               <button class="sidebar-item" type="button" data-nav-id="tablet-pairing" data-nav-label="Ring Assignment" data-nav-parents="tournament rings">Ring Assignment</button>
               <button class="sidebar-item" type="button" data-nav-id="ring-assignment" data-nav-label="Division Assignments" data-nav-parents="tournament rings">Division Assignments</button>
+              <button class="sidebar-item" type="button" data-nav-id="division-qr" data-nav-label="Division QR Codes" data-nav-parents="tournament rings">Division QR Codes</button>
               <button class="sidebar-item" type="button" data-nav-id="head-table" data-nav-label="Head Table" data-nav-parents="tournament rings">Head Table</button>
             </div>
             <button class="sidebar-item" type="button" data-nav-id="printing" data-nav-label="Printing" data-nav-parents="tournament" data-nav-planned="true">Printing</button>
@@ -2353,6 +2354,7 @@
         groups: 'Build and adjust the competitor groups for the selected event.',
         'ring-assignment': 'Assign the active event\'s saved divisions to rings.',
         'tablet-pairing': 'Authorize tablets for rings and display or print the daily QR codes.',
+        'division-qr': 'Print self-contained division QR codes that load divisions onto tablets without a network.',
         'head-table': 'Monitor the active event, respond to assistance, and identify rings needing attention.',
         placeholder: ''
       };
@@ -2374,7 +2376,7 @@
       let importBusy = false;
       let activationBusy = false;
       let activeRequestToken = 0;
-      const dayOfViews = ['tablet-pairing', 'ring-assignment', 'head-table'];
+      const dayOfViews = ['tablet-pairing', 'division-qr', 'ring-assignment', 'head-table'];
       const createEventBtn = document.getElementById('createEventBtn');
       const deleteEventBtn = document.getElementById('deleteEventBtn');
       const resetEventBtn = document.getElementById('resetEventBtn');
@@ -3030,8 +3032,8 @@
           renderTournamentList();
           if (currentView === 'ring-assignment') raLoad();
           else if (currentView === 'head-table') htLoad();
-          else if (currentView === 'tablet-pairing' && activated) {
-            document.getElementById('administrationToolFrame').setAttribute('src', '/tablet-pairing/?embedded=1');
+          else if (['tablet-pairing', 'division-qr'].includes(currentView) && activated) {
+            document.getElementById('administrationToolFrame').setAttribute('src', `/${currentView}/?embedded=1`);
           }
         }
       }
@@ -3301,7 +3303,7 @@
         const toolPaths = { 'server-maintenance': '/admin/?embedded=1', simulator: '/simulator/?embedded=1',
           users: '/account/users?embedded=1', 'user-account-settings': '/account/settings?embedded=1',
           'audience-viewer': '/audience-monitor/?embedded=1', 'your-account': '/account/profile?embedded=1',
-          'tablet-pairing': '/tablet-pairing/?embedded=1' };
+          'tablet-pairing': '/tablet-pairing/?embedded=1', 'division-qr': '/division-qr/?embedded=1' };
         const toolFrame = document.getElementById('administrationToolFrame');
         document.getElementById('administrationToolView').hidden = !toolPaths[view];
         if (toolPaths[view]) {

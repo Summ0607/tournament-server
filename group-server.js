@@ -24,6 +24,7 @@ const { createRingJudgeRouter } = require('./backend/ringJudgeRoutes');
 const { createJudgeAssignmentRouter } = require('./backend/judgeAssignmentRoutes');
 const { createVolunteerRouter } = require('./backend/volunteerRoutes');
 const { createRingRouter } = require('./backend/ringRoutes');
+const { createDivisionPackageRouter } = require('./backend/divisionPackage');
 const { divisionDurationMs } = require('./backend/ringEstimates');
 const { estimateDivisionTiming } = require('./backend/simulatorTiming');
 const { createResultPacketStore } = require('./backend/resultPacket');
@@ -986,6 +987,15 @@ app.use('/api', createDivisionRouter({
   loadSavedGroups: primeGroupCacheFromDatabase,
   buildGroups,
   buildGroupsWithReview
+}));
+
+app.use('/api', createDivisionPackageRouter({
+  readAssignmentsState,
+  getRingState,
+  listAllowedRingLabels,
+  loadGroup: groupStore.loadGroup,
+  loadSavedGroups: primeGroupCacheFromDatabase,
+  readActiveEvent
 }));
 
 app.post('/api/events/activate', async (req, res) => {

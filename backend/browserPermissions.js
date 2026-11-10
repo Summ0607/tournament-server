@@ -19,7 +19,7 @@ const VIEW_ROLES = {
   'judge-eligibility': ['administrator', 'judging-coordinator'],
   'judge-experience': ['administrator', 'judging-coordinator'],
   'judge-csv-settings': ['administrator', 'judging-coordinator'],
-  'clinic-management': EVENT, 'tablet-pairing': DAY, 'ring-assignment': DAY, 'head-table': DAY, 'audience-viewer': AUDIENCE,
+  'clinic-management': EVENT, 'tablet-pairing': DAY, 'division-qr': DAY, 'ring-assignment': DAY, 'head-table': DAY, 'audience-viewer': AUDIENCE,
   printing: EVENT, 'csv-settings': EVENT, 'event-history': EVENT,
   schools: ['administrator'], ranks: ['administrator'], 'visual-definitions': ['administrator'],
   users: ['administrator'], 'user-account-settings': ['administrator'],
@@ -47,6 +47,7 @@ rule('GET', /^\/api\/(competitors(?:\/table)?|tournament-results|results(?:\/gro
 rule('GET', /^\/search$/, EVENT);
 rule('GET', /^\/api\/groups(?:\/[^/]+)?$/, DAY);
 rule('POST', /^\/api\/divisions\/(build|save)$/, EVENT);
+rule('POST', /^\/api\/divisions\/qr-codes$/, DAY);
 rule('GET POST PUT DELETE', /^\/api\/teams(?:\/(?:settings|[^/]+))?$/, EVENT);
 rule('GET', /^\/api\/visual-definitions$/, Object.keys(ROLE_LABELS));
 rule('GET', /^\/api\/(schools|ranks)$/, Object.keys(ROLE_LABELS).filter((role) => role !== 'viewer'));
@@ -63,7 +64,7 @@ rule('GET', /^\/(?:status|api\/rings(?:\/(?:config|estimates))?)$/, DAY);
 rule('POST', /^\/api\/rings\/config$/, EVENT);
 rule('POST', /^\/api\/rings\/schedule\/day2$/, DAY);
 rule('POST DELETE', new RegExp(`^/api/rings/${segment}/(?:reset|queue(?:/${segment})?|assistance/clear)$`), DAY);
-rule('GET', new RegExp(`^/api/rings/${segment}/current$`), DAY);
+rule('GET', new RegExp(`^/api/rings/${segment}/(?:current|division-package)$`), DAY);
 rule('POST', new RegExp(`^/api/rings/${segment}/(?:request-group|heartbeat|complete|assistance)$`), DAY);
 rule('POST', /^\/api\/reset$/, ['administrator']);
 rule('GET', /^\/api\/simulator\/runs$/, AUDIENCE);
@@ -81,7 +82,7 @@ function apiRoles(method, pathname) {
 }
 function isTabletEndpoint(method, pathname) {
   if (method === 'GET') return /^\/(?:api\/(?:health|version|events\/active|rings\/config)|download-app)$/.test(pathname) ||
-    /^\/api\/rings\/[^/]+\/current$/.test(pathname);
+    /^\/api\/rings\/[^/]+\/(?:current|division-package)$/.test(pathname);
   return method === 'POST' && /^\/api\/rings\/[^/]+\/(?:request-group|heartbeat|complete|assistance(?:\/clear)?)$/.test(pathname);
 }
 function pageView(pathname) {
@@ -91,6 +92,7 @@ function pageView(pathname) {
   if (['/head-table', '/dashboard', '/control-board', '/event-progress', '/administration-progress', '/ring-progress', '/ring-status', '/rings'].includes(name)) return 'head-table';
   if (name === '/ring-assignment') return 'ring-assignment';
   if (name === '/tablet-pairing') return 'tablet-pairing';
+  if (name === '/division-qr') return 'division-qr';
   if (name === '/competitors') return 'competitors';
   if (name === '/head-table/search' || name === '/dashboard/search') return 'competitors';
   if (name === '/simulator') return 'simulator';
