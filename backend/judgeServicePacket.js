@@ -72,7 +72,24 @@ function validateServicePacket(input, ringId) {
       if (entry.action === 'SWAPPED' && (!judgeAssociationId || !serviceRoles.includes(previousJudgeAssociationId))) {
         fail('A role swap must identify the judge and both roles.');
       }
-      return { at, action: entry.action, role: entry.role, judgeAssociationId, previousJudgeAssociationId };
+      const hasReplacementMetadata = Object.hasOwn(entry, 'assignmentRevision') ||
+        Object.hasOwn(entry, 'replacementPinVerified') || Object.hasOwn(entry, 'requiresCoordinatorReview');
+      if (hasReplacementMetadata && entry.action !== 'REPLACED') {
+        fail('Replacement verification metadata is only valid for replacement history.');
+      }
+      if (hasReplacementMetadata &&
+          (entry.replacementPinVerified !== true || entry.requiresCoordinatorReview !== true)) {
+        fail('A replacement must have a verified event PIN and coordinator review flag.');
+      }
+      const replacementMetadata = hasReplacementMetadata ? {
+        assignmentRevision: boundedText(entry.assignmentRevision, 'Replacement assignment revision', 100),
+        replacementPinVerified: true,
+        requiresCoordinatorReview: true
+      } : {};
+      return {
+        at, action: entry.action, role: entry.role, judgeAssociationId, previousJudgeAssociationId,
+        ...replacementMetadata
+      };
     });
     return { groupAnchor, seats, history };
   });

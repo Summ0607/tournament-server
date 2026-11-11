@@ -1830,6 +1830,13 @@ phase. `POST /api/rings/<ringId>/service-packets` is ring-authorized and stores
 the packet outside static web content. The tablet persists its submission ID
 before sending and retains it until a matching receipt is saved.
 
+For a replacement, the tablet verifies the event's four-character PIN against
+the saved plan's verifier, including while offline; the PIN itself is never
+stored in service history or transferred. The history records the assignment
+revision, successful PIN verification, and a required coordinator-review flag.
+The server validates and preserves those fields in the service packet so they
+remain available during coordinator intake and follow-up review.
+
 An exact network retry returns the original server acknowledgment. Reusing an ID
 for different content or submitting another packet for the same event/ring/phase
 is rejected. The result-report endpoint and its per-division submission IDs

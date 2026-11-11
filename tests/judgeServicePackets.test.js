@@ -67,6 +67,42 @@ test('service packet storage acknowledges exact retries and rejects conflicting 
   assert.equal(store.list('Event A').length, 1);
 });
 
+test('service packet storage retains replacement PIN verification and coordinator review evidence', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-replacement-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const store = createJudgeServicePacketStore({ root });
+  const submitted = packet();
+  Object.assign(submitted.divisions[0].history[1], {
+    assignmentRevision: 'assignment-revision-1',
+    replacementPinVerified: true,
+    requiresCoordinatorReview: true
+  });
+  await store.accept('Event A', submitted, 'ring-a-1', {
+    date: '2026-01-15', scope: 'REGIONAL', location: ''
+  });
+  const stored = store.get('Event A', submitted.submissionId);
+  assert.deepEqual(stored.packet.divisions[0].history[1], {
+    at: '2026-01-15T10:00:00.000Z',
+    action: 'REPLACED',
+    role: 'center',
+    judgeAssociationId: 'ID2',
+    previousJudgeAssociationId: 'ID1',
+    assignmentRevision: 'assignment-revision-1',
+    replacementPinVerified: true,
+    requiresCoordinatorReview: true
+  });
+
+  const invalid = packet('323e4567-e89b-12d3-a456-426614174000');
+  Object.assign(invalid.divisions[0].history[1], {
+    assignmentRevision: 'assignment-revision-1',
+    replacementPinVerified: false,
+    requiresCoordinatorReview: true
+  });
+  await assert.rejects(store.accept('Event A', invalid, 'ring-a-1', {
+    date: '2026-01-15', scope: 'REGIONAL', location: ''
+  }), /verified event PIN/);
+});
+
 test('tablet service intake persists, replays acknowledgements and binds ring authorization scope', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-route-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
