@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { normalizeRank } = require('../db/rankNormalization');
 const { normalizeCertification, certificationLevels, judgeRankOptions, JUDGE_RANKS, isJudgeRank } = require('../db/judgeCertification');
 const { validDate } = require('./tournamentAge');
+const { actualServiceRoles, eventIdFor } = require('./judgeServicePacket');
 
 const fields = ['associationId', 'firstName', 'lastName', 'school', 'rank', 'certification', 'expiration', 'status', 'notes'];
 const dateOfBirthColumn = 'date_of_birth';
@@ -33,6 +34,13 @@ const close = (db) => new Promise((resolve, reject) => db.close((e) => e ? rejec
 const manualSourceId = (eventId, role, phase) => `manual:${crypto.createHash('sha256').update(JSON.stringify([eventId, role, phase])).digest('hex')}`;
 function date(value, label) {
   try { return validDate(value); } catch { throw invalid(`${label} must be a valid YYYY-MM-DD date.`); }
+}
+function boundedEventName(value) {
+  if (typeof value !== 'string' || !value.trim() || value !== value.trim() || value.length > 200 ||
+      /[<>:"/\\|?*\x00-\x1F]/.test(value) || ['.', '..'].includes(value)) {
+    throw invalid('An explicit valid eventName is required.');
+  }
+  return value;
 }
 function ageOn(dateOfBirth, asOf) {
   const birth = new Date(`${dateOfBirth}T00:00:00.000Z`), date = new Date(`${asOf}T00:00:00.000Z`);
@@ -255,7 +263,15 @@ async function parseCsv(text, aliases) {
   });
 }
 
-function createJudgeManagementRouter({ file, currentDate = () => new Date().toISOString().slice(0, 10), allowSimulation = false }) {
+function createJudgeManagementRouter({
+  file,
+  currentDate = () => new Date().toISOString().slice(0, 10),
+  allowSimulation = false,
+  servicePacketStore,
+  readActiveEvent,
+  readEventConfig,
+  isKnownRing
+}) {
   const router = express.Router();
   async function handle(req, res, operation, write = false) {
     let db;
@@ -265,6 +281,7 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
         const instance = new sqlite3.Database(file, sqlite3.OPEN_READWRITE, (error) => error ? reject(error) : resolve(instance));
       });
       db.configure('busyTimeout', 5000);
+      let committed = false;
       try {
         await run(db, 'PRAGMA foreign_keys = ON');
         if (write) await run(db, 'BEGIN IMMEDIATE');
@@ -272,7 +289,11 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
         if (!settings) throw new Error('Judge Management settings are missing.');
         if (write && (!Number.isSafeInteger(req.body?.revision) || req.body.revision !== settings.revision)) throw invalid('Judge data changed. Reload before saving.', 409);
         const aliases = Object.keys(JSON.parse(settings.aliases)).length ? validateAliases(JSON.parse(settings.aliases)) : defaults;
-        const extra = await operation(db, aliases, today);
+        const operationResult = await operation(db, aliases, today);
+        const afterCommit = typeof operationResult?.afterCommit === 'function' ? operationResult.afterCommit : null;
+        const extra = operationResult && typeof operationResult === 'object'
+          ? Object.fromEntries(Object.entries(operationResult).filter(([name]) => name !== 'afterCommit'))
+          : operationResult;
         if (write) await run(db, 'UPDATE judge_management_settings SET revision = revision + 1 WHERE id = 1');
         const [next] = await all(db, 'SELECT revision, aliases FROM judge_management_settings WHERE id = 1');
         const judges = await all(db, `SELECT id, association_id AS associationId, first_name AS firstName, last_name AS lastName,
@@ -288,7 +309,11 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
           FROM judge_experience ORDER BY event_date DESC, id DESC`);
         const eligibility = judges.map((judge) => evaluateEligibility(judge, tests, experience, today));
         const publicJudges = judges.map(({ dateOfBirth, ...judge }) => judge);
-        if (write) await run(db, 'COMMIT');
+        if (write) {
+          await run(db, 'COMMIT');
+          committed = true;
+        }
+        if (afterCommit) await afterCommit();
         const payload = { asOf: today, revision: next.revision, aliases: Object.keys(JSON.parse(next.aliases)).length ? JSON.parse(next.aliases) : defaults,
           judges: publicJudges, tests, experience, eligibility, certificationLevels: certificationLevels(), ranks: judgeRankOptions(), ...extra };
         if (req.path === '/judge-management/profile') {
@@ -301,7 +326,7 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
         }
         res.json(payload);
       } catch (error) {
-        if (write) {
+        if (write && !committed) {
           try { await run(db, 'ROLLBACK'); } catch (rollbackError) { console.error('Judge Management rollback failed:', rollbackError); }
         }
         throw error;
@@ -314,12 +339,115 @@ function createJudgeManagementRouter({ file, currentDate = () => new Date().toIS
   const endpoint = (operation, write = false) => (req, res) => handle(req, res, (db, aliases, today) => operation(req, db, aliases, today), write);
   router.get('/judge-management', endpoint(() => ({})));
   router.get('/judge-management/profile', endpoint(() => ({})));
+  router.get('/judge-management/service-packets', (_req, res) => {
+    try {
+      if (!servicePacketStore) throw new Error('Judge service packet storage is not configured.');
+      res.json({ packets: servicePacketStore.list() });
+    } catch (error) {
+      console.error('Unable to list judge service packets:', error);
+      res.status(500).json({ error: 'Unable to list judge service packets. Check the server log.' });
+    }
+  });
+  router.post('/judge-management/service-packets/usb', async (req, res) => {
+    try {
+      if (!servicePacketStore) throw new Error('Judge service packet storage is not configured.');
+      if (typeof readActiveEvent !== 'function' || typeof readEventConfig !== 'function' ||
+          typeof isKnownRing !== 'function') {
+        throw new Error('USB judge service intake is not configured.');
+      }
+      const activeEventName = readActiveEvent();
+      if (!activeEventName) throw invalid('Activate the tournament before importing a tablet service packet.', 409);
+      const envelope = req.body;
+      if (!envelope || envelope.type !== 'tournament-judge-service-transfer' ||
+          envelope.schemaVersion !== 1 || envelope.eventName !== activeEventName ||
+          !envelope.packet || typeof envelope.packet !== 'object') {
+        throw invalid('The USB file is not a service packet for the active tournament.', 409);
+      }
+      const ringId = String(envelope.packet.ringId || '').trim();
+      if (!isKnownRing(ringId)) throw invalid(`The service packet ring '${ringId}' is not configured for this event.`, 409);
+      const config = readEventConfig(activeEventName);
+      const scope = String(config.scope || '').toUpperCase().replace(/-/g, '_');
+      const accepted = await servicePacketStore.accept(activeEventName, envelope.packet, ringId, {
+        date: config.date, scope, location: config.location || ''
+      });
+      res.json({
+        type: 'tournament-judge-service-receipt',
+        schemaVersion: 1,
+        eventName: activeEventName,
+        ringId,
+        phase: envelope.packet.phase,
+        ...accepted
+      });
+    } catch (error) {
+      if (!error.statusCode) console.error('Unable to import USB judge service packet:', error);
+      res.status(error.statusCode || 500).json({
+        error: error.statusCode ? error.message : 'Unable to import USB judge service packet. Check the server log.'
+      });
+    }
+  });
   async function member(db, associationId) {
     if (typeof associationId !== 'string' || !associationId.trim()) throw invalid('Association ID is required.');
     const [judge] = await all(db, 'SELECT id FROM judges WHERE association_id = ? COLLATE NOCASE', [associationId.trim()]);
     if (!judge) throw invalid('Judge not found by Association ID.', 404);
     return judge;
   }
+  router.post('/judge-management/service-packets/:submissionId/import', endpoint(async (req, db) => {
+    if (!servicePacketStore) throw new Error('Judge service packet storage is not configured.');
+    if (req.body?.confirmImport !== true) throw invalid('Confirm intake of the tablet service packet.');
+    const eventName = boundedEventName(req.body.eventName);
+    const submissionId = String(req.params.submissionId || '');
+    const stored = servicePacketStore.get(eventName, submissionId);
+    if (!stored) throw invalid('Judge service packet not found for this event.', 404);
+    if (stored.importedAt) return { added: 0, duplicates: 0, importedAt: stored.importedAt, alreadyImported: true };
+    const { event, packet } = stored;
+    const eventDate = date(event.date, 'Service event date');
+    const eventScope = String(event.scope || '');
+    if (!scopes.includes(eventScope) || event.id !== eventIdFor(event.name, eventDate)) {
+      throw invalid('Stored tablet service packet has invalid event metadata.', 409);
+    }
+    const sktkRoles = req.body.sktkRoles ?? {};
+    if (!sktkRoles || typeof sktkRoles !== 'object' || Array.isArray(sktkRoles)) throw invalid('SK/TK role selections must be an object.');
+    const participants = actualServiceRoles(packet, sktkRoles);
+    const [existingEvent] = await all(db, `SELECT event_name,event_date,event_scope,event_id FROM judge_experience
+      WHERE event_id = ? OR (event_name = ? COLLATE NOCASE AND event_date = ?) LIMIT 1`,
+    [event.id, event.name, eventDate]);
+    if (existingEvent && (existingEvent.event_name !== event.name || existingEvent.event_date !== eventDate ||
+        existingEvent.event_scope !== eventScope || existingEvent.event_id !== event.id)) {
+      throw invalid('This event already has experience records with conflicting metadata.', 409);
+    }
+    let added = 0, duplicates = 0;
+    for (const participant of participants) {
+      const { id: judgeId } = await member(db, participant.associationId);
+      const sourceId = `tournament:${crypto.createHash('sha256')
+        .update(JSON.stringify([event.id, packet.phase, participant.associationId.toUpperCase(), participant.role]))
+        .digest('hex')}`;
+      const [existing] = await all(db, `SELECT event_name,event_date,location,role,event_scope,event_id,phase,source,source_id
+        FROM judge_experience WHERE judge_id = ? AND
+        (source_id = ? OR (event_id = ? AND role = ? AND phase = ?))`,
+      [judgeId, sourceId, event.id, participant.role, packet.phase]);
+      if (existing) {
+        if (existing.event_name !== event.name || existing.event_date !== eventDate ||
+            existing.location !== event.location || existing.role !== participant.role ||
+            existing.event_scope !== eventScope || existing.event_id !== event.id ||
+            existing.phase !== packet.phase || existing.source !== 'TOURNAMENT' || existing.source_id !== sourceId) {
+          throw invalid(`Experience already exists with conflicting details for ${participant.associationId}.`, 409);
+        }
+        duplicates++;
+        continue;
+      }
+      await run(db, `INSERT INTO judge_experience
+        (judge_id,event_name,event_date,location,role,event_scope,log_verified,event_id,phase,source,source_id)
+        VALUES (?,?,?,?,?,?,0,?,?,?,?)`,
+      [judgeId, event.name, eventDate, event.location, participant.role, eventScope,
+        event.id, packet.phase, 'TOURNAMENT', sourceId]);
+      added++;
+    }
+    return {
+      added,
+      duplicates,
+      afterCommit: () => servicePacketStore.markImported(eventName, submissionId)
+    };
+  }, true));
   router.post('/judge-management/experience', endpoint(async (req, db, _aliases, today) => {
     const judge = await member(db, req.body.associationId);
     if (!Array.isArray(req.body.records) || !req.body.records.length || req.body.records.length > 200) throw invalid('Provide 1 to 200 experience records.');

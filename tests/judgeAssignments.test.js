@@ -13,7 +13,7 @@ const { createRingJudgeRouter } = require('../backend/ringJudgeRoutes');
 const { readVolunteerDirectory, replaceVolunteerDirectory } = require('../backend/volunteerStore');
 const { autoAssign, progressionOpportunity, minimums } = require('../backend/judgeAssignmentAlgorithm');
 const { regionalDataset } = require('../backend/judgeSimulationData');
-const { apiRoles } = require('../backend/browserPermissions');
+const { apiRoles, isTabletEndpoint } = require('../backend/browserPermissions');
 const run = (db, sql, args = []) => new Promise((resolve, reject) => db.run(sql, args, (error) => error ? reject(error) : resolve()));
 
 async function setup(t) {
@@ -91,6 +91,31 @@ test('realistic 200-member directory supplies event volunteers only; 8, 16 and 2
   assert.equal((await request('/judge-assignments?eventName=..')).status, 400);
   assert.equal((await request('/judge-assignments?eventName=missing')).status, 404);
   assert.deepEqual(apiRoles('PUT', '/api/judge-assignments'), ['administrator', 'event-coordinator', 'judging-coordinator']);
+});
+
+test('ring judge plan slices are read-only and preserve the saved qualification revision', async (t) => {
+  const { request } = await setup(t);
+  const data = (await request(url)).data;
+  const center = data.judges.find((judge) => judge.roles.center);
+  const corner = data.judges.find((judge) => judge.roles.corner && judge.id !== center.id);
+  const draft = phase(data, [center.id, corner.id], 'black-belt', 1);
+  const ringId = draft.rings[0];
+  draft.assignments = { [ringId]: { center: [center.id], corner: [corner.id], sktk: [] } };
+  const saved = await request(url, 'PUT', {
+    revision: data.revision,
+    sourceRevision: data.sourceRevision,
+    phases: { P1: draft, P2: data.phases.P2 }
+  });
+  assert.equal(saved.status, 200);
+  const plan = await request(`/rings/${encodeURIComponent(ringId)}/judge-plan?eventName=A&phase=P1`);
+  assert.equal(plan.status, 200);
+  assert.equal(plan.data.type, 'tournament-judge-plan');
+  assert.equal(plan.data.assignmentRevision, saved.data.revision);
+  assert.deepEqual(plan.data.positions.center.map((judge) => judge.associationId), [center.id]);
+  assert.deepEqual(plan.data.positions.corner.map((judge) => judge.associationId), [corner.id]);
+  assert.equal(plan.data.assigned, true);
+  assert.equal(apiRoles('GET', `/api/rings/${ringId}/judge-plan`).includes('tournament-operator'), true);
+  assert.equal(isTabletEndpoint('GET', `/api/rings/${ringId}/judge-plan`), true);
 });
 
 test('certified competitors are potential candidates; agreement is per phase, duplicate role identities merge, and ring population uses directory certification', async (t) => {

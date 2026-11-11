@@ -9,6 +9,78 @@ test('completed-service attestation uses the shared inline checkbox layout', () 
   const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
   assert.match(html, /<label class="jm-check"><input id="jmServiceCompleted" type="checkbox" required> I confirm/);
   assert.match(html, /#judgeManagementView label\.jm-check \{[^}]*flex-direction: row;[^}]*align-items: center;/);
+  assert.match(html, /id="jmServicePacketsReload">Load service packets/);
+  assert.match(html, /coordinators must verify it separately/);
+});
+
+test('tablet service intake imports packets only as pending experience and supports USB receipts', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, {
+      value: '', innerHTML: '', textContent: '', handlers: {}, disabled: false,
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {},
+      querySelectorAll() { return []; }
+    });
+    return nodes.get(id);
+  };
+  const state = { asOf: '2026-01-15', revision: 7, aliases: defaults, ranks: judgeRankOptions(),
+    certificationLevels: certificationLevels(), judges: [], tests: [], experience: [], eligibility: [] };
+  const record = {
+    submissionId: '123e4567-e89b-12d3-a456-426614174000', eventName: 'Event A',
+    ringId: 'ring-a-1', phase: 'P1', importedAt: '', event: { date: '2026-01-15', scope: 'REGIONAL' },
+    packet: { divisions: [{ seats: { center: [{ associationId: 'ID1' }] }, history: [] }] }
+  };
+  const workspace = create({
+    document: {
+      getElementById: node,
+      createElement: () => ({ click() {} })
+    },
+    confirm: () => true, showPanel() {},
+    request: async (url, options) => {
+      calls.push({ url, options });
+      if (url === '/api/judge-management/service-packets') return { packets: [record] };
+      if (url === '/api/judge-management/service-packets/usb') {
+        return {
+          type: 'tournament-judge-service-receipt',
+          submissionId: record.submissionId,
+          accepted: true,
+          serverRecordId: 'server-record',
+          receivedAt: '2026-01-15T12:00:00.000Z'
+        };
+      }
+      return { ...state, added: 1, duplicates: 0 };
+    }
+  });
+  await workspace.load();
+  await node('jmServicePacketsReload').handlers.click();
+  assert.match(node('jmServicePacketsBody').innerHTML, /Ring ring-a-1 — P1/);
+  const importButton = {
+    disabled: false,
+    getAttribute: () => record.submissionId,
+    closest: () => ({ querySelectorAll: () => [] })
+  };
+  await node('jmServicePacketsBody').handlers.click({
+    target: { closest: () => importButton }
+  });
+  const request = calls.find((call) => call.url.includes('/import'));
+  assert.ok(request);
+  assert.equal(request.options.method, 'POST');
+  assert.equal(JSON.parse(request.options.body).confirmImport, true);
+  assert.equal(JSON.parse(request.options.body).eventName, 'Event A');
+  assert.doesNotMatch(request.options.body, /logVerified|verified/);
+
+  const envelope = {
+    type: 'tournament-judge-service-transfer',
+    schemaVersion: 1,
+    eventName: 'Event A',
+    packet: { ringId: 'ring-a-1', phase: 'P1' }
+  };
+  node('jmServicePacketsUsbFile').files = [{ text: async () => JSON.stringify(envelope) }];
+  await node('jmServicePacketsUsbFile').handlers.change({ target: node('jmServicePacketsUsbFile') });
+  const usbRequest = calls.find((call) => call.url.endsWith('/service-packets/usb'));
+  assert.ok(usbRequest);
+  assert.deepEqual(JSON.parse(usbRequest.options.body), envelope);
+  assert.match(node('jmServicePacketsNotice').textContent, /import that receipt on the tablet/);
 });
 
 test('judge workspace saves, protects unsaved edits, filters, escapes and surfaces errors', async () => {

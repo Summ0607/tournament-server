@@ -1764,8 +1764,8 @@ saves both incomplete phase drafts. Auto assign is highlighted separately and
 still produces an unsaved draft.
 Changes to profiles, volunteers, registration or event configuration invalidate
 stale saves. Planning locks when operational event use begins; Reset Run returns
-the event to preparation. Runtime phase switching, substitutions, contact
-messaging and automatic experience capture remain later work.
+the event to preparation. Runtime reassignment and contact messaging remain
+separate work; a saved plan is not evidence that an official actually served.
 
 Ring Judges' competitor population now uses certified directory matches when
 running the normal server. Its review note identifies potential candidates.
@@ -1809,14 +1809,42 @@ World experience requirements remain unchanged. Actual-service corrections
 recalculate advisory eligibility; they do not automatically revoke an already
 awarded certification.
 
-This is manual coordinator capture, not tablet-confirmed service. Tablet roster
-delivery, per-phase judge check-in, replacement authorization, and result/service
-reporting remain **Step 3B**, a future coordinated server/app effort. No tablet
-contract or ring-result ingestion has changed, and arbitrator service is entered
-manually here.
+##### Tablet-confirmed actual service (Step 3B)
+
+Paired tablets can read `GET /api/rings/<ringId>/judge-plan?phase=P1|P2`.
+The read-only slice returns the saved assignment revision and qualified officials
+for one ring/phase; a stale qualification revision is rejected, and this request
+never changes the saved assignment or records experience. Tablets independently
+record actual service by division, including seating, replacement, role swaps and
+removals, then consolidate those histories into one durable packet per ring and
+phase. `POST /api/rings/<ringId>/service-packets` is ring-authorized and stores
+the packet outside static web content. The tablet persists its submission ID
+before sending and retains it until a matching receipt is saved.
+
+An exact network retry returns the original server acknowledgment. Reusing an ID
+for different content or submitting another packet for the same event/ring/phase
+is rejected. The result-report endpoint and its per-division submission IDs
+remain separate. Tablet service packets do not create experience until an
+Administrator or Judging Coordinator opens **Judge Management > Experience >
+Tablet service intake** and imports the actual-service history. Import creates
+`source: TOURNAMENT` records with `log_verified: false`; repeated imports are
+idempotent. Center, Corner, Scorekeeper, Timekeeper and Arbitrator roles are
+preserved, and an older combined SK/TK record requires the coordinator to select
+its actual role. The existing **Verify** action remains the sole verification
+decision; intake, packet receipts and saved assignments never verify experience
+or grant certification.
+
+For offline USB transfer, the tablet can save a self-contained service packet
+from **Judge Service > Save packet to USB**. In the active tournament's Judge
+Management workspace, **Import packet from USB** accepts that file, checks its
+event and configured ring, stores it through the same duplicate-safe packet
+store, and downloads a receipt. Import the receipt on the tablet with **Import
+USB receipt**; the tablet verifies its submission ID and stores the
+acknowledgment durably. USB receipt does not import judge experience by itself:
+the coordinator still performs the separate intake and verification steps.
 
 Focused validation:
-`node --test tests/judgeExperienceApi.test.js tests/judgeManagementUi.test.js`.
+`node --test tests/judgeServicePackets.test.js tests/judgeAssignments.test.js tests/judgeManagementRoutes.test.js tests/judgeManagementUi.test.js`.
 
 ##### Exercising certification upgrades (Step 4)
 

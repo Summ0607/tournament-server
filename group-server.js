@@ -44,6 +44,7 @@ const { createAppReleaseRouter } = require('./backend/appRelease');
 const { initializeJudgeDatabase } = require('./db/judgeManagement');
 const { DEFAULT_JUDGE_DATABASE } = require('./db/judgeManagement');
 const { createJudgeManagementRouter } = require('./backend/judgeManagementRoutes');
+const { createJudgeServicePacketStore } = require('./backend/judgeServicePacket');
 
 const app = express();
 let httpsServer;
@@ -62,6 +63,9 @@ const SURFACE_ENTRY_PATH = ACTIVE_SURFACE === 'adminProgress'
 // BASE CONSTANTS
 // ─────────────────────────────────────────────
 const ROOT_DIR = __dirname;
+const judgeServicePacketStore = createJudgeServicePacketStore({
+  root: path.join(ROOT_DIR, 'judge-management-data', 'service-packets')
+});
 const CONTROL_BOARD_DIR = path.join(ROOT_DIR, 'head-table');
 const DISCONNECT_AFTER_MS = 90 * 1000;
 const MAX_LETTERS = 26;
@@ -218,7 +222,13 @@ app.use((req, res, next) => {
   return accountWeb(req, res, next);
 });
 app.use(express.json({ limit: '50mb' }));
-app.use('/api', createJudgeManagementRouter({ file: DEFAULT_JUDGE_DATABASE }));
+app.use('/api', createJudgeManagementRouter({
+  file: DEFAULT_JUDGE_DATABASE,
+  servicePacketStore: judgeServicePacketStore,
+  readActiveEvent,
+  readEventConfig,
+  isKnownRing: (ringId) => Object.hasOwn(readAssignmentsState().rings, ringId)
+}));
 app.use('/api/server-control', createServerControl({
   allowedHosts: httpsConfig ? httpsOrigins(httpsConfig, ACTIVE_SURFACE).map((origin) => new URL(origin).host) : [],
   enabled: process.env.TOURNAMENT_MANAGED_SERVER === '1' && typeof process.send === 'function',
@@ -979,7 +989,7 @@ app.use('/api', createRankRouter(path.join(ROOT_DIR, 'ranks.json')));
 app.use('/api', createCompetitionSettingRouter({ eventsRoot: EVENTS_ROOT, configurationStatus }));
 app.use('/api', createTournamentResultRouter({ eventsRoot: EVENTS_ROOT, runsRoot: path.join(ROOT_DIR, 'simulator-runs') }));
 app.use('/api', createRingJudgeRouter({ eventsRoot: EVENTS_ROOT, configurationStatus, judgeFile: DEFAULT_JUDGE_DATABASE }));
-app.use('/api', createJudgeAssignmentRouter({ eventsRoot: EVENTS_ROOT }));
+app.use('/api', createJudgeAssignmentRouter({ eventsRoot: EVENTS_ROOT, readActiveEvent }));
 app.use('/api', createVolunteerRouter({ eventsRoot: EVENTS_ROOT, configurationStatus }));
 app.use('/api', createDivisionRouter({
   competitorStore: (eventName) => createCompetitorStore(resolveEventDbPath(eventName, { strict: !!String(eventName || '').trim() })),
@@ -1341,6 +1351,7 @@ app.use('/api', createRingRouter({
   DISCONNECT_AFTER_MS,
   saveUploadedDivisionPacket,
   resultPacketStore,
+  servicePacketStore: judgeServicePacketStore,
   readActiveEvent,
   readEventConfig
 }));

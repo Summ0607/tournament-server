@@ -8,6 +8,7 @@
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const pretty = (value) => String(value || '').replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
     let data = null, busy = false, token = 0, editing = false, editId = null, baseline = '', aliasesBaseline = '', origin = 'judge-management';
+    let servicePackets = [];
     let testRecords = [], experienceRecords = [];
     const serviceFields = ['associationId', 'eventId', 'eventName', 'eventDate', 'eventScope', 'location', 'phase', 'role'];
     let serviceOpen = false, serviceId = null, serviceBaseline = '';
@@ -144,6 +145,94 @@
         setData(result); notice(''); return true;
       } catch (error) { if (current === token) notice(error.message, true); return false; }
     }
+    function legacySktkIds(packet) {
+      const ids = new Set();
+      for (const division of packet.divisions || []) {
+        for (const judge of division.seats?.sktk || []) if (judge.associationId) ids.add(judge.associationId);
+        for (const entry of division.history || []) {
+          if (entry.role === 'sktk' && entry.judgeAssociationId) ids.add(entry.judgeAssociationId);
+          if (entry.role === 'sktk' && entry.action === 'REPLACED' && entry.previousJudgeAssociationId) ids.add(entry.previousJudgeAssociationId);
+        }
+      }
+      return [...ids];
+    }
+    function renderServicePackets() {
+      node('jmServicePacketsBody').innerHTML = servicePackets.map((record) => {
+        const packet = record.packet, legacy = legacySktkIds(packet);
+        const historyCount = (packet.divisions || []).reduce((count, division) => count + (division.history || []).length, 0);
+        const roles = Object.entries((packet.divisions || []).flatMap((division) =>
+          Object.entries(division.seats || {}).flatMap(([role, judges]) => judges.map((judge) => `${role}: ${judge.associationId}`)))
+          .reduce((counts, value) => { counts[value] = (counts[value] || 0) + 1; return counts; }, {}));
+        const legacyControls = legacy.map((associationId) => `<label>${esc(associationId)} actual SK/TK role
+          <select data-jm-packet-sktk="${esc(associationId)}"><option value="">Select</option>
+          <option value="SCOREKEEPER">Scorekeeper</option><option value="TIMEKEEPER">Timekeeper</option></select></label>`).join('');
+        return `<article class="jm-card" data-jm-service-packet="${esc(record.submissionId)}">
+          <h4>${esc(record.eventName)} — Ring ${esc(record.ringId)} — ${esc(record.phase)}</h4>
+          <p>${esc(record.event?.date)} · ${esc(pretty(record.event?.scope))} · ${packet.divisions.length} division(s) · ${historyCount} history change(s)</p>
+          <p>${esc(roles.map(([role, count]) => `${role} (${count})`).join(', ') || 'No seated judges')}</p>
+          ${legacyControls}
+          <p>${record.importedAt
+            ? `Imported ${esc(record.importedAt)}; experience remains subject to coordinator verification.`
+            : `<button type="button" data-jm-service-packet-import="${esc(record.submissionId)}">Import as pending experience</button>`}</p>
+        </article>`;
+      }).join('') || '<p>No tablet service packets loaded.</p>';
+    }
+    async function loadServicePackets() {
+      node('jmServicePacketsReload').disabled = true;
+      node('jmServicePacketsNotice').textContent = 'Loading received tablet service packets...';
+      try {
+        const result = await request('/api/judge-management/service-packets');
+        servicePackets = Array.isArray(result.packets) ? result.packets : [];
+        renderServicePackets();
+        node('jmServicePacketsNotice').textContent = `${servicePackets.length} service packet(s) received.`;
+      } catch (error) {
+        node('jmServicePacketsNotice').textContent = error.message;
+      } finally {
+        node('jmServicePacketsReload').disabled = false;
+      }
+    }
+    async function importUsbServicePacket(file) {
+      if (!file || busy) return;
+      busy = true;
+      node('jmServicePacketsUsbImport').disabled = true;
+      try {
+        const envelope = JSON.parse(await file.text());
+        if (envelope?.type !== 'tournament-judge-service-transfer' || envelope.schemaVersion !== 1 ||
+            !envelope.eventName || !envelope.packet?.ringId || !envelope.packet?.phase) {
+          throw new Error('The selected file is not a valid tablet service packet.');
+        }
+        if (!confirm(`Accept ${envelope.eventName}, ${envelope.packet.ringId}, ${envelope.packet.phase}? ` +
+            'This finalizes the ring-phase packet; a different packet cannot be accepted later.')) return;
+        const receipt = await request('/api/judge-management/service-packets/usb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(envelope)
+        });
+        if (!receipt.accepted || !receipt.submissionId || !receipt.serverRecordId) {
+          throw new Error('The server did not return a valid service receipt.');
+        }
+        const download = document.createElement('a');
+        const downloadUrl = URL.createObjectURL(new Blob([JSON.stringify(receipt, null, 2)], {
+          type: 'application/json'
+        }));
+        download.href = downloadUrl;
+        download.download = `${receipt.submissionId}.receipt.json`;
+        document.body?.appendChild(download);
+        download.click();
+        download.remove?.();
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+        await loadServicePackets();
+        node('jmServicePacketsNotice').textContent =
+          `Service packet acknowledged. Copy ${download.download} to USB, then import that receipt on the tablet.`;
+      } catch (error) {
+        node('jmServicePacketsNotice').textContent = error.message || 'Unable to import the USB service packet.';
+        node('jmServicePacketsNotice').setAttribute('data-state', 'error');
+      } finally {
+        busy = false;
+        node('jmServicePacketsUsbImport').disabled = false;
+        node('jmServicePacketsUsbFile').value = '';
+      }
+    }
     function begin(source, judge = null) {
       if (busy || !data) return;
       if (serviceOpen && !canLeave()) return;
@@ -256,6 +345,29 @@
         return write('/api/judge-management/experience-verify', 'POST',
           { associationId: judge.associationId, ids: [record.id], verified: !record.logVerified }, 'Experience verification updated.');
       }
+    });
+    node('jmServicePacketsReload').addEventListener('click', () => loadServicePackets());
+    node('jmServicePacketsUsbImport').addEventListener('click', () => node('jmServicePacketsUsbFile').click());
+    node('jmServicePacketsUsbFile').addEventListener('change', (event) => {
+      return importUsbServicePacket(event.target.files?.[0]);
+    });
+    node('jmServicePacketsBody').addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-jm-service-packet-import]');
+      if (!button || busy || !data) return;
+      const record = servicePackets.find((item) => item.submissionId === button.getAttribute('data-jm-service-packet-import'));
+      if (!record) return;
+      const card = button.closest('[data-jm-service-packet]');
+      const selections = [...card.querySelectorAll('[data-jm-packet-sktk]')];
+      const sktkRoles = Object.fromEntries(selections.map((select) => [select.getAttribute('data-jm-packet-sktk'), select.value]));
+      if (legacySktkIds(record.packet).some((associationId) => !sktkRoles[associationId])) {
+        node('jmServicePacketsNotice').textContent = 'Select Scorekeeper or Timekeeper for every legacy SK/TK service entry.';
+        return;
+      }
+      if (!confirm(`Import actual service for Ring ${record.ringId}, ${record.phase} as pending, unverified experience?`)) return;
+      const imported = await write(`/api/judge-management/service-packets/${encodeURIComponent(record.submissionId)}/import`,
+        'POST', { eventName: record.eventName, confirmImport: true, sktkRoles },
+        (result) => `${result.added || 0} pending experience record(s) added; ${result.duplicates || 0} duplicate(s) skipped. Verification remains a separate coordinator action.`);
+      if (imported) await loadServicePackets();
     });
     function openService(record = null, planned = null) {
       if (!data || !canLeave()) return;

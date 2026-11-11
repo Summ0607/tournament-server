@@ -2036,6 +2036,16 @@
               <section id="jmExperience" hidden>
                 <div class="jm-toolbar"><button type="button" id="jmExperienceAdd">Add Judge</button><button type="button" id="jmServiceAdd">Record Completed Service</button></div>
                 <p class="jm-note">Only Regional, National and World events are sanctioned. A verified log is required except for Sah Dan (D5) and above.</p>
+                <div class="jm-panel">
+                  <div class="jm-toolbar"><h3>Tablet service intake</h3><button type="button" id="jmServicePacketsReload">Load service packets</button></div>
+                  <p class="jm-note">Review actual service history received from ring tablets. Import creates pending, unverified Tournament experience; coordinators must verify it separately.</p>
+                  <div class="jm-toolbar">
+                    <button type="button" id="jmServicePacketsUsbImport">Import packet from USB</button>
+                    <input type="file" id="jmServicePacketsUsbFile" accept="application/json,.json" hidden>
+                  </div>
+                  <p id="jmServicePacketsNotice" class="jm-note" role="status"></p>
+                  <div id="jmServicePacketsBody"></div>
+                </div>
                 <form id="jmServiceForm" hidden>
                   <h3 id="jmServiceTitle">Record Completed Service</h3>
                   <p id="jmServiceContext" class="jm-note" hidden></p>

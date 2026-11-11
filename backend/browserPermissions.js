@@ -57,6 +57,9 @@ rule('GET POST PUT', /^\/api\/(ring-judges|volunteers|volunteer-types)(?:\/[^/]+
 rule('GET PUT', /^\/api\/judge-assignments$/, JUDGING);
 rule('POST', /^\/api\/judge-assignments\/auto$/, JUDGING);
 rule('GET POST PUT', /^\/api\/judge-management(?:\/[^/]+(?:\/award)?|-settings|-import)?$/, ['administrator', 'judging-coordinator']);
+rule('GET', /^\/api\/judge-management\/service-packets$/, ['administrator', 'judging-coordinator']);
+rule('POST', /^\/api\/judge-management\/service-packets\/usb$/, ['administrator', 'judging-coordinator']);
+rule('POST', /^\/api\/judge-management\/service-packets\/[a-f0-9-]{36}\/import$/, ['administrator', 'judging-coordinator']);
 rule('PUT DELETE', /^\/api\/judge-management\/experience\/[1-9]\d*$/, ['administrator', 'judging-coordinator']);
 rule('GET', /^\/api\/rings\/monitor$/, AUDIENCE);
 rule('POST', /^\/api\/tablet\/codes$/, DAY);
@@ -64,8 +67,8 @@ rule('GET', /^\/(?:status|api\/rings(?:\/(?:config|estimates))?)$/, DAY);
 rule('POST', /^\/api\/rings\/config$/, EVENT);
 rule('POST', /^\/api\/rings\/schedule\/day2$/, DAY);
 rule('POST DELETE', new RegExp(`^/api/rings/${segment}/(?:reset|queue(?:/${segment})?|assistance/clear)$`), DAY);
-rule('GET', new RegExp(`^/api/rings/${segment}/(?:current|division-package)$`), DAY);
-rule('POST', new RegExp(`^/api/rings/${segment}/(?:request-group|heartbeat|complete|assistance)$`), DAY);
+rule('GET', new RegExp(`^/api/rings/${segment}/(?:current|division-package|judge-plan)$`), DAY);
+rule('POST', new RegExp(`^/api/rings/${segment}/(?:request-group|heartbeat|complete|service-packets|assistance)$`), DAY);
 rule('POST', /^\/api\/reset$/, ['administrator']);
 rule('GET', /^\/api\/simulator\/runs$/, AUDIENCE);
 rule('GET', /^\/api\/simulator\/runs\/[^/]+\/audience$/, AUDIENCE);
@@ -82,8 +85,8 @@ function apiRoles(method, pathname) {
 }
 function isTabletEndpoint(method, pathname) {
   if (method === 'GET') return /^\/(?:api\/(?:health|version|events\/active|rings\/config)|download-app)$/.test(pathname) ||
-    /^\/api\/rings\/[^/]+\/(?:current|division-package)$/.test(pathname);
-  return method === 'POST' && /^\/api\/rings\/[^/]+\/(?:request-group|heartbeat|complete|assistance(?:\/clear)?)$/.test(pathname);
+    /^\/api\/rings\/[^/]+\/(?:current|division-package|judge-plan)$/.test(pathname);
+  return method === 'POST' && /^\/api\/rings\/[^/]+\/(?:request-group|heartbeat|complete|service-packets|assistance(?:\/clear)?)$/.test(pathname);
 }
 function pageView(pathname) {
   const name = pathname.replace(/\/index\.html$/i, '').replace(/\/+$/, '').replace(/\.html$/i, '').toLowerCase();

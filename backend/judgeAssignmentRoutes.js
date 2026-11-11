@@ -47,11 +47,10 @@ function validatePhase(phase, rings, judges) {
   }
   return structuredClone(phase);
 }
-function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DATABASE }) {
+function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DATABASE, readActiveEvent = () => '' }) {
   const router = express.Router();
   const { readEventConfig, configurationStatus } = createEventConfigStore(eventsRoot);
-  async function context(req) {
-    const name = req.query.eventName;
+  async function contextForEvent(name) {
     if (typeof name !== 'string' || !name.trim() || name !== name.trim() || /[<>:"/\\|?*\x00-\x1F]/.test(name) || ['.', '..'].includes(name)) fail('An explicit valid eventName is required.');
     const dir = path.join(eventsRoot, name), eventFile = path.join(dir, 'tournament.db');
     if (!fs.existsSync(eventFile)) fail('Tournament database not found.', 404);
@@ -62,9 +61,11 @@ function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DAT
     const rings = [];
     for (let x = 0; x < config.ringConfigX; x++) for (let y = 1; y <= config.ringConfigY; y++) rings.push(buildRingLabel(String.fromCharCode(65 + x), y));
     const file = path.join(dir, 'judge-assignments.json');
-    return { eventName: name, file, rings, judges: candidates.judges, sourceRevision, asOf: config.date,
-      ...read(file), ...configurationStatus(name) };
+    const saved = read(file);
+    return { ...saved, eventName: name, file, rings, judges: candidates.judges, sourceRevision,
+      assignmentSourceRevision: saved.sourceRevision || null, asOf: config.date, ...configurationStatus(name) };
   }
+  const context = (req) => contextForEvent(req.query.eventName);
   const payload = ({ file, ...data }) => data;
   const handle = (action) => async (req, res) => {
     try { res.json(await action(req, await context(req))); }
@@ -77,6 +78,48 @@ function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DAT
     if (state.configurationLocked) fail('Assignments are locked after operational use begins. Reset Run before editing.', 409);
     if (req.body?.sourceRevision !== state.sourceRevision || req.body?.revision !== state.revision) fail('Judge qualifications, event data or assignments changed. Reload before saving.', 409);
   }
+  router.get('/rings/:ringId/judge-plan', async (req, res) => {
+    try {
+      const eventName = req.query.eventName || res.locals.tabletSession?.event || readActiveEvent();
+      const state = await contextForEvent(eventName);
+      const phaseName = req.query.phase;
+      if (!phases.includes(phaseName)) fail('phase must be P1 or P2.');
+      const ringId = String(req.params.ringId || '').trim();
+      if (!state.rings.includes(ringId)) fail('Ring is not configured for this event.', 404);
+      const phase = state.phases[phaseName];
+      if (!phase) fail('The requested phase has no saved judge assignment.', 404);
+      if (state.assignmentSourceRevision && state.assignmentSourceRevision !== state.sourceRevision) {
+        fail('Judge qualifications or event data changed. Reload and save the assignment plan before using it.', 409);
+      }
+      const candidates = new Map(state.judges.map((judge) => [judge.id, judge]));
+      const checked = validatePhase(phase, state.rings, state.judges);
+      const planned = checked.rings.includes(ringId);
+      const ids = planned ? checked.assignments[ringId] : null;
+      const officials = (role) => (ids?.[role] || []).map((id) => {
+        const judge = candidates.get(id);
+        return { associationId: judge.associationId, name: judge.name, rank: judge.rank, certification: judge.certification };
+      });
+      res.json({
+        type: 'tournament-judge-plan',
+        schemaVersion: 1,
+        eventName: state.eventName,
+        eventDate: state.asOf,
+        ringId,
+        phase: phaseName,
+        assignmentRevision: state.revision,
+        sourceRevision: state.sourceRevision,
+        assigned: planned,
+        positions: Object.fromEntries(POSITIONS.map((role) => [role, officials(role)])),
+        arbitrators: checked.arbitrators.map((id) => {
+          const judge = candidates.get(id);
+          return { associationId: judge.associationId, name: judge.name, rank: judge.rank, certification: judge.certification };
+        })
+      });
+    } catch (error) {
+      if (!error.statusCode) console.error('Judge assignment plan slice failed:', error);
+      res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Unable to access judge assignment plan. Check the server log.' });
+    }
+  });
   router.get('/judge-assignments', handle((_req, state) => payload(state)));
   router.post('/judge-assignments/auto', handle((req, state) => {
     writable(state, req);
@@ -88,7 +131,7 @@ function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DAT
   router.put('/judge-assignments', handle(async (req, state) => {
     writable(state, req);
     if (!req.body.phases || Object.keys(req.body.phases).length !== 2) fail('Both phases are required.');
-    const next = { revision: crypto.randomUUID(), phases: Object.fromEntries(phases.map((phase) =>
+    const next = { revision: crypto.randomUUID(), sourceRevision: state.sourceRevision, phases: Object.fromEntries(phases.map((phase) =>
       [phase, validatePhase(req.body.phases[phase], state.rings, state.judges)])) };
     const latest = await context(req);
     writable(latest, req);

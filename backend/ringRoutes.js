@@ -237,7 +237,9 @@ function createRingRouter(deps) {
     DISCONNECT_AFTER_MS,
     saveUploadedDivisionPacket,
     resultPacketStore,
+    servicePacketStore,
     readActiveEvent,
+    readEventConfig,
     appendDivisionTrace = defaultAppendDivisionTrace
   } = deps;
 
@@ -632,6 +634,30 @@ function createRingRouter(deps) {
 
   router.get('/rings/:ringId/bootstrap', handleRequestGroup);
   router.post('/rings/:ringId/request-group', handleRequestGroup);
+
+  router.post('/rings/:ringId/service-packets', async (req, res) => {
+    const ringId = String(req.params.ringId || '').trim();
+    const activeEventName = readActiveEvent();
+    try {
+      if (!servicePacketStore) throw new Error('Judge service packet storage is not configured.');
+      const state = readAssignmentsState();
+      if (!getRingState(state, ringId)) {
+        return res.status(400).json({ error: `Invalid ring '${ringId}'. Allowed rings: ${listAllowedRingLabels(state).join(', ')}` });
+      }
+      if (!activeEventName) return res.status(409).json({ error: 'Activate a tournament before transferring judge service.' });
+      const config = readEventConfig(activeEventName);
+      const scope = String(config.scope || '').toUpperCase().replace(/-/g, '_');
+      const receipt = await servicePacketStore.accept(activeEventName, req.body, ringId, {
+        date: config.date, scope, location: config.location || ''
+      });
+      return res.json(receipt);
+    } catch (error) {
+      if (!error.statusCode) console.error('Failed to process judge service packet:', error);
+      return res.status(error.statusCode || 500).json({
+        error: error.statusCode ? error.message : 'Unable to persist judge service packet. Check the server log.'
+      });
+    }
+  });
 
   router.get('/rings/:ringId/current', (req, res) => {
     const state = readAssignmentsState();
