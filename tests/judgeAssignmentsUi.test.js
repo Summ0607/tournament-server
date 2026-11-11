@@ -52,6 +52,43 @@ test('phase planner confirms competitor agreement, preserves other phase, saves 
   assert.match(node('jaContent').innerHTML, /Select a tournament/);
 });
 
+test('planner saves the coordinator-created event PIN without reading it back', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { innerHTML: '', textContent: '', value: '', handlers: {},
+      setAttribute(name, value) { this[name] = value; }, addEventListener(name, fn) { this.handlers[name] = fn; } });
+    return nodes.get(id);
+  };
+  const empty = (discipline) => ({ discipline, rings: [], available: [], arbitrators: [], assignments: {} });
+  let state = {
+    revision: null, sourceRevision: 'source-1', configurationLocked: false,
+    rings: ['A1'], replacementPinConfigured: false,
+    phases: { P1: empty('black-belt'), P2: empty('gup') }, judges: []
+  };
+  const workspace = create({
+    document: { getElementById: node }, selectedEvent: () => 'Event A', confirm: () => true,
+    request: async (_url, options) => {
+      calls.push({ options });
+      if (options?.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        state = { ...state, revision: 'revision-1', replacementPinConfigured: Boolean(body.replacementPin) };
+      }
+      return structuredClone(state);
+    }
+  });
+  await workspace.load();
+  node('jaReplacementPin').value = 'A7!Q';
+  node('jaReplacementPin').handlers.input();
+  assert.equal(workspace.dirty(), true);
+  await node('jaSave').handlers.click();
+
+  const save = calls.find(({ options }) => options?.method === 'PUT');
+  assert.equal(JSON.parse(save.options.body).replacementPin, 'A7!Q');
+  assert.equal(node('jaReplacementPin').value, '');
+  assert.match(node('jaReplacementPinState').textContent, /Configured/);
+  assert.equal(JSON.stringify(state).includes('A7!Q'), false);
+});
+
 test('planner preserves expanded sections and availability scroll across selections, phases and saves', async () => {
   const nodes = new Map();
   const node = (id) => {

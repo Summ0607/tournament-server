@@ -12,13 +12,29 @@ const phases = ['P1', 'P2'];
 const fail = (message, statusCode = 400) => { throw Object.assign(new Error(message), { statusCode }); };
 const emptyPhase = (discipline) => ({ discipline, rings: [], available: [], arbitrators: [], assignments: {} });
 function read(file) {
-  if (!fs.existsSync(file)) return { revision: null, phases: { P1: emptyPhase('black-belt'), P2: emptyPhase('gup') } };
+  if (!fs.existsSync(file)) return {
+    revision: null,
+    phases: { P1: emptyPhase('black-belt'), P2: emptyPhase('gup') },
+    replacementPinVerifier: null
+  };
   const data = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (!data || typeof data.revision !== 'string' || !data.phases || phases.some((phase) => !data.phases[phase])) throw new Error('Invalid saved judge assignment phases.');
-  return data;
+  if (data.replacementPinVerifier && !validReplacementPinVerifier(data.replacementPinVerifier)) {
+    throw new Error('Invalid saved event replacement PIN verifier.');
+  }
+  return { ...data, replacementPinVerifier: data.replacementPinVerifier || null };
 }
 function canServe(judge, phase, role) {
   return Boolean(judge?.roles[role] && !(phase.discipline === 'black-belt' && judge.sources.includes('competitor') && /^D[1-8]$/.test(judge.rank)));
+}
+function createReplacementPinVerifier(pin) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const digest = crypto.createHash('sha256').update(`${salt}:${pin}`, 'utf8').digest('hex');
+  return { algorithm: 'SHA-256-salted-v1', salt, digest };
+}
+function validReplacementPinVerifier(value) {
+  return value && value.algorithm === 'SHA-256-salted-v1' &&
+    /^[a-f0-9]{32}$/i.test(value.salt) && /^[a-f0-9]{64}$/i.test(value.digest);
 }
 function validatePhase(phase, rings, judges) {
   if (!phase || !['black-belt', 'gup'].includes(phase.discipline)) fail('Select Black Belt or Gup for each phase.');
@@ -66,7 +82,10 @@ function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DAT
       assignmentSourceRevision: saved.sourceRevision || null, asOf: config.date, ...configurationStatus(name) };
   }
   const context = (req) => contextForEvent(req.query.eventName);
-  const payload = ({ file, ...data }) => data;
+  const payload = ({ file, replacementPinVerifier, ...data }) => ({
+    ...data,
+    replacementPinConfigured: Boolean(replacementPinVerifier)
+  });
   const handle = (action) => async (req, res) => {
     try { res.json(await action(req, await context(req))); }
     catch (error) {
@@ -108,6 +127,8 @@ function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DAT
         phase: phaseName,
         assignmentRevision: state.revision,
         sourceRevision: state.sourceRevision,
+        replacementPinVerifier: state.replacementPinVerifier || null,
+        replacementPinConfigured: Boolean(state.replacementPinVerifier),
         assigned: planned,
         positions: Object.fromEntries(POSITIONS.map((role) => [role, officials(role)])),
         arbitrators: checked.arbitrators.map((id) => {
@@ -131,7 +152,16 @@ function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DAT
   router.put('/judge-assignments', handle(async (req, state) => {
     writable(state, req);
     if (!req.body.phases || Object.keys(req.body.phases).length !== 2) fail('Both phases are required.');
-    const next = { revision: crypto.randomUUID(), sourceRevision: state.sourceRevision, phases: Object.fromEntries(phases.map((phase) =>
+    if (Object.hasOwn(req.body, 'replacementPin') && typeof req.body.replacementPin !== 'string') {
+      fail('The event replacement PIN must be text.');
+    }
+    const replacementPin = req.body.replacementPin || '';
+    if (replacementPin && !/^[\x21-\x7e]{4}$/.test(replacementPin)) {
+      fail('The event replacement PIN must contain exactly four visible ASCII characters.');
+    }
+    const next = { revision: crypto.randomUUID(), sourceRevision: state.sourceRevision,
+      replacementPinVerifier: replacementPin ? createReplacementPinVerifier(replacementPin) : state.replacementPinVerifier,
+      phases: Object.fromEntries(phases.map((phase) =>
       [phase, validatePhase(req.body.phases[phase], state.rings, state.judges)])) };
     const latest = await context(req);
     writable(latest, req);

@@ -1767,6 +1767,15 @@ stale saves. Planning locks when operational event use begins; Reset Run returns
 the event to preparation. Runtime reassignment and contact messaging remain
 separate work; a saved plan is not evidence that an official actually served.
 
+The coordinator can also set a four-character event replacement PIN while
+saving the plans. The server stores only a salted verifier, never returns the
+PIN to the browser after saving, and includes the verifier in each ring/phase
+plan response for offline tablet use. Leave the field blank to retain the
+existing PIN. Set the PIN before operational use locks assignment changes.
+`GET /api/rings/<ringId>/judge-plan?phase=P1|P2` returns the assigned roster,
+assignment and source revisions, arbitrator reserves, and hidden PIN verifier;
+the verifier is not included in the Judge Assignments browser response.
+
 Ring Judges' competitor population now uses certified directory matches when
 running the normal server. Its review note identifies potential candidates.
 The assignment candidate view independently refreshes authoritative directory

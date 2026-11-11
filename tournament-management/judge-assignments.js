@@ -6,7 +6,9 @@
     const roles = ['center', 'corner', 'sktk'];
     const labels = { center: 'Center', corner: 'Corner', sktk: 'SK/TK' };
     let data = null, eventName = '', phase = 'P1', baseline = '', busy = false, token = 0;
-    const dirty = () => Boolean(data && JSON.stringify(data.phases) !== baseline);
+    const dirty = () => Boolean(data && (
+      JSON.stringify(data.phases) !== baseline || Boolean(node('jaReplacementPin')?.value)
+    ));
     const current = () => data && eventName === selectedEvent();
     const notice = (message, error = false) => {
       node('jaNotice').textContent = message; node('jaNotice').setAttribute('data-state', error ? 'error' : 'info');
@@ -15,6 +17,7 @@
       if (busy) { notice('Wait for the current assignment operation to finish.', true); return false; }
       if (!dirty()) return true;
       if (!confirm('Discard unsaved judge assignments?')) return false;
+      node('jaReplacementPin').value = '';
       data = null; eventName = ''; token++;
       return true;
     }
@@ -35,6 +38,10 @@
       node('jaAuto').setAttribute('data-action', 'primary');
       node('jaReload').disabled = busy;
       node('jaPhase').disabled = busy;
+      node('jaReplacementPin').disabled = busy || Boolean(data?.configurationLocked);
+      node('jaReplacementPinState').textContent = data?.replacementPinConfigured
+        ? 'Configured; blank keeps the current PIN.'
+        : 'Not configured; set before tablets load ring plans.';
       if (!current()) { node('jaContent').innerHTML = '<p>Select a tournament.</p>'; node('jaCandidateCount').textContent = ''; return; }
       const draft = data.phases[phase], byId = new Map(data.judges.map((judge) => [judge.id, judge]));
       const query = (node('jaSearch').value || '').trim().toLowerCase();
@@ -93,6 +100,7 @@
     async function load() {
       const target = selectedEvent(), run = ++token;
       if (target !== eventName) node('jaSearch').value = '';
+      node('jaReplacementPin').value = '';
       data = null; eventName = ''; render();
       if (!target) return;
       notice('Loading judge profiles and event candidates...');
@@ -104,6 +112,7 @@
       } catch (error) { if (run === token) notice(error.message, true); }
     }
     node('jaPhase').addEventListener('change', () => { phase = node('jaPhase').value; render(); });
+    node('jaReplacementPin').addEventListener('input', render);
     node('jaSearch').addEventListener('input', () => { if (node('jaAvailability')) node('jaAvailability').open = true; render(); });
     node('jaClearSearch').addEventListener('click', () => { node('jaSearch').value = ''; render(); });
     node('jaReload').addEventListener('click', () => { if (canLeave()) return load(); });
@@ -166,14 +175,22 @@
       if (auto && !confirm(`Replace ring assignments for ${phase}? Availability and arbitrators will be preserved.`)) return;
       busy = true; render();
       try {
+        const replacementPin = node('jaReplacementPin').value;
         const result = await request(`/api/judge-assignments${auto ? '/auto' : ''}?eventName=${encodeURIComponent(eventName)}`,
           { method: auto ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ revision: data.revision, sourceRevision: data.sourceRevision,
-              ...(auto ? { phase: data.phases[phase] } : { phases: data.phases }) }) });
+              ...(auto ? { phase: data.phases[phase] } : {
+                phases: data.phases,
+                ...(replacementPin ? { replacementPin } : {})
+              }) }) });
         if (auto) {
           data.phases[phase].assignments = result.assignments;
           notice(`Draft: ${result.operatingRings} rings staffed. Required staffing first; qualified progression opportunities preferred. Save to keep.`);
-        } else { data = result; baseline = JSON.stringify(data.phases); notice('Both phase plans saved.'); }
+        } else {
+          data = result; baseline = JSON.stringify(data.phases);
+          node('jaReplacementPin').value = '';
+          notice('Both phase plans saved.');
+        }
       } catch (error) { notice(error.message, true); }
       finally { busy = false; render(); }
     }

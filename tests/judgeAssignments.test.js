@@ -98,24 +98,50 @@ test('ring judge plan slices are read-only and preserve the saved qualification 
   const data = (await request(url)).data;
   const center = data.judges.find((judge) => judge.roles.center);
   const corner = data.judges.find((judge) => judge.roles.corner && judge.id !== center.id);
-  const draft = phase(data, [center.id, corner.id], 'black-belt', 1);
+  const draft = phase(data, [center.id, corner.id], 'black-belt', 2);
   const ringId = draft.rings[0];
   draft.assignments = { [ringId]: { center: [center.id], corner: [corner.id], sktk: [] } };
   const saved = await request(url, 'PUT', {
     revision: data.revision,
     sourceRevision: data.sourceRevision,
+    replacementPin: 'A7!Q',
     phases: { P1: draft, P2: data.phases.P2 }
   });
   assert.equal(saved.status, 200);
+  assert.equal(saved.data.replacementPinConfigured, true);
+  assert.equal(JSON.stringify(saved.data).includes('A7!Q'), false);
   const plan = await request(`/rings/${encodeURIComponent(ringId)}/judge-plan?eventName=A&phase=P1`);
   assert.equal(plan.status, 200);
   assert.equal(plan.data.type, 'tournament-judge-plan');
   assert.equal(plan.data.assignmentRevision, saved.data.revision);
+  assert.equal(plan.data.replacementPinVerifier.algorithm, 'SHA-256-salted-v1');
+  assert.equal(
+    require('node:crypto').createHash('sha256')
+      .update(`${plan.data.replacementPinVerifier.salt}:A7!Q`, 'utf8').digest('hex'),
+    plan.data.replacementPinVerifier.digest
+  );
+  assert.equal(JSON.stringify(plan.data).includes('A7!Q'), false);
   assert.deepEqual(plan.data.positions.center.map((judge) => judge.associationId), [center.id]);
   assert.deepEqual(plan.data.positions.corner.map((judge) => judge.associationId), [corner.id]);
   assert.equal(plan.data.assigned, true);
   assert.equal(apiRoles('GET', `/api/rings/${ringId}/judge-plan`).includes('tournament-operator'), true);
   assert.equal(isTabletEndpoint('GET', `/api/rings/${ringId}/judge-plan`), true);
+  const secondRing = await request(`/rings/${encodeURIComponent(draft.rings[1] || ringId)}/judge-plan?eventName=A&phase=P1`);
+  assert.equal(secondRing.data.replacementPinVerifier.salt, plan.data.replacementPinVerifier.salt);
+  const invalidPin = await request(url, 'PUT', {
+    revision: saved.data.revision,
+    sourceRevision: saved.data.sourceRevision,
+    replacementPin: 'bad',
+    phases: saved.data.phases
+  });
+  assert.equal(invalidPin.status, 400);
+  const nonTextPin = await request(url, 'PUT', {
+    revision: saved.data.revision,
+    sourceRevision: saved.data.sourceRevision,
+    replacementPin: 1234,
+    phases: saved.data.phases
+  });
+  assert.equal(nonTextPin.status, 400);
 });
 
 test('certified competitors are potential candidates; agreement is per phase, duplicate role identities merge, and ring population uses directory certification', async (t) => {

@@ -1951,9 +1951,11 @@
               <h2>Judge Assignments</h2>
               <p>1. Select rings and confirm availability. 2. Reserve arbitrators. 3. Auto assign or adjust positions. 4. Save assignment changes.</p>
               <details><summary>Phase planning rules</summary><p>Plan P1 and P2 before the event. Competitor candidates require agreement; no contact messages are sent. BB competitors may serve in the Gup phase, not their competing BB phase. Assignments earn no experience by themselves.</p></details>
+              <div class="actions"><label>Event replacement PIN (exactly 4 characters) <input id="jaReplacementPin" type="password" maxlength="4" autocomplete="new-password"></label>
+                <span id="jaReplacementPinState" role="status"></span></div>
               <div class="actions"><label>Assignment phase <select id="jaPhase"><option>P1</option><option>P2</option></select></label>
                 <button id="jaReload" type="button">Reload</button><button id="jaAuto" type="button">Auto assign phase</button><button id="jaSave" type="button" aria-describedby="jaSaveHelp jaSaveState">Save assignment changes</button><strong id="jaSaveState" role="status"></strong></div>
-              <p id="jaSaveHelp">Saves P1 and P2 drafts; incomplete staffing is allowed. Auto assign creates a draft, not a saved plan.</p>
+              <p id="jaSaveHelp">Saves P1 and P2 drafts and the event replacement PIN; incomplete staffing is allowed. The PIN is never shown after saving and is included only as hidden verification data in ring plans. Auto assign creates a draft, not a saved plan.</p>
               <div class="actions"><label>Find candidate (name, ID, rank or certification) <input id="jaSearch" type="search"></label><button id="jaClearSearch" type="button">Clear search</button><span id="jaCandidateCount" role="status"></span></div>
               <p id="jaNotice" role="status" aria-live="polite"></p><div id="jaContent"></div>
             </div>
