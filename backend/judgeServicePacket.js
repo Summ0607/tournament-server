@@ -86,9 +86,31 @@ function validateServicePacket(input, ringId) {
         replacementPinVerified: true,
         requiresCoordinatorReview: true
       } : {};
+      const hasSwapMetadata = Object.hasOwn(entry, 'swapPartnerAssociationId') ||
+        Object.hasOwn(entry, 'otherRole') || Object.hasOwn(entry, 'creditedRole');
+      if (hasSwapMetadata && entry.action !== 'SWAPPED') {
+        fail('Role-swap credit metadata is only valid for a role swap.');
+      }
+      let swapMetadata = {};
+      if (hasSwapMetadata) {
+        const swapPartnerAssociationId = boundedText(
+          entry.swapPartnerAssociationId, 'Swap partner Association ID', 100
+        );
+        const otherRole = boundedText(entry.otherRole, 'Other swapped role', 20);
+        const creditedRole = boundedText(entry.creditedRole, 'Role-swap credit role', 20);
+        if (swapPartnerAssociationId.toUpperCase() === judgeAssociationId.toUpperCase() ||
+            !serviceRoles.includes(otherRole) || !serviceRoles.includes(creditedRole) ||
+            entry.previousJudgeAssociationId !== otherRole ||
+            ![entry.role, otherRole].includes('center') ||
+            ![entry.role, otherRole].includes('corner') ||
+            creditedRole !== 'center') {
+          fail('A Center/Corner swap must identify its partner and award Center service only.');
+        }
+        swapMetadata = { swapPartnerAssociationId, otherRole, creditedRole };
+      }
       return {
         at, action: entry.action, role: entry.role, judgeAssociationId, previousJudgeAssociationId,
-        ...replacementMetadata
+        ...replacementMetadata, ...swapMetadata
       };
     });
     return { groupAnchor, seats, history };
@@ -122,15 +144,38 @@ function actualServiceRoles(packet, sktkRoles = {}) {
     timekeeper: 'TIMEKEEPER', arbitrator: 'ARBITRATOR'
   };
   for (const division of packet.divisions) {
+    const swapCredits = new Map();
+    for (const entry of division.history) {
+      if (entry.action !== 'SWAPPED' || !entry.swapPartnerAssociationId) continue;
+      swapCredits.set(entry.judgeAssociationId.toUpperCase(), {
+        associationId: entry.judgeAssociationId,
+        role: entry.creditedRole
+      });
+      swapCredits.set(entry.swapPartnerAssociationId.toUpperCase(), {
+        associationId: entry.swapPartnerAssociationId,
+        role: entry.creditedRole
+      });
+    }
+    const addActualRole = (associationId, role) => {
+      if (associationId && !swapCredits.has(associationId.toUpperCase())) add(associationId, role);
+    };
     for (const [role, judges] of Object.entries(division.seats)) {
       const actualRole = roleNames[role] || role;
-      for (const judge of judges) add(judge.associationId, actualRole);
+      for (const judge of judges) addActualRole(judge.associationId, actualRole);
     }
     for (const entry of division.history) {
       const actualRole = roleNames[entry.role] || entry.role;
-      add(entry.judgeAssociationId, actualRole);
-      if (entry.action === 'REPLACED') add(entry.previousJudgeAssociationId, actualRole);
-      if (entry.action === 'SWAPPED') add(entry.judgeAssociationId, roleNames[entry.previousJudgeAssociationId] || entry.previousJudgeAssociationId);
+      addActualRole(entry.judgeAssociationId, actualRole);
+      if (entry.action === 'REPLACED') addActualRole(entry.previousJudgeAssociationId, actualRole);
+      if (entry.action === 'SWAPPED' && !entry.swapPartnerAssociationId) {
+        addActualRole(
+          entry.judgeAssociationId,
+          roleNames[entry.previousJudgeAssociationId] || entry.previousJudgeAssociationId
+        );
+      }
+    }
+    for (const swapCredit of swapCredits.values()) {
+      add(swapCredit.associationId, roleNames[swapCredit.role] || swapCredit.role);
     }
   }
   return [...participants.values()].sort((a, b) => a.associationId.localeCompare(b.associationId) || a.role.localeCompare(b.role));

@@ -236,6 +236,68 @@ test('coordinator intake creates unverified tournament experience from the full 
     ['administrator', 'judging-coordinator']);
 });
 
+test('a Center/Corner swap credits both judges with Center service only', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-role-swap-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const judgeFile = path.join(root, 'judges.db');
+  await initializeJudgeDatabase(judgeFile);
+  const db = new sqlite3.Database(judgeFile);
+  await new Promise((resolve, reject) => db.run(`INSERT INTO judges
+    (association_id,first_name,last_name,rank,certification,status)
+    VALUES ('ID1','Center','Judge','D5','REGIONAL','Active'),
+      ('ID2','Corner','Judge','D4','REGIONAL','Active')`,
+  (error) => error ? reject(error) : resolve()));
+  await new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
+
+  const servicePacketStore = createJudgeServicePacketStore({ root: path.join(root, 'packets') });
+  const swapped = packet('423e4567-e89b-12d3-a456-426614174000');
+  swapped.divisions[0].seats = {
+    center: [{ associationId: 'ID2', name: 'Corner Judge', rank: 'D4' }],
+    corner: [{ associationId: 'ID1', name: 'Center Judge', rank: 'D5' }]
+  };
+  swapped.divisions[0].history = [{
+    at: '2026-01-15T11:00:00.000Z',
+    action: 'SWAPPED',
+    role: 'center',
+    judgeAssociationId: 'ID2',
+    previousJudgeAssociationId: 'corner',
+    swapPartnerAssociationId: 'ID1',
+    otherRole: 'corner',
+    creditedRole: 'center'
+  }];
+  const invalidSwap = structuredClone(swapped);
+  invalidSwap.submissionId = '523e4567-e89b-12d3-a456-426614174000';
+  invalidSwap.divisions[0].history[0].creditedRole = 'corner';
+  await assert.rejects(servicePacketStore.accept('Event A', invalidSwap, 'ring-a-1', {
+    date: '2026-01-15', scope: 'REGIONAL', location: 'Venue'
+  }), /award Center service only/);
+  await servicePacketStore.accept('Event A', swapped, 'ring-a-1', {
+    date: '2026-01-15', scope: 'REGIONAL', location: 'Venue'
+  });
+
+  const app = express(); app.use(express.json());
+  app.use('/api', createJudgeManagementRouter({
+    file: judgeFile,
+    currentDate: () => '2026-01-15',
+    servicePacketStore
+  }));
+  const base = await listen(app, t);
+  const state = await fetch(`${base}/judge-management`).then((response) => response.json());
+  const importedResponse = await fetch(
+    `${base}/judge-management/service-packets/${swapped.submissionId}/import`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revision: state.revision, eventName: 'Event A', confirmImport: true })
+    }
+  );
+  assert.equal(importedResponse.status, 200);
+  const imported = await importedResponse.json();
+  assert.equal(imported.added, 2);
+  assert.deepEqual(imported.experience.map((entry) => entry.role), ['CENTER_JUDGE', 'CENTER_JUDGE']);
+  assert.ok(imported.experience.every((entry) => entry.logVerified === 0));
+});
+
 test('legacy combined SK/TK service requires an explicit actual role during coordinator intake', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-sktk-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

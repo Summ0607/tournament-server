@@ -1837,6 +1837,11 @@ revision, successful PIN verification, and a required coordinator-review flag.
 The server validates and preserves those fields in the service packet so they
 remain available during coordinator intake and follow-up review.
 
+Center/Corner role swaps exchange the two judges' actual seats and are allowed
+without the replacement PIN. The tablet records both Association IDs and the
+swap roles; coordinator intake credits both participants with Center service
+only, while experience verification remains a separate coordinator decision.
+
 An exact network retry returns the original server acknowledgment. Reusing an ID
 for different content or submitting another packet for the same event/ring/phase
 is rejected. The result-report endpoint and its per-division submission IDs
