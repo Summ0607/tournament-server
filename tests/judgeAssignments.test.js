@@ -160,8 +160,10 @@ test('certified competitors are potential candidates; agreement is per phase, du
   const candidate = data.judges.find((judge) => judge.id === 'SIM-R-041');
   assert.equal(candidate.potential, true);
   assert.equal(candidate.certification, 'CORNER');
+  assert.equal(candidate.priority, 4);
   assert.equal(data.judges.filter((judge) => judge.id === 'SIM-R-042').length, 1);
   assert.deepEqual(data.judges.find((judge) => judge.id === 'SIM-R-042').sources, ['volunteer', 'competitor']);
+  assert.equal(data.judges.find((judge) => judge.id === 'SIM-R-042').priority, 6);
   assert.ok(!data.judges.some((judge) => judge.id === 'OTHER'));
   assert.deepEqual(data.phases.P1.available, []);
   const draft = phase(data, ['SIM-R-041'], 'gup', 1);
@@ -182,10 +184,51 @@ test('certified competitors are potential candidates; agreement is per phase, du
   assert.equal(result.data.certificationReadOnly, true);
   assert.ok(result.data.judges.every((judge) => judge.certification === 'CORNER'));
   assert.match(result.data.judges[0].reviewNotes, /potential judge/);
+  const beforePriority = (await request(url)).data;
+  const ringFile = path.join(path.dirname(eventFile), 'ring-judges.json');
+  const ringData = JSON.parse(fs.readFileSync(ringFile, 'utf8'));
+  ringData.judges.find((judge) => judge.associationNumber === 'SIM-R-041').priority = 9;
+  ringData.revision = 'edited-priority';
+  fs.writeFileSync(ringFile, JSON.stringify(ringData));
+  const afterPriority = (await request(url)).data;
+  assert.equal(afterPriority.judges.find((judge) => judge.id === 'SIM-R-041').priority, 9);
+  assert.notEqual(afterPriority.sourceRevision, beforePriority.sourceRevision);
   const populated = result.data.judges[0];
   assert.equal((await request(`/ring-judges/${populated.id}?eventName=A`, 'PUT', {
     revision: result.data.revision, judge: { ...populated, certification: 'INTERNATIONAL' }
   })).status, 409);
+});
+
+test('In-House competitor approval adds only to Ring Judges and never assigns uncertified competitors', async (t) => {
+  const { request, eventsRoot, eventFile } = await setup(t);
+  const configFile = path.join(eventsRoot, 'A', 'event-config.json');
+  const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+  fs.writeFileSync(configFile, JSON.stringify({ ...config, scope: 'in-house' }));
+  const db = new sqlite3.Database(eventFile);
+  try {
+    await run(db, `INSERT INTO competitors(id,firstName,lastName,associationNumber,rank,age,ageAsOf)
+      VALUES(1,'Jordan','Test','UNMATCHED','D1',25,'2026-01-15')`);
+  } finally { await new Promise((resolve) => db.close(resolve)); }
+
+  const directory = await request('/ring-judges?eventName=A');
+  assert.equal(directory.data.eventScope, 'in-house');
+  const review = await request('/ring-judges/in-house-competitors?eventName=A');
+  assert.equal(review.status, 200);
+  assert.deepEqual(review.data.candidates.map((candidate) => candidate.associationNumber), ['UNMATCHED']);
+  assert.equal((await request('/ring-judges/in-house-competitors?eventName=B')).status, 400);
+  assert.equal((await request('/ring-judges/approve-in-house-competitors?eventName=A', 'POST', {
+    revision: directory.data.revision, candidateRevision: 'stale', competitorIds: ['1']
+  })).status, 409);
+
+  const approved = await request('/ring-judges/approve-in-house-competitors?eventName=A', 'POST', {
+    revision: directory.data.revision, candidateRevision: review.data.candidateRevision, competitorIds: ['1']
+  });
+  assert.equal(approved.status, 200);
+  assert.equal(approved.data.judges[0].priority, 4);
+  assert.equal(approved.data.judges[0].certification, 'UNKNOWN');
+  assert.equal(approved.data.judges[0].flaggedForReview, false);
+  const assignments = await request('/judge-assignments?eventName=A');
+  assert.ok(!assignments.data.judges.some((judge) => judge.id === 'UNMATCHED'));
 });
 
 test('saves reject invalid qualification, unconfirmed availability, double booking, stale sources and operational locks', async (t) => {
@@ -271,6 +314,24 @@ test('assignment optimization preserves staffing before progression and returns 
   assert.equal(progressionOpportunity(judge('x', { corner: true }, 'CORNER', true), 'center'), false);
   const all = Object.values(result.assignments).flatMap((ring) => Object.values(ring).flat());
   assert.equal(new Set(all).size, all.length);
+});
+test('higher priority wins role selection before progression opportunity', () => {
+  const candidate = (id, priority, roles, progression = null) => ({
+    id, priority, roles: { center: false, corner: false, sktk: false, ...roles },
+    certification: 'REGIONAL', progression
+  });
+  const judges = [
+    candidate('high-priority', 6, { center: true }),
+    candidate('low-priority-progression', 4, { center: true }, {
+      targetLevel: 'INTERNATIONAL', requiredExperience: 2, experienceCount: 0
+    }),
+    candidate('corner1', 4, { corner: true }),
+    candidate('corner2', 4, { corner: true }),
+    candidate('sktk', 4, { sktk: true })
+  ];
+  const result = autoAssign(judges, ['A1'], 'gup');
+  assert.equal(result.operatingRings, 1);
+  assert.deepEqual(result.assignments.A1.center, ['high-priority']);
 });
 
 test('verified service and retained retakes require an explicit award before subsequent-event Center assignment', async (t) => {

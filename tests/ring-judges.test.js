@@ -13,7 +13,7 @@ const judge = { name: 'Judge One', associationNumber: 'D100', school: 'School', 
   certification: '', flaggedForReview: false, reviewNotes: '' };
 test('judge validation preserves optional certification and review observations', () => {
   assert.equal(validateJudge({ ...judge, rank: 'Cho Dan' }).rank, 'D1');
-  assert.equal(validateJudge(judge).priority, 4);
+  assert.equal(validateJudge(judge).priority, 6);
   assert.equal(validateJudge({ ...judge, priority: 99 }).priority, 99);
   for (const change of [{ name: '' }, { rank: 'unknown' }, { flaggedForReview: 'false' }, { reviewNotes: 'x'.repeat(2001) }, { certification: null }]) {
     assert.throws(() => validateJudge({ ...judge, ...change }));
@@ -98,12 +98,12 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   assert.equal((await write('', { revision: null, volunteerRevision: null, volunteer: volunteerDetails,
     judge: { ...judge, associationNumber: '' } })).status, 400);
   let response = await write('', { revision: null, volunteerRevision: null, volunteer: volunteerDetails,
-    judge: { ...judge, firstName: 'Jane Ann', lastName: 'Doe', associationNumber: 'D101', priority: 4 } });
+    judge: { ...judge, firstName: 'Jane Ann', lastName: 'Doe', associationNumber: 'D101' } });
   assert.equal(response.status, 200);
   let data = await response.json();
   assert.deepEqual(data.judgeRanks, judgeRankOptions());
   assert.equal(data.judges[0].firstName, 'Jane Ann');
-  assert.equal(data.judges[0].priority, 4);
+  assert.equal(data.judges[0].priority, 6);
   assert.equal(data.volunteerDirectory.volunteers.length, 1);
   assert.equal(data.judges[0].volunteerId, data.volunteerDirectory.volunteers[0].id);
   assert.equal((await get()).judges[0].lastName, 'Doe');
@@ -114,6 +114,7 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   assert.equal(data.added, 4); assert.equal(data.skipped, 1);
   assert.equal(data.judges.length, 5);
   assert.equal(data.judges.find((row) => row.competitorId !== null && row.rank === 'D8').rank, 'D8');
+  assert.ok(data.judges.filter((row) => row.competitorId).every((row) => row.priority === 4));
   for (const rank of ['D3', 'CDB', 'G1']) {
     const candidate = data.judges.find((row) => row.rank === rank);
     assert.equal(candidate.certification, 'UNKNOWN');
@@ -229,6 +230,10 @@ function frontend(change = {}, rows = null, metadata = {}) {
         const body = JSON.parse(options.body);
         if (url.includes('/delete?')) judges = [];
         else if (url.includes('/clear-review?')) judges = judges.map((row) => body.ids.includes(row.id) ? { ...row, flaggedForReview: false } : row);
+        else if (url.includes('/approve-in-house-competitors?')) judges = body.competitorIds.map((competitorId, index) => ({
+          id: `approved-${index}`, competitorId, name: 'Jordan Test', associationNumber: 'WT27-BB-009',
+          certification: 'UNKNOWN', priority: 4, flaggedForReview: false
+        }));
         else if (!url.includes('/populate?')) judges = [{ id: 'one', competitorId: null, ...body.judge,
           name: `${body.judge.lastName}, ${body.judge.firstName}` }];
       }
@@ -358,7 +363,7 @@ test('Add and Edit use named rank and school dropdowns, retain selections and su
   assert.equal(n('rj-school').value, 'Former <School>');
   assert.match(n('rj-school').innerHTML, /Former &lt;School&gt;/);
   assert.equal(n('rj-rank').value, 'D8');
-  assert.equal(n('rj-priority').value, 4);
+  assert.equal(n('rj-priority').value, 6);
   assert.equal(p.workspace.dirty(), false);
   n('rj-firstName').value = 'Janet';
   n('rj-rank').value = 'D7';
@@ -417,13 +422,34 @@ test('directory-linked Ring Judges certification is read-only and directs correc
   assert.match(p.node('rjSourceHelp').textContent, /Certification comes from Judge Management/);
   assert.doesNotMatch(p.node('rjNotice').textContent, /Planned/);
   p.node('rjCancel').handlers.click();
+  const requestCount = p.requests.filter((request) => request.options).length;
   await p.node('rjPopulate').handlers.click();
-  assert.match(p.confirmations.at(-1), /Matched Judge Management certification is used/);
-  assert.doesNotMatch(p.confirmations.at(-1), /Certification stays Unknown/);
+  assert.equal(p.confirmations.length, 0);
+  assert.equal(p.requests.filter((request) => request.options).length, requestCount + 1);
   const legacy = frontend();
   await legacy.workspace.load();
   await legacy.node('rjPopulate').handlers.click();
   assert.match(legacy.confirmations.at(-1), /Certification stays Unknown/);
+});
+test('In-House competitor review requires explicit selection and records pool-only approval', async () => {
+  const candidates = [
+    { competitorId: 'competitor-1', name: 'Jordan Test', associationNumber: 'WT27-BB-009', rank: 'D1', age: 25 }
+  ];
+  const p = frontend({}, null, { eventScope: 'in-house', certificationReadOnly: true, candidates, candidateRevision: 'candidates-r1' });
+  await p.workspace.load();
+  assert.equal(p.node('rjReviewCompetitors').hidden, false);
+  await p.node('rjReviewCompetitors').handlers.click();
+  assert.match(p.node('rjCompetitorReviewBody').innerHTML, /Jordan Test/);
+  assert.equal(p.node('rjApproveCompetitors').disabled, true);
+  p.node('rjCompetitorReviewAll').checked = true;
+  p.node('rjCompetitorReviewAll').handlers.change();
+  assert.equal(p.node('rjApproveCompetitors').disabled, false);
+  await p.node('rjApproveCompetitors').handlers.click();
+  const request = p.requests.find((item) => item.url.includes('/approve-in-house-competitors'));
+  const body = JSON.parse(request.options.body);
+  assert.equal(body.candidateRevision, 'candidates-r1');
+  assert.deepEqual(body.competitorIds, ['competitor-1']);
+  assert.match(p.node('rjNotice').textContent, /pool only/);
 });
 test('single-click and keyboard activation open Edit Judge directly without the details screen', async () => {
   const p = frontend({ reviewNotes: '<Follow up>\nSecond line' }), n = p.node;

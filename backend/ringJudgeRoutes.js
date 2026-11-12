@@ -44,7 +44,7 @@ function validateJudge(input, lenient = false) {
     throw new Error(`Certification must be one of: ${certificationLevels().map((level) => level.label).join(', ')}.`);
   }
   row.certification = certification.code;
-  const priority = input.priority === undefined ? 4 : input.priority;
+  const priority = input.priority === undefined ? 6 : input.priority;
   if (!Number.isSafeInteger(priority) || priority < 0 || priority > 99) {
     throw new Error('Priority must be a whole number from 0 to 99.');
   }
@@ -91,9 +91,55 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
           row.competitorId !== null && typeof row.competitorId !== 'string') throw new Error('Invalid saved judge identity.');
       ids.add(row.id);
       if (row.volunteerId !== undefined && row.volunteerId !== null && typeof row.volunteerId !== 'string') throw new Error('Invalid volunteer judge identity.');
-      return { id: row.id, competitorId: row.competitorId, volunteerId: row.volunteerId || null, ...validateJudge(row, true) };
+      if (row.inHousePoolApproved !== undefined && typeof row.inHousePoolApproved !== 'boolean') throw new Error('Invalid In-House judge approval.');
+      return { id: row.id, competitorId: row.competitorId, volunteerId: row.volunteerId || null,
+        ...validateJudge({ ...row, priority: row.priority ?? (row.competitorId ? 4 : 6) }, true),
+        ...(row.inHousePoolApproved ? { inHousePoolApproved: true } : {}) };
     });
     return data;
+  }
+  async function inHouseCompetitorCandidates(dir, dbFile, data) {
+    const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
+    if (config.scope !== 'in-house') fail('Uncertified competitor review is available only for In-House events.', 400);
+    const [roster, snapshot] = await Promise.all([
+      readRoster(dbFile),
+      judgeFile ? judgeSnapshot(judgeFile, config.date) : Promise.resolve({ revision: null, judges: [] })
+    ]);
+    const members = new Map(snapshot.judges.map((member) => [member.associationId.toUpperCase(), member]));
+    const existingIds = new Set(data.judges.map((row) => row.associationNumber.toUpperCase()));
+    const existingCompetitors = new Set(data.judges.map((row) => row.competitorId).filter(Boolean));
+    const candidates = [];
+    for (const competitor of roster) {
+      const associationNumber = String(competitor.associationNumber || '').trim();
+      const associationId = associationNumber.toUpperCase();
+      const competitorId = String(competitor.id);
+      if (!associationId || existingIds.has(associationId) || existingCompetitors.has(competitorId)) continue;
+      const member = members.get(associationId);
+      if (member) {
+        const sameName = (left, right) => String(left || '').trim().replace(/\s+/g, ' ').toLowerCase() ===
+          String(right || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        if (!sameName(competitor.firstName, member.firstName) || !sameName(competitor.lastName, member.lastName) ||
+            normalizeRank(competitor.rank).code !== member.rank ||
+            /^(inactive|suspended|revoked)$/i.test(member.status) ||
+            !['UNKNOWN', 'UNCERTIFIED'].includes(normalizeCertification(member.certification).code)) continue;
+      }
+      const rank = normalizeRank(competitor.rank);
+      if (!rank.recognized || !isJudgeRank(rank.code)) continue;
+      let age;
+      try { age = storedAge(competitor, config.date); }
+      catch (error) { fail(`Cannot determine eligibility for ${competitor.firstName} ${competitor.lastName}: ${error.message}`, 400); }
+      if (!judgeAgeEligible(rank.code, age, config.scope) &&
+          certificationAgeIssue('SK_TK', rank.code, age, config.scope)) continue;
+      candidates.push({
+        competitorId, firstName: competitor.firstName, lastName: competitor.lastName,
+        name: `${competitor.lastName}, ${competitor.firstName}`, associationNumber, school: competitor.studio || '',
+        rank: rank.code, age, certification: member ? normalizeCertification(member.certification).code : 'UNKNOWN'
+      });
+    }
+    const candidateRevision = crypto.createHash('sha256').update(JSON.stringify([
+      config, snapshot.revision, roster, data.revision
+    ])).digest('hex');
+    return { candidates, candidateRevision };
   }
   const fail = (message, statusCode) => { throw Object.assign(new Error(message), { statusCode }); };
   function handle(callback, write = false) {
@@ -137,9 +183,10 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
           const linked = new Map((await assignmentCandidates({ eventFile: dbFile, judgeFile, config })).judges.map((judge) => [judge.id, judge]));
           result.judges = result.judges.map((judge) => {
             const candidate = linked.get(judge.associationNumber.toUpperCase());
-            return { ...judge, certification: candidate?.certification || 'UNKNOWN',
-              flaggedForReview: judge.flaggedForReview || !candidate || Boolean(candidate.qualificationIssue),
-              reviewNotes: [judge.reviewNotes, candidate?.qualificationIssue || (!candidate ? 'No current event candidate matched to Judge Management.' : '')].filter(Boolean).join(' ') };
+            const approvedInHouse = config.scope === 'in-house' && judge.inHousePoolApproved === true;
+            return { ...judge, certification: candidate?.certification || (approvedInHouse ? judge.certification : 'UNKNOWN'),
+              flaggedForReview: judge.flaggedForReview || !candidate && !approvedInHouse || Boolean(candidate?.qualificationIssue),
+              reviewNotes: [judge.reviewNotes, candidate?.qualificationIssue || (!candidate && !approvedInHouse ? 'No current event candidate matched to Judge Management.' : '')].filter(Boolean).join(' ') };
           });
         }
         res.json(result);
@@ -149,7 +196,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
       }
     };
   }
-  router.get('/ring-judges', handle(async (_req, { name, data, dir }) => ({ ...data, volunteerDirectory: await volunteerDirectory(dir), certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, ...configurationStatus(name) })));
+  router.get('/ring-judges', handle(async (_req, { name, data, dir }) => ({ ...data, volunteerDirectory: await volunteerDirectory(dir), certificationLevels: certificationLevels(), judgeRanks: judgeRankOptions(), eventName: name, eventScope: JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8')).scope, ...configurationStatus(name) })));
   const save = handle(async (req, { data, commit, dir, dbFile }) => {
     const existing = req.params.id ? data.judges.find((judge) => judge.id === req.params.id) : null;
     if (req.params.id && !existing) fail('Judge not found. Reload the directory.', 404);
@@ -227,6 +274,30 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
     data.judges.forEach((judge) => { if (ids.includes(judge.id)) judge.flaggedForReview = false; });
     return commit();
   }, true));
+  router.get('/ring-judges/in-house-competitors', handle(async (_req, { dir, dbFile, data }) => ({
+    ...data, ...(await inHouseCompetitorCandidates(dir, dbFile, data))
+  })));
+  router.post('/ring-judges/approve-in-house-competitors', handle(async (req, { dir, dbFile, data, commit }) => {
+    const ids = req.body.competitorIds;
+    if (!Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length ||
+        ids.some((id) => typeof id !== 'string')) fail('Select distinct In-House competitors to approve.', 400);
+    const { candidates, candidateRevision } = await inHouseCompetitorCandidates(dir, dbFile, data);
+    if (req.body.candidateRevision !== candidateRevision) fail('Competitor review candidates changed. Reload before approving.', 409);
+    const selected = new Map(candidates.map((candidate) => [candidate.competitorId, candidate]));
+    if (ids.some((id) => !selected.has(id))) fail('A selected competitor is no longer available for In-House review. Reload the list.', 409);
+    for (const id of ids) {
+      const candidate = selected.get(id);
+      const row = validateJudge({
+        firstName: candidate.firstName, lastName: candidate.lastName, associationNumber: candidate.associationNumber,
+        school: candidate.school, rank: candidate.rank, certification: candidate.certification, priority: 4,
+        flaggedForReview: false,
+        reviewNotes: 'Coordinator-approved for the In-House Ring Judges pool only; not certified or eligible for phase assignment.'
+      }, true);
+      data.judges.push({ id: crypto.randomUUID(), competitorId: candidate.competitorId, volunteerId: null,
+        ...row, inHousePoolApproved: true });
+    }
+    return commit({ added: ids.length, skipped: 0 });
+  }, true));
   router.post('/ring-judges/delete', handle((req, { data, commit }) => {
     const ids = selectedIds(req, data, 'delete');
     data.judges = data.judges.filter((judge) => !ids.includes(judge.id));
@@ -234,6 +305,9 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
   }, true));
   const populate = (volunteers) => handle(async (_req, { dir, dbFile, data, commit }) => {
     const config = JSON.parse(fs.readFileSync(path.join(dir, 'event-config.json'), 'utf8'));
+    if (!volunteers && !judgeFile && config.scope === 'in-house') {
+      fail('Use coordinator review to select In-House competitors when Judge Management is unavailable.', 400);
+    }
     const linked = judgeFile ? new Map((await assignmentCandidates({ eventFile: dbFile, judgeFile, config })).judges
       .map((judge) => [judge.id, judge])) : null;
     const volunteerData = volunteers ? await readVolunteerDirectory(dbFile) : null;
@@ -262,6 +336,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
           judge.associationNumber.toUpperCase() === associationNumber.toUpperCase())) { skipped++; continue; }
       const row = validateJudge({ firstName: member.firstName, lastName: member.lastName, associationNumber,
         school: member.studio || '', rank: rank.code, certification: verified?.certification || (volunteers ? member.certification : ''), flaggedForReview: Boolean(verified?.qualificationIssue),
+        priority: volunteers ? 6 : 4,
         reviewNotes: verified ? [verified.qualificationIssue, !volunteers ? 'Certified directory match; potential judge only. Coordinator must confirm phase availability before assignment.' : 'Matched to Judge Management by Association ID.'].filter(Boolean).join(' ') :
           !volunteers && sktkEligible ? 'Meets SK/TK age and rank criteria; certification is unverified.' : '' }, true);
       data.judges.push({ id: crypto.randomUUID(), competitorId: volunteers ? null : String(member.id), volunteerId: volunteers ? String(member.id) : null, ...row }); added++;

@@ -6,6 +6,7 @@
     const volunteerFields = ['age', 'parentName', 'contactNumber', 'primaryType', 'secondaryType'];
     const certLabel = (code) => (data && data.certificationLevels || []).find((level) => level.code === code)?.label || code || 'Unknown';
     const rankLabel = (code) => (data && data.judgeRanks || []).find((rank) => rank.code === code)?.label || code;
+    const priorityOf = (row) => row.priority ?? (row.competitorId ? 4 : 6);
     const filterFields = ['name', 'associationNumber', 'school', 'rank', 'certification', 'priority', 'flaggedForReview', 'source'];
     const filters = Object.fromEntries(filterFields.map((key) => [key, '']));
     let data = null, schools = [], scope = '', token = 0, writing = false, editing = false, id = '', baseline = '', query = '', detailsId = '';
@@ -30,7 +31,7 @@
         (!filters.school || row.school.toLowerCase() === filters.school.toLowerCase()) &&
         (!filters.rank || row.rank === filters.rank) &&
         (!filters.certification || row.certification === filters.certification) &&
-        (!filters.priority || String(row.priority ?? 4) === filters.priority) &&
+        (!filters.priority || String(priorityOf(row)) === filters.priority) &&
         (!filters.flaggedForReview || String(row.flaggedForReview) === filters.flaggedForReview) &&
         (!filters.source || sourceValue === filters.source);
     }) : [];
@@ -39,7 +40,7 @@
         if (key === 'school') return row.school;
         if (key === 'rank') return row.rank;
         if (key === 'certification') return row.certification || 'UNKNOWN';
-        if (key === 'priority') return row.priority ?? 4;
+        if (key === 'priority') return priorityOf(row);
         if (key === 'source') return source(row);
         return '';
       }).filter((value) => value !== '' && value !== null && value !== undefined))]
@@ -67,6 +68,9 @@
     function notice(message, error = false) { node('rjNotice').textContent = message; node('rjNotice').setAttribute('data-state', error ? 'error' : 'info'); }
     function controls() {
       ['rjAdd', 'rjPopulate', 'rjPopulateVolunteers', 'rjSave'].forEach((key) => { node(key).disabled = locked(); });
+      node('rjReviewCompetitors').hidden = data?.eventScope !== 'in-house';
+      node('rjReviewCompetitors').disabled = locked() || data?.eventScope !== 'in-house';
+      node('rjApproveCompetitors').disabled = locked() || !reviewSelected.size;
       node('rjDelete').disabled = locked() || !selected.size;
       node('rjClearReview').disabled = locked() || !data.judges.some((row) => selected.has(row.id) && row.flaggedForReview);
       node('rjDetailsEdit').disabled = locked();
@@ -84,7 +88,7 @@
     }
     function render() {
       renderFilters();
-      node('rjBody').innerHTML = visible().map((row) => `<tr><td><input type="checkbox" data-rj-select="${esc(row.id)}" aria-label="Select ${esc(row.name)}" ${locked() ? 'disabled' : ''} ${selected.has(row.id) ? 'checked' : ''}></td><td><a class="tournament-name" href="${locked() ? '#rjDetailsDialog' : '#rjDialog'}" data-rj-name="${esc(row.id)}" title="${locked() ? 'View judge details' : 'Edit Judge'}">${esc(row.name)}</a></td><td>${esc(row.associationNumber)}</td><td>${esc(row.school)}</td><td>${esc(rankLabel(row.rank))}</td><td>${esc(certLabel(row.certification))}</td><td class="rj-priority-column">${row.priority ?? 4}</td><td>${row.flaggedForReview ? 'Yes' : 'No'}</td><td>${row.volunteerId ? 'Volunteer' : row.competitorId === null ? 'Manual' : 'Competitor'}</td></tr>`).join('') ||
+      node('rjBody').innerHTML = visible().map((row) => `<tr><td><input type="checkbox" data-rj-select="${esc(row.id)}" aria-label="Select ${esc(row.name)}" ${locked() ? 'disabled' : ''} ${selected.has(row.id) ? 'checked' : ''}></td><td><a class="tournament-name" href="${locked() ? '#rjDetailsDialog' : '#rjDialog'}" data-rj-name="${esc(row.id)}" title="${locked() ? 'View judge details' : 'Edit Judge'}">${esc(row.name)}</a></td><td>${esc(row.associationNumber)}</td><td>${esc(row.school)}</td><td>${esc(rankLabel(row.rank))}</td><td>${esc(certLabel(row.certification))}</td><td class="rj-priority-column">${priorityOf(row)}</td><td>${row.flaggedForReview ? 'Yes' : 'No'}</td><td>${row.volunteerId ? 'Volunteer' : row.competitorId === null ? 'Manual' : 'Competitor'}</td></tr>`).join('') ||
         `<tr><td colspan="9">${data ? 'No matching judges.' : 'Select a tournament to view judges.'}</td></tr>`;
       node('rjCount').textContent = data ? `${visible().length} of ${data.judges.length} judges · ${selected.size} selected` : '';
       controls();
@@ -99,7 +103,7 @@
       node('rjDetailsTitle').textContent = row.name;
       node('rjDetailsContent').innerHTML = [
         ['TSD ID', row.associationNumber], ['School', row.school], ['Rank', rankLabel(row.rank)],
-        ['Certification', certLabel(row.certification)], ['Priority', row.priority ?? 4],
+        ['Certification', certLabel(row.certification)], ['Priority', priorityOf(row)],
         ['Flagged for Review', row.flaggedForReview ? 'Yes' : 'No'],
         ['Source', row.volunteerId ? 'Volunteer' : row.competitorId === null ? 'Manual' : 'Competitor'],
         ['Review Notes', row.reviewNotes]
@@ -136,7 +140,7 @@
       node('rj-school').innerHTML = '<option value="">--</option>' + [...schoolNames].sort((a, b) => a.localeCompare(b))
         .map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
       node('rj-certification').innerHTML = (data.certificationLevels || []).map((level) => `<option value="${esc(level.code)}">${esc(level.label)}</option>`).join('');
-      fields.forEach((key) => { node(`rj-${key}`).value = row ? row[key] ?? (key === 'priority' ? 4 : '') : key === 'certification' ? 'UNKNOWN' : key === 'priority' ? 4 : ''; });
+      fields.forEach((key) => { node(`rj-${key}`).value = row ? key === 'priority' ? priorityOf(row) : row[key] ?? '' : key === 'certification' ? 'UNKNOWN' : key === 'priority' ? 6 : ''; });
       if (volunteer) {
         for (const key of ['firstName', 'lastName', 'associationNumber', 'school', 'rank', 'certification']) {
           node(`rj-${key}`).value = volunteer[key];
@@ -183,12 +187,42 @@
         if (current !== token || event !== selectedEvent()) return;
         data = result; data.judges.sort((a, b) => a.name.localeCompare(b.name)); selected.clear();
         if (form) { editing = false; node('rjDialog').close(); }
-        notice(suffix.startsWith('/populate') ? `Added ${result.added} judges; ${result.skipped} already listed. Certification and availability still require verification.` :
+        if (suffix === '/approve-in-house-competitors') {
+          reviewSelected.clear(); node('rjCompetitorReviewDialog').close();
+        }
+        notice(suffix === '/approve-in-house-competitors' ? `Approved ${result.added} competitors for the In-House Ring Judges pool only; they are not certified or phase-assignable.` :
+          suffix.startsWith('/populate') ? `Added ${result.added} judges; ${result.skipped} already listed. Certification and availability still require verification.` :
           form ? 'Judge saved.' : suffix === '/clear-review' ? 'Review flags cleared. Notes are unchanged.' : 'Selected judges deleted. Competitor registrations are unchanged.');
       } catch (error) {
         if (current === token) { if (form) node('rjError').textContent = error.message; else notice(error.message, true); }
       } finally { writing = false; if (current === token) render(); }
     }
+    async function openCompetitorReview() {
+      if (locked() || data.eventScope !== 'in-house') return;
+      reviewSelected.clear(); reviewCandidates = []; reviewCandidateRevision = '';
+      node('rjCompetitorReviewBody').innerHTML = '<tr><td colspan="5">Loading competitors...</td></tr>';
+      node('rjCompetitorReviewStatus').textContent = '';
+      node('rjCompetitorReviewDialog').showModal();
+      try {
+        const result = await request(`/api/ring-judges/in-house-competitors?eventName=${encodeURIComponent(scope)}`);
+        if (scope !== selectedEvent()) return;
+        reviewCandidates = result.candidates;
+        reviewCandidateRevision = result.candidateRevision;
+        renderReviewCandidates();
+      } catch (error) {
+        node('rjCompetitorReviewStatus').textContent = error.message;
+      }
+    }
+    function renderReviewCandidates() {
+      node('rjCompetitorReviewBody').innerHTML = reviewCandidates.map((candidate) =>
+        `<tr><td><input type="checkbox" data-rj-review="${esc(candidate.competitorId)}" aria-label="Approve ${esc(candidate.name)}" ${reviewSelected.has(candidate.competitorId) ? 'checked' : ''}></td><td>${esc(candidate.name)}</td><td>${esc(candidate.associationNumber)}</td><td>${esc(rankLabel(candidate.rank))}</td><td>${candidate.age}</td></tr>`).join('') ||
+        '<tr><td colspan="5">No uncredentialed, eligible competitors need review.</td></tr>';
+      node('rjCompetitorReviewCount').textContent = `${reviewCandidates.length} competitors require coordinator review; select only those approved for the Ring Judges pool.`;
+      node('rjCompetitorReviewAll').checked = reviewCandidates.length > 0 && reviewSelected.size === reviewCandidates.length;
+      node('rjApproveCompetitors').disabled = locked() || !reviewSelected.size;
+    }
+    const reviewSelected = new Set();
+    let reviewCandidates = [], reviewCandidateRevision = '';
     node('rjAdd').addEventListener('click', () => { if (!locked()) open(); });
     node('rjBody').addEventListener('click', (event) => {
       const target = event.target.closest('[data-rj-name]');
@@ -247,10 +281,35 @@
     node('rjDetailsClose').addEventListener('click', close);
     node('rjDetailsDialog').addEventListener('cancel', (event) => { event.preventDefault(); close(); });
     node('rjPopulate').addEventListener('click', () => {
+      if (locked()) return;
+      if (!locked() && data.certificationReadOnly) return write('/populate', 'POST', {});
+      if (data.eventScope === 'in-house') return openCompetitorReview();
       if (!locked() && confirm(`Add Dan-ranked competitors aged 18+ and other competitors who meet SK/TK age and rank requirements to Ring Judges for ${scope}? ${data.certificationReadOnly ? 'Matched Judge Management certification is used; candidates still require agreement and phase availability confirmation.' : 'Certification stays Unknown and SK/TK eligibility is noted.'} Existing entries will not be overwritten.`)) return write('/populate', 'POST', {});
     });
     node('rjPopulateVolunteers').addEventListener('click', () => {
       if (!locked() && confirm(`Add primary or secondary Judging volunteers who are Dan-ranked and aged 18+, or have SK/TK certification and meet its rank and age requirements, for ${scope}? Existing entries will not be overwritten.`)) return write('/populate-volunteers', 'POST', {});
+    });
+    node('rjReviewCompetitors').addEventListener('click', openCompetitorReview);
+    node('rjCompetitorReviewAll').addEventListener('change', () => {
+      reviewSelected.clear();
+      if (node('rjCompetitorReviewAll').checked) reviewCandidates.forEach((candidate) => reviewSelected.add(candidate.competitorId));
+      renderReviewCandidates();
+    });
+    node('rjCompetitorReviewBody').addEventListener('change', (event) => {
+      const id = event.target.getAttribute('data-rj-review');
+      if (!id) return;
+      if (event.target.checked) reviewSelected.add(id); else reviewSelected.delete(id);
+      renderReviewCandidates();
+    });
+    node('rjApproveCompetitors').addEventListener('click', () => {
+      if (locked() || !reviewSelected.size) return;
+      return write('/approve-in-house-competitors', 'POST', {
+        candidateRevision: reviewCandidateRevision, competitorIds: [...reviewSelected]
+      });
+    });
+    node('rjCompetitorReviewClose').addEventListener('click', () => node('rjCompetitorReviewDialog').close());
+    node('rjCompetitorReviewDialog').addEventListener('cancel', (event) => {
+      event.preventDefault(); node('rjCompetitorReviewDialog').close();
     });
     node('rj-age').addEventListener('input', () => {
       node('rj-parentName').required = node('rj-age').value !== '' && Number(node('rj-age').value) < 18;

@@ -45,14 +45,16 @@
       if (!current()) { node('jaContent').innerHTML = '<p>Select a tournament.</p>'; node('jaCandidateCount').textContent = ''; return; }
       const draft = data.phases[phase], byId = new Map(data.judges.map((judge) => [judge.id, judge]));
       const query = (node('jaSearch').value || '').trim().toLowerCase();
-      const visible = data.judges.filter((judge) => `${judge.name} ${judge.associationId} ${judge.rank} ${judge.certification}`.toLowerCase().includes(query));
+      const visible = data.judges.filter((judge) => `${judge.name} ${judge.associationId} ${judge.rank} ${judge.certification}`.toLowerCase().includes(query))
+        .sort((a, b) => (b.priority ?? 6) - (a.priority ?? 6) || a.name.localeCompare(b.name));
       node('jaCandidateCount').textContent = `${visible.length} of ${data.judges.length} candidates shown; ${draft.available.length} confirmed available in ${phase}`;
       const locked = data.configurationLocked || busy;
       const disabled = locked ? 'disabled' : '';
       const used = new Set([...draft.arbitrators, ...Object.values(draft.assignments).flatMap((ring) => roles.flatMap((role) => ring[role]))]);
       const options = (role) => '<option value="">Select official</option>' + data.judges.filter((judge) =>
         draft.available.includes(judge.id) && !used.has(judge.id) && eligible(judge, role, draft))
-        .map((judge) => `<option value="${esc(judge.id)}">${esc(judge.name)} (${esc(judge.associationId)}; ${esc(judge.certification)})</option>`).join('');
+        .sort((a, b) => (b.priority ?? 6) - (a.priority ?? 6) || a.name.localeCompare(b.name))
+        .map((judge) => `<option value="${esc(judge.id)}">${esc(judge.name)} (${esc(judge.associationId)}; ${esc(judge.certification)}; priority ${judge.priority ?? 6})</option>`).join('');
       const person = (id) => byId.has(id) ? `${byId.get(id).name} (${byId.get(id).associationId})` : `Missing member: ${id}`;
       const minCorner = draft.discipline === 'black-belt' ? 4 : 2;
       const operating = draft.rings.filter((ring) => {
@@ -66,16 +68,17 @@
         <details id="jaRings"${ringsOpen ? ' open' : ''}><summary>Select rings (${draft.rings.length} selected)</summary><button type="button" data-ja-all-rings ${disabled}>Select all rings</button> <button type="button" data-ja-clear-rings ${disabled}>Clear rings</button><div>${[...new Set([...data.rings, ...draft.rings])].map((ring, index) =>
           `<label><input id="jaRing-${index}" type="checkbox" data-ja-ring="${esc(ring)}" ${draft.rings.includes(ring) ? 'checked' : ''} ${disabled}> ${esc(ring)}</label>`).join('')}</div></details>
         <details id="jaAvailability"${availabilityOpen ? ' open' : ''}><summary>Confirm phase availability - ${data.judges.length} candidates; ${draft.available.length} confirmed available</summary>
-        <p>Check only officials who agreed to serve in ${phase}. Filtering does not change availability or assignments.</p>
+        <p>Check only officials who agreed to serve in ${phase}. Higher priority is considered first; progression opportunities break ties. Filtering does not change availability or assignments.</p>
         ${draft.available.filter((id) => !byId.has(id)).map((id) => `<label><input type="checkbox" checked data-ja-available="${esc(id)}" ${disabled}> Missing candidate ${esc(id)}; uncheck to remove stale availability.</label>`).join('')}
-        <div id="jaAvailabilityList" class="table-wrap"><table aria-label="Phase availability"><thead><tr><th>Available</th><th>Official / source</th><th>Certification</th><th>Progression / review</th></tr></thead><tbody>${visible.map((judge, index) =>
+        <div id="jaAvailabilityList" class="table-wrap"><table aria-label="Phase availability"><thead><tr><th>Available</th><th>Official / source</th><th>Priority</th><th>Certification</th><th>Progression / review</th></tr></thead><tbody>${visible.map((judge, index) =>
           `<tr><td><input id="jaAvailable-${index}" aria-label="Confirm ${esc(judge.name)} (${esc(judge.associationId)})" type="checkbox" data-ja-available="${esc(judge.id)}" ${draft.available.includes(judge.id) ? 'checked' : ''} ${disabled}></td>
           <td>${esc(judge.name)} (${esc(judge.associationId)})<br>Rank: ${esc(judge.rank || 'unknown')}. ${judge.potential ? 'Potential competitor; not a registered volunteer' : 'Judging volunteer'}${judge.sources.includes('competitor') ? '; competing BB officials unavailable in BB phase' : ''}</td>
+          <td>${judge.priority ?? 6}</td>
           <td>${esc(judge.certification)}; expires ${esc(judge.expiration || 'unknown')}</td>
           <td>${esc(judge.qualificationIssue || (!Object.values(judge.roles).some(Boolean) ? Object.values(judge.roleIssues || {}).filter(Boolean).join(' ') : '') || judge.progression?.reason || judge.progression?.status || 'No profile match')}
           <br>Allowed roles: ${esc(Object.keys(judge.roles).filter((role) => eligible(judge, role, draft)).map((role) => labels[role] || 'Arbitrator').join(', ') || 'None')}.
           ${Object.values(judge.roleIssues || {}).some(Boolean) ? `<details><summary>Role restrictions</summary>${esc([...new Set(Object.values(judge.roleIssues).filter(Boolean))].join(' '))}</details>` : ''}
-          ${judge.progression ? `<br>Target ${esc(judge.progression.targetLevel)}; experience ${judge.progression.experienceCount}/${judge.progression.requiredExperience}` : ''}</td></tr>`).join('') || '<tr><td colspan="4">No matching candidates. Clear search to see the full list.</td></tr>'}</tbody></table></div></details>
+          ${judge.progression ? `<br>Target ${esc(judge.progression.targetLevel)}; experience ${esc(judge.progression.experienceCount)}/${esc(judge.progression.requiredExperience)}` : ''}</td></tr>`).join('') || '<tr><td colspan="5">No matching candidates. Clear search to see the full list.</td></tr>'}</tbody></table></div></details>
         <section><h3>Arbitrators (${draft.arbitrators.length}; reserve 2-4 as needed)</h3>
         ${draft.arbitrators.map((id) => `<p>${esc(person(id))} <button type="button" data-ja-unarb="${esc(id)}" ${disabled}>Remove</button></p>`).join('')}
         <details id="jaArbitrators"${arbitratorsOpen ? ' open' : ''}><summary>Add or remove arbitrator reservations</summary>
@@ -185,7 +188,7 @@
               }) }) });
         if (auto) {
           data.phases[phase].assignments = result.assignments;
-          notice(`Draft: ${result.operatingRings} rings staffed. Required staffing first; qualified progression opportunities preferred. Save to keep.`);
+          notice(`Draft: ${result.operatingRings} rings staffed. Higher priority first; progression opportunities break ties. Save to keep.`);
         } else {
           data = result; baseline = JSON.stringify(data.phases);
           node('jaReplacementPin').value = '';

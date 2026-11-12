@@ -606,14 +606,16 @@ Unknown, Uncertified, SK/TK, Corner, Regional (Center) and International.
 Judge ranks span G5–D8, and each level from SK/TK up enforces a minimum rank
 (SK/TK: G5, Corner and Regional: D1, International: D2). **Clear Review Flag**, beside
 Delete, clears selected judges' flags after confirmation and preserves notes.
-**Populate Judges from Competitors** adds certified, event-date-qualified
-competitors matched to Judge Management by Association ID, including eligible
-SK/TK candidates. Certification is refreshed from that directory and is read-only
-here; make certification corrections in Judge Management. Existing linked
-competitors or matching case-insensitive Association IDs are skipped; existing
-edits are not overwritten. Population does not certify a judge or establish
-availability. Missing or stale tournament ages for eligible ranks prevent
-population and are reported for correction.
+**Populate Certified Competitors** adds event-date-qualified competitors matched
+to Judge Management by Association ID, including eligible SK/TK candidates,
+without a bulk-approval prompt. Certification is refreshed from that directory
+and is read-only here; make certification corrections in Judge Management.
+Existing linked competitors or matching case-insensitive Association IDs are
+skipped; existing edits are not overwritten. Population does not establish
+phase availability. In-House events also provide **Review In-House Competitors**
+for coordinator selection of uncredentialed competitors. Approval adds them to
+that event's Ring Judges pool only; it does not certify them or bypass phase
+assignment certification requirements.
 Every judge must have an Association ID. Population excludes any record without
 one, and In-House non-member volunteers cannot be added as judges.
 
@@ -622,9 +624,11 @@ certification are normalized on load; unrecognized values or rank/certification
 mismatches reset to Unknown or flag the judge for review with an explanatory
 note. **Flagged for Review** and
 review notes capture follow-up observations, not automatic assignment exclusions.
-Judges have an editable Priority from 0 to 99, defaulting to 4; the directory can
-be filtered by priority. Manual Only is omitted; **Judge Assignments** supports
-independent P1/P2 preparation with explicitly confirmed availability.
+Judges have an editable Priority from 0 to 99. Volunteer judges default to 6
+and competitor-imported judges to 4. Higher numeric priority is considered first
+among role-eligible judges; progression opportunities break ties. The directory
+can be filtered by priority. Manual Only is omitted; **Judge Assignments**
+supports independent P1/P2 preparation with explicitly confirmed availability.
 **Populate Judges from Volunteers** includes member volunteers with an
 Association ID and primary or secondary Judging choice: those aged 18+ with Dan
 rank, and SK/TK-certified volunteers meeting the rank and age rules above.
@@ -637,8 +641,9 @@ Judge data persists atomically in each event's `ring-judges.json`, with revision
 checks rejecting stale writes. Operational use locks every write until Reset Run;
 reading, searching and opening read-only details remain available.
 `GET/POST /api/ring-judges`, `PUT /api/ring-judges/:id`,
-`POST /api/ring-judges/populate`, `POST /api/ring-judges/delete` and
-`POST /api/ring-judges/clear-review` require an
+`POST /api/ring-judges/populate`, `GET /api/ring-judges/in-house-competitors`,
+`POST /api/ring-judges/approve-in-house-competitors`,
+`POST /api/ring-judges/delete` and `POST /api/ring-judges/clear-review` require an
 explicit `eventName`. Writes include `revision`; saves include `judge`, deletes
 and clear-review include `ids`. No file is written until the first change. Reset Run preserves
 the directory alongside other preparation settings.

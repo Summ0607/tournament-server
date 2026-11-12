@@ -21,8 +21,11 @@ function allocate(judges, counts) {
   judges.forEach((judge, index) => {
     edge(source, firstJudge + index, 1, 0);
     POSITIONS.forEach((role, roleIndex) => {
-      if (judge.roles[role]) links.push({ judge, role, edge: edge(firstJudge + index, firstRole + roleIndex, 1,
-        progressionOpportunity(judge, role) ? -1000 : 0) });
+      if (judge.roles[role]) {
+        const priority = Number.isSafeInteger(judge.priority) ? judge.priority : 6;
+        const preference = priority * (judges.length + 1) + Number(progressionOpportunity(judge, role));
+        links.push({ judge, role, edge: edge(firstJudge + index, firstRole + roleIndex, 1, -preference) });
+      }
     });
   });
   POSITIONS.forEach((role, index) => edge(firstRole + index, sink, counts[role], 0));
@@ -66,7 +69,8 @@ function autoAssign(judges, rings, discipline) {
   }
   for (const role of ['corner', 'sktk']) {
     const extras = judges.filter((judge) => !used.has(judge.id) && judge.roles[role])
-      .sort((a, b) => Number(progressionOpportunity(b, role)) - Number(progressionOpportunity(a, role)) || a.id.localeCompare(b.id));
+      .sort((a, b) => (b.priority ?? 6) - (a.priority ?? 6) ||
+        Number(progressionOpportunity(b, role)) - Number(progressionOpportunity(a, role)) || a.id.localeCompare(b.id));
     for (let slot = minimum[role]; slot < preferred[role]; slot++) {
       for (const ring of operating) {
         const judge = extras.shift();

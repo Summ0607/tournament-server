@@ -1,3 +1,5 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const sqlite3 = require('sqlite3');
 const { evaluateEligibility } = require('./judgeManagementRoutes');
 const { readVolunteerDirectory } = require('./volunteerStore');
@@ -33,10 +35,29 @@ async function judgeSnapshot(file, date) {
     }) };
   });
 }
+function ringJudgePriorities(eventFile) {
+  const file = path.join(path.dirname(eventFile), 'ring-judges.json');
+  if (!fs.existsSync(file)) return { revision: null, priorities: new Map() };
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (typeof data.revision !== 'string' || !Array.isArray(data.judges)) {
+    throw new Error('Invalid saved judge directory.');
+  }
+  const priorities = new Map();
+  for (const judge of data.judges) {
+    if (typeof judge.associationNumber !== 'string') continue;
+    const priority = judge.priority ?? (judge.competitorId ? 4 : 6);
+    if (!Number.isSafeInteger(priority) || priority < 0 || priority > 99) {
+      throw new Error('Invalid saved judge priority.');
+    }
+    priorities.set(judge.associationNumber.trim().toUpperCase(), priority);
+  }
+  return { revision: data.revision, priorities };
+}
 async function assignmentCandidates({ eventFile, judgeFile, config }) {
   const snapshot = await judgeSnapshot(judgeFile, config.date);
   const directory = await readVolunteerDirectory(eventFile);
   const competitors = await readOnly(eventFile, (db) => all(db, `SELECT id,associationNumber,firstName,lastName,rank,age,ageAsOf FROM competitors`));
+  const ringJudges = ringJudgePriorities(eventFile);
   const judgingTypes = new Set(directory.types.filter((type) => type.name.toLowerCase() === 'judging').map((type) => type.id));
   const members = new Map(snapshot.judges.map((judge) => [judge.associationId.toUpperCase(), judge]));
   const pool = new Map();
@@ -71,6 +92,8 @@ async function assignmentCandidates({ eventFile, judgeFile, config }) {
     }
   }
   const judges = [...pool.values()].map((judge) => {
+    judge.priority = ringJudges.priorities.get(judge.id) ??
+      (judge.sources.includes('volunteer') ? 6 : 4);
     const cdbCorner = judge.certification === 'CORNER' && judge.rank === 'CDB';
     const issue = cdbCorner ? '' : certificationRankIssue(judge.certification, judge.rank);
     if (issue) judge.issues.push(issue);
@@ -89,6 +112,7 @@ async function assignmentCandidates({ eventFile, judgeFile, config }) {
       potential: !judge.sources.includes('volunteer') };
   }).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
   return { judges, judgeRevision: snapshot.revision, volunteerRevision: directory.revision,
-    sourceFingerprint: JSON.stringify({ competitors, volunteers: directory.volunteers, types: directory.types }) };
+    sourceFingerprint: JSON.stringify({ competitors, volunteers: directory.volunteers, types: directory.types,
+      ringJudgeRevision: ringJudges.revision }) };
 }
 module.exports = { assignmentCandidates, judgeSnapshot };
