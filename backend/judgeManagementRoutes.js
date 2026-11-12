@@ -4,6 +4,7 @@ const csv = require('csv-parser');
 const { Readable } = require('node:stream');
 const crypto = require('node:crypto');
 const { normalizeRank } = require('../db/rankNormalization');
+const { CSV_HEADER_ALIASES, createCsvHeaderMapper, inspectMappedCsvHeaders, normalizeCsvHeader } = require('../db/csvHeaderAliases');
 const { normalizeCertification, certificationLevels, judgeRankOptions, JUDGE_RANKS, isJudgeRank } = require('../db/judgeCertification');
 const { validDate } = require('./tournamentAge');
 const { actualServiceRoles, eventIdFor, flaggedReplacements } = require('./judgeServicePacket');
@@ -12,14 +13,15 @@ const fields = ['associationId', 'firstName', 'lastName', 'school', 'rank', 'cer
 const dateOfBirthColumn = 'date_of_birth';
 const csvFields = [...fields, 'dateOfBirth'];
 const testLevels = ['SK_TK', 'CORNER', 'REGIONAL', 'INTERNATIONAL'];
-const defaults = {
-  associationId: ['wtsda_id', 'idNumber'], firstName: ['first_name', 'firstName'],
-  lastName: ['last_name', 'lastName'], school: ['school', 'studioName'],
-  rank: ['rank', 'current_rank'], certification: ['certification_level', 'level'],
-  expiration: ['certification_expiration', 'judgingLevelExpDate'], status: ['status', 'judge_status'],
-  notes: ['notes', 'judging_notes'],
-  dateOfBirth: ['dateOfBirth', 'date_of_birth', 'DOB', 'birthDate']
-};
+const defaults = Object.fromEntries(csvFields.map((field) => [field,
+  [...new Set([field, ...(CSV_HEADER_ALIASES[field] || []), ...({
+    associationId: ['wtsda_id', 'idNumber'], firstName: ['first_name', 'firstName'],
+    lastName: ['last_name', 'lastName'], school: ['studioName'], rank: ['current_rank'],
+    certification: ['certification_level', 'level'], expiration: ['certification_expiration', 'judgingLevelExpDate'],
+    status: ['judge_status'], notes: ['judging_notes'],
+    dateOfBirth: ['date_of_birth', 'DOB', 'birthDate']
+  }[field] || [])])]
+]));
 const columns = { associationId: 'association_id', firstName: 'first_name', lastName: 'last_name', school: 'school',
   rank: 'rank', certification: 'certification', expiration: 'certification_expiration', status: 'status', notes: 'notes',
   dateOfBirth: dateOfBirthColumn };
@@ -27,7 +29,7 @@ const levels = ['SK_TK', 'CORNER', 'REGIONAL', 'INTERNATIONAL'];
 const experienceRoles = ['JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE', 'SCOREKEEPER', 'TIMEKEEPER', 'ARBITRATOR'];
 const scopes = ['REGIONAL', 'NATIONAL', 'WORLD', 'IN_HOUSE'];
 const invalid = (message, statusCode = 400) => Object.assign(new Error(message), { statusCode });
-const key = (value) => value.toLowerCase().replace(/[\s_]+/g, '');
+const key = normalizeCsvHeader;
 const run = (db, sql, args = []) => new Promise((resolve, reject) => db.run(sql, args, function (e) { e ? reject(e) : resolve(this); }));
 const all = (db, sql, args = []) => new Promise((resolve, reject) => db.all(sql, args, (e, rows) => e ? reject(e) : resolve(rows)));
 const close = (db) => new Promise((resolve, reject) => db.close((e) => e ? reject(e) : resolve()));
@@ -211,6 +213,16 @@ function validateAliases(input) {
   return aliases;
 }
 
+function withCommonAliases(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalid('CSV aliases are required.');
+  const supplied = Object.keys(input || {}).length ? validateAliases(input) : {};
+  const merged = Object.fromEntries(csvFields.map((field) => {
+    const values = [...defaults[field], ...(supplied[field] || [])];
+    return [field, [...new Map(values.map((value) => [key(value), value])).values()]];
+  }));
+  return validateAliases(merged);
+}
+
 async function replaceRecords(db, judgeId, body, today) {
   if (Object.hasOwn(body, 'tests')) {
     if (!Array.isArray(body.tests) || body.tests.length > 100) throw invalid('Testing records must be an array of at most 100 records.');
@@ -248,13 +260,13 @@ async function replaceRecords(db, judgeId, body, today) {
 async function parseCsv(text, aliases) {
   if (typeof text !== 'string' || !text.trim() || Buffer.byteLength(text) > 2 * 1024 * 1024) throw invalid('Choose a nonempty CSV file of at most 2 MB.');
   return new Promise((resolve, reject) => {
-    const mapping = new Map(csvFields.flatMap((field) => aliases[field].map((a) => [key(a), field])));
-    const rows = [], seen = new Set();
-    const parser = csv({ strict: true, maxRowBytes: 10000, mapHeaders: ({ header }) => mapping.get(key(header.replace(/^\uFEFF/, '').trim())) || null });
+    const rows = [];
+    const mapHeader = createCsvHeaderMapper(csvFields, aliases);
+    const parser = csv({ strict: true, maxRowBytes: 10000, mapHeaders: ({ header }) => mapHeader(header) });
     parser.on('headers', (headers) => {
-      const mapped = headers.filter(Boolean);
-      if (mapped.some((header) => seen.has(header) || !seen.add(header))) return parser.destroy(invalid('CSV contains multiple columns for the same field.'));
-      if (['associationId', 'firstName', 'lastName'].some((field) => !seen.has(field))) parser.destroy(invalid('CSV must contain Association ID, first name, and last name columns.'));
+      const issues = inspectMappedCsvHeaders(headers, ['associationId', 'firstName', 'lastName']);
+      if (issues.duplicates.length) return parser.destroy(invalid('CSV contains multiple columns for the same field.'));
+      if (issues.missing.length) parser.destroy(invalid('CSV must contain Association ID, first name, and last name columns.'));
     });
     parser.on('data', (row) => rows.push(row));
     parser.on('error', (error) => reject(error.statusCode ? error : invalid(`Invalid CSV: ${error.message}`)));
@@ -288,7 +300,7 @@ function createJudgeManagementRouter({
         const [settings] = await all(db, 'SELECT revision, aliases FROM judge_management_settings WHERE id = 1');
         if (!settings) throw new Error('Judge Management settings are missing.');
         if (write && (!Number.isSafeInteger(req.body?.revision) || req.body.revision !== settings.revision)) throw invalid('Judge data changed. Reload before saving.', 409);
-        const aliases = Object.keys(JSON.parse(settings.aliases)).length ? validateAliases(JSON.parse(settings.aliases)) : defaults;
+        const aliases = withCommonAliases(JSON.parse(settings.aliases));
         const operationResult = await operation(db, aliases, today);
         const afterCommit = typeof operationResult?.afterCommit === 'function' ? operationResult.afterCommit : null;
         const extra = operationResult && typeof operationResult === 'object'
@@ -600,7 +612,7 @@ function createJudgeManagementRouter({
     return {};
   }, true));
   router.put('/judge-management-settings', endpoint(async (req, db) => {
-    const aliases = validateAliases(req.body.aliases);
+    const aliases = withCommonAliases(req.body.aliases);
     await run(db, 'UPDATE judge_management_settings SET aliases = ? WHERE id = 1', [JSON.stringify(aliases)]);
     return {};
   }, true));

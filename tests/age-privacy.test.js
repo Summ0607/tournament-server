@@ -45,6 +45,33 @@ test('competitor import retains age/date but no DOB, and invalid rows preserve t
   await assert.rejects(importCSV(csv, db, { clearExisting: true, tournamentDate: '2027-01-09' }), /CSV row 3/);
   await database(db, async (_run, all) => assert.equal((await all('SELECT * FROM competitors')).length, 1));
 });
+test('competitor CSV recognizes common registration headers and rejects duplicate aliases atomically', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jot-import-aliases-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const db = path.join(root, 'tournament.db'), csv = path.join(root, 'input.csv');
+  await initialize(db);
+  fs.writeFileSync(csv, [
+    'Given Name,Family Name,Date of Birth,WTSDA Membership Number,Sex,Rank at Event,School Name,Special Needs (Y|N),Height (inches),Jotform Submission ID',
+    'Taylor,Tester,2000-01-09,TSD-001,Female,D1,Sample Dojang,Y,65,FORM-001'
+  ].join('\n'));
+  const imported = await importCSV(csv, db, { tournamentDate: '2027-01-09' });
+  assert.equal(imported.normalizedCompetitors.length, 1);
+  assert.equal(imported.normalizedCompetitors[0].firstName, 'Taylor');
+  assert.equal(imported.normalizedCompetitors[0].associationNumber, 'TSD-001');
+  assert.equal(imported.normalizedCompetitors[0].studio, 'Sample Dojang');
+  assert.equal(imported.normalizedCompetitors[0].specialNeeds, 1);
+  assert.equal(imported.normalizedCompetitors[0].height, 65);
+
+  fs.writeFileSync(csv, [
+    'First Name,Given Name,Last Name,DOB,Association Number',
+    'Taylor,Taylor,Tester,2000-01-09,TSD-002'
+  ].join('\n'));
+  await assert.rejects(importCSV(csv, db, { clearExisting: true, tournamentDate: '2027-01-09' }), /multiple columns for firstName/);
+  await database(db, async (_run, all) => {
+    assert.equal((await all('SELECT * FROM competitors')).length, 1);
+    assert.equal((await all('SELECT associationNumber FROM competitors'))[0].associationNumber, 'TSD-001');
+  });
+});
 test('new simulation snapshots preserve tournament date and reject stale ages or birth dates', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'age-simulation-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

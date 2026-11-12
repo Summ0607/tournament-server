@@ -60,6 +60,16 @@ test('judge records, ID-based imports, CSV aliases and revision conflicts are sa
   assert.equal(result.status, 200); state = result.data;
   result = await request('/judge-management/delete', 'POST', { revision: state.revision, ids: [target.id] });
   assert.equal(result.status, 200); assert.equal(result.data.judges.length, 3);
+  result = await request('/judge-management-import', 'POST', { revision: result.data.revision,
+    csv: 'WTSDA Number,Given Name,Family Name,School Name,Belt Rank,Judging Certification Level,Judging Certification Expiration,Judge Status,Birth Date,JOT Form Submission ID\n' +
+      'ID5,Alias,Judge,Alias School,D1,Corner,2030-12-31,Active,2000-01-01,FORM-005' });
+  assert.equal(result.status, 200, JSON.stringify(result.data));
+  assert.equal(result.data.added, 1);
+  const aliasJudge = result.data.judges.find((item) => item.associationId === 'ID5');
+  assert.equal(aliasJudge.firstName, 'Alias');
+  assert.equal(aliasJudge.school, 'Alias School');
+  assert.equal(aliasJudge.certification, 'CORNER');
+  assert.equal(aliasJudge.expiration, '2030-12-31');
 });
 
 test('DOB remains private; eligibility, tests, experience and coordinator awards follow the certification rules', async (t) => {

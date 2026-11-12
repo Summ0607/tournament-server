@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const crypto = require('node:crypto');
+const { ADDITIONAL_VOLUNTEER_TYPES } = require('../db/volunteerTypes');
 const { resolveMemberPerson, deleteOrphanPeople } = require('./eventPeople');
 
 function openDatabase(file) {
@@ -35,10 +36,44 @@ async function loadVolunteerDirectory(db) {
   return { revision: settings.revision, types, volunteers };
 }
 
+async function applyAdditionalVolunteerTypesMigration(db) {
+  await run(db, `CREATE TABLE IF NOT EXISTS volunteer_type_migrations (
+    version INTEGER PRIMARY KEY
+  )`);
+  const [migration] = await all(db, 'SELECT version FROM volunteer_type_migrations WHERE version = 1');
+  if (migration) return;
+
+  let addedTypes = false;
+  for (const type of ADDITIONAL_VOLUNTEER_TYPES) {
+    const result = await run(db, 'INSERT OR IGNORE INTO volunteer_types (id, name) VALUES (?, ?)', type);
+    if (result.changes) addedTypes = true;
+  }
+  if (addedTypes) {
+    await run(db, 'UPDATE volunteer_settings SET revision = ? WHERE id = 1', [crypto.randomUUID()]);
+  }
+  await run(db, 'INSERT INTO volunteer_type_migrations (version) VALUES (1)');
+}
+
 async function readVolunteerDirectory(file) {
   const db = await openDatabase(file);
-  try { return await loadVolunteerDirectory(db); }
-  finally { await closeDatabase(db); }
+  let transaction = false;
+  try {
+    db.configure('busyTimeout', 5000);
+    await run(db, 'BEGIN IMMEDIATE');
+    transaction = true;
+    await applyAdditionalVolunteerTypesMigration(db);
+    await run(db, 'COMMIT');
+    transaction = false;
+    return await loadVolunteerDirectory(db);
+  } catch (error) {
+    if (transaction) {
+      try { await run(db, 'ROLLBACK'); }
+      catch (rollbackError) { console.error('Volunteer type migration rollback failed:', rollbackError); }
+    }
+    throw error;
+  } finally {
+    await closeDatabase(db);
+  }
 }
 
 async function replaceVolunteerDirectory(file, expectedRevision, next, revision = crypto.randomUUID()) {

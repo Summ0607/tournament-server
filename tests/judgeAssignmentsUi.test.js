@@ -11,8 +11,12 @@ test('phase planner confirms competitor agreement, preserves other phase, saves 
   const empty = (discipline) => ({ discipline, rings: [], available: [], arbitrators: [], assignments: {} });
   let state = { revision: null, sourceRevision: 's1', configurationLocked: false, rings: ['A1'],
     phases: { P1: empty('black-belt'), P2: empty('gup') },
-    judges: [{ id: 'TEST', name: '<Test>', associationId: 'TEST', potential: true, sources: ['competitor'], rank: 'D1',
-      certification: 'CORNER', roles: { corner: true, sktk: true, center: false, arbitrator: false } }] };
+    judges: [
+      { id: 'TEST', name: '<Test>', associationId: 'TEST', potential: true, sources: ['competitor'], rank: 'D1',
+        certification: 'CORNER', roles: { corner: true, sktk: true, center: false, arbitrator: false } },
+      { id: 'GUP', name: 'Gup Volunteer', associationId: 'GUP', potential: false, sources: ['volunteer', 'competitor'],
+        rank: 'G5', certification: 'SK_TK', roles: { corner: false, sktk: true, center: false, arbitrator: false } }
+    ] };
   let agree = false, fail = false, eventName = 'Event', delayed;
   const workspace = create({ document: { getElementById: node }, selectedEvent: () => eventName, confirm: () => agree,
     request: async (url, options) => {
@@ -24,7 +28,12 @@ test('phase planner confirms competitor agreement, preserves other phase, saves 
     } });
   await workspace.load();
   assert.match(node('jaContent').innerHTML, /&lt;Test&gt;/);
+  assert.match(node('jaContent').innerHTML, /Confirm Gup Volunteer \(GUP\)[^>]*data-ja-available="GUP"[^>]*>/);
+  assert.doesNotMatch(node('jaContent').innerHTML.match(/<input id="jaAvailable-\d+" aria-label="Confirm Gup Volunteer \(GUP\)"[^>]*>/)?.[0] || '', /disabled/,
+    'Gup competitors may be considered for the non-competing Black Belt phase');
   node('jaPhase').value = 'P2'; node('jaPhase').handlers.change();
+  assert.match(node('jaContent').innerHTML.match(/<input id="jaAvailable-\d+" aria-label="Confirm Gup Volunteer \(GUP\)"[^>]*>/)?.[0] || '', /disabled/,
+    'Gup competitors cannot be marked available in the Gup phase');
   const change = (attributes, checked = true) => node('jaContent').handlers.change({
     target: { checked, value: '', getAttribute(name) { return attributes[name]; } }
   });

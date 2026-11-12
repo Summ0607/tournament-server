@@ -33,11 +33,20 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   const write = (route, body, method = 'POST') => fetch(`${base}/${route}?eventName=A`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await fetch(`${base}/volunteers`)).status, 400);
   assert.equal((await fetch(`${base}/volunteers?eventName=..`)).status, 400);
+  const legacyDb = await new Promise((resolve, reject) => {
+    const db = new sqlite3.Database(path.join(root, 'A', 'tournament.db'));
+    db.run("DELETE FROM volunteer_types WHERE id IN ('operations', 'awards', 'medical')", (error) => {
+      db.close((closeError) => error || closeError ? reject(error || closeError) : resolve(true));
+    });
+  });
+  assert.equal(legacyDb, true);
   let data = await get();
-  assert.deepEqual(data.types.map((r) => r.name), ['Setup', 'Teardown', 'Judging', 'Security']);
+  assert.deepEqual(data.types.map((r) => r.name), [
+    'Setup', 'Teardown', 'Judging', 'Security', 'Operations', 'Awards', 'Medical'
+  ]);
   assert.deepEqual(data.rankOptions, judgeRankOptions());
   assert.equal(fs.existsSync(path.join(root, 'A', 'volunteers.json')), false);
-  let inHouse = await write('volunteers/import', { revision: null,
+  let inHouse = await write('volunteers/import', { revision: data.revision,
     csv: csvText('Young,Doe,2016-01-09,IH1,School,G5,SK/TK,Judging,').replace('\n', ',Parent/Guardian Name\n') + ',Guardian' });
   assert.equal(inHouse.status, 200);
   data = await inHouse.json();
@@ -159,11 +168,9 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   const type = data.types.at(-1);
   data = await (await write(`volunteer-types/${type.id}`, { revision: data.revision, name: 'Welcome' }, 'PUT')).json();
   data = await (await write('volunteer-types/delete', { revision: data.revision, ids: [type.id] })).json();
-  for (const name of ['Medical', 'Operations Mgmt']) {
-    const response = await write('volunteer-types', { revision: data.revision, name });
-    assert.equal(response.status, 200);
-    data = await response.json();
-  }
+  const operationsResponse = await write('volunteer-types', { revision: data.revision, name: 'Operations Mgmt' });
+  assert.equal(operationsResponse.status, 200);
+  data = await operationsResponse.json();
   const medical = data.types.find((row) => row.name === 'Medical');
   const operations = data.types.find((row) => row.name === 'Operations Mgmt');
   const customImport = await write('volunteers/import', { revision: data.revision,
@@ -202,6 +209,38 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   data = await (await write('volunteers/delete', { revision: data.revision, ids: [originalId] })).json();
   assert.equal(data.volunteers.some((r) => r.id === originalId), false);
   assert.equal(fs.existsSync(path.join(root, 'A', 'volunteers.json')), false);
+});
+test('volunteer CSV recognizes common registration headers and ignores unrelated source columns', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'volunteer-csv-aliases-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const eventsRoot = path.join(root, 'events'), eventDir = path.join(eventsRoot, 'Spring');
+  fs.mkdirSync(eventDir, { recursive: true });
+  await initializeDatabase(path.join(eventDir, 'tournament.db'));
+  fs.writeFileSync(path.join(eventDir, 'event-config.json'), JSON.stringify({ date: '2027-03-13', scope: 'regional' }));
+  const app = express(); app.use(express.json({ limit: '3mb' }));
+  app.use('/api', createVolunteerRouter({ eventsRoot, configurationStatus: () => ({ configurationLocked: false }) }));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}/api`;
+  const data = await (await fetch(`${base}/volunteers?eventName=Spring`)).json();
+  const csv = [
+    'Given Name,Family Name,Date Of Birth,Membership Number,School Name,Current Belt Rank,Judge Certification Level,First Volunteer Choice,Second Volunteer Choice,Contact Phone,Sex,Email Address,JOT Form Submission ID',
+    'Jordan,Example,1990-01-09,TSD-VOL-001,Example Dojang,D1,Regional,Judging,Setup,555-0101,Female,jordan@example.test,FORM-001'
+  ].join('\n');
+  const response = await fetch(`${base}/volunteers/import?eventName=Spring`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ revision: data.revision, csv })
+  });
+  const result = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(result));
+  assert.equal(result.added, 1);
+  assert.equal(result.volunteers[0].firstName, 'Jordan');
+  assert.equal(result.volunteers[0].associationNumber, 'TSD-VOL-001');
+  assert.equal(result.volunteers[0].primaryType, 'judging');
+  assert.equal(result.volunteers[0].secondaryType, 'setup');
+  assert.equal(result.volunteers[0].contactNumber, '555-0101');
+  assert.equal(result.volunteers[0].email, 'jordan@example.test');
 });
 test('volunteer editor switches types, protects drafts, filters and surfaces import errors', async () => {
   const nodes = new Map(), requests = [];

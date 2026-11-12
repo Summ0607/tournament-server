@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
+const { DEFAULT_VOLUNTEER_TYPES } = require('./volunteerTypes');
 const { normalizeRank, isCanonicalRank } = require('./rankNormalization');
 
 const DEFAULT_DB_PATH = path.join(__dirname, 'tournament.db');
@@ -153,8 +154,9 @@ async function ensureVolunteerTables(db) {
     revision TEXT
   )`);
   await run(db, 'INSERT OR IGNORE INTO volunteer_settings (id, revision) VALUES (1, NULL)');
-  const types = [['setup', 'Setup'], ['teardown', 'Teardown'], ['judging', 'Judging'], ['security', 'Security']];
-  for (const type of types) await run(db, 'INSERT OR IGNORE INTO volunteer_types (id, name) VALUES (?, ?)', type);
+  for (const type of DEFAULT_VOLUNTEER_TYPES) {
+    await run(db, 'INSERT OR IGNORE INTO volunteer_types (id, name) VALUES (?, ?)', type);
+  }
 }
 
 function initializeDatabase(targetDbPath = DEFAULT_DB_PATH) {

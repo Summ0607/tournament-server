@@ -306,3 +306,14 @@ test('completed integrated pages explain each primary, next-step and maintenance
   assert.equal((html.match(/\bdata-help-root\b/g) || []).length, 1);
   assert.equal((html.match(/\bdata-help-page=/g) || []).length, 15);
 });
+
+test('volunteer CSV import stays visible and detailed instructions are in page help', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
+  const importArea = html.match(/<section id="vmImportArea"[\s\S]*?<\/section>/);
+  assert.ok(importArea);
+  assert.doesNotMatch(html, /<details id="vmImportArea"/);
+  assert.match(importArea[0], /<input id="vmCsv" type="file" accept="\.csv,text\/csv">/);
+  assert.match(importArea[0], /<button id="vmImport" type="button"[^>]*>Import CSV<\/button>/);
+  assert.match(html, /data-help-source="Volunteer CSV import"/);
+  assert.doesNotMatch(importArea[0], /Required columns:/);
+});

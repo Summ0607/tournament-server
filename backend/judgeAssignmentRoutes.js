@@ -24,8 +24,18 @@ function read(file) {
   }
   return { ...data, replacementPinVerifier: data.replacementPinVerifier || null };
 }
+function competitionDiscipline(judge) {
+  if (!Array.isArray(judge?.sources) || !judge.sources.includes('competitor')) return '';
+  const rank = String(judge.rank || '').trim().toUpperCase();
+  if (/^D[1-8]$/.test(rank)) return 'black-belt';
+  if (/^(?:G(?:10|[1-9])|CDB)$/.test(rank)) return 'gup';
+  return '';
+}
+function competingInPhase(judge, phase) {
+  return Boolean(competitionDiscipline(judge) && competitionDiscipline(judge) === phase.discipline);
+}
 function canServe(judge, phase, role) {
-  return Boolean(judge?.roles[role] && !(phase.discipline === 'black-belt' && judge.sources.includes('competitor') && /^D[1-8]$/.test(judge.rank)));
+  return Boolean(judge?.roles[role] && !competingInPhase(judge, phase));
 }
 function createReplacementPinVerifier(pin) {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -44,6 +54,9 @@ function validatePhase(phase, rings, judges) {
   };
   distinct(phase.rings, new Set(rings), 'rings');
   distinct(phase.available, new Set(byId.keys()), 'availability');
+  for (const id of phase.available) {
+    if (competingInPhase(byId.get(id), phase)) fail('An official competing in this phase cannot be marked available.');
+  }
   if (!Array.isArray(phase.arbitrators)) fail('Arbitrators must be a list.');
   distinct(phase.arbitrators, new Set(phase.available), 'arbitrators');
   const used = new Set(phase.arbitrators);

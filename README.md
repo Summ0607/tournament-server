@@ -633,9 +633,11 @@ supports independent P1/P2 preparation with explicitly confirmed availability.
 Association ID and primary or secondary Judging choice: those aged 18+ with Dan
 rank, and SK/TK-certified volunteers meeting the rank and age rules above.
 Certification comes from Judge Management, not a volunteer's claimed level.
-Linked volunteer IDs and nonblank Association IDs prevent repeated population;
-existing judge edits are not overwritten. Keep a type named **Judging** for this
-workflow; if it is renamed or deleted, population reports the missing type.
+Linked volunteer IDs and nonblank Association IDs prevent repeated population.
+When volunteer population finds an existing priority-4 competitor entry, it
+promotes that priority to 6; other saved judge priorities and details are
+preserved. Keep a type named **Judging** for this workflow; if it is renamed or
+deleted, population reports the missing type.
 
 Judge data persists atomically in each event's `ring-judges.json`, with revision
 checks rejecting stale writes. Operational use locks every write until Reset Run;
@@ -653,9 +655,11 @@ the directory alongside other preparation settings.
 The Tier 2 **Volunteer Management** group, below Competitors, contains Tier 3
 **Volunteers** and **Volunteer Types**. Both support Add/Edit, search, filtered
 select-all, confirmed Delete selected, and Reload Saved. Types initially include
-Setup, Teardown, Judging and Security. A type referenced as primary or secondary
-cannot be deleted until volunteers are reassigned. Primary is required, secondary
-is optional and cannot equal primary.
+Setup, Teardown, Judging, Security, Operations, Awards and Medical. A type
+referenced as primary or secondary cannot be deleted until volunteers are
+reassigned. Existing tournament databases receive the three additional defaults
+on their first Volunteer Management load after the server update. Primary is
+required, secondary is optional and cannot equal primary.
 
 Manual volunteers require First Name, Last Name, age on the tournament date,
 School and recognized Rank. Assoc ID may be blank.
@@ -682,7 +686,13 @@ tournament age; DOB is not retained in the volunteer directory.
 Contact number accepts international formats and extensions. Parent/guardian name
 is required when saving or importing a volunteer under 18; older records without
 these fields remain readable and can be completed in Add/Edit.
-CSV import requires these headers (order may vary):
+CSV import accepts the headers below (order may vary), plus common alternatives
+such as `Given Name`/`Family Name`, `Date of Birth`/`Birthdate`,
+`Association ID`/`Association Number`/`Assoc ID`/`WTSDA ID`/`WTSDA Number`/
+`TSD ID`/`Membership Number`/`Member ID`, `School Name`/`Studio`/`Dojang`,
+`Current Rank`/`Belt Rank`, `First Choice`, and `Second Choice`. Matching ignores
+case, spaces and punctuation. Unknown extra columns are ignored; two columns
+that map to the same field are rejected.
 
 ```csv
 First Name,Last Name,DOB,Assoc ID,School,Rank,Certification,Primary Volunteer Type,Secondary Volunteer Type
@@ -1424,10 +1434,14 @@ Its hierarchy is:
 
 Judges supports adding, editing, filtering, and deleting records in the separate
 Judge Management directory. Email and Merge Records remain disabled. CSV Settings
-saves visible header aliases; the importer requires Association ID, first name,
-and last name headers, matches IDs without regard to ASCII letter case, and
+saves visible custom header aliases in addition to the built-in aliases. The
+importer requires an Association ID, first name, and last name column, matches IDs
+without regard to ASCII letter case, and
 updates only nonblank imported values. DOB/date-of-birth headers are recognized
 for private age checks but are not displayed or returned by the judge-list API.
+Built-in aliases also cover `Given Name`/`Family Name`, `School Name`/`Studio`,
+`Belt Rank`/`Current Rank`, `Certification Level`/`Judging Certification`,
+`Certification Expiration`/`Expiration Date`, and `DOB`/`Birth Date`.
 Same-name judges with different IDs remain separate. Duplicate or missing IDs and
 invalid rows reject the entire import. Changing data in another session requires
 a reload before saving.

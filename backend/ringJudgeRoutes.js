@@ -316,7 +316,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
     const roster = volunteers ? volunteerData.volunteers.filter((row) => row.associationNumber &&
       (judgingIds.includes(row.primaryType) || judgingIds.includes(row.secondaryType)))
       .map((row) => ({ ...row, studio: row.school })) : await readRoster(dbFile);
-    let added = 0, skipped = 0;
+    let added = 0, updated = 0, skipped = 0;
     for (const member of roster) {
       if (!String(member.associationNumber || '').trim()) continue;
       const verified = linked?.get(String(member.associationNumber).trim().toUpperCase());
@@ -332,8 +332,16 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
       const sktkEligible = (!volunteers || hasSktkCertification) && !certificationAgeIssue('SK_TK', rank.code, age, config.scope);
       if (!judgeEligible && !sktkEligible && !verified?.roles.corner) continue;
       const associationNumber = String(member.associationNumber || '').trim();
-      if (data.judges.some((judge) => (volunteers ? judge.volunteerId : judge.competitorId) === String(member.id) || associationNumber &&
-          judge.associationNumber.toUpperCase() === associationNumber.toUpperCase())) { skipped++; continue; }
+      const existing = data.judges.find((judge) =>
+        (volunteers ? judge.volunteerId : judge.competitorId) === String(member.id) ||
+        associationNumber && judge.associationNumber.toUpperCase() === associationNumber.toUpperCase());
+      if (existing) {
+        if (volunteers && existing.priority === 4) {
+          existing.priority = 6;
+          updated++;
+        } else skipped++;
+        continue;
+      }
       const row = validateJudge({ firstName: member.firstName, lastName: member.lastName, associationNumber,
         school: member.studio || '', rank: rank.code, certification: verified?.certification || (volunteers ? member.certification : ''), flaggedForReview: Boolean(verified?.qualificationIssue),
         priority: volunteers ? 6 : 4,
@@ -341,7 +349,7 @@ function createRingJudgeRouter({ eventsRoot, configurationStatus, judgeFile }) {
           !volunteers && sktkEligible ? 'Meets SK/TK age and rank criteria; certification is unverified.' : '' }, true);
       data.judges.push({ id: crypto.randomUUID(), competitorId: volunteers ? null : String(member.id), volunteerId: volunteers ? String(member.id) : null, ...row }); added++;
     }
-    return commit({ added, skipped });
+    return commit({ added, updated, skipped });
   }, true);
   router.post('/ring-judges/populate', populate(false));
   router.post('/ring-judges/populate-volunteers', populate(true));

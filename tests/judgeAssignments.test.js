@@ -199,6 +199,62 @@ test('certified competitors are potential candidates; agreement is per phase, du
   })).status, 409);
 });
 
+test('Gup competitors who volunteer for SK/TK are unavailable only in Gup phases for sanctioned and In-House events', async (t) => {
+  const { request, eventFile, eventsRoot } = await setup(t);
+  let directory = (await request('/judge-management')).data;
+  const member = directory.judges.find((judge) => judge.associationId === 'SIM-R-041');
+  assert.ok(member);
+  let result = await request(`/judge-management/${member.id}`, 'PUT', {
+    revision: directory.revision,
+    judge: { ...member, rank: 'G5', certification: 'SK_TK', expiration: '2027-01-15', status: 'Active' }
+  });
+  assert.equal(result.status, 200);
+
+  const volunteers = await readVolunteerDirectory(eventFile);
+  const volunteer = volunteers.volunteers.find((row) => row.associationNumber.toUpperCase() === 'SIM-R-041');
+  assert.ok(volunteer);
+  Object.assign(volunteer, { rank: 'G5', certification: 'SK_TK', age: 16, ageAsOf: '2026-01-15' });
+  await replaceVolunteerDirectory(eventFile, volunteers.revision, volunteers);
+  const rosterDb = new sqlite3.Database(eventFile);
+  try {
+    await run(rosterDb, `INSERT INTO competitors(id,firstName,lastName,associationNumber,rank,age,ageAsOf)
+      VALUES(1,?,?,?,?,?,?)`, [member.firstName, member.lastName, member.associationId, 'G5', 16, '2026-01-15']);
+  } finally { await new Promise((resolve) => rosterDb.close(resolve)); }
+
+  let data = (await request(url)).data;
+  const candidate = data.judges.find((judge) => judge.id === member.associationId);
+  assert.deepEqual(candidate.sources, ['volunteer', 'competitor']);
+  assert.equal(candidate.roles.sktk, true);
+
+  const gupPhase = phase(data, [candidate.id], 'gup', 1);
+  const rejectedAuto = await request('/judge-assignments/auto?eventName=A', 'POST', {
+    revision: data.revision, sourceRevision: data.sourceRevision, phase: gupPhase
+  });
+  assert.equal(rejectedAuto.status, 400);
+  assert.match(rejectedAuto.data.error, /competing in this phase/);
+  result = await request(url, 'PUT', { revision: data.revision, sourceRevision: data.sourceRevision,
+    phases: { P1: data.phases.P1, P2: gupPhase } });
+  assert.equal(result.status, 400);
+  assert.match(result.data.error, /cannot be marked available/);
+
+  const blackBeltPhase = phase(data, [candidate.id], 'black-belt', 1);
+  blackBeltPhase.assignments[blackBeltPhase.rings[0]] = { center: [], corner: [], sktk: [candidate.id] };
+  result = await request(url, 'PUT', { revision: data.revision, sourceRevision: data.sourceRevision,
+    phases: { P1: blackBeltPhase, P2: data.phases.P2 } });
+  assert.equal(result.status, 200, 'the Gup competitor may serve in a phase where they are not competing');
+
+  const configPath = path.join(eventsRoot, 'A', 'event-config.json');
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  fs.writeFileSync(configPath, JSON.stringify({ ...config, scope: 'in-house' }));
+  data = (await request(url)).data;
+  const inHouseGup = phase(data, [candidate.id], 'gup', 1);
+  const rejectedInHouse = await request('/judge-assignments/auto?eventName=A', 'POST', {
+    revision: data.revision, sourceRevision: data.sourceRevision, phase: inHouseGup
+  });
+  assert.equal(rejectedInHouse.status, 400);
+  assert.match(rejectedInHouse.data.error, /competing in this phase/);
+});
+
 test('In-House competitor approval adds only to Ring Judges and never assigns uncertified competitors', async (t) => {
   const { request, eventsRoot, eventFile } = await setup(t);
   const configFile = path.join(eventsRoot, 'A', 'event-config.json');

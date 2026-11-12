@@ -15,6 +15,7 @@
     const serviceDraft = () => ({ ...Object.fromEntries(serviceFields.map((field) => [field, node(`jmService-${field}`).value])),
       confirmedCompleted: Boolean(node('jmServiceCompleted').checked) });
     const selected = new Set();
+    let visibleJudges = [];
     const grantDates = new Map();
     const draft = () => Object.fromEntries(fields.map((f) => [f, node(`jm-${f}`).value]));
     const visibleAliases = () => Object.fromEntries(fields.map((f) => [f, node(`jmAlias-${f}`).value.split(',').map((v) => v.trim())]));
@@ -23,9 +24,9 @@
       experience: cleaned(experienceRecords, ['eventName', 'eventDate', 'location', 'role', 'eventScope', 'logVerified']) });
     const dirty = () => editing && JSON.stringify(formDraft()) !== baseline ||
       serviceOpen && JSON.stringify(serviceDraft()) !== serviceBaseline || data && JSON.stringify(visibleAliases()) !== aliasesBaseline;
-    function notice(message, error = false) {
+    function notice(message, state = 'info') {
       node('jmNotice').textContent = message;
-      node('jmNotice').setAttribute('data-state', error ? 'error' : 'info');
+      node('jmNotice').setAttribute('data-state', state === true ? 'error' : state === false ? 'info' : state);
     }
     function options(id, entries, blank) {
       const current = node(id).value;
@@ -51,8 +52,13 @@
           (!status || j.status === status) && (!school || j.school === school) &&
           (!certification || j.certification === certification) && (!days || expiry && expiry <= end);
       });
+      visibleJudges = rows;
       node('jmBody').innerHTML = rows.map((j) => `<tr><td><input type="checkbox" data-jm-select="${j.id}" aria-label="Select ${esc(j.firstName)} ${esc(j.lastName)}" ${selected.has(j.id) ? 'checked' : ''}></td><td><button type="button" data-jm-edit="${j.id}">Edit</button></td><td>${esc(j.associationId)}</td><td>${esc(j.lastName)}</td><td>${esc(j.firstName)}</td><td>${esc(j.school)}</td><td>${esc((data.ranks || []).find((rank) => rank.code === j.rank)?.label || j.rank || '')}</td><td>${esc(label(j.certification))}</td><td>${esc(j.expiration)}</td><td>${esc(j.status)}</td></tr>`).join('') || '<tr><td colspan="10">No matching judges.</td></tr>';
       node('jmCount').textContent = `${rows.length} of ${data.judges.length} judges`;
+      const visibleSelected = rows.filter((judge) => selected.has(judge.id)).length;
+      node('jmSelectAll').disabled = busy || !rows.length;
+      node('jmSelectAll').checked = rows.length > 0 && visibleSelected === rows.length;
+      node('jmSelectAll').indeterminate = visibleSelected > 0 && visibleSelected < rows.length;
       const judges = new Map(data.judges.map((judge) => [judge.id, judge]));
       const testing = (data.tests || []).filter((record) => {
         const judge = judges.get(record.judgeId);
@@ -143,7 +149,7 @@
         const result = await request('/api/judge-management');
         if (current !== token) return;
         setData(result); notice(''); return true;
-      } catch (error) { if (current === token) notice(error.message, true); return false; }
+      } catch (error) { if (current === token) notice(error.message, 'error'); return false; }
     }
     function legacySktkIds(packet) {
       const ids = new Set();
@@ -282,7 +288,7 @@
       showPanel('jmAdd', judge ? 'Edit Judge' : 'Add Judge');
     }
     function canLeave() {
-      if (busy) { notice('Wait for the current Judge Management operation to finish.', true); return false; }
+      if (busy) { notice('Wait for the current Judge Management operation to finish.', 'error'); return false; }
       if (dirty() && !confirm('Discard unsaved Judge Management changes?')) return false;
       editing = false;
       serviceOpen = false; node('jmServiceForm').hidden = true;
@@ -298,11 +304,11 @@
           body: JSON.stringify({ ...body, revision: data.revision }) });
         setData(result);
         if (form) { editing = false; showPanel(origin); }
-        notice(typeof message === 'function' ? message(result) : message);
+        notice(typeof message === 'function' ? message(result) : message, 'success');
         return true;
       } catch (error) {
         if (form) node('jmError').textContent = error.message;
-        else notice(error.message, true);
+        else notice(error.message, 'error');
       } finally { busy = false; render(); }
     }
     function updateRecordRows(event, collection, selector, fieldAttribute) {
@@ -336,6 +342,13 @@
       const id = Number(event.target.getAttribute('data-jm-select'));
       if (!data?.judges.some((j) => j.id === id)) return;
       if (event.target.checked) selected.add(id); else selected.delete(id);
+      render();
+    });
+    node('jmSelectAll').addEventListener('change', () => {
+      if (busy || !data) return;
+      visibleJudges.forEach((judge) => {
+        if (node('jmSelectAll').checked) selected.add(judge.id); else selected.delete(judge.id);
+      });
       render();
     });
     node('jmDelete').addEventListener('click', () => {
@@ -529,11 +542,11 @@
     node('jmImportRun').addEventListener('click', async () => {
       if (!data || busy) return;
       const file = node('jmCsv').files[0];
-      if (!file || file.size > 2 * 1024 * 1024) { notice('Choose a CSV file of at most 2 MB.', true); return; }
+      if (!file || file.size > 2 * 1024 * 1024) { notice('Choose a CSV file of at most 2 MB.', 'error'); return; }
       if (!confirm('Import this file? Matching Association IDs will be updated with nonblank CSV values.')) return;
       let text;
       busy = true;
-      try { text = await file.text(); } catch (error) { notice(`Unable to read CSV: ${error.message}`, true); return; }
+      try { text = await file.text(); } catch (error) { notice(`Unable to read CSV: ${error.message}`, 'error'); return; }
       finally { busy = false; }
       return write('/api/judge-management-import', 'POST', { csv: text }, (result) => `Import complete: ${result.added} added, ${result.updated} updated.`);
     });

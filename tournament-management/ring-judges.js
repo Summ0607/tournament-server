@@ -191,7 +191,8 @@
           reviewSelected.clear(); node('rjCompetitorReviewDialog').close();
         }
         notice(suffix === '/approve-in-house-competitors' ? `Approved ${result.added} competitors for the In-House Ring Judges pool only; they are not certified or phase-assignable.` :
-          suffix.startsWith('/populate') ? `Added ${result.added} judges; ${result.skipped} already listed. Certification and availability still require verification.` :
+          suffix === '/populate-volunteers' ? `Added ${result.added} judges; promoted ${result.updated} matching priorities to 6; ${result.skipped} already listed. Certification and availability still require verification.` :
+            suffix.startsWith('/populate') ? `Added ${result.added} judges; ${result.skipped} already listed. Certification and availability still require verification.` :
           form ? 'Judge saved.' : suffix === '/clear-review' ? 'Review flags cleared. Notes are unchanged.' : 'Selected judges deleted. Competitor registrations are unchanged.');
       } catch (error) {
         if (current === token) { if (form) node('rjError').textContent = error.message; else notice(error.message, true); }
@@ -287,7 +288,7 @@
       if (!locked() && confirm(`Add Dan-ranked competitors aged 18+ and other competitors who meet SK/TK age and rank requirements to Ring Judges for ${scope}? ${data.certificationReadOnly ? 'Matched Judge Management certification is used; candidates still require agreement and phase availability confirmation.' : 'Certification stays Unknown and SK/TK eligibility is noted.'} Existing entries will not be overwritten.`)) return write('/populate', 'POST', {});
     });
     node('rjPopulateVolunteers').addEventListener('click', () => {
-      if (!locked() && confirm(`Add primary or secondary Judging volunteers who are Dan-ranked and aged 18+, or have SK/TK certification and meet its rank and age requirements, for ${scope}? Existing entries will not be overwritten.`)) return write('/populate-volunteers', 'POST', {});
+      if (!locked() && confirm(`Add primary or secondary Judging volunteers who are Dan-ranked and aged 18+, or have SK/TK certification and meet its rank and age requirements, for ${scope}? Matching entries at competitor priority 4 will be promoted to volunteer priority 6; other existing judge details will not be overwritten.`)) return write('/populate-volunteers', 'POST', {});
     });
     node('rjReviewCompetitors').addEventListener('click', openCompetitorReview);
     node('rjCompetitorReviewAll').addEventListener('change', () => {

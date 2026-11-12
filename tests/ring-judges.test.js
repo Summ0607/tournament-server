@@ -6,6 +6,7 @@ const os = require('node:os');
 const sqlite3 = require('sqlite3');
 const express = require('express');
 const { createRingJudgeRouter, validateJudge } = require('../backend/ringJudgeRoutes');
+const { createVolunteerRouter } = require('../backend/volunteerRoutes');
 const { certificationLevels, judgeRankOptions } = require('../db/judgeCertification');
 const { create } = require('../tournament-management/ring-judges');
 const initializeDatabase = require('../db/init');
@@ -80,11 +81,13 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   }
   let locked = false;
   const app = express(); app.use(express.json());
+  app.use('/api', createVolunteerRouter({ eventsRoot: root, configurationStatus: () => ({ configurationLocked: locked }) }));
   app.use('/api', createRingJudgeRouter({ eventsRoot: root, configurationStatus: () => ({ configurationLocked: locked }) }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
-  const url = `http://127.0.0.1:${server.address().port}/api/ring-judges`;
+  const api = `http://127.0.0.1:${server.address().port}/api`;
+  const url = `${api}/ring-judges`;
   const get = async (name = 'A') => (await (await fetch(`${url}?eventName=${name}`)).json());
   const write = (suffix, body, method = 'POST') => fetch(`${url}${suffix}?eventName=A`, {
     method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
@@ -122,8 +125,24 @@ test('judge API persists scoped CRUD, idempotent adult Dan population, stale gua
   }
   assert.equal(data.judges.some((row) => row.associationNumber === 'G107' || row.associationNumber === 'G108'), false);
   assert.equal(data.judges.some((row) => row.rank === 'D10'), false);
+  const volunteerResponse = await fetch(`${api}/volunteers?eventName=A`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ revision: data.volunteerDirectory.revision, volunteer: {
+      firstName: 'First2', lastName: 'Last', associationNumber: 'D102', school: 'School', rank: 'D2',
+      certification: 'SK/TK', age: 25, ageAsOf: '2027-01-09', parentName: '', primaryType: 'judging', secondaryType: ''
+    } })
+  });
+  assert.equal(volunteerResponse.status, 200);
+  data = await (await write('/populate-volunteers', { revision: data.revision })).json();
+  assert.equal(data.added, 0);
+  assert.equal(data.updated, 1);
+  assert.equal(data.skipped, 1);
+  const volunteerCompetitor = data.judges.find((row) => row.associationNumber === 'D102');
+  assert.ok(volunteerCompetitor.competitorId);
+  assert.equal(volunteerCompetitor.priority, 6);
   data = await (await write('/populate', { revision: data.revision })).json();
   assert.equal(data.added, 0); assert.equal(data.skipped, 5);
+  assert.equal(data.judges.find((row) => row.associationNumber === 'D102').priority, 6);
   const concurrent = await Promise.all([
     write('/populate', { revision: data.revision }), write('/populate', { revision: data.revision })
   ]);
@@ -234,7 +253,7 @@ function frontend(change = {}, rows = null, metadata = {}) {
           id: `approved-${index}`, competitorId, name: 'Jordan Test', associationNumber: 'WT27-BB-009',
           certification: 'UNKNOWN', priority: 4, flaggedForReview: false
         }));
-        else if (!url.includes('/populate?')) judges = [{ id: 'one', competitorId: null, ...body.judge,
+        else if (!url.includes('/populate')) judges = [{ id: 'one', competitorId: null, ...body.judge,
           name: `${body.judge.lastName}, ${body.judge.firstName}` }];
       }
       return { judges, revision: 'r1', volunteerDirectory: { revision: null, tournamentDate: '2027-01-09',
@@ -278,6 +297,15 @@ test('judge editor filters, escapes, confirms changes, preserves errors and guar
   p.lock(); await p.workspace.load();
   assert.equal(n('rjAdd').disabled, true);
   assert.equal(n('rjPopulate').disabled, true);
+});
+test('volunteer population confirms and reports matching priority promotions', async () => {
+  const p = frontend({}, null, { added: 0, updated: 1, skipped: 2 }), n = p.node;
+  await p.workspace.load();
+  p.confirm(true);
+  await n('rjPopulateVolunteers').handlers.click();
+  assert.match(p.confirmations.at(-1), /priority 4.*priority 6/i);
+  assert.equal(p.requests.at(-1).url, '/api/ring-judges/populate-volunteers?eventName=A');
+  assert.match(n('rjNotice').textContent, /promoted 1 matching priorities to 6/);
 });
 test('judge workspace ignores late responses after tournament changes or navigation', async () => {
   const p = frontend();

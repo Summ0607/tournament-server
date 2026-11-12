@@ -13,6 +13,50 @@ test('completed-service attestation uses the shared inline checkbox layout', () 
   assert.match(html, /coordinators must verify it separately/);
 });
 
+test('CSV import shows high-contrast success and places Back to Judges in the import panel', async () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
+  const importSection = html.match(/<section id="jmImport" hidden>([\s\S]*?)<\/section>/)?.[1] || '';
+  const importPanel = importSection.match(/<div class="jm-panel">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.match(importPanel, /id="jmImportCancel">Back to Judges/);
+  assert.match(html, /#judgeManagementView #jmNotice\[data-state="success"\][^{]*\{[^}]*color:\s*#166116/);
+
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, {
+      value: '', innerHTML: '', textContent: '', handlers: {}, files: [], disabled: false,
+      attributes: {}, addEventListener(name, fn) { this.handlers[name] = fn; },
+      setAttribute(name, value) { this.attributes[name] = value; }, querySelectorAll() { return []; }
+    });
+    return nodes.get(id);
+  };
+  const judge = { id: 1, associationId: 'NEW-1', firstName: 'New', lastName: 'Judge',
+    school: 'School', rank: 'D1', certification: 'CORNER', status: 'Active' };
+  const state = { revision: 1, aliases: defaults, ranks: judgeRankOptions(),
+    certificationLevels: certificationLevels(), judges: [], tests: [], experience: [], eligibility: [] };
+  const updated = { ...state, revision: 2, judges: [judge], added: 1, updated: 0 };
+  const workspace = create({ document: { getElementById: node }, confirm: () => true, showPanel() {},
+    request: async (url, options) => {
+      calls.push({ url, options });
+      return url === '/api/judge-management' ? state : updated;
+    } });
+  await workspace.load();
+  node('jmCsv').files = [{ size: 10, text: async () => 'Association ID,First Name,Last Name\nNEW-1,New,Judge' }];
+  await node('jmImportRun').handlers.click();
+
+  assert.equal(calls.at(-1).url, '/api/judge-management-import');
+  assert.match(node('jmNotice').textContent, /Import complete: 1 added, 0 updated/);
+  assert.equal(node('jmNotice').attributes['data-state'], 'success');
+  assert.match(node('jmBody').innerHTML, /NEW-1/);
+  node('jmSelectAll').checked = true;
+  node('jmSelectAll').handlers.change();
+  assert.equal(node('jmSelectAll').checked, true);
+  assert.equal(node('jmDelete').disabled, false);
+  await node('jmDelete').handlers.click();
+  assert.equal(calls.at(-1).url, '/api/judge-management/delete');
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body).ids, [1]);
+});
+
 test('tablet service intake imports packets only as pending experience and supports USB receipts', async () => {
   const nodes = new Map(), calls = [];
   const node = (id) => {

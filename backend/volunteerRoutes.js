@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { Readable } = require('stream');
 const csv = require('csv-parser');
 const { normalizeRank } = require('../db/rankNormalization');
+const { createCsvHeaderMapper, inspectMappedCsvHeaders } = require('../db/csvHeaderAliases');
 const { normalizeCertification, certificationLevels, certificationRankIssue, certificationAgeIssue, judgeRankOptions } = require('../db/judgeCertification');
 const { ageOnDate, storedAge, lockAgeDate } = require('./tournamentAge');
 const { readVolunteerDirectory, replaceVolunteerDirectory } = require('./volunteerStore');
@@ -52,12 +53,13 @@ function validateVolunteer(input, types, date, lenient = false, scope = '') {
 function parseCsv(text) {
   return new Promise((resolve, reject) => {
     const rows = [];
-    const parser = csv({ strict: true, maxRowBytes: 10000, mapHeaders: ({ header }) => header.replace(/^\uFEFF/, '').trim() });
+    const fields = [...Object.values(headers), ...Object.values(optionalHeaders)];
+    const mapHeader = createCsvHeaderMapper(fields);
+    const parser = csv({ strict: true, maxRowBytes: 10000, mapHeaders: ({ header }) => mapHeader(header) });
     parser.on('headers', (values) => {
-      if (new Set(values).size !== values.length || values.some((key) => !Object.hasOwn(headers, key) && !Object.hasOwn(optionalHeaders, key)) ||
-          Object.keys(headers).some((key) => !values.includes(key))) {
-        parser.destroy(new Error(`CSV headers must include: ${Object.keys(headers).join(', ')}. Optional: ${Object.keys(optionalHeaders).join(', ')}.`));
-      }
+      const issues = inspectMappedCsvHeaders(values, Object.values(headers));
+      if (issues.duplicates.length) parser.destroy(new Error(`CSV contains multiple columns for ${issues.duplicates[0]}.`));
+      else if (issues.missing.length) parser.destroy(new Error(`CSV headers must include: ${Object.keys(headers).join(', ')}.`));
     });
     parser.on('data', (row) => rows.push(row));
     parser.on('error', reject); parser.on('end', () => resolve(rows));
@@ -133,10 +135,8 @@ function createVolunteerRouter({ eventsRoot, configurationStatus }) {
     const seen = new Set(); let added = 0, updated = 0, unrecognizedCertifications = 0;
     for (const [index, raw] of records.entries()) {
       try {
-        const input = Object.fromEntries(Object.entries(headers).map(([header, key]) => [key, raw[header]]));
-        for (const [header, key] of Object.entries(optionalHeaders)) {
-          if (Object.hasOwn(raw, header)) input[key] = raw[header];
-        }
+        const input = Object.fromEntries(Object.values(headers).map((field) => [field, raw[field]]));
+        for (const field of Object.values(optionalHeaders)) if (Object.hasOwn(raw, field)) input[field] = raw[field];
         const certification = normalizeCertification(input.certification);
         if (!certification.recognized) unrecognizedCertifications++;
         input.certification = certification.code;

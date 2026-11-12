@@ -3,15 +3,12 @@ const path = require('path');
 const csv = require('csv-parser');
 const sqlite3 = require('sqlite3').verbose();
 const { normalizeRank } = require('./rankNormalization');
+const { createCsvHeaderMapper, inspectMappedCsvHeaders } = require('./csvHeaderAliases');
 const { ageOnDate, validDate, lockAgeDate } = require('../backend/tournamentAge');
 const { resolveMemberPerson, deleteOrphanPeople } = require('../backend/eventPeople');
 
 const defaultDbPath = path.join(__dirname, 'tournament.db');
 const weaponsEligibleRanks = new Set(['G2', 'G1', 'CDB', 'D1', 'D2', 'D3']);
-
-function normalizeHeader(header) {
-  return header ? header.replace(/^\uFEFF/, '').trim() : header;
-}
 
 function normalizeString(value) {
   if (value === null || value === undefined) {
@@ -163,29 +160,37 @@ function importCSV(csvFilePath, targetDbPath = defaultDbPath, options = {}) {
 
       const runImport = () => {
         const rows = [];
-
-        const parser = csv({
-            mapHeaders: ({ header }) => normalizeHeader(header)
-          });
+        const fields = ['firstName', 'lastName', 'parentFirstName', 'parentLastName', 'email', 'phone', 'dob',
+          'associationNumber', 'gender', 'rank', 'studio', 'specialNeeds', 'height', 'competitorId'];
+        const mapHeader = createCsvHeaderMapper(fields);
+        const parser = csv({ mapHeaders: ({ header }) => mapHeader(header) });
+        parser.on('headers', (headers) => {
+          const issues = inspectMappedCsvHeaders(headers, ['firstName', 'lastName', 'dob', 'associationNumber']);
+          if (issues.duplicates.length) {
+            parser.destroy(Object.assign(new Error(`CSV contains multiple columns for ${issues.duplicates[0]}.`), { statusCode: 400 }));
+          } else if (issues.missing.length) {
+            parser.destroy(Object.assign(new Error(`CSV must include columns for: ${issues.missing.join(', ')}.`), { statusCode: 400 }));
+          }
+        });
         const source = fs.createReadStream(csvFilePath);
         source.on('error', (error) => parser.destroy(error));
         source.pipe(parser)
           .on('data', (row) => {
             const mapped = {
-              firstName: row['First Name'],
-              lastName: row['Last Name'],
-              parentFirstName: row['Parent First Name'],
-              parentLastName: row['Parent Last Name'],
-              email: row['Email'],
-              phone: row['Phone'],
-              dob: row['DOB'],
-              associationNumber: row['Association Number'],
-              gender: row['Gender'],
-              rank: row['Current Rank'],
-              studio: row['Studio'],
-              specialNeeds: row['Special Needs'] ?? row['Special Needs (Y|N)'],
-              height: row['Height'],
-              id: row['ID'] ?? row['Competitor ID'] ?? row['CompetitorId'] ?? row['Competitor_ID'] ?? row.id ?? row.competitorId
+              firstName: row.firstName,
+              lastName: row.lastName,
+              parentFirstName: row.parentFirstName,
+              parentLastName: row.parentLastName,
+              email: row.email,
+              phone: row.phone,
+              dob: row.dob,
+              associationNumber: row.associationNumber,
+              gender: row.gender,
+              rank: row.rank,
+              studio: row.studio,
+              specialNeeds: row.specialNeeds,
+              height: row.height,
+              id: row.competitorId
             };
 
             let normalized;
