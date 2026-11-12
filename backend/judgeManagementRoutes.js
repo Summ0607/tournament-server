@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { normalizeRank } = require('../db/rankNormalization');
 const { normalizeCertification, certificationLevels, judgeRankOptions, JUDGE_RANKS, isJudgeRank } = require('../db/judgeCertification');
 const { validDate } = require('./tournamentAge');
-const { actualServiceRoles, eventIdFor } = require('./judgeServicePacket');
+const { actualServiceRoles, eventIdFor, flaggedReplacements } = require('./judgeServicePacket');
 
 const fields = ['associationId', 'firstName', 'lastName', 'school', 'rank', 'certification', 'expiration', 'status', 'notes'];
 const dateOfBirthColumn = 'date_of_birth';
@@ -385,6 +385,19 @@ function createJudgeManagementRouter({
       });
     }
   });
+  router.put('/judge-management/service-packets/:submissionId/replacement-reviews', endpoint(async (req) => {
+    if (!servicePacketStore) throw new Error('Judge service packet storage is not configured.');
+    const eventName = boundedEventName(req.body.eventName);
+    const submissionId = String(req.params.submissionId || '');
+    const stored = servicePacketStore.get(eventName, submissionId);
+    if (!stored) throw invalid('Judge service packet not found for this event.', 404);
+    const reviews = await servicePacketStore.saveReplacementReviews(
+      eventName,
+      submissionId,
+      req.body.reviews
+    );
+    return { replacementReviews: reviews };
+  }, true));
   async function member(db, associationId) {
     if (typeof associationId !== 'string' || !associationId.trim()) throw invalid('Association ID is required.');
     const [judge] = await all(db, 'SELECT id FROM judges WHERE association_id = ? COLLATE NOCASE', [associationId.trim()]);
@@ -407,7 +420,15 @@ function createJudgeManagementRouter({
     }
     const sktkRoles = req.body.sktkRoles ?? {};
     if (!sktkRoles || typeof sktkRoles !== 'object' || Array.isArray(sktkRoles)) throw invalid('SK/TK role selections must be an object.');
-    const participants = actualServiceRoles(packet, sktkRoles);
+    const requiredReviews = flaggedReplacements(packet);
+    const replacementReviews = stored.replacementReviews || [];
+    if (replacementReviews.length !== requiredReviews.length ||
+        replacementReviews.some((review) =>
+          !['APPROVED', 'REJECTED'].includes(review.decision) ||
+          review.reviewedWithAffectedParties !== true || !review.reviewedAt)) {
+      throw invalid('Review every flagged replacement with the affected parties before importing this service packet.', 409);
+    }
+    const participants = actualServiceRoles(packet, sktkRoles, replacementReviews);
     const [existingEvent] = await all(db, `SELECT event_name,event_date,event_scope,event_id FROM judge_experience
       WHERE event_id = ? OR (event_name = ? COLLATE NOCASE AND event_date = ?) LIMIT 1`,
     [event.id, event.name, eventDate]);
@@ -445,6 +466,8 @@ function createJudgeManagementRouter({
     return {
       added,
       duplicates,
+      approvedReplacements: replacementReviews.filter((review) => review.decision === 'APPROVED').length,
+      rejectedReplacements: replacementReviews.filter((review) => review.decision === 'REJECTED').length,
       afterCommit: () => servicePacketStore.markImported(eventName, submissionId)
     };
   }, true));

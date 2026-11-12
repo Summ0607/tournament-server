@@ -59,6 +59,7 @@ rule('POST', /^\/api\/judge-assignments\/auto$/, JUDGING);
 rule('GET POST PUT', /^\/api\/judge-management(?:\/[^/]+(?:\/award)?|-settings|-import)?$/, ['administrator', 'judging-coordinator']);
 rule('GET', /^\/api\/judge-management\/service-packets$/, ['administrator', 'judging-coordinator']);
 rule('POST', /^\/api\/judge-management\/service-packets\/usb$/, ['administrator', 'judging-coordinator']);
+rule('PUT', /^\/api\/judge-management\/service-packets\/[a-f0-9-]{36}\/replacement-reviews$/, ['administrator', 'judging-coordinator']);
 rule('POST', /^\/api\/judge-management\/service-packets\/[a-f0-9-]{36}\/import$/, ['administrator', 'judging-coordinator']);
 rule('PUT DELETE', /^\/api\/judge-management\/experience\/[1-9]\d*$/, ['administrator', 'judging-coordinator']);
 rule('GET', /^\/api\/rings\/monitor$/, AUDIENCE);

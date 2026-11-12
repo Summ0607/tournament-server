@@ -103,6 +103,42 @@ test('service packet storage retains replacement PIN verification and coordinato
   }), /verified event PIN/);
 });
 
+test('flagged replacement review decisions persist, require affected-party review and lock after import', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-reconciliation-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const store = createJudgeServicePacketStore({ root });
+  const submitted = packet('623e4567-e89b-12d3-a456-426614174000');
+  Object.assign(submitted.divisions[0].history[1], {
+    assignmentRevision: 'assignment-revision-1',
+    replacementPinVerified: true,
+    requiresCoordinatorReview: true
+  });
+  await store.accept('Event A', submitted, 'ring-a-1', {
+    date: '2026-01-15', scope: 'REGIONAL', location: ''
+  });
+  const replacement = store.get('Event A', submitted.submissionId).replacementReviews[0];
+  assert.equal(replacement.incomingAssociationId, 'ID2');
+  assert.equal(replacement.outgoingAssociationId, 'ID1');
+  await assert.rejects(store.markImported('Event A', submitted.submissionId), /Review every flagged replacement/);
+  await assert.rejects(store.saveReplacementReviews('Event A', submitted.submissionId, [{
+    replacementId: replacement.replacementId,
+    decision: 'APPROVED',
+    reviewedWithAffectedParties: false
+  }]), /Confirm that the replacement was reviewed/);
+  const reviews = await store.saveReplacementReviews('Event A', submitted.submissionId, [{
+    replacementId: replacement.replacementId,
+    decision: 'REJECTED',
+    reviewedWithAffectedParties: true
+  }]);
+  assert.equal(reviews[0].decision, 'REJECTED');
+  const reopened = createJudgeServicePacketStore({ root }).get('Event A', submitted.submissionId);
+  assert.equal(reopened.replacementReviews[0].decision, 'REJECTED');
+  assert.equal(reopened.replacementReviews[0].reviewedWithAffectedParties, true);
+  await store.markImported('Event A', submitted.submissionId);
+  await assert.rejects(store.saveReplacementReviews('Event A', submitted.submissionId, reviews),
+    /cannot be changed after service import/);
+});
+
 test('tablet service intake persists, replays acknowledgements and binds ring authorization scope', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-route-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -234,6 +270,80 @@ test('coordinator intake creates unverified tournament experience from the full 
   assert.equal(retry.data.experience.length, 3);
   assert.deepEqual(apiRoles('POST', `/api/judge-management/service-packets/${submissionId}/import`),
     ['administrator', 'judging-coordinator']);
+});
+
+test('coordinator replacement reconciliation gates import and can reject replacement credit', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-replacement-review-route-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const judgeFile = path.join(root, 'judges.db');
+  await initializeJudgeDatabase(judgeFile);
+  const db = new sqlite3.Database(judgeFile);
+  await new Promise((resolve, reject) => db.run(`INSERT INTO judges
+    (association_id,first_name,last_name,rank,certification,status)
+    VALUES ('ID1','Outgoing','Judge','D2','CORNER','Active'),
+      ('ID2','Incoming','Judge','D4','REGIONAL','Active')`,
+  (error) => error ? reject(error) : resolve()));
+  await new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
+
+  const servicePacketStore = createJudgeServicePacketStore({ root: path.join(root, 'packets') });
+  const flagged = packet('723e4567-e89b-12d3-a456-426614174000');
+  Object.assign(flagged.divisions[0].history[1], {
+    assignmentRevision: 'assignment-revision-1',
+    replacementPinVerified: true,
+    requiresCoordinatorReview: true
+  });
+  await servicePacketStore.accept('Event A', flagged, 'ring-a-1', {
+    date: '2026-01-15', scope: 'REGIONAL', location: 'Venue'
+  });
+  const app = express(); app.use(express.json());
+  app.use('/api', createJudgeManagementRouter({
+    file: judgeFile,
+    currentDate: () => '2026-01-15',
+    servicePacketStore
+  }));
+  const base = await listen(app, t);
+  const request = async (endpoint, method = 'GET', body) => {
+    const response = await fetch(`${base}${endpoint}`, {
+      method,
+      ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {})
+    });
+    return { status: response.status, data: await response.json() };
+  };
+  let state = await request('/judge-management');
+  const intake = await request('/judge-management/service-packets');
+  const replacement = intake.data.packets[0].replacementReviews[0];
+  assert.equal(replacement.decision, undefined);
+  const importPath = `/judge-management/service-packets/${flagged.submissionId}/import`;
+  const unreviewed = await request(importPath, 'POST', {
+    revision: state.data.revision, eventName: 'Event A', confirmImport: true
+  });
+  assert.equal(unreviewed.status, 409);
+  assert.match(unreviewed.data.error, /affected parties/);
+
+  const reviewPath = `/judge-management/service-packets/${flagged.submissionId}/replacement-reviews`;
+  const saved = await request(reviewPath, 'PUT', {
+    revision: state.data.revision,
+    eventName: 'Event A',
+    reviews: [{
+      replacementId: replacement.replacementId,
+      decision: 'REJECTED',
+      reviewedWithAffectedParties: true
+    }]
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.replacementReviews[0].decision, 'REJECTED');
+  state = saved;
+
+  const imported = await request(importPath, 'POST', {
+    revision: state.data.revision, eventName: 'Event A', confirmImport: true
+  });
+  assert.equal(imported.status, 200);
+  assert.equal(imported.data.added, 1);
+  assert.equal(imported.data.rejectedReplacements, 1);
+  const outgoingJudgeId = state.data.judges.find((judge) => judge.associationId === 'ID1').id;
+  assert.deepEqual(imported.data.experience.map((entry) => entry.judgeId), [outgoingJudgeId]);
+  assert.deepEqual(imported.data.experience.map((entry) => entry.role), ['CENTER_JUDGE']);
+  assert.equal(apiRoles('PUT', `/api${reviewPath}`)?.includes('judging-coordinator'), true);
 });
 
 test('a Center/Corner swap credits both judges with Center service only', async (t) => {

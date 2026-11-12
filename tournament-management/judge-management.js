@@ -166,11 +166,42 @@
         const legacyControls = legacy.map((associationId) => `<label>${esc(associationId)} actual SK/TK role
           <select data-jm-packet-sktk="${esc(associationId)}"><option value="">Select</option>
           <option value="SCOREKEEPER">Scorekeeper</option><option value="TIMEKEEPER">Timekeeper</option></select></label>`).join('');
+        const replacementReviews = record.replacementReviews || [];
+        const replacementControls = replacementReviews.map((review) => {
+          const locked = Boolean(record.importedAt);
+          const reviewedAt = review.reviewedAt
+            ? `Reviewed ${esc(review.reviewedAt)} with affected parties.`
+            : 'Review this replacement with the affected parties before deciding.';
+          return `<fieldset class="jm-replacement-review" data-jm-replacement="${esc(review.replacementId)}">
+            <legend>Replacement review · Division ${esc(review.groupAnchor)} · ${esc(review.role)}</legend>
+            <p>Incoming judge ${esc(review.incomingAssociationId)} replaced ${esc(review.outgoingAssociationId)}.
+              PIN ${review.replacementPinVerified ? 'verified' : 'not verified'} · assignment revision ${esc(review.assignmentRevision || 'unavailable')}</p>
+            <label>Incoming judge service credit
+              <select data-jm-replacement-decision="${esc(review.replacementId)}" ${locked ? 'disabled' : ''}>
+                <option value="">Select decision</option>
+                <option value="APPROVED" ${review.decision === 'APPROVED' ? 'selected' : ''}>Approve — valid judge; allow credit</option>
+                <option value="REJECTED" ${review.decision === 'REJECTED' ? 'selected' : ''}>Reject — do not award this replacement credit</option>
+              </select>
+            </label>
+            <label class="jm-check"><input type="checkbox" data-jm-replacement-confirm="${esc(review.replacementId)}"
+              ${review.reviewedWithAffectedParties ? 'checked' : ''} ${locked ? 'disabled' : ''}>
+              I reviewed this replacement with the affected parties</label>
+            <p>${reviewedAt}</p>
+          </fieldset>`;
+        }).join('');
         return `<article class="jm-card" data-jm-service-packet="${esc(record.submissionId)}">
           <h4>${esc(record.eventName)} — Ring ${esc(record.ringId)} — ${esc(record.phase)}</h4>
           <p>${esc(record.event?.date)} · ${esc(pretty(record.event?.scope))} · ${packet.divisions.length} division(s) · ${historyCount} history change(s)</p>
           <p>${esc(roles.map(([role, count]) => `${role} (${count})`).join(', ') || 'No seated judges')}</p>
           ${legacyControls}
+          ${replacementReviews.length
+            ? `<section aria-label="Flagged replacement reviews">
+              <h5>Coordinator replacement reconciliation</h5>
+              <p>Decide whether each incoming judge is eligible for credit only after reviewing the replacement with the affected parties. This does not verify certification.</p>
+              ${replacementControls}
+              ${record.importedAt ? '' : `<button type="button" data-jm-replacement-reviews-save="${esc(record.submissionId)}">Save replacement decisions</button>`}
+            </section>`
+            : ''}
           <p>${record.importedAt
             ? `Imported ${esc(record.importedAt)}; experience remains subject to coordinator verification.`
             : `<button type="button" data-jm-service-packet-import="${esc(record.submissionId)}">Import as pending experience</button>`}</p>
@@ -352,10 +383,50 @@
       return importUsbServicePacket(event.target.files?.[0]);
     });
     node('jmServicePacketsBody').addEventListener('click', async (event) => {
+      const saveReviewsButton = event.target.closest('[data-jm-replacement-reviews-save]');
+      if (saveReviewsButton) {
+        if (busy || !data) return;
+        const record = servicePackets.find((item) =>
+          item.submissionId === saveReviewsButton.getAttribute('data-jm-replacement-reviews-save'));
+        if (!record) return;
+        const card = saveReviewsButton.closest('[data-jm-service-packet]');
+        const selections = [...card.querySelectorAll('[data-jm-replacement-decision]')];
+        const reviews = selections.map((select) => {
+          const replacementId = select.getAttribute('data-jm-replacement-decision');
+          const confirmation = card.querySelector(`[data-jm-replacement-confirm="${replacementId}"]`);
+          return {
+            replacementId,
+            decision: select.value,
+            reviewedWithAffectedParties: Boolean(confirmation?.checked)
+          };
+        });
+        if (reviews.some((review) => !review.decision || !review.reviewedWithAffectedParties)) {
+          node('jmServicePacketsNotice').textContent =
+            'Choose an outcome and confirm the discussion with affected parties for every flagged replacement.';
+          node('jmServicePacketsNotice').setAttribute('data-state', 'error');
+          return;
+        }
+        const saved = await write(
+          `/api/judge-management/service-packets/${encodeURIComponent(record.submissionId)}/replacement-reviews`,
+          'PUT',
+          { eventName: record.eventName, reviews },
+          'Replacement decisions saved. Service credit remains pending import and certification review is separate.'
+        );
+        if (saved) await loadServicePackets();
+        return;
+      }
       const button = event.target.closest('[data-jm-service-packet-import]');
       if (!button || busy || !data) return;
       const record = servicePackets.find((item) => item.submissionId === button.getAttribute('data-jm-service-packet-import'));
       if (!record) return;
+      const replacements = record.replacementReviews || [];
+      if (replacements.some((review) =>
+        !['APPROVED', 'REJECTED'].includes(review.decision) || review.reviewedWithAffectedParties !== true || !review.reviewedAt)) {
+        node('jmServicePacketsNotice').textContent =
+          'Review every flagged replacement with the affected parties and save each decision before importing.';
+        node('jmServicePacketsNotice').setAttribute('data-state', 'error');
+        return;
+      }
       const card = button.closest('[data-jm-service-packet]');
       const selections = [...card.querySelectorAll('[data-jm-packet-sktk]')];
       const sktkRoles = Object.fromEntries(selections.map((select) => [select.getAttribute('data-jm-packet-sktk'), select.value]));
@@ -366,7 +437,9 @@
       if (!confirm(`Import actual service for Ring ${record.ringId}, ${record.phase} as pending, unverified experience?`)) return;
       const imported = await write(`/api/judge-management/service-packets/${encodeURIComponent(record.submissionId)}/import`,
         'POST', { eventName: record.eventName, confirmImport: true, sktkRoles },
-        (result) => `${result.added || 0} pending experience record(s) added; ${result.duplicates || 0} duplicate(s) skipped. Verification remains a separate coordinator action.`);
+        (result) => `${result.added || 0} pending experience record(s) added; ${result.duplicates || 0} duplicate(s) skipped. ` +
+          `${result.approvedReplacements || 0} replacement(s) approved, ${result.rejectedReplacements || 0} rejected. ` +
+          'Certification verification remains a separate coordinator action.');
       if (imported) await loadServicePackets();
     });
     function openService(record = null, planned = null) {

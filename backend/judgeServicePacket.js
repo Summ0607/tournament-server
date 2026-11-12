@@ -124,9 +124,33 @@ function eventIdFor(eventName, eventDate) {
   return `tournament:${crypto.createHash('sha256').update(JSON.stringify([eventName, eventDate])).digest('hex').slice(0, 32)}`;
 }
 
-function actualServiceRoles(packet, sktkRoles = {}) {
+function replacementReviewId(groupAnchor, historyIndex) {
+  return crypto.createHash('sha256')
+    .update(JSON.stringify([groupAnchor, historyIndex]))
+    .digest('hex');
+}
+
+function flaggedReplacements(packet) {
+  return packet.divisions.flatMap((division) =>
+    division.history.flatMap((entry, historyIndex) => {
+      if (entry.action !== 'REPLACED' || entry.requiresCoordinatorReview !== true) return [];
+      return [{
+        replacementId: replacementReviewId(division.groupAnchor, historyIndex),
+        groupAnchor: division.groupAnchor,
+        historyIndex,
+        role: entry.role,
+        incomingAssociationId: entry.judgeAssociationId,
+        outgoingAssociationId: entry.previousJudgeAssociationId,
+        assignmentRevision: entry.assignmentRevision,
+        replacementPinVerified: entry.replacementPinVerified
+      }];
+    }));
+}
+
+function actualServiceRoles(packet, sktkRoles = {}, replacementReviews = []) {
   const participants = new Map();
   const sktkRoleById = new Map(Object.entries(sktkRoles).map(([id, role]) => [id.toUpperCase(), role]));
+  const reviewById = new Map(replacementReviews.map((review) => [review.replacementId, review]));
   const add = (associationId, role) => {
     if (!associationId) return;
     let actualRole = role;
@@ -144,21 +168,33 @@ function actualServiceRoles(packet, sktkRoles = {}) {
     timekeeper: 'TIMEKEEPER', arbitrator: 'ARBITRATOR'
   };
   for (const division of packet.divisions) {
+    const rejectedIds = new Set(division.history.flatMap((entry, historyIndex) => {
+      const review = reviewById.get(replacementReviewId(division.groupAnchor, historyIndex));
+      return entry.action === 'REPLACED' && entry.requiresCoordinatorReview === true &&
+        review?.decision === 'REJECTED' && entry.judgeAssociationId
+        ? [entry.judgeAssociationId.toUpperCase()]
+        : [];
+    }));
+    const addActualRole = (associationId, role) => {
+      const id = associationId.toUpperCase();
+      if (!rejectedIds.has(id) && !swapCredits.has(id)) add(associationId, role);
+    };
     const swapCredits = new Map();
     for (const entry of division.history) {
       if (entry.action !== 'SWAPPED' || !entry.swapPartnerAssociationId) continue;
-      swapCredits.set(entry.judgeAssociationId.toUpperCase(), {
-        associationId: entry.judgeAssociationId,
-        role: entry.creditedRole
-      });
-      swapCredits.set(entry.swapPartnerAssociationId.toUpperCase(), {
-        associationId: entry.swapPartnerAssociationId,
-        role: entry.creditedRole
-      });
+      if (!rejectedIds.has(entry.judgeAssociationId.toUpperCase())) {
+        swapCredits.set(entry.judgeAssociationId.toUpperCase(), {
+          associationId: entry.judgeAssociationId,
+          role: entry.creditedRole
+        });
+      }
+      if (!rejectedIds.has(entry.swapPartnerAssociationId.toUpperCase())) {
+        swapCredits.set(entry.swapPartnerAssociationId.toUpperCase(), {
+          associationId: entry.swapPartnerAssociationId,
+          role: entry.creditedRole
+        });
+      }
     }
-    const addActualRole = (associationId, role) => {
-      if (associationId && !swapCredits.has(associationId.toUpperCase())) add(associationId, role);
-    };
     for (const [role, judges] of Object.entries(division.seats)) {
       const actualRole = roleNames[role] || role;
       for (const judge of judges) addActualRole(judge.associationId, actualRole);
@@ -195,10 +231,61 @@ function createJudgeServicePacketStore({ root, now = () => new Date().toISOStrin
   const writeIndex = (index) => writeJsonAtomicSync(indexFile, index);
   const packetFile = (id) => path.join(root, `${id}.json`);
   const serialize = (packet) => JSON.stringify(packet);
+  const decoratedRecord = (record, stored) => {
+    const savedReviews = new Map(
+      (record.replacementReviews || []).map((review) => [review.replacementId, review])
+    );
+    return {
+      ...record,
+      replacementReviews: flaggedReplacements(stored.packet).map((replacement) => ({
+        ...replacement,
+        ...(savedReviews.get(replacement.replacementId) || {})
+      })),
+      event: stored.event,
+      packet: stored.packet
+    };
+  };
   const transaction = (callback) => {
     const result = queue.then(callback);
     queue = result.then(() => undefined, () => undefined);
     return result;
+  };
+  const resolvePacketRecord = (index, eventName, submissionId) => {
+    const record = index.packets.find((candidate) =>
+      candidate.eventName === eventName && candidate.submissionId === submissionId);
+    if (!record) fail('Judge service packet not found.', 404);
+    const stored = JSON.parse(fs.readFileSync(packetFile(submissionId), 'utf8'));
+    return { record, packet: stored.packet };
+  };
+  const validateReplacementReviews = (packet, supplied, reviewedAt) => {
+    if (!Array.isArray(supplied)) fail('Replacement reviews must be provided as a list.');
+    const expected = flaggedReplacements(packet);
+    if (supplied.length !== expected.length) {
+      fail('Review every flagged replacement before saving the reconciliation.', 409);
+    }
+    const byId = new Map();
+    for (const item of supplied) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) fail('Invalid replacement review.');
+      const replacementId = boundedText(item.replacementId, 'Replacement review ID', 64);
+      if (byId.has(replacementId)) fail('A replacement may be reviewed only once.');
+      if (!['APPROVED', 'REJECTED'].includes(item.decision)) {
+        fail('Choose whether the replacement judge is approved or rejected for service credit.');
+      }
+      if (item.reviewedWithAffectedParties !== true) {
+        fail('Confirm that the replacement was reviewed with the affected parties.');
+      }
+      byId.set(replacementId, item);
+    }
+    return expected.map((replacement) => {
+      const suppliedReview = byId.get(replacement.replacementId);
+      if (!suppliedReview) fail('Review every flagged replacement before saving the reconciliation.', 409);
+      return {
+        ...replacement,
+        decision: suppliedReview.decision,
+        reviewedWithAffectedParties: true,
+        reviewedAt
+      };
+    });
   };
   return {
     accept(eventName, packetInput, ringId, eventMetadata) {
@@ -245,7 +332,7 @@ function createJudgeServicePacketStore({ root, now = () => new Date().toISOStrin
         index.packets.push({
           eventName: eventNameValue, submissionId: packet.submissionId, serverRecordId, receivedAt,
           ringId: packet.ringId, phase: packet.phase, packetHash,
-          acknowledgement, importedAt: ''
+          acknowledgement, importedAt: '', replacementReviews: []
         });
         try { writeIndex(index); }
         catch (error) {
@@ -262,21 +349,33 @@ function createJudgeServicePacketStore({ root, now = () => new Date().toISOStrin
         .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
         .map((item) => {
           const stored = JSON.parse(fs.readFileSync(packetFile(item.submissionId), 'utf8'));
-          return { ...item, event: stored.event, packet: stored.packet };
+          return decoratedRecord(item, stored);
         });
     },
     get(eventName, submissionId) {
       const item = readIndex().packets.find((candidate) =>
         candidate.eventName === eventName && candidate.submissionId === submissionId);
       if (!item) return null;
-      return { ...item, ...JSON.parse(fs.readFileSync(packetFile(submissionId), 'utf8')) };
+      return decoratedRecord(item, JSON.parse(fs.readFileSync(packetFile(submissionId), 'utf8')));
+    },
+    saveReplacementReviews(eventName, submissionId, suppliedReviews) {
+      return transaction(() => {
+        const index = readIndex();
+        const { record, packet } = resolvePacketRecord(index, eventName, submissionId);
+        if (record.importedAt) fail('Replacement reviews cannot be changed after service import.', 409);
+        const replacementReviews = validateReplacementReviews(packet, suppliedReviews, now());
+        record.replacementReviews = replacementReviews;
+        writeIndex(index);
+        return replacementReviews;
+      });
     },
     markImported(eventName, submissionId, importedAt = now()) {
       return transaction(() => {
         const index = readIndex();
-        const item = index.packets.find((candidate) =>
-          candidate.eventName === eventName && candidate.submissionId === submissionId);
-        if (!item) fail('Judge service packet not found.', 404);
+        const { record: item, packet } = resolvePacketRecord(index, eventName, submissionId);
+        if (flaggedReplacements(packet).length !== (item.replacementReviews || []).length) {
+          fail('Review every flagged replacement before importing this service packet.', 409);
+        }
         item.importedAt ||= importedAt;
         writeIndex(index);
         return item.importedAt;
@@ -286,5 +385,6 @@ function createJudgeServicePacketStore({ root, now = () => new Date().toISOStrin
 }
 
 module.exports = {
-  actualServiceRoles, createJudgeServicePacketStore, eventIdFor, validateServicePacket
+  actualServiceRoles, createJudgeServicePacketStore, eventIdFor, flaggedReplacements,
+  replacementReviewId, validateServicePacket
 };

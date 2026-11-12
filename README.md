@@ -1837,6 +1837,14 @@ revision, successful PIN verification, and a required coordinator-review flag.
 The server validates and preserves those fields in the service packet so they
 remain available during coordinator intake and follow-up review.
 
+Before importing any packet with flagged replacements, an Administrator or
+Judging Coordinator must review each incoming judge with the affected parties
+and save an **Approve** or **Reject** decision in Judge Management. Approval
+allows the incoming judge's replacement-attributed service to be imported;
+rejection excludes that incoming judge's service for the affected division.
+Neither decision removes the outgoing judge's otherwise creditable service.
+The decisions are retained with the packet and cannot be changed after import.
+
 Center/Corner role swaps exchange the two judges' actual seats and are allowed
 without the replacement PIN. The tablet records both Association IDs and the
 swap roles; coordinator intake credits both participants with Center service

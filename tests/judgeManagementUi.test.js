@@ -60,7 +60,7 @@ test('tablet service intake imports packets only as pending experience and suppo
     closest: () => ({ querySelectorAll: () => [] })
   };
   await node('jmServicePacketsBody').handlers.click({
-    target: { closest: () => importButton }
+    target: { closest: (selector) => selector.includes('replacement-reviews-save') ? null : importButton }
   });
   const request = calls.find((call) => call.url.includes('/import'));
   assert.ok(request);
@@ -81,6 +81,83 @@ test('tablet service intake imports packets only as pending experience and suppo
   assert.ok(usbRequest);
   assert.deepEqual(JSON.parse(usbRequest.options.body), envelope);
   assert.match(node('jmServicePacketsNotice').textContent, /import that receipt on the tablet/);
+});
+
+test('flagged tablet replacements require saved affected-party decisions before import', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, {
+      value: '', innerHTML: '', textContent: '', handlers: {}, disabled: false,
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {},
+      querySelectorAll() { return []; }
+    });
+    return nodes.get(id);
+  };
+  const state = { asOf: '2026-01-15', revision: 7, aliases: defaults, ranks: judgeRankOptions(),
+    certificationLevels: certificationLevels(), judges: [], tests: [], experience: [], eligibility: [] };
+  const record = {
+    submissionId: '123e4567-e89b-12d3-a456-426614174000', eventName: 'Event A',
+    ringId: 'ring-a-1', phase: 'P1', importedAt: '', event: { date: '2026-01-15', scope: 'REGIONAL' },
+    packet: { divisions: [{ groupAnchor: '20', seats: {}, history: [] }] },
+    replacementReviews: [{
+      replacementId: 'a'.repeat(64), groupAnchor: '20', role: 'center',
+      incomingAssociationId: 'ID2', outgoingAssociationId: 'ID1',
+      assignmentRevision: 'revision-1', replacementPinVerified: true
+    }]
+  };
+  const decision = { value: 'APPROVED', getAttribute: () => record.replacementReviews[0].replacementId };
+  const confirmation = { checked: true };
+  const card = {
+    querySelectorAll: (selector) => selector === '[data-jm-replacement-decision]' ? [decision] : [],
+    querySelector: () => confirmation
+  };
+  const saveButton = {
+    getAttribute: () => record.submissionId,
+    closest: () => card
+  };
+  const importButton = {
+    getAttribute: () => record.submissionId,
+    closest: () => card
+  };
+  const workspace = create({
+    document: { getElementById: node },
+    confirm: () => true, showPanel() {},
+    request: async (url, options) => {
+      calls.push({ url, options });
+      if (url === '/api/judge-management/service-packets') return { packets: [record] };
+      if (url.endsWith('/replacement-reviews')) {
+        const request = JSON.parse(options.body);
+        record.replacementReviews[0] = {
+          ...record.replacementReviews[0], ...request.reviews[0], reviewedAt: '2026-01-15T12:00:00.000Z'
+        };
+        state.revision++;
+        return state;
+      }
+      if (url.endsWith('/import')) return { ...state, added: 1, duplicates: 0 };
+      return state;
+    }
+  });
+  await workspace.load();
+  await node('jmServicePacketsReload').handlers.click();
+  assert.match(node('jmServicePacketsBody').innerHTML, /reviewing the replacement with the affected parties/);
+  await node('jmServicePacketsBody').handlers.click({
+    target: { closest: (selector) => selector.includes('replacement-reviews-save') ? null : importButton }
+  });
+  assert.match(node('jmServicePacketsNotice').textContent, /save each decision/);
+  assert.equal(calls.some((call) => call.url.endsWith('/import')), false);
+
+  await node('jmServicePacketsBody').handlers.click({
+    target: { closest: (selector) => selector.includes('replacement-reviews-save') ? saveButton : null }
+  });
+  const reviewRequest = calls.find((call) => call.url.endsWith('/replacement-reviews'));
+  assert.equal(reviewRequest.options.method, 'PUT');
+  assert.equal(JSON.parse(reviewRequest.options.body).reviews[0].decision, 'APPROVED');
+  assert.equal(JSON.parse(reviewRequest.options.body).reviews[0].reviewedWithAffectedParties, true);
+
+  await node('jmServicePacketsBody').handlers.click({
+    target: { closest: (selector) => selector.includes('service-packet-import') ? importButton : null }
+  });
+  assert.ok(calls.some((call) => call.url.endsWith('/import')));
 });
 
 test('judge workspace saves, protects unsaved edits, filters, escapes and surfaces errors', async () => {
