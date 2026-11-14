@@ -173,6 +173,7 @@ ring-assignments.json
 *.csv
 !test-data/judge-simulation/*.csv
 /step7-import-files/
+/docs/tournament-setup-testing-guide.md
 
 # IDE
 /.idea/
