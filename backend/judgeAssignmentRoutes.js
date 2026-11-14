@@ -6,6 +6,7 @@ const { writeJsonAtomicSync } = require('./atomicJsonFile');
 const { createEventConfigStore } = require('./eventConfig');
 const { assignmentCandidates } = require('./judgeAssignmentCandidates');
 const { DEFAULT_JUDGE_DATABASE } = require('../db/judgeManagement');
+const { judgeRankOptions } = require('../db/judgeCertification');
 const { POSITIONS, preferred, autoAssign } = require('./judgeAssignmentAlgorithm');
 const { buildRingLabel } = require('../group-server-helpers');
 const phases = ['P1', 'P2'];
@@ -97,6 +98,7 @@ function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DAT
   const context = (req) => contextForEvent(req.query.eventName);
   const payload = ({ file, replacementPinVerifier, ...data }) => ({
     ...data,
+    judgeRanks: judgeRankOptions(),
     replacementPinConfigured: Boolean(replacementPinVerifier)
   });
   const handle = (action) => async (req, res) => {

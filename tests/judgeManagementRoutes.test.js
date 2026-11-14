@@ -210,4 +210,8 @@ test('effective-date eligibility evaluates written/practical attempts independen
   result = evaluateEligibility(judge, reversed, experience, '2026-01-15');
   assert.equal(result.writtenPassed, false);
   assert.equal(result.practicalPassed, true);
+  const arbitrator = { judgeId: 1, eventId: 'arbitrator-service', eventDate: '2026-01-15',
+    role: 'ARBITRATOR', eventScope: 'REGIONAL', logVerified: 1 };
+  result = evaluateEligibility(judge, tests, [arbitrator], '2026-01-15');
+  assert.equal(result.experienceCount, 0);
 });

@@ -1,5 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { normalizeRank } = require('../db/rankNormalization');
 const { normalizeCertification, certificationLevels, formatCertificationForDisplay,
   meetsMinimumCertification, certificationRankIssue, certificationAgeIssue, isJudgeRank, JUDGE_RANKS, judgeRankOptions } = require('../db/judgeCertification');
 
@@ -8,6 +9,13 @@ test('judge rank options use readable Gup and Korean Dan names while retaining c
   assert.deepEqual(options.map((rank) => rank.code), JUDGE_RANKS);
   assert.deepEqual(options.map((rank) => rank.label), ['5th Gup', '4th Gup', '3rd Gup', '2nd Gup', '1st Gup',
     'Cho Dan Bo', 'Cho Dan', 'E Dan', 'Sam Dan', 'Sah Dan', 'Oh Dan', 'Yuk Dan', 'Chil Dan', 'Pal Dan']);
+});
+
+test('Korean Dan names normalize to canonical ranks', () => {
+  for (const [label, code] of [['Cho Dan', 'D1'], ['E Dan', 'D2'], ['Sam Dan', 'D3'],
+    ['Sah Dan', 'D4'], ['Oh Dan', 'D5'], ['Yuk Dan', 'D6']]) {
+    assert.equal(normalizeRank(label).code, code);
+  }
 });
 
 test('certification levels are ordered with canonical codes and display labels', () => {

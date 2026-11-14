@@ -240,12 +240,53 @@
     #resultSource { max-width: 100%; min-height: var(--vd-control-height, 28px); font: inherit; }
     #resultNotice[data-state="error"] { color: #a02020; }
     #ringJudgesView .table-wrap { max-height: none; }
-    #judgeAssignmentsView .ja-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-    #judgeAssignmentsView .ja-card { border: 1px solid var(--line); padding: 12px; border-radius: 5px; }
+    #judgeAssignmentsView .ja-planner-grid { display: grid; grid-template-columns: minmax(270px, .8fr) minmax(0, 1.6fr); align-items: start; gap: 12px; }
+    #judgeAssignmentsView .ja-panel { min-width: 0; padding: 12px; border: 1px solid #748196; border-radius: 8px; background: #f6f8fb; }
+    #judgeAssignmentsView .ja-panel-heading { display: grid; gap: 8px; margin-bottom: 10px; }
+    #judgeAssignmentsView .ja-panel-heading h3 { margin: 0; font-size: 1rem; }
+    #judgeAssignmentsView .ja-assignment-toolbar { display: grid; gap: 4px; }
+    #judgeAssignmentsView .ja-assignment-actions, #judgeAssignmentsView .ja-assignment-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    #judgeAssignmentsView #jaStaffingStatus { margin: 0; }
+    #judgeAssignmentsView .ja-drag-instructions { margin: 4px 0 6px; padding: 5px 8px; border-left: 3px solid #477faf; background: #eef6ff; color: #173b5b; font-size: .82rem; }
+    #judgeAssignmentsView .ja-drag-hint:not([hidden]) { position: fixed; z-index: 10000; top: 12px; left: 50%; max-width: min(90vw, 560px); transform: translateX(-50%); margin: 0; padding: 8px 12px; border: 1px solid #477faf; border-radius: 6px; background: #eef6ff; box-shadow: 0 2px 8px #0003; color: #173b5b; pointer-events: none; }
+    #judgeAssignmentsView .ja-filter-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+    #judgeAssignmentsView .ja-filter-controls label { display: grid; flex: 1 1 180px; gap: 4px; margin: 0; }
+    #judgeAssignmentsView .ja-filter-controls input { width: 100%; min-width: 0; }
+    #judgeAssignmentsView .ja-empty { margin: 4px 0; color: var(--text-soft); }
+    #judgeAssignmentsView .ja-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 4px; }
+    #judgeAssignmentsView .ja-card { min-width: 0; border: 1px solid #6f7c8e; padding: 4px; border-radius: 6px; background: #e9eef4; font-size: .85rem; line-height: 1.15; }
+    #judgeAssignmentsView .ja-card h3 { margin: 0 0 3px; padding-bottom: 2px; border-bottom: 1px solid #9aa5b3; font-size: .9rem; }
+    #judgeAssignmentsView .ja-role { min-width: 0; margin: 2px 0; padding: 2px 4px; border: 1px solid #8793a3; border-radius: 4px; background: #fff; font-size: 11px; line-height: 1.15; }
+    #judgeAssignmentsView .ja-role legend { padding: 0 2px; font-weight: 700; }
+    #judgeAssignmentsView .ja-role p { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin: 0; }
+    #judgeAssignmentsView .ja-assignment-person { gap: 2px 7px !important; }
+    #judgeAssignmentsView .ja-assignment-person > span { min-width: 0; }
+    #judgeAssignmentsView .ja-assignment-person strong { color: #344255; }
+    #judgeAssignmentsView .ja-rank { display: inline-block; padding: 1px 4px; border: 1px solid #8793a3; border-radius: 3px; background: #e9eef4; color: #344255; }
+    #judgeAssignmentsView .ja-assigned-official[draggable="true"], #judgeAssignmentsView .ja-roster-table tr[data-ja-candidate][draggable="true"] { cursor: grab; }
+    #judgeAssignmentsView .ja-assigned-official[draggable="true"]:active, #judgeAssignmentsView .ja-roster-table tr[data-ja-candidate][draggable="true"]:active { cursor: grabbing; }
+    #judgeAssignmentsView .ja-drop-target { outline: 2px solid #477faf; outline-offset: -2px; background: #eaf4ff; }
+    #judgeAssignmentsView button[data-ja-remove], #judgeAssignmentsView button[data-ja-unarb] { min-height: 22px !important; height: auto; padding: 0 4px !important; border: 1px solid #718096 !important; border-radius: 3px; background: #e8edf3; color: #1d2734; font-size: 10px; line-height: 1; white-space: nowrap; }
+    #judgeAssignmentsView .ja-arbitrator-section { margin: 6px 0 0; }
+    #judgeAssignmentsView .ja-arbitrator-section h4 { margin: 0 0 3px; font-size: .9rem; }
+    #judgeAssignmentsView .ja-arbitrator-reserves { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; margin: 3px 0; }
+    #judgeAssignmentsView .ja-arbitrator-reserve { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: .82rem; line-height: 1.15; }
+    #judgeAssignmentsView button[data-ja-unarb] { min-height: 18px !important; height: 18px; padding: 0 4px !important; border-color: #7f1d1d !important; background: #b42318; color: #fff; font-size: 10px; font-weight: 700; }
+    #judgeAssignmentsView button[data-ja-unarb]:hover:not(:disabled) { background: #8f1b13; }
+    #judgeAssignmentsView button[data-ja-unarb]:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+    #judgeAssignmentsView .ja-panel .table-wrap { max-height: 480px; overflow: auto; }
     #judgeAssignmentsView details, #judgeAssignmentsView section { margin: 12px 0; }
-    #judgeAssignmentsView table { min-width: 900px; }
+    #judgeAssignmentsView table { width: 100%; min-width: 0; }
+    #judgeAssignmentsView .ja-roster-table th:first-child { width: 68px; }
     #judgeAssignmentsView label { margin-right: 12px; }
-    #jaNotice[data-state="error"] { color: #d65b5b; }
+    #judgeAssignmentsView .ja-pin-panel { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 14px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; }
+    #judgeAssignmentsView .ja-pin-panel legend { padding: 0 4px; font-weight: 700; }
+    #judgeAssignmentsView .ja-pin-panel label { display: grid; gap: 4px; margin: 0; }
+    #judgeAssignmentsView .ja-pin-panel input { width: 150px; }
+    #judgeAssignmentsView .ja-pin-note { color: var(--text-soft); }
+    #judgeAssignmentsView .ja-ring-selection { padding: 6px; border: 1px solid #748196; border-radius: 5px; background: #fff; }
+    #judgeAssignmentsView .ja-ring-selection h4 { margin: 0 0 4px; }
+    #jaNotice[data-state="error"] { color: #9b1c1c; }
     #judgeManagementView .jm-toolbar, #judgeManagementView .jm-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 12px; }
     #judgeManagementView .jm-panel { border: 1px solid var(--line); background: var(--panel); border-radius: 5px; padding: 16px; margin-bottom: 14px; }
     #judgeManagementView .jm-filters, #judgeManagementView .jm-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -1500,14 +1541,25 @@
     #judgeManagementView .table-wrap th, #volunteersView .table-wrap th, #ringJudgesView .table-wrap th, #judgeAssignmentsView .table-wrap th { position: static; background: var(--panel, #f3f6fa); color: inherit; }
     #judgeManagementView .jm-toolbar label { min-width: 180px; }
     #judgeAssignmentsView .actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 12px 0; }
+    #judgeAssignmentsView .ja-plan-context { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 12px; border: 1px solid #748196; border-radius: 8px; background: #eef2f7; }
+    #judgeAssignmentsView .ja-plan-context label { display: grid; gap: 4px; margin: 0; font-weight: 700; }
+    #judgeAssignmentsView .ja-plan-context select { min-width: 150px; min-height: var(--vd-control-height, 28px); padding: 4px 8px; font: inherit; }
+    #judgeAssignmentsView .ja-ring-list { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; }
+    #judgeAssignmentsView .ja-ring-list label { margin: 0; }
+    #judgeAssignmentsView .ja-roster-table { table-layout: fixed; border-collapse: collapse; }
+    #judgeAssignmentsView .ja-roster-table th { background: #e2e8f0; border-bottom: 2px solid #748196; color: #1d2734; }
+    #judgeAssignmentsView .ja-roster-table td { border-bottom: 1px solid #aeb8c5; font-size: 11px; }
+    #judgeAssignmentsView .ja-roster-table tr[data-ja-candidate][draggable="true"]:hover { background: #e2ebf5; }
+    #judgeAssignmentsView .ja-help-sources { display: none; }
     #judgeAssignmentsView h2 { font-size: 1.1rem; margin: 0 0 8px; }
     #judgeAssignmentsView label { display: inline-flex; gap: 6px; align-items: center; margin: 6px 12px 6px 0; }
     #jaArbitratorList label { display: flex; }
     #judgeAssignmentsView #jaAuto { border: 2px solid #477faf; }
     #judgeAssignmentsView #jaSave[data-unsaved="true"]:not(:disabled) { background: #875000; color: #fff; border-color: #b87915; }
     #judgeAssignmentsView #jaSaveState { color: inherit; }
-    #judgeAssignmentsView:has(#jaSave[data-unsaved="true"]) #jaSaveState { color: #b76a00; }
+    #judgeAssignmentsView:has(#jaSave[data-unsaved="true"]) #jaSaveState { color: #7a3e00; }
     #judgeAssignmentsView #jaSaveHelp { color: var(--text-soft); }
+    @media (max-width: 1000px) { #judgeAssignmentsView .ja-planner-grid { grid-template-columns: 1fr; } }
     @media print { #judgeManagementView .table-wrap, #volunteersView .table-wrap, #ringJudgesView .table-wrap, #judgeAssignmentsView .table-wrap { max-height: none; overflow: visible; } }
     @media print { #judgeManagementView .table-wrap thead, #volunteersView .table-wrap thead, #ringJudgesView .table-wrap thead, #judgeAssignmentsView .table-wrap thead { position: static; } }
   </style>
@@ -1961,16 +2013,56 @@
               </form></dialog>
             </div>
             <div class="view" id="judgeAssignmentsView" data-help-page="judge-assignments" data-help-title="Judge Assignments" hidden>
-              <h2>Judge Assignments</h2>
-              <p>1. Select rings and confirm availability. 2. Reserve arbitrators. 3. Auto assign or adjust positions. 4. Save assignment changes.</p>
-              <details><summary>Phase planning rules</summary><p>Plan P1 and P2 before the event. Competitor candidates require agreement; no contact messages are sent. Competitors cannot be marked available in the phase for their registered rank: Dan ranks are unavailable in Black Belt phases, and Gup/CDB ranks are unavailable in Gup phases. This applies to sanctioned and In-House events; qualified competitors may serve in the other phase. Assignments earn no experience by themselves.</p></details>
-              <div class="actions"><label>Event replacement PIN (exactly 4 characters) <input id="jaReplacementPin" type="password" maxlength="4" autocomplete="new-password"></label>
-                <span id="jaReplacementPinState" role="status"></span></div>
-              <div class="actions"><label>Assignment phase <select id="jaPhase"><option>P1</option><option>P2</option></select></label>
-                <button id="jaReload" type="button">Reload</button><button id="jaAuto" type="button">Auto assign phase</button><button id="jaSave" type="button" aria-describedby="jaSaveHelp jaSaveState">Save assignment changes</button><strong id="jaSaveState" role="status"></strong></div>
-              <p id="jaSaveHelp">Saves P1 and P2 drafts and the event replacement PIN; incomplete staffing is allowed. The PIN is never shown after saving and is included only as hidden verification data in ring plans. Auto assign creates a draft, not a saved plan.</p>
-              <div class="actions"><label>Find candidate (name, ID, rank or certification) <input id="jaSearch" type="search"></label><button id="jaClearSearch" type="button">Clear search</button><span id="jaCandidateCount" role="status"></span></div>
-              <p id="jaNotice" role="status" aria-live="polite"></p><div id="jaContent"></div>
+              <div class="ja-plan-context">
+                <label>Phase<select id="jaPhase"><option>P1</option><option>P2</option></select></label>
+                <label>Discipline<select id="jaDiscipline"><option value="black-belt">Black Belt</option><option value="gup">Gup</option></select></label>
+              </div>
+              <fieldset id="jaReplacementSettings" class="ja-pin-panel">
+                <legend>Tablet replacement PIN (optional)</legend>
+                <label>Event replacement PIN (exactly 4 characters) <input id="jaReplacementPin" type="password" maxlength="4" autocomplete="new-password"></label>
+                <span id="jaReplacementPinState" class="ja-pin-note" role="status"></span>
+              </fieldset>
+              <p id="jaNotice" role="status" aria-live="polite"></p>
+              <p id="jaDragHint" class="ja-drag-hint" role="status" aria-live="polite" hidden></p>
+              <div id="jaContent" class="ja-planner-grid">
+                <section id="jaAvailablePanel" class="ja-panel" aria-labelledby="jaAvailableTitle">
+                  <div class="ja-panel-heading">
+                    <h3 id="jaAvailableTitle">Available Judges</h3>
+                    <div class="ja-filter-controls">
+                      <label>Filter this list by name, ID, rank or certification<input id="jaSearch" type="search" placeholder="Name, ID, rank or certification"></label>
+                      <button id="jaClearSearch" type="button">Clear</button>
+                    </div>
+                    <span id="jaCandidateCount" role="status"></span>
+                  </div>
+                  <div id="jaAvailabilityPanel"><p class="ja-empty">No judge roster loaded.</p></div>
+                </section>
+                <section id="jaAssignmentPanel" class="ja-panel" aria-labelledby="jaAssignmentTitle">
+                  <div class="ja-panel-heading">
+                    <h3 id="jaAssignmentTitle">Tournament Ring Assignments</h3>
+                    <div class="ja-assignment-toolbar">
+                      <div class="ja-assignment-actions">
+                        <button id="jaAuto" type="button" data-help="Build ring assignments for the selected phase using the selected rings and confirmed available judges. Review the result, then save.">Build ring assignments</button>
+                        <button id="jaSave" type="button" aria-describedby="jaSaveState" data-help="Save the assignment plans for both P1 and P2.">Save assignments</button>
+                        <button id="jaReload" type="button" data-help="Reload the selected tournament's saved assignment plans.">Reload</button>
+                      </div>
+                      <div class="ja-assignment-status">
+                        <strong id="jaSaveState" role="status"></strong>
+                        <span id="jaBuildHint" role="status"></span>
+                      </div>
+                    </div>
+                    <p id="jaStaffingStatus"></p>
+                  </div>
+                  <p class="ja-drag-instructions">Drag between assigned judges to swap; drag between an assignment and an available judge to replace.</p>
+                  <div id="jaRingPlanning"><p class="ja-empty">No tournament rings loaded.</p></div>
+                </section>
+              </div>
+              <div class="ja-help-sources">
+                <p data-help-source="Planning P1 and P2">P1 and P2 are separate assignment plans. Choose the phase and its Black Belt or Gup discipline together at the top of the page. Select rings and confirm which judges are available for that phase; availability is never assumed, and competitor candidates need coordinator confirmation. A competitor cannot be available in the phase that matches their competition rank. A judge can serve in both phases, but only once per phase.</p>
+                <p data-help-source="Building and saving assignments">Build ring assignments uses only selected rings and judges confirmed available for the selected phase. The system places eligible judges according to certification, priority and progression opportunities; it does not invent judges or bypass role qualifications. Review the resulting ring cards and make any allowed manual adjustments. Building changes a draft only. Save assignments persists both phase plans; incomplete staffing can be saved.</p>
+                <p data-help-source="Staffing and arbitrators">Minimum staffing per ring is one Center, four Corners and one SK/TK for Black Belt, or one Center, two Corners and one SK/TK for Gup. Preferred staffing is one Center, four Corners and two SK/TK. Reserve arbitrators only after confirming availability; reserved judges cannot also fill ring positions in that phase. Removing availability also removes that judge from the phase's positions and arbitrator reservations.</p>
+                <p data-help-source="Eligibility and experience">Role eligibility uses the event date and authoritative Judge Management certification, rank and age rules. A promotion opportunity does not substitute for an awarded certification. Assignments are plans only; they do not record completed service, verify experience, pass tests or award certification.</p>
+                <p data-help-source="Tablet replacement PIN">The four-character replacement PIN is used only to authorize a tablet judge replacement. Set it before tablets load ring plans if that workflow will be used. It is optional for assignment planning; a blank field leaves an existing PIN unchanged. The saved PIN is never shown again.</p>
+              </div>
             </div>
             <div class="view" id="ringJudgesView" data-help-page="ring-judges" data-help-title="Ring Judges" hidden>
               <div class="actions"><button id="rjAdd" type="button"               data-help="Create a validated member Judging volunteer with an Association ID and add that volunteer to Ring Judges.">Add Judge</button><button id="rjPopulate" type="button" data-help="Add eligible competitors matched to current Judge Management records. Certified matches need no bulk approval; phase agreement is still confirmed separately.">Populate Certified Competitors</button><button id="rjReviewCompetitors" type="button" hidden data-help="Review and select uncredentialed In-House competitors to add to the Ring Judges pool only. This does not certify them or make them assignable.">Review In-House Competitors</button><button id="rjPopulateVolunteers" type="button" data-help="Add eligible member Judging volunteers. Matching entries at competitor priority 4 are promoted to volunteer priority 6; other judge details are preserved.">Populate Judges from Volunteers</button><button id="rjReload" type="button" data-help="Reload the saved judges and operational lock status.">Reload Saved</button></div>
@@ -2075,7 +2167,7 @@
                     <label>Event scope<select id="jmService-eventScope" required><option value="">Select scope</option><option value="REGIONAL">Regional</option><option value="NATIONAL">National</option><option value="WORLD">World</option><option value="IN_HOUSE">In-House</option></select></label>
                     <label>Location<input id="jmService-location" maxlength="200"></label>
                     <label>Phase<select id="jmService-phase" required><option value="">Select phase</option><option>P1</option><option>P2</option></select></label>
-                    <label>Actual role<select id="jmService-role" required><option value="">Select role</option><option value="SCOREKEEPER">Scorekeeper</option><option value="TIMEKEEPER">Timekeeper</option><option value="CORNER_JUDGE">Corner Judge</option><option value="CENTER_JUDGE">Center Judge</option><option value="ARBITRATOR">Arbitrator</option><option value="JUDGE">Judge (unspecified role)</option></select></label>
+                    <label><span id="jmServiceRoleLabel">Actual role</span><select id="jmService-role" required><option value="">Select role</option><option value="SCOREKEEPER">Scorekeeper</option><option value="TIMEKEEPER">Timekeeper</option><option value="CORNER_JUDGE">Corner Judge</option><option value="CENTER_JUDGE">Center Judge</option><option value="ARBITRATOR">Arbitrator</option><option value="JUDGE">Judge (unspecified role)</option></select></label>
                   </div>
                   <label class="jm-check"><input id="jmServiceCompleted" type="checkbox" required> I confirm this judge actually completed the recorded service, not merely an assignment or check-in.</label>
                   </fieldset>
@@ -2084,7 +2176,7 @@
                   <button type="button" id="jmServiceCancel">Cancel</button>
                 </form>
                 <div class="jm-toolbar"><label>Search experience (name, ID, event or role)<input type="search" id="jmExperienceSearch"></label><label>Verification<select id="jmExperienceVerified"><option value="">All records</option><option value="pending">Not verified</option><option value="verified">Verified</option></select></label><button type="button" id="jmExperienceClear">Clear filters</button><span id="jmExperienceCount" role="status"></span></div>
-                <div class="table-wrap"><table aria-label="Judge experience"><thead><tr><th scope="col">WTSDA ID</th><th scope="col">Judge</th><th scope="col">Event</th><th scope="col">Date</th><th scope="col">Location</th><th scope="col">Role</th><th scope="col">Scope</th><th scope="col">Log</th></tr></thead><tbody id="jmExperienceBody"><tr><td colspan="8">Loading experience records...</td></tr></tbody></table></div>
+                <div class="table-wrap"><table aria-label="Judge experience"><thead><tr><th scope="col">WTSDA ID</th><th scope="col">Judge</th><th scope="col">Event</th><th scope="col">Date</th><th scope="col">Location</th><th scope="col">Credited role</th><th scope="col">Scope</th><th scope="col">Log</th></tr></thead><tbody id="jmExperienceBody"><tr><td colspan="8">Loading experience records...</td></tr></tbody></table></div>
               </section>
               <section id="jmCsvSettings" hidden>
                 <div class="jm-panel"><h2>CSV Field Mapping</h2><p class="jm-note">Built-in aliases cover common registration and record-keeping headers. Matching ignores case, spaces and punctuation; saved aliases add to the built-in set.</p>
@@ -4670,7 +4762,7 @@
             ${raDivisionEstimate(group)}
           </button>`;
         }).join('') : `<p class="ra-meta">${!ra.ready ? 'Divisions unavailable.' : !ra.groups.length
-            ? 'No saved divisions for the active event. Build and save groups first.'
+            ? `No saved division configuration for ${gbEsc(ra.eventName)}. Open Divisions, build and save groups for this tournament, then refresh Ring Assignment.`
             : availableGroups.length ? 'No available divisions match the selected filters.' : 'No available divisions.'}</p>`;
         document.getElementById('raRingCount').textContent = `${ra.rings.length} rings`;
         raRingsEl.innerHTML = ra.rings.map((ring) => {

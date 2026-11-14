@@ -2,6 +2,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { validDate } = require('./tournamentAge');
 
+const DEFAULT_EXPERIENCE_PERCENTAGE = 70;
+const DEFAULT_EXPERIENCE_SEED = 'spring-2027-experience-70-v1';
+
 function regionalDataset(today) {
   validDate(today);
   const offset = (days) => {
@@ -35,7 +38,68 @@ function regionalDataset(today) {
   return { csv, judges, date: today };
 }
 
-async function setupExperience(base, associationIds) {
+function hashText(value) {
+  let hash = 2166136261;
+  for (const character of value) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+  return hash >>> 0;
+}
+
+function seededRandom(seed) {
+  let state = hashText(seed) || 0x6d2b79f5;
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return (state >>> 0) / 0x100000000;
+  };
+}
+
+function experienceRole(judge) {
+  switch (String(judge.certification || '').trim().toUpperCase()) {
+    case 'CORNER': return 'CORNER_JUDGE';
+    case 'REGIONAL':
+    case 'INTERNATIONAL': return 'CENTER_JUDGE';
+    case 'SK_TK': return hashText(judge.associationId) % 2 ? 'TIMEKEEPER' : 'SCOREKEEPER';
+    default: return null;
+  }
+}
+
+function selectExperienceJudges(judges, percentage = DEFAULT_EXPERIENCE_PERCENTAGE, seed = DEFAULT_EXPERIENCE_SEED) {
+  if (!Array.isArray(judges) || !judges.length) throw new Error('Judge DB has no judges to select from.');
+  if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 100) {
+    throw new Error('Experience percentage must be greater than 0 and at most 100.');
+  }
+  if (typeof seed !== 'string' || !seed.trim()) throw new Error('An experience selection seed is required.');
+
+  const seen = new Set();
+  for (const judge of judges) {
+    const associationId = String(judge.associationId || '').trim().toUpperCase();
+    if (!associationId || seen.has(associationId)) throw new Error('Judge DB contains a missing or duplicate Association ID.');
+    seen.add(associationId);
+  }
+
+  const population = judges.filter((judge) => {
+    const certification = String(judge.certification || '').trim().toUpperCase();
+    return certification && !['UNKNOWN', 'UNCERTIFIED'].includes(certification);
+  });
+  const targetCount = Math.round(population.length * percentage / 100);
+  const candidates = population.filter((judge) => experienceRole(judge))
+    .slice()
+    .sort((a, b) => a.associationId.localeCompare(b.associationId));
+  if (targetCount > candidates.length) {
+    throw new Error(`Cannot select ${targetCount} of ${population.length} judges: only ${candidates.length} have a role-compatible certification.`);
+  }
+
+  const random = seededRandom(seed);
+  for (let index = candidates.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [candidates[index], candidates[swapIndex]] = [candidates[swapIndex], candidates[index]];
+  }
+  return { judgeCount: judges.length, eligibleJudgeCount: population.length,
+    selected: candidates.slice(0, targetCount), targetCount };
+}
+
+async function setupExperience(base, { percentage = DEFAULT_EXPERIENCE_PERCENTAGE, seed = DEFAULT_EXPERIENCE_SEED } = {}) {
   const url = new URL(base);
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.username || url.password || url.pathname !== '/') {
     throw new Error('Experience setup requires a local isolated simulation URL, such as http://127.0.0.1:3450.');
@@ -48,44 +112,53 @@ async function setupExperience(base, associationIds) {
   }
   const simulation = await request('/api/simulation');
   if (simulation.format !== 'judge-lifecycle-simulation-v1') throw new Error('Not an isolated judge simulation.');
-  if (!Array.isArray(associationIds) || !associationIds.length ||
-      associationIds.some((id) => !/^SIM-R-(?:00[1-9]|0[1-9]\d|1\d\d|200)$/.test(id)) ||
-      new Set(associationIds).size !== associationIds.length) throw new Error('Select distinct fabricated regional IDs SIM-R-001 through SIM-R-200.');
-  // Preflight every selected identity before creating any experience.
-  for (const associationId of associationIds) {
-    await request(`/api/judge-management/profile?associationId=${encodeURIComponent(associationId)}`);
+  const roster = await request('/api/judge-management');
+  if (!Array.isArray(roster.judges)) throw new Error('Judge DB did not return its judge roster.');
+  const selection = selectExperienceJudges(roster.judges, percentage, seed);
+  const selectedProfiles = new Map();
+  for (const judge of selection.selected) {
+    const profile = await request(`/api/judge-management/profile?associationId=${encodeURIComponent(judge.associationId)}`);
+    if (profile.judge.associationId.toUpperCase() !== judge.associationId.toUpperCase() ||
+        profile.judge.certification !== judge.certification || !experienceRole(profile.judge)) {
+      throw new Error('Judge DB changed during experience setup. Reload and retry.');
+    }
+    selectedProfiles.set(judge.associationId, profile.judge);
   }
+
+  const eventDateValue = new Date(`${simulation.initialDate || simulation.date}T00:00:00Z`);
+  eventDateValue.setUTCDate(eventDateValue.getUTCDate() - 30);
+  const eventDate = eventDateValue.toISOString().slice(0, 10);
+  if (eventDate > simulation.date) throw new Error('Generated experience date must not be in the future.');
+  const eventId = `sim-regional-${eventDate}`;
+  const eventName = `SIMULATED Regional ${eventDate}`;
   let added = 0, duplicates = 0;
-  for (const associationId of associationIds) {
+  for (const judge of selection.selected) {
+    const associationId = judge.associationId;
     const profile = await request(`/api/judge-management/profile?associationId=${encodeURIComponent(associationId)}`);
-    if (['UNKNOWN', 'UNCERTIFIED'].includes(profile.judge.certification)) continue;
-    const number = Number(associationId.slice(-3));
-    const count = number % 4;
-    if (!count) continue;
-    const records = Array.from({ length: count }, (_, index) => {
-      const eventDate = new Date(`${simulation.initialDate || simulation.date}T00:00:00Z`);
-      eventDate.setUTCDate(eventDate.getUTCDate() - 30 * (index + 1));
-      const date = eventDate.toISOString().slice(0, 10);
-      const eventId = `sim-regional-${date}`;
-      const role = ['REGIONAL', 'INTERNATIONAL'].includes(profile.judge.certification) ? 'CENTER_JUDGE' :
-        profile.judge.certification === 'CORNER' ? 'CORNER_JUDGE' : 'SCOREKEEPER';
-      return { eventId, eventName: `SIMULATED Regional ${date}`, eventDate: date,
-        location: 'Fabricated regional venue', role, eventScope: 'REGIONAL', phase: 'P1',
-        source: 'SIMULATION', sourceId: `${associationId}:${eventId}:${role}:P1` };
-    });
+    const expectedJudge = selectedProfiles.get(associationId);
+    if (profile.judge.certification !== expectedJudge.certification) {
+      throw new Error('Judge certification changed during experience setup. Reload and retry.');
+    }
+    const role = experienceRole(profile.judge);
+    const records = [{ eventId, eventName, eventDate,
+      location: 'Fabricated regional venue', role, eventScope: 'REGIONAL', phase: 'P1',
+      source: 'SIMULATION', sourceId: `${associationId}:${eventId}:${role}:P1` }];
     const result = await request('/api/judge-management/experience', { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ associationId, revision: profile.revision, records }) });
     added += result.added; duplicates += result.duplicates;
   }
-  return { added, duplicates };
+  return { judgeCount: selection.judgeCount, eligibleJudgeCount: selection.eligibleJudgeCount,
+    selectedCount: selection.targetCount,
+    selectedIds: selection.selected.map((judge) => judge.associationId),
+    percentage, seed, eventId, eventDate, added, duplicates };
 }
 
 async function main(args) {
   const [command, ...options] = args;
-  if (!['csv', 'experience'].includes(command) || options.length % 2) throw new Error('Use csv --date YYYY-MM-DD --output PATH, or experience --url http://127.0.0.1:3450 --ids SIM-R-001,SIM-R-002 (omit --ids for all 200).');
+  if (!['csv', 'experience'].includes(command) || options.length % 2) throw new Error('Use csv --date YYYY-MM-DD --output PATH, or experience --url http://127.0.0.1:3450 [--percent 70] [--seed NAME].');
   const values = {};
-  const allowed = command === 'csv' ? ['--date', '--output'] : ['--url', '--ids'];
+  const allowed = command === 'csv' ? ['--date', '--output'] : ['--url', '--percent', '--seed'];
   for (let i = 0; i < options.length; i += 2) {
     if (!allowed.includes(options[i]) || Object.hasOwn(values, options[i])) throw new Error(`Invalid option: ${options[i]}`);
     values[options[i]] = options[i + 1];
@@ -96,10 +169,14 @@ async function main(args) {
     fs.writeFileSync(path.resolve(values['--output']), dataset.csv, { flag: 'wx' });
     console.log('Created 200 fabricated regional judges; existing files are never overwritten.');
   } else {
-    const ids = values['--ids'] ? values['--ids'].split(',').map((id) => id.trim()) :
-      Array.from({ length: 200 }, (_, i) => `SIM-R-${String(i + 1).padStart(3, '0')}`);
-    console.log(await setupExperience(values['--url'], ids));
+    if (!values['--url']) throw new Error('An isolated simulation URL is required.');
+    const percentage = values['--percent'] === undefined ? DEFAULT_EXPERIENCE_PERCENTAGE : Number(values['--percent']);
+    const seed = values['--seed'] || DEFAULT_EXPERIENCE_SEED;
+    const result = await setupExperience(values['--url'], { percentage, seed });
+    console.log({ judgeCount: result.judgeCount, eligibleJudgeCount: result.eligibleJudgeCount,
+      selectedCount: result.selectedCount,
+      added: result.added, duplicates: result.duplicates, eventDate: result.eventDate });
   }
 }
 if (require.main === module) main(process.argv.slice(2)).catch((error) => { console.error(error.message); process.exitCode = 1; });
-module.exports = { regionalDataset, setupExperience };
+module.exports = { regionalDataset, experienceRole, selectExperienceJudges, setupExperience };

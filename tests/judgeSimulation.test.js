@@ -262,13 +262,23 @@ test('isolated preparation persists explicit participants, shared identities and
   actualState = response.data;
   assert.equal(actualState.eligibility.find((row) => row.judgeId === replacement.id).experienceCount,
     initial.eligibility.find((row) => row.judgeId === replacement.id).experienceCount + 1);
-  response = await request(`/api/judge-management/experience/${entry.id}`, 'PUT', {
-    revision: actualState.revision, associationId: 'SIM-004', confirmedCompleted: true,
-    record: { ...service, role: 'TIMEKEEPER' }
+  assert.equal((await request(`/api/judge-management/experience/${entry.id}`, 'PUT', {
+    revision: actualState.revision, confirmedRoleAdjustment: true, record: { role: 'TIMEKEEPER' }
+  })).status, 409);
+  response = await request('/api/judge-management/experience-verify', 'POST', {
+    revision: actualState.revision, associationId: 'SIM-005', ids: [entry.id], verified: false
   });
   assert.equal(response.status, 200);
   actualState = response.data;
-  assert.equal(actualState.experience.find((row) => row.id === entry.id).logVerified, 0, 'corrected replacement resets verification');
+  response = await request(`/api/judge-management/experience/${entry.id}`, 'PUT', {
+    revision: actualState.revision, confirmedRoleAdjustment: true, record: { role: 'TIMEKEEPER' }
+  });
+  assert.equal(response.status, 200);
+  actualState = response.data;
+  const adjusted = actualState.experience.find((row) => row.id === entry.id);
+  assert.equal(adjusted.logVerified, 0, 'credited-role adjustment remains pending verification');
+  assert.equal(adjusted.judgeId, replacement.id, 'credit adjustment does not reassign the judge');
+  assert.equal(adjusted.phase, service.phase, 'credit adjustment preserves the phase');
   assert.equal(buildReview(state.config, plan, actualState).actual[0].role, 'TIMEKEEPER');
   response = await request(`/api/judge-management/experience/${entry.id}`, 'DELETE', {
     revision: actualState.revision, confirmedWithdrawal: true

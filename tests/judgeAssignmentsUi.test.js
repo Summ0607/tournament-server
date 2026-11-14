@@ -10,6 +10,7 @@ test('phase planner confirms competitor agreement, preserves other phase, saves 
   };
   const empty = (discipline) => ({ discipline, rings: [], available: [], arbitrators: [], assignments: {} });
   let state = { revision: null, sourceRevision: 's1', configurationLocked: false, rings: ['A1'],
+    judgeRanks: [{ code: 'D1', label: 'Cho Dan' }, { code: 'G5', label: '5th Gup' }],
     phases: { P1: empty('black-belt'), P2: empty('gup') },
     judges: [
       { id: 'TEST', name: '<Test>', associationId: 'TEST', potential: true, sources: ['competitor'], rank: 'D1',
@@ -27,12 +28,14 @@ test('phase planner confirms competitor agreement, preserves other phase, saves 
       return structuredClone(state);
     } });
   await workspace.load();
-  assert.match(node('jaContent').innerHTML, /&lt;Test&gt;/);
-  assert.match(node('jaContent').innerHTML, /Confirm Gup Volunteer \(GUP\)[^>]*data-ja-available="GUP"[^>]*>/);
-  assert.doesNotMatch(node('jaContent').innerHTML.match(/<input id="jaAvailable-\d+" aria-label="Confirm Gup Volunteer \(GUP\)"[^>]*>/)?.[0] || '', /disabled/,
+  assert.match(node('jaAvailabilityPanel').innerHTML, /&lt;Test&gt;/);
+  assert.match(node('jaAvailabilityPanel').innerHTML, /<span class="ja-rank">Cho Dan<\/span>/);
+  assert.doesNotMatch(node('jaAvailabilityPanel').innerHTML, /<span class="ja-rank">D1<\/span>/);
+  assert.match(node('jaAvailabilityPanel').innerHTML, /Confirm Gup Volunteer \(GUP\)[^>]*data-ja-available="GUP"[^>]*>/);
+  assert.doesNotMatch(node('jaAvailabilityPanel').innerHTML.match(/<input id="jaAvailable-\d+" aria-label="Confirm Gup Volunteer \(GUP\)"[^>]*>/)?.[0] || '', /disabled/,
     'Gup competitors may be considered for the non-competing Black Belt phase');
   node('jaPhase').value = 'P2'; node('jaPhase').handlers.change();
-  assert.match(node('jaContent').innerHTML.match(/<input id="jaAvailable-\d+" aria-label="Confirm Gup Volunteer \(GUP\)"[^>]*>/)?.[0] || '', /disabled/,
+  assert.match(node('jaAvailabilityPanel').innerHTML.match(/<input id="jaAvailable-\d+" aria-label="Confirm Gup Volunteer \(GUP\)"[^>]*>/)?.[0] || '', /disabled/,
     'Gup competitors cannot be marked available in the Gup phase');
   const change = (attributes, checked = true) => node('jaContent').handlers.change({
     target: { checked, value: '', getAttribute(name) { return attributes[name]; } }
@@ -58,7 +61,23 @@ test('phase planner confirms competitor agreement, preserves other phase, saves 
   delayed = new Promise((done) => { resolve = done; });
   const loading = workspace.load();
   eventName = 'Other'; workspace.leave(); resolve(); await loading;
-  assert.match(node('jaContent').innerHTML, /Select a tournament/);
+  assert.match(node('jaAvailabilityPanel').innerHTML, /No judge list is loaded/);
+});
+
+test('empty assignment page explains which tournament selector loads each panel', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { innerHTML: '', textContent: '', value: '', handlers: {},
+      setAttribute() {}, addEventListener(name, fn) { this.handlers[name] = fn; } });
+    return nodes.get(id);
+  };
+  const workspace = create({ document: { getElementById: node }, selectedEvent: () => '',
+    request: async (...args) => { calls.push(args); } });
+  await workspace.load();
+  assert.equal(calls.length, 0);
+  assert.match(node('jaNotice').textContent, /Tournament for this page.*selector above.*judges and rings/);
+  assert.match(node('jaAvailabilityPanel').innerHTML, /No judge list is loaded/);
+  assert.match(node('jaRingPlanning').innerHTML, /No tournament rings are loaded/);
 });
 
 test('planner saves the coordinator-created event PIN without reading it back', async () => {
@@ -98,18 +117,17 @@ test('planner saves the coordinator-created event PIN without reading it back', 
   assert.equal(JSON.stringify(state).includes('A7!Q'), false);
 });
 
-test('planner preserves expanded sections and availability scroll across selections, phases and saves', async () => {
+test('planner keeps both assignment panels populated and preserves judge-list scroll across changes', async () => {
   const nodes = new Map();
   const node = (id) => {
-    if (!nodes.has(id)) nodes.set(id, { value: '', handlers: {}, open: false, scrollTop: 0,
+    if (!nodes.has(id)) nodes.set(id, { value: '', innerHTML: '', handlers: {}, open: undefined, scrollTop: 0,
       setAttribute() {}, addEventListener(name, fn) { this.handlers[name] = fn; } });
     return nodes.get(id);
   };
-  Object.defineProperty(node('jaContent'), 'innerHTML', {
+  Object.defineProperty(node('jaAvailabilityPanel'), 'innerHTML', {
+    get() { return this._html || ''; },
     set(html) {
-      for (const id of ['jaRings', 'jaAvailability']) {
-        node(id).open = html.includes(`<details id="${id}" open>`);
-      }
+      this._html = html;
       node('jaAvailabilityList').scrollTop = 0;
     }
   });
@@ -124,30 +142,25 @@ test('planner preserves expanded sections and availability scroll across selecti
       return structuredClone(state);
     } });
   await workspace.load();
-  assert.equal(node('jaRings').open, false);
-  node('jaRings').open = true;
-  node('jaAvailability').open = true;
+  assert.match(node('jaAvailabilityPanel').innerHTML, /jaAvailable-0/);
+  assert.match(node('jaRingPlanning').innerHTML, /data-ja-ring="A1"/);
   node('jaAvailabilityList').scrollTop = 235;
   const change = (attribute, value) => node('jaContent').handlers.change({
     target: { checked: true, getAttribute: (name) => name === attribute ? value : null }
   });
   for (const ring of ['A1', 'A2']) {
     change('data-ja-ring', ring);
-    assert.equal(node('jaRings').open, true);
-    assert.equal(node('jaAvailability').open, true);
+    assert.match(node('jaRingPlanning').innerHTML, /ja-card/);
   }
   for (const member of ['ONE', 'TWO']) {
     change('data-ja-available', member);
-    assert.equal(node('jaAvailability').open, true);
     assert.equal(node('jaAvailabilityList').scrollTop, 235);
   }
   node('jaPhase').value = 'P2'; node('jaPhase').handlers.change();
-  assert.equal(node('jaRings').open, true);
-  assert.equal(node('jaAvailability').open, true);
-  node('jaRings').open = false;
+  assert.match(node('jaAvailabilityPanel').innerHTML, /Available judges for P2/);
+  node('jaArbitrators').open = true;
   await node('jaSave').handlers.click();
-  assert.equal(node('jaRings').open, false, 'a deliberately closed section stays closed');
-  assert.equal(node('jaAvailability').open, true);
+  assert.match(node('jaRingPlanning').innerHTML, /id="jaArbitrators" open/);
   assert.equal(node('jaAvailabilityList').scrollTop, 235);
   assert.deepEqual(state.phases.P1.rings, ['A1', 'A2']);
   assert.deepEqual(state.phases.P1.available, ['ONE', 'TWO']);
@@ -158,6 +171,16 @@ test('main shell wires selected-event preparation, not live-only routing, with d
   const fs = require('node:fs'), path = require('node:path');
   const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
   assert.match(html, /judge-assignments\.js/);
+  const planContext = html.match(/<div class="ja-plan-context">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.ok(planContext.indexOf('id="jaPhase"') < planContext.indexOf('id="jaDiscipline"'));
+  assert.match(html, /id="jaAvailablePanel" class="ja-panel"/);
+  assert.match(html, /id="jaAssignmentPanel" class="ja-panel"/);
+  assert.match(html, /id="jaReplacementSettings" class="ja-pin-panel"/);
+  assert.match(html, /Build ring assignments/);
+  assert.match(html, /Filter this list by name, ID, rank or certification/);
+  assert.match(html, /data-help-source="Building and saving assignments"/);
+  assert.doesNotMatch(html, /Saves P1 and P2 drafts/);
+  assert.doesNotMatch(html, /Select a tournament to begin assignment planning/);
   assert.match(html, /judgeAssignmentsWorkspace\.canLeave/);
   assert.match(html, /judgeAssignmentsWorkspace\.dirty/);
   assert.doesNotMatch(html.match(/const dayOfViews = .*;/)[0], /judge-assignments/);
@@ -193,9 +216,9 @@ test('planner search is display-only, counts confirmed availability, supports pe
   await workspace.load();
   assert.equal(node('jaSave').disabled, true);
   node('jaSearch').value = 'ONE'; node('jaSearch').handlers.input();
-  assert.match(node('jaCandidateCount').textContent, /1 of 2 candidates shown; 2 confirmed available/);
+  assert.match(node('jaCandidateCount').textContent, /1 of 2 judges shown; 2 marked available/);
   assert.equal(workspace.dirty(), false);
-  assert.match(node('jaContent').innerHTML, /&lt;ONE&gt; \(ONE; REGIONAL\)/, 'reserves show name and Association ID');
+  assert.match(node('jaRingPlanning').innerHTML, /&lt;ONE&gt; \(ONE; REGIONAL\)/, 'reserves show name and Association ID');
   const reserve = (id, checked = true) => node('jaContent').handlers.change({ target: {
     checked, getAttribute: (name) => name === 'data-ja-arbitrator' ? id : null
   } });
@@ -205,16 +228,16 @@ test('planner search is display-only, counts confirmed availability, supports pe
   assert.equal(node('jaSave')['data-unsaved'], 'true');
   assert.equal(node('jaSave').disabled, false);
   assert.match(node('jaSaveState').textContent, /Unsaved changes/);
-  assert.match(node('jaContent').innerHTML, /id="jaArbitrators" open/);
+  assert.match(node('jaRingPlanning').innerHTML, /id="jaArbitrators" open/);
   assert.equal(node('jaArbitratorList').scrollTop, 90);
   await node('jaSave').handlers.click();
   assert.deepEqual(state.phases.P1.arbitrators, ['ONE', 'TWO'], 'no duplicate reservations');
   assert.deepEqual(state.phases.P2.arbitrators, []);
   assert.equal(node('jaSave')['data-unsaved'], 'false');
-  assert.match(node('jaSaveState').textContent, /All assignment changes saved/);
+  assert.match(node('jaSaveState').textContent, /^Saved$/);
   reserve('ONE', false);
   node('jaClearSearch').handlers.click();
-  assert.match(node('jaCandidateCount').textContent, /2 of 2 candidates/);
+  assert.match(node('jaCandidateCount').textContent, /2 of 2 judges/);
   const click = (attribute) => node('jaContent').handlers.click({ target: {
     hasAttribute: (name) => name === attribute, getAttribute: () => null
   } });
@@ -227,6 +250,156 @@ test('planner search is display-only, counts confirmed availability, supports pe
   assert.deepEqual(state.phases.P1.rings, []);
   assert.deepEqual(state.phases.P1.available, ['ONE', 'TWO']);
   assert.equal(calls.filter((call) => call.options).length, 3, 'only explicit saves write');
+});
+
+test('planner groups phase and discipline and shows the judge list by default', async () => {
+  const nodes = new Map();
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { innerHTML: '', textContent: '', value: '', handlers: {}, open: undefined,
+      setAttribute() {}, addEventListener(name, fn) { this.handlers[name] = fn; } });
+    return nodes.get(id);
+  };
+  const phase = (discipline) => ({ discipline, rings: [], available: ['BB'], arbitrators: [], assignments: {} });
+  let state = { revision: 'r1', sourceRevision: 's1', configurationLocked: false, rings: ['A1'],
+    judgeRanks: [{ code: 'D1', label: 'Cho Dan' }],
+    phases: { P1: phase('gup'), P2: phase('black-belt') }, judges: [{
+      id: 'BB', name: 'Black Belt Judge', associationId: 'BB', rank: 'D1',
+      sources: ['competitor'], potential: false, certification: 'CORNER',
+      roles: { corner: true, sktk: true, center: false, arbitrator: false }
+    }] };
+  const workspace = create({ document: { getElementById: node }, selectedEvent: () => 'Event', confirm: () => true,
+    request: async (_url, options) => {
+      if (options?.method === 'PUT') state = { ...state, revision: 'r2', phases: JSON.parse(options.body).phases };
+      return structuredClone(state);
+    } });
+  await workspace.load();
+  assert.equal(node('jaPhase').value, 'P1');
+  assert.equal(node('jaDiscipline').value, 'gup');
+  assert.equal(node('jaNotice').textContent, '');
+  assert.equal(node('jaAuto').disabled, true);
+  assert.match(node('jaBuildHint').textContent, /Select at least one ring/);
+  assert.match(node('jaAvailabilityPanel').innerHTML, /Black Belt Judge/);
+  assert.match(node('jaAvailabilityPanel').innerHTML, /<span class="ja-rank">Cho Dan<\/span>/);
+  assert.doesNotMatch(node('jaAvailabilityPanel').innerHTML, /<span class="ja-rank">D1<\/span>/);
+  assert.doesNotMatch(node('jaAvailabilityPanel').innerHTML, /Check the judges to include/);
+  assert.match(node('jaRingPlanning').innerHTML, /Select rings above to assign judges/);
+  const click = (attribute) => node('jaContent').handlers.click({ target: {
+    hasAttribute: (name) => name === attribute, getAttribute: () => null
+  } });
+  click('data-ja-all-rings');
+  for (const role of ['Center', 'Corners', 'SK/TK']) {
+    assert.match(node('jaRingPlanning').innerHTML, new RegExp(`<legend>${role}`));
+  }
+  node('jaDiscipline').value = 'black-belt';
+  await node('jaDiscipline').handlers.change();
+  assert.match(node('jaNotice').textContent, /Review judge availability and rebuild/);
+  await node('jaSave').handlers.click();
+  assert.deepEqual(state.phases.P1.available, []);
+  assert.deepEqual(state.phases.P1.assignments, {});
+  assert.deepEqual(state.phases.P1.arbitrators, []);
+  assert.equal(node('jaDiscipline').value, 'black-belt');
+  assert.match(node('jaNotice').textContent, /Assignments saved for P1 and P2/);
+  state = { ...state, phases: { ...state.phases, P1: { ...state.phases.P1, assignments: {
+    A1: { center: ['BB'], corner: ['BB', 'BB', 'BB', 'BB'], sktk: ['BB', 'BB'] }
+  } } } };
+  await workspace.load();
+  assert.match(node('jaRingPlanning').innerHTML, /<legend>Center 1\/1<\/legend>/);
+  assert.doesNotMatch(node('jaRingPlanning').innerHTML, /Role filled|minimum\)/);
+});
+
+test('assignment actions sit in the assignment panel with compact ring controls', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tournament-management', 'index.html'), 'utf8');
+  const assignmentPanel = html.match(/<section id="jaAssignmentPanel"[\s\S]*?<\/section>/)?.[0] || '';
+  for (const id of ['jaAuto', 'jaSave', 'jaReload']) assert.ok(assignmentPanel.includes(`id="${id}"`));
+  const planContext = html.match(/<div class="ja-plan-context">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.doesNotMatch(planContext, /id="jaAuto"|id="jaSave"|id="jaReload"/);
+  const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((match) => match[1]).join('\n');
+  assert.match(styles, /\.ja-grid \{[^}]*gap: 4px;/);
+  assert.match(styles, /\.ja-grid \{[^}]*repeat\(auto-fill, minmax\(min\(100%, 220px\), 1fr\)\)/);
+  assert.match(styles, /\.ja-card \{[^}]*padding: 4px;/);
+  assert.match(styles, /\.ja-role \{[^}]*font-size: 11px;/);
+  assert.match(styles, /\.ja-roster-table td \{[^}]*font-size: 11px;/);
+  assert.match(styles, /button\[data-ja-remove\].*?min-height: 22px !important;.*?padding: 0 4px !important;/);
+  assert.match(styles, /\.ja-arbitrator-reserves \{[^}]*display: flex;/);
+  assert.match(styles, /\.ja-arbitrator-reserve \{[^}]*font-size: \.82rem;/);
+  assert.match(styles, /button\[data-ja-unarb\] \{[^}]*min-height: 18px !important;[^}]*background: #b42318; color: #fff;[^}]*font-size: 10px;/);
+  assert.match(styles, /#judgeAssignmentsView \.ja-panel \{[^}]*border: 1px solid #748196;[^}]*background: #f6f8fb;/);
+  assert.match(styles, /#judgeAssignmentsView \.ja-card \{[^}]*border: 1px solid #6f7c8e;[^}]*background: #e9eef4;/);
+  assert.match(styles, /#judgeAssignmentsView \.ja-roster-table th \{[^}]*background: #e2e8f0;[^}]*border-bottom: 2px solid #748196;/);
+  assert.match(html, /class="ja-drag-instructions">Drag between assigned judges to swap; drag between an assignment and an available judge to replace\./);
+});
+
+test('planner swaps assigned judges and replaces them only with eligible available candidates', async () => {
+  const nodes = new Map(), saved = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', innerHTML: '', textContent: '', handlers: {}, hidden: true,
+      setAttribute(name, value) { this[name] = value; }, removeAttribute(name) { delete this[name]; },
+      addEventListener(name, fn) { this.handlers[name] = fn; } });
+    return nodes.get(id);
+  };
+  const judge = (id, roles) => ({ id, name: id, associationId: id, rank: 'D1', sources: ['volunteer'], potential: false,
+    certification: 'REGIONAL', roles });
+  const available = ['A', 'B', 'FREE', 'UNQUALIFIED'];
+  let state = { revision: 'v1', sourceRevision: 's1', configurationLocked: false, rings: ['R1'],
+    judgeRanks: [{ code: 'D1', label: 'Cho Dan' }],
+    phases: { P1: { discipline: 'black-belt', rings: ['R1'], available, arbitrators: [],
+      assignments: { R1: { center: [], corner: ['A', 'B'], sktk: [] } } },
+      P2: { discipline: 'black-belt', rings: [], available: [], arbitrators: [], assignments: {} } },
+    judges: [
+      ...['A', 'B', 'FREE'].map((id) => judge(id, { corner: true, center: false, sktk: false })),
+      judge('UNQUALIFIED', { corner: false, center: false, sktk: true })
+    ] };
+  const workspace = create({ document: { getElementById: node }, selectedEvent: () => 'Event', confirm: () => true,
+    request: async (_url, options) => {
+      if (options?.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        saved.push(body.phases.P1.assignments.R1.corner);
+        state = { ...state, revision: 'v2', phases: body.phases };
+      }
+      return structuredClone(state);
+    } });
+  await workspace.load();
+  assert.match(node('jaAvailabilityPanel').innerHTML, /<span class="ja-rank">Cho Dan<\/span>/);
+  assert.match(node('jaRingPlanning').innerHTML, /<span>A \(A\)<\/span><span class="ja-rank">Cho Dan<\/span>/);
+  assert.doesNotMatch(node('jaRingPlanning').innerHTML, /Name:|Dan #:|Rank:/);
+  const element = (attributes, kind) => ({
+    getAttribute(name) { return attributes[name] ?? null; },
+    closest(selector) {
+      return selector.includes(`data-ja-${kind}`) ? this : null;
+    },
+    setAttribute(name, value) { this[name] = value; },
+    removeAttribute(name) { delete this[name]; },
+    classList: { add() {}, remove() {} },
+    contains() { return false; }
+  });
+  const assignment = (id, index) => element({
+    'data-ja-assignment': id, 'data-ring': 'R1', 'data-role': 'corner', 'data-index': String(index)
+  }, 'assignment');
+  const candidate = (id) => element({ 'data-ja-candidate': id }, 'candidate');
+  const fire = (name, target) => {
+    const event = { target, prevented: false, preventDefault() { this.prevented = true; } };
+    node('jaContent').handlers[name](event);
+    return event;
+  };
+  const start = (target) => fire('dragstart', target);
+  start(assignment('A', 0));
+  assert.match(node('jaDragHint').textContent, /Drop on another assigned judge/);
+  assert.equal(fire('dragover', assignment('B', 1)).prevented, true);
+  fire('drop', assignment('B', 1));
+  assert.equal(node('jaDragHint').hidden, true);
+
+  start(candidate('FREE'));
+  assert.equal(fire('dragover', assignment('B', 0)).prevented, true);
+  fire('drop', assignment('B', 0));
+  start(candidate('UNQUALIFIED'));
+  assert.equal(fire('dragover', assignment('FREE', 0)).prevented, false);
+  fire('drop', assignment('FREE', 0));
+  await node('jaSave').handlers.click();
+
+  assert.deepEqual(saved, [['FREE', 'A']]);
+  assert.deepEqual(state.phases.P1.assignments.R1.corner, ['FREE', 'A']);
+  assert.deepEqual(state.phases.P1.available, available, 'swapping does not remove either judge from availability');
 });
 
 test('lifecycle tables share bounded sticky whole headers without overlapping Ring Judges filter rows', () => {

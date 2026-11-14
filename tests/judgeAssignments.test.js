@@ -67,6 +67,7 @@ test('realistic 200-member directory supplies event volunteers only; 8, 16 and 2
   assert.equal(response.status, 200);
   const data = response.data;
   assert.equal(data.judges.length, 188);
+  assert.deepEqual(data.judgeRanks.find((rank) => rank.code === 'D1'), { code: 'D1', label: 'Cho Dan' });
   assert.ok(data.judges.every((judge) => !Object.hasOwn(judge, 'dateOfBirth')));
   assert.equal(data.judges.filter((judge) => judge.roles.center).length, 40);
   assert.equal(data.judges.filter((judge) => judge.roles.corner).length, 136);

@@ -7,16 +7,16 @@ const express = require('express');
 const { initializeJudgeDatabase } = require('../db/judgeManagement');
 const { createJudgeManagementRouter } = require('../backend/judgeManagementRoutes');
 const { createSimulationApp, initializeSimulation } = require('../backend/judgeSimulation');
-const { regionalDataset, setupExperience } = require('../backend/judgeSimulationData');
+const { regionalDataset, experienceRole, selectExperienceJudges, setupExperience } = require('../backend/judgeSimulationData');
 const { apiRoles } = require('../backend/browserPermissions');
 
-async function setup(t, simulation = true) {
+async function setup(t, simulation = true, empty = false) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-experience-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const directory = path.join(root, 'data');
   let app;
   if (simulation) {
-    await initializeSimulation(directory, '2026-01-15');
+    await initializeSimulation(directory, '2026-01-15', { empty });
     app = createSimulationApp(directory);
   } else {
     fs.mkdirSync(directory);
@@ -44,8 +44,58 @@ const record = (overrides = {}) => ({ eventId: 'championship-1', eventName: 'Reg
   eventDate: '2026-01-10', location: 'Venue', role: 'CORNER_JUDGE', eventScope: 'REGIONAL',
   phase: 'P1', source: 'TOURNAMENT', sourceId: 'service-1', ...overrides });
 
-test('200-judge CSV imports by headers and experience setup preserves identities and histories on rerun', async (t) => {
-  const { base, request, profile } = await setup(t);
+test('experience setup reads the Judge DB, selects 70 percent, and derives compatible roles', async (t) => {
+  const { base, request } = await setup(t);
+  const result = await setupExperience(base, { seed: 'judge-role-check' });
+  assert.equal(result.judgeCount, 11);
+  assert.equal(result.eligibleJudgeCount, 9);
+  assert.equal(result.selectedCount, 6);
+  assert.equal(result.added, 6);
+  const state = (await request('')).data;
+  const generated = state.experience.filter((item) => item.eventId === result.eventId);
+  assert.equal(generated.length, 6);
+  const judgesById = new Map(state.judges.map((judge) => [judge.id, judge]));
+  for (const experience of generated) {
+    const judge = judgesById.get(experience.judgeId);
+    assert.ok(judge);
+    if (judge.certification === 'CORNER') {
+      assert.equal(experience.role, 'CORNER_JUDGE');
+      assert.notEqual(experience.role, 'CENTER_JUDGE');
+    }
+    if (['REGIONAL', 'INTERNATIONAL'].includes(judge.certification)) {
+      assert.equal(experience.role, 'CENTER_JUDGE');
+      assert.notEqual(experience.role, 'CORNER_JUDGE');
+    }
+    if (judge.certification === 'SK_TK') {
+      assert.ok(['SCOREKEEPER', 'TIMEKEEPER'].includes(experience.role));
+      assert.notEqual(experience.role, 'CORNER_JUDGE');
+      assert.notEqual(experience.role, 'CENTER_JUDGE');
+    }
+    assert.equal(experience.logVerified, 0);
+    assert.ok(experience.eventDate < state.asOf);
+  }
+  assert.ok(result.selectedIds.every((id) => !['UNKNOWN', 'UNCERTIFIED'].includes(
+    state.judges.find((judge) => judge.associationId === id)?.certification
+  )));
+});
+
+test('unknown and uncertified judges are excluded from the percentage denominator and selection', () => {
+  const judges = [
+    { associationId: 'SIM-UNKNOWN', certification: 'UNKNOWN' },
+    { associationId: 'SIM-UNCERTIFIED', certification: 'UNCERTIFIED' },
+    { associationId: 'SIM-CORNER', certification: 'CORNER' }
+  ];
+  const selection = selectExperienceJudges(judges, 70, 'unknown-exclusion-test');
+  assert.equal(selection.judgeCount, 3);
+  assert.equal(selection.eligibleJudgeCount, 1);
+  assert.equal(selection.targetCount, 1);
+  assert.deepEqual(selection.selected.map((judge) => judge.associationId), ['SIM-CORNER']);
+  assert.equal(experienceRole(judges[0]), null);
+  assert.equal(experienceRole(judges[1]), null);
+});
+
+test('200-judge CSV import seeds exactly 70 percent of the current role-compatible database roster', async (t) => {
+  const { base, request, profile } = await setup(t, true, true);
   const dataset = regionalDataset('2026-01-15');
   assert.equal(dataset.judges.length, 200);
   assert.equal(new Set(dataset.judges.map((j) => j.associationId)).size, 200);
@@ -57,30 +107,55 @@ test('200-judge CSV imports by headers and experience setup preserves identities
   let response = await request('-import', 'POST', { revision: state.revision, csv: dataset.csv });
   assert.equal(response.status, 200);
   assert.equal(response.data.added, 200);
-  const ids = dataset.judges.map((j) => j.associationId);
-  const result = await setupExperience(base, ids);
-  assert.ok(result.added > 200);
+  const result = await setupExperience(base);
+  assert.equal(result.judgeCount, 200);
+  assert.equal(result.eligibleJudgeCount, 188);
+  assert.equal(result.selectedCount, 132);
+  assert.equal(result.selectedIds.length, 132);
+  assert.equal(new Set(result.selectedIds).size, 132);
+  assert.equal(result.added, 132);
   assert.equal(result.duplicates, 0);
-  const before = await profile('sim-r-041');
-  assert.equal(before.judge.associationId, 'SIM-R-041');
+  state = (await request('')).data;
+  const generated = state.experience.filter((item) => item.eventId === result.eventId);
+  assert.equal(generated.length, 132);
+  const judgesById = new Map(state.judges.map((judge) => [judge.id, judge]));
+  for (const experience of generated) {
+    const judge = judgesById.get(experience.judgeId);
+    assert.ok(judge);
+    if (judge.certification === 'CORNER') assert.equal(experience.role, 'CORNER_JUDGE');
+    if (['REGIONAL', 'INTERNATIONAL'].includes(judge.certification)) assert.equal(experience.role, 'CENTER_JUDGE');
+    if (judge.certification === 'SK_TK') assert.ok(['SCOREKEEPER', 'TIMEKEEPER'].includes(experience.role));
+    assert.ok(experience.eventDate < state.asOf);
+    assert.equal(experience.logVerified, 0);
+  }
+  assert.ok(result.selectedIds.every((id) => !['UNKNOWN', 'UNCERTIFIED'].includes(
+    state.judges.find((judge) => judge.associationId === id)?.certification
+  )));
+
+  const selectedId = result.selectedIds[0];
+  const before = await profile(selectedId);
+  assert.equal(before.judge.associationId, selectedId);
   assert.equal(Object.hasOwn(before.judge, 'dateOfBirth'), false);
-  assert.equal(before.experience.length, 1);
-  assert.equal(before.experience[0].logVerified, 0);
+  assert.equal(before.experience.filter((item) => item.eventId === result.eventId).length, 1);
+  assert.equal(before.experience.find((item) => item.eventId === result.eventId).logVerified, 0);
   assert.equal(before.eligibility.experienceCount, 0);
-  const rerun = await setupExperience(base, ids);
+  const rerun = await setupExperience(base);
+  assert.deepEqual(rerun.selectedIds, result.selectedIds);
   assert.equal(rerun.added, 0);
-  assert.equal(rerun.duplicates, result.added);
+  assert.equal(rerun.duplicates, result.selectedCount);
   const clockResponse = await fetch(base + '/api/simulation', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ previousDate: '2026-01-15', date: '2026-02-15' }) });
   assert.equal(clockResponse.status, 200);
-  const afterAdvance = await setupExperience(base, ['SIM-R-041']);
-  assert.deepEqual(afterAdvance, { added: 0, duplicates: 1 });
+  const afterAdvance = await setupExperience(base);
+  assert.equal(afterAdvance.added, 0);
+  assert.equal(afterAdvance.duplicates, result.selectedCount);
+  assert.equal(afterAdvance.eventDate, result.eventDate);
   state = (await request('')).data;
   response = await request('-import', 'POST', { revision: state.revision, csv: dataset.csv });
   assert.equal(response.status, 200);
   assert.equal(response.data.updated, 200);
-  assert.deepEqual((await profile('SIM-R-041')).experience, before.experience);
-  await assert.rejects(setupExperience('https://example.com', ids), /local isolated/);
+  assert.deepEqual((await profile(selectedId)).experience, before.experience);
+  await assert.rejects(setupExperience('https://example.com'), /local isolated/);
 });
 
 test('shared append API deduplicates service, counts phases once and supports verification, tests and coordinator promotion', async (t) => {
@@ -194,7 +269,7 @@ test('normal management uses real dates, rejects simulation submissions and acce
   assert.equal(response.data.experience.find((row) => row.source === 'MANUAL').logVerified, 0);
 });
 
-test('coordinator actual service supports phase details, corrections, withdrawal and normal progression through World service', async (t) => {
+test('coordinator actual service supports phase details, role lowering, withdrawal and normal progression through World service', async (t) => {
   const { base, request, profile } = await setup(t);
   let state = await profile('SIM-005');
   const append = (records) => request('/experience', 'POST', { associationId: 'SIM-005',
@@ -216,10 +291,21 @@ test('coordinator actual service supports phase details, corrections, withdrawal
   assert.equal(result.status, 200);
   state = await profile('SIM-005');
   assert.equal(state.eligibility.experienceCount, 2);
-  result = await request(`/experience/${p1.id}`, 'PUT', { associationId: 'SIM-011', revision: state.revision,
-    confirmedCompleted: true, record: { location: 'Replacement served', role: 'CORNER_JUDGE', phase: 'P1' } });
+  assert.equal((await request(`/experience/${p1.id}`, 'PUT', { revision: state.revision,
+    confirmedRoleAdjustment: true, record: { role: 'TIMEKEEPER' } })).status, 409);
+  result = await request('/experience-verify', 'POST', { associationId: 'SIM-005',
+    revision: state.revision, ids: [p1.id], verified: false });
   assert.equal(result.status, 200);
-  assert.equal(result.data.experience.find((row) => row.id === p1.id).logVerified, 0);
+  state = await profile('SIM-005');
+  result = await request(`/experience/${p1.id}`, 'PUT', { revision: state.revision,
+    confirmedRoleAdjustment: true, record: { role: 'TIMEKEEPER' } });
+  assert.equal(result.status, 200);
+  const adjusted = result.data.experience.find((row) => row.id === p1.id);
+  assert.equal(adjusted.logVerified, 0);
+  assert.equal(adjusted.judgeId, p1.judgeId);
+  assert.equal(adjusted.phase, 'P1');
+  assert.equal(adjusted.location, p1.location);
+  assert.equal(adjusted.role, 'TIMEKEEPER');
   state = await profile('SIM-005');
   assert.equal(state.eligibility.experienceCount, 1);
   result = await request(`/experience/${p1.id}`, 'DELETE', { revision: state.revision, confirmedWithdrawal: true });
@@ -276,10 +362,10 @@ test('coordinator actual service supports phase details, corrections, withdrawal
   assert.equal((await profile('SIM-005')).judge.certification, 'INTERNATIONAL');
 });
 
-test('coordinator service requires attestation and valid identity; stale, conflicting and nonmanual changes are rejected', async (t) => {
+test('coordinator service requires attestation and valid identity; role increases, stale and nonmanual changes are rejected', async (t) => {
   const { request, profile } = await setup(t);
   let state = await profile('SIM-003');
-  const manual = record({ source: 'MANUAL', sourceId: undefined, role: 'SCOREKEEPER' });
+  const manual = record({ source: 'MANUAL', sourceId: undefined, role: 'CORNER_JUDGE' });
   const append = (overrides = {}) => request('/experience', 'POST', { associationId: 'SIM-003',
     revision: state.revision, records: [manual], confirmedCompleted: true, ...overrides });
   assert.equal((await append({ confirmedCompleted: false })).status, 400);
@@ -296,23 +382,42 @@ test('coordinator service requires attestation and valid identity; stale, confli
   const id = state.experience[0].id;
   assert.equal((await append({ records: [{ ...manual, eventName: 'Different name' }] })).status, 409);
   const correction = (overrides = {}) => request(`/experience/${id}`, 'PUT', {
-    associationId: 'SIM-003', revision: state.revision, confirmedCompleted: true,
-    record: { location: 'Corrected', role: 'TIMEKEEPER', phase: 'P2' }, ...overrides });
-  assert.equal((await correction({ confirmedCompleted: false })).status, 400);
+    revision: state.revision, confirmedRoleAdjustment: true,
+    record: { role: 'TIMEKEEPER' }, ...overrides });
+  assert.equal((await correction({ confirmedRoleAdjustment: false })).status, 400);
   assert.equal((await correction({ revision: -1 })).status, 409);
   assert.equal((await request(`/experience/${id}`, 'DELETE', { revision: -1, confirmedWithdrawal: true })).status, 409);
-  assert.equal((await correction({ record: { ...manual, eventId: 'another-event' } })).status, 400);
-  assert.equal((await correction({ associationId: 'missing' })).status, 404);
-  result = await append({ records: [{ ...manual, phase: 'P2', role: 'TIMEKEEPER' }] });
+  assert.equal((await correction({ record: { role: 'TIMEKEEPER', phase: 'P2' } })).status, 400);
+  assert.equal((await correction({ record: { role: 'TIMEKEEPER', eventId: 'another-event' } })).status, 400);
+  assert.equal((await correction({ record: { role: 'TIMEKEEPER', location: 'Corrected' } })).status, 400);
+  assert.equal((await correction({ associationId: 'missing' })).status, 400);
+  assert.equal((await correction({ record: { role: 'CENTER_JUDGE' } })).status, 400);
+  result = await correction({ record: { role: 'TIMEKEEPER' } });
+  assert.equal(result.status, 200);
+  const adjusted = result.data.experience.find((row) => row.id === id);
+  assert.equal(adjusted.judgeId, state.experience[0].judgeId);
+  assert.equal(adjusted.phase, 'P1');
+  assert.equal(adjusted.location, manual.location);
+  assert.equal(adjusted.role, 'TIMEKEEPER');
+  state = await profile('SIM-003');
+  result = await append({ records: [{ ...manual, role: 'TIMEKEEPER' }] });
   assert.equal(result.status, 200);
   state = await profile('SIM-003');
-  assert.equal((await correction()).status, 409);
+  assert.equal((await correction()).status, 400);
   assert.equal((await request(`/experience/${id}`, 'DELETE', { revision: state.revision })).status, 400);
   result = await request('/experience-verify', 'POST', { revision: state.revision, associationId: 'SIM-003',
     ids: state.experience.map((row) => row.id), verified: true });
   assert.equal(result.status, 200);
   state = await profile('SIM-003');
   assert.equal(state.eligibility.experienceCount, 1);
+  const verifiedIds = state.experience.map((row) => row.id);
+  assert.equal((await correction()).status, 409);
+  assert.equal((await request(`/experience/${verifiedIds[0]}`, 'DELETE', {
+    revision: state.revision, confirmedWithdrawal: true })).status, 409);
+  result = await request('/experience-verify', 'POST', { revision: state.revision, associationId: 'SIM-003',
+    ids: verifiedIds, verified: false });
+  assert.equal(result.status, 200);
+  state = await profile('SIM-003');
   for (const row of state.experience) {
     result = await request(`/experience/${row.id}`, 'DELETE', { revision: state.revision, confirmedWithdrawal: true });
     assert.equal(result.status, 200);

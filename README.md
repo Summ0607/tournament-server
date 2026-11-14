@@ -1650,20 +1650,28 @@ generate a new CSV (output must not already exist):
 npm run judge:simulation-data -- csv --date 2030-01-15 --output C:\TournamentTests\regional-judges-2030.csv
 ```
 
-After importing, submit starting experience for selected judges, or omit `--ids`
-to process all 200:
+After importing, generate one starting experience record for 70% of the judges
+currently in the Judge DB. The script reads the roster from the isolated
+simulation, calculates the count from the database size, and selects judges
+without replacement. Use `--percent` or `--seed` to override the defaults:
 
 ```powershell
-npm run judge:simulation-data -- experience --url http://127.0.0.1:3451 --ids SIM-R-041,SIM-R-042,SIM-R-043
-npm run judge:simulation-data -- experience --url http://127.0.0.1:3451
+npm run judge:simulation-data -- experience --url http://127.0.0.1:3451 --percent 70 --seed regional-experience-v1
 ```
 
-The script requires the isolated local simulation, preflights selected profiles,
-and then uses the shared API. It never writes SQLite directly, changes
-certifications, records tests, or verifies its own submissions. New candidates
-start without experience; other selected officials receive zero to three
-historical Regional events based on their ID and current certification role.
-All submissions start pending. Use **Experience > Verify**, then edit testing
+The target count is rounded from the Judge DB row count excluding both
+`UNKNOWN` and `UNCERTIFIED` certification entries. Roles are derived from
+certification: Corner receives `CORNER_JUDGE`, Regional and International
+receive `CENTER_JUDGE`, and SK/TK receives `SCOREKEEPER` or `TIMEKEEPER`.
+Uncertified judges are not assigned experience for now. The script errors if
+there are too few role-compatible entries to meet the target; it never assigns
+center experience to Corner judges or judge experience to SK/TK officials.
+
+The script requires the isolated local simulation, preflights selected
+profiles, and uses the shared API. It never writes SQLite directly, changes
+certifications, records tests, or verifies its own submissions. Each selected
+judge receives one prior Regional service record, submitted pending
+coordinator verification. Use **Experience > Verify**, then edit testing
 records and use the explicit coordinator **Grant** action when requirements
 are met. Reimporting the CSV preserves testing and experience, but its nonblank
 certification values will overwrite later awards: treat it as an initial

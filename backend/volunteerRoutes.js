@@ -12,7 +12,8 @@ const { readVolunteerDirectory, replaceVolunteerDirectory } = require('./volunte
 
 const headers = { 'First Name': 'firstName', 'Last Name': 'lastName', 'DOB': 'dob', 'Assoc ID': 'associationNumber',
   'School': 'school', 'Rank': 'rank', 'Certification': 'certification', 'Primary Volunteer Type': 'primaryType', 'Secondary Volunteer Type': 'secondaryType' };
-const optionalHeaders = { 'Parent/Guardian Name': 'parentName', 'Contact Number': 'contactNumber',
+const optionalHeaders = { 'Parent First Name': 'parentFirstName', 'Parent Last Name': 'parentLastName',
+  'Parent/Guardian Name': 'parentName', 'Contact Number': 'contactNumber',
   'Gender': 'gender', 'Email': 'email' };
 // Strict validation rejects qualification problems; lenient validation
 // (saved data migration) resets unrecognized certification text to Unknown
@@ -29,12 +30,22 @@ function validateVolunteer(input, types, date, lenient = false, scope = '') {
   if (scope !== 'in-house' && !row.associationNumber) throw new Error('Association ID is required for volunteers at sanctioned events.');
   const ageAsOf = date || input.ageAsOf;
   const age = input.dob ? ageOnDate(input.dob, ageAsOf) : storedAge({ age: input.age, ageAsOf: input.ageAsOf }, ageAsOf);
-  for (const [key, label, max] of [['parentName', 'Parent/guardian name', 200], ['contactNumber', 'Contact number', 100],
-    ['gender', 'Gender', 100], ['email', 'Email', 254]]) {
+  for (const [key, label, max] of [['parentName', 'Parent/guardian name', 200],
+    ['parentFirstName', 'Parent first name', 100], ['parentLastName', 'Parent last name', 100],
+    ['contactNumber', 'Contact number', 100], ['gender', 'Gender', 100], ['email', 'Email', 254]]) {
     const value = input[key] === undefined ? '' : input[key];
     if (typeof value !== 'string' || value.trim().length > max) throw new Error(`Invalid ${label.toLowerCase()}.`);
     row[key] = value.trim();
   }
+  if (Boolean(row.parentFirstName) !== Boolean(row.parentLastName)) {
+    throw new Error('Parent first and last names must be provided together.');
+  }
+  if (row.parentFirstName && row.parentLastName) {
+    row.parentName = `${row.parentFirstName} ${row.parentLastName}`;
+    if (row.parentName.length > 200) throw new Error('Invalid parent/guardian name.');
+  }
+  delete row.parentFirstName;
+  delete row.parentLastName;
   const rank = normalizeRank(row.rank);
   if (!rank.recognized) throw new Error('Rank must be a recognized rank code.');
   row.rank = rank.code;

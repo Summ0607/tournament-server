@@ -22,7 +22,8 @@ const KOREAN_DAN_NUMBERS = {
   e: 2, ee: 2, yi: 2,
   sam: 3,
   sa: 4, sah: 4,
-  o: 5, oh: 5
+  o: 5, oh: 5,
+  yuk: 6
 };
 
 const GUP_WORDS = new Set(['gup', 'kup', 'geup', 'keup']);

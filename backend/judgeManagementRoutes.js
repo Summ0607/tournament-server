@@ -27,6 +27,12 @@ const columns = { associationId: 'association_id', firstName: 'first_name', last
   dateOfBirth: dateOfBirthColumn };
 const levels = ['SK_TK', 'CORNER', 'REGIONAL', 'INTERNATIONAL'];
 const experienceRoles = ['JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE', 'SCOREKEEPER', 'TIMEKEEPER', 'ARBITRATOR'];
+const creditRoleTiers = [['JUDGE'], ['SCOREKEEPER', 'TIMEKEEPER'], ['CORNER_JUDGE'], ['CENTER_JUDGE']];
+const isLowerCreditRole = (current, next) => {
+  const currentTier = creditRoleTiers.findIndex((tier) => tier.includes(current));
+  const nextTier = creditRoleTiers.findIndex((tier) => tier.includes(next));
+  return currentTier > nextTier && nextTier >= 0;
+};
 const scopes = ['REGIONAL', 'NATIONAL', 'WORLD', 'IN_HOUSE'];
 const invalid = (message, statusCode = 400) => Object.assign(new Error(message), { statusCode });
 const key = normalizeCsvHeader;
@@ -79,7 +85,8 @@ function evaluateEligibility(judge, tests, experience, today = new Date().toISOS
     mayJudge: !(judge.certification === 'CORNER' && judge.rank === 'CDB') };
   const grantedAt = judge.grantedAt || '';
   const logExempt = rankIndex >= JUDGE_RANKS.indexOf('D5');
-  const records = experience.filter((item) => item.judgeId === judge.id && (item.logVerified || logExempt) &&
+  const records = experience.filter((item) => item.judgeId === judge.id && item.role !== 'ARBITRATOR' &&
+    (item.logVerified || logExempt) &&
     item.eventDate <= today && item.eventScope !== 'IN_HOUSE' && (!grantedAt || item.eventDate >= grantedAt));
   const minimumRank = target === 'INTERNATIONAL' ? JUDGE_RANKS.indexOf('D2') :
     ['CORNER', 'REGIONAL'].includes(target) ? JUDGE_RANKS.indexOf('D1') : 0;
@@ -525,30 +532,31 @@ function createJudgeManagementRouter({
   router.put('/judge-management/experience/:id', endpoint(async (req, db, _aliases, today) => {
     const [existing] = await all(db, 'SELECT * FROM judge_experience WHERE id = ?', [req.params.id]);
     if (!existing) throw invalid('Experience record not found.', 404);
-    if (existing.source !== 'MANUAL' || !existing.source_id) throw invalid('Only coordinator-recorded completed service can be corrected here.', 409);
-    if (req.body.confirmedCompleted !== true) throw invalid('Confirm the corrected record describes actual completed service.');
-    if (!req.body.record || typeof req.body.record !== 'object' || Array.isArray(req.body.record)) throw invalid('Corrected service details are required.');
-    for (const [field, stored] of [['eventId', 'event_id'], ['eventName', 'event_name'], ['eventDate', 'event_date'], ['eventScope', 'event_scope']]) {
-      if (req.body.record[field] !== undefined && req.body.record[field] !== existing[stored]) throw invalid('Event identity cannot be changed in a service correction. Withdraw an incorrect event record and enter it again.');
+    if (existing.source !== 'MANUAL' || !existing.source_id) throw invalid('Only coordinator-recorded service credit can be adjusted here.', 409);
+    if (existing.log_verified) throw invalid('Unverify the record before lowering its credited role.', 409);
+    if (existing.role === 'ARBITRATOR') throw invalid('Arbitrator service does not earn experience credit.', 409);
+    if (req.body.confirmedRoleAdjustment !== true) throw invalid('Confirm the credited role adjustment.');
+    if (!req.body.record || typeof req.body.record !== 'object' || Array.isArray(req.body.record)) throw invalid('A credited role is required.');
+    if (Object.hasOwn(req.body, 'associationId') || Object.keys(req.body.record).some((field) => field !== 'role')) {
+      throw invalid('Judge identity, event details and phase cannot be changed; only the credited role can be adjusted.');
     }
-    const judge = await member(db, req.body.associationId);
-    const record = validateExperience({ ...req.body.record, eventName: existing.event_name, eventDate: existing.event_date,
-      eventScope: existing.event_scope, logVerified: false }, today);
-    if (!['P1', 'P2'].includes(req.body.record?.phase)) throw invalid('Select P1 or P2.');
+    if (!isLowerCreditRole(existing.role, req.body.record.role)) throw invalid('Choose a lower eligible credited role.');
+    const record = validateExperience({ eventName: existing.event_name, eventDate: existing.event_date,
+      location: existing.location, role: req.body.record.role, eventScope: existing.event_scope, logVerified: false }, today);
     try {
-      await run(db, `UPDATE judge_experience SET judge_id=?,location=?,role=?,phase=?,source_id=?,log_verified=0 WHERE id=?`,
-        [judge.id, record.location, record.role, req.body.record.phase,
-          manualSourceId(existing.event_id, record.role, req.body.record.phase), existing.id]);
+      await run(db, `UPDATE judge_experience SET role=?,source_id=?,log_verified=0 WHERE id=?`,
+        [record.role, manualSourceId(existing.event_id, record.role, existing.phase), existing.id]);
     } catch (error) {
-      if (error.code === 'SQLITE_CONSTRAINT' && /UNIQUE/.test(error.message)) throw invalid('That judge already has this event, role and phase recorded.', 409);
+      if (error.code === 'SQLITE_CONSTRAINT' && /UNIQUE/.test(error.message)) throw invalid('That judge already has this event, credited role and phase recorded.', 409);
       throw error;
     }
     return {};
   }, true));
   router.delete('/judge-management/experience/:id', endpoint(async (req, db) => {
-    const [existing] = await all(db, 'SELECT source,source_id FROM judge_experience WHERE id=?', [req.params.id]);
+    const [existing] = await all(db, 'SELECT source,source_id,log_verified FROM judge_experience WHERE id=?', [req.params.id]);
     if (!existing) throw invalid('Experience record not found.', 404);
     if (existing.source !== 'MANUAL' || !existing.source_id) throw invalid('Only coordinator-recorded completed service can be withdrawn here.', 409);
+    if (existing.log_verified) throw invalid('Unverify the record before withdrawing it.', 409);
     if (req.body.confirmedWithdrawal !== true) throw invalid('Confirm withdrawal of this service and its experience credit.');
     await run(db, 'DELETE FROM judge_experience WHERE id=?', [req.params.id]);
     return {};

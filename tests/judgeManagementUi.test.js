@@ -350,7 +350,7 @@ test('API experience remains read-only in edits and coordinator verification use
   });
 });
 
-test('coordinator service form guards drafts, attestation, failures, duplicate writes, corrections and withdrawal', async () => {
+test('coordinator service form guards drafts, attestation, failures, inline role reductions, verification and withdrawal', async () => {
   const nodes = new Map(), calls = [];
   const node = (id) => {
     if (!nodes.has(id)) nodes.set(id, { value: '', checked: false, handlers: {},
@@ -359,7 +359,7 @@ test('coordinator service form guards drafts, attestation, failures, duplicate w
   };
   const service = { id: 21, judgeId: 1, eventId: 'event-1', eventName: '<Regional>',
     eventDate: '2026-01-10', eventScope: 'REGIONAL', phase: 'P1', role: 'CORNER_JUDGE',
-    location: 'Venue', source: 'MANUAL', sourceId: 'manual:1', logVerified: 1 };
+    location: 'Venue', source: 'MANUAL', sourceId: 'manual:1', logVerified: 0 };
   const state = { asOf: '2026-01-15', revision: 4, aliases: defaults, ranks: judgeRankOptions(),
     certificationLevels: certificationLevels(), judges: [{ id: 1, associationId: 'ID1', firstName: 'Test',
       lastName: '<Judge>', certification: 'CORNER', school: '', status: 'Active' }], experience: [service] };
@@ -374,6 +374,8 @@ test('coordinator service form guards drafts, attestation, failures, duplicate w
   await workspace.load();
   assert.match(node('jmExperienceBody').innerHTML, /Coordinator-recorded actual service/);
   assert.match(node('jmExperienceBody').innerHTML, /&lt;Regional&gt;/);
+  assert.match(node('jmExperienceBody').innerHTML, /<select data-jm-credit-role="21"/);
+  assert.doesNotMatch(node('jmExperienceBody').innerHTML, /<option value="CENTER_JUDGE"/);
   assert.match(node('jmService-associationId').innerHTML, /&lt;Judge&gt;/);
   node('jmServiceAdd').handlers.click();
   for (const [field, value] of Object.entries({ associationId: 'ID1', eventId: 'event-1', eventName: '<Regional>',
@@ -412,17 +414,26 @@ test('coordinator service form guards drafts, attestation, failures, duplicate w
   assert.equal(node('jmServiceForm').hidden, true);
   const action = (attribute) => ({ target: { closest: (selector) =>
     selector === `[${attribute}]` ? { getAttribute: () => '21' } : null } });
-  node('jmExperienceBody').handlers.click(action('data-jm-service-edit'));
-  assert.equal(node('jmService-eventId').disabled, true);
-  assert.equal(node('jmServiceEvent').disabled, true);
-  assert.equal(node('jmServiceCompleted').checked, false);
-  node('jmServiceCompleted').checked = true;
-  await submit();
+  await node('jmExperienceBody').handlers.change({ target: { closest: (selector) =>
+    selector === '[data-jm-credit-role]' ? { getAttribute: () => '21', value: 'TIMEKEEPER' } : null } });
   assert.equal(calls.at(-1).url, '/api/judge-management/experience/21');
   assert.equal(calls.at(-1).options.method, 'PUT');
+  const adjustment = JSON.parse(calls.at(-1).options.body);
+  assert.deepEqual(adjustment.record, { role: 'TIMEKEEPER' });
+  assert.equal(adjustment.confirmedRoleAdjustment, true);
+  assert.equal(adjustment.associationId, undefined);
+  service.role = 'TIMEKEEPER';
   await node('jmExperienceBody').handlers.click(action('data-jm-service-delete'));
   assert.equal(calls.at(-1).options.method, 'DELETE');
   assert.equal(JSON.parse(calls.at(-1).options.body).confirmedWithdrawal, true);
+  service.logVerified = 1;
+  await workspace.load();
+  assert.match(node('jmExperienceBody').innerHTML, /data-jm-credit-role="21"[^>]*disabled/);
+  assert.match(node('jmExperienceBody').innerHTML, /data-jm-service-delete="21" disabled/);
+  assert.match(node('jmExperienceBody').innerHTML, /data-jm-verify="21"[^>]*>Unverify/);
+  await node('jmExperienceBody').handlers.click(action('data-jm-verify'));
+  assert.equal(calls.at(-1).url, '/api/judge-management/experience-verify');
+  assert.equal(JSON.parse(calls.at(-1).options.body).verified, false);
   node('jmServiceAdd').handlers.click();
   node('jmServiceEvent').value = 'event-1';
   node('jmServiceEvent').handlers.change();

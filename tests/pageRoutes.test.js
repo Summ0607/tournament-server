@@ -487,6 +487,7 @@ test('integrated tournament management is available directly and through workflo
   assert.match(directFile.body, /SIMULATION - \$\{ht\.simulatorStatus/);
   assert.match(directFile.body, /!ht\.simulatorRunId && !htIsStale\(\)/);
   assert.match(directFile.body, /audience-monitor\/\?simulatorRunId=\$\{encodeURIComponent\(ht\.simulatorRunId\)\}/);
+  assert.match(directFile.body, /No saved division configuration for \$\{gbEsc\(ra\.eventName\)\}\. Open Divisions, build and save groups for this tournament, then refresh Ring Assignment\./);
 });
 
 test('day-of pages still serve their existing interfaces and link to integrated setup', async () => {

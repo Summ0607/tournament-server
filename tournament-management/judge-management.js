@@ -4,6 +4,11 @@
     const fields = ['associationId', 'firstName', 'lastName', 'school', 'rank', 'certification', 'expiration', 'status', 'notes'];
     const levels = ['SK_TK', 'CORNER', 'REGIONAL', 'INTERNATIONAL'];
     const roles = ['JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE', 'SCOREKEEPER', 'TIMEKEEPER', 'ARBITRATOR'];
+    const creditRoleTiers = [['JUDGE'], ['SCOREKEEPER', 'TIMEKEEPER'], ['CORNER_JUDGE'], ['CENTER_JUDGE']];
+    const creditRoleOptions = (role) => {
+      const tier = creditRoleTiers.findIndex((rolesInTier) => rolesInTier.includes(role));
+      return tier < 0 ? [] : [role, ...creditRoleTiers.slice(0, tier).reverse().flat()];
+    };
     const scopes = ['REGIONAL', 'NATIONAL', 'WORLD', 'IN_HOUSE'];
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const pretty = (value) => String(value || '').replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -11,7 +16,7 @@
     let servicePackets = [];
     let testRecords = [], experienceRecords = [];
     const serviceFields = ['associationId', 'eventId', 'eventName', 'eventDate', 'eventScope', 'location', 'phase', 'role'];
-    let serviceOpen = false, serviceId = null, serviceBaseline = '';
+    let serviceOpen = false, serviceBaseline = '';
     const serviceDraft = () => ({ ...Object.fromEntries(serviceFields.map((field) => [field, node(`jmService-${field}`).value])),
       confirmedCompleted: Boolean(node('jmServiceCompleted').checked) });
     const selected = new Set();
@@ -81,7 +86,11 @@
         const judge = judges.get(record.judgeId);
         if (!judge) return '';
         const manual = record.source === 'MANUAL' && record.sourceId;
-        return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(record.eventName)}${record.phase ? ` (${esc(record.phase)})` : ''}<br>${esc(record.eventId || '')}${manual ? '<br>Coordinator-recorded actual service' : ''}</td><td>${esc(record.eventDate)}</td><td>${esc(record.location)}</td><td>${esc(pretty(record.role))}</td><td>${esc(pretty(record.eventScope))}</td><td>${record.logVerified ? 'Verified' : 'Not verified'} <button type="button" data-jm-verify="${record.id}" data-judge="${judge.id}">${record.logVerified ? 'Unverify' : 'Verify'}</button>${manual ? ` <button type="button" data-jm-service-edit="${record.id}">Correct</button> <button type="button" data-jm-service-delete="${record.id}">Withdraw</button>` : ''}</td></tr>`;
+        const roleOptions = creditRoleOptions(record.role);
+        const roleCell = manual && roleOptions.length > 1
+          ? `<select data-jm-credit-role="${record.id}" aria-label="Credited role for ${esc(judge.firstName)} ${esc(judge.lastName)}" ${busy || record.logVerified ? 'disabled' : ''}>${roleOptions.map((role) => `<option value="${role}" ${role === record.role ? 'selected' : ''}>${esc(pretty(role))}</option>`).join('')}</select>`
+          : `${esc(pretty(record.role))}${record.role === 'ARBITRATOR' ? ' (no experience credit)' : ''}`;
+        return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(record.eventName)}${record.phase ? ` (${esc(record.phase)})` : ''}<br>${esc(record.eventId || '')}${manual ? '<br>Coordinator-recorded actual service' : ''}</td><td>${esc(record.eventDate)}</td><td>${esc(record.location)}</td><td>${roleCell}</td><td>${esc(pretty(record.eventScope))}</td><td>${record.logVerified ? 'Verified' : 'Not verified'} <button type="button" data-jm-verify="${record.id}" data-judge="${judge.id}" ${busy ? 'disabled' : ''}>${record.logVerified ? 'Unverify' : 'Verify'}</button>${manual ? ` <button type="button" data-jm-service-delete="${record.id}" ${busy || record.logVerified ? 'disabled' : ''}>Withdraw</button>` : ''}</td></tr>`;
       }).join('') || '<tr><td colspan="8">No matching experience records.</td></tr>';
       const eligibility = (data.eligibility || []).filter((item) => {
         const judge = judges.get(item.judgeId), readiness = node('jmEligibilityReady').value;
@@ -367,12 +376,31 @@
         return write(`/api/judge-management/${judgeId}/award`, 'POST', { grantedAt: grantDate }, 'Certification granted.');
       }
     });
+    node('jmExperienceBody').addEventListener('change', async (event) => {
+      const target = event.target.closest('[data-jm-credit-role]');
+      if (!target || busy) return;
+      const record = data.experience.find((item) => item.id === Number(target.getAttribute('data-jm-credit-role')));
+      const role = target.value;
+      if (!record || record.logVerified || record.source !== 'MANUAL' || !record.sourceId ||
+          !creditRoleOptions(record.role).includes(role) || role === record.role) {
+        render();
+        return;
+      }
+      if (!canLeave()) { render(); return; }
+      const judge = data.judges.find((item) => item.id === record.judgeId);
+      if (!confirm(`Lower the credited role for ${judge?.firstName || ''} ${judge?.lastName || ''} from ${pretty(record.role)} to ${pretty(role)}?`)) {
+        render();
+        return;
+      }
+      await write(`/api/judge-management/experience/${record.id}`, 'PUT',
+        { confirmedRoleAdjustment: true, record: { role } },
+        'Credited role lowered; the record remains pending verification.');
+    });
     node('jmExperienceBody').addEventListener('click', (event) => {
       if (busy) return;
-      const correction = event.target.closest('[data-jm-service-edit]');
-      if (correction) return openService(data.experience.find((record) => record.id === Number(correction.getAttribute('data-jm-service-edit'))));
       const withdrawal = event.target.closest('[data-jm-service-delete]');
       if (withdrawal) {
+        if (withdrawal.disabled) return;
         if (!canLeave()) return;
         const id = Number(withdrawal.getAttribute('data-jm-service-delete'));
         if (confirm('Withdraw this actual-service record? This removes its experience credit; other service records are retained.')) {
@@ -381,11 +409,13 @@
         return;
       }
       const target = event.target.closest('[data-jm-verify]');
-      if (!target) return;
+      if (!target || target.disabled) return;
       if (!canLeave()) return;
       const record = data.experience.find((item) => item.id === Number(target.getAttribute('data-jm-verify')));
       const judge = data.judges.find((item) => item.id === record?.judgeId);
-      if (judge && confirm(`${record.logVerified ? 'Remove verification of' : 'Verify'} this experience for ${judge.firstName} ${judge.lastName}?`)) {
+      if (judge && confirm(record.logVerified
+        ? `Return this experience for ${judge.firstName} ${judge.lastName} to pending verification?`
+        : `Verify this experience for ${judge.firstName} ${judge.lastName}?`)) {
         return write('/api/judge-management/experience-verify', 'POST',
           { associationId: judge.associationId, ids: [record.id], verified: !record.logVerified }, 'Experience verification updated.');
       }
@@ -455,19 +485,26 @@
           'Certification verification remains a separate coordinator action.');
       if (imported) await loadServicePackets();
     });
-    function openService(record = null, planned = null) {
+    function openService(planned = null) {
       if (!data || !canLeave()) return;
-      serviceId = record?.id || null;
-      const judge = data.judges.find((item) => item.id === record?.judgeId);
-      for (const field of serviceFields) node(`jmService-${field}`).value =
-        field === 'associationId' ? judge?.associationId || '' : record?.[field] || '';
-      node('jmServiceEvent').value = record?.eventId || '';
-      node('jmServiceEvent').disabled = Boolean(record || planned);
-      for (const field of ['eventId', 'eventName', 'eventDate', 'eventScope']) node(`jmService-${field}`).disabled = Boolean(record || planned);
+      for (const field of serviceFields) node(`jmService-${field}`).value = '';
+      node('jmService-associationId').hidden = false;
+      node('jmService-associationId').disabled = false;
+      node('jmService-associationId').required = true;
+      node('jmServiceEvent').value = '';
+      node('jmServiceEvent').disabled = Boolean(planned);
+      for (const field of ['eventId', 'eventName', 'eventDate', 'eventScope']) node(`jmService-${field}`).disabled = Boolean(planned);
+      node('jmService-location').readOnly = false;
+      node('jmService-phase').hidden = false;
+      node('jmService-phase').disabled = Boolean(planned);
+      node('jmService-phase').required = true;
       node('jmService-eventDate').max = data.asOf || '';
       node('jmServiceCompleted').checked = false;
+      node('jmServiceCompleted').required = true;
       node('jmServiceError').textContent = '';
-      node('jmServiceTitle').textContent = record ? 'Correct Completed Service (verification will reset)' : 'Record Completed Service';
+      node('jmServiceTitle').textContent = 'Record Completed Service';
+      node('jmServiceSave').textContent = 'Submit Pending Experience';
+      node('jmServiceRoleLabel').textContent = 'Actual role';
       node('jmServiceContext').textContent = '';
       node('jmServiceContext').hidden = true;
       node('jmServiceForm').hidden = false; serviceOpen = true;
@@ -487,14 +524,14 @@
       if (!await load()) throw new Error('Unable to reload Judge Management. Retry before recording service.');
       if (data.revision !== expectedRevision) throw new Error('Judge data or service changed. Reload assignment service review before recording.');
       if (!data.judges.some((judge) => judge.associationId === planned.associationId)) throw new Error('Planned judge no longer exists in Judge Management.');
-      openService(null, planned);
+      openService(planned);
       showPanel('judge-experience');
       return true;
     }
     node('jmServiceAdd').addEventListener('click', () => openService());
     node('jmServiceCancel').addEventListener('click', canLeave);
     node('jmServiceEvent').addEventListener('change', () => {
-      if (busy || serviceId) return;
+      if (busy) return;
       const record = data?.experience.find((item) => item.eventId === node('jmServiceEvent').value);
       for (const field of ['eventId', 'eventName', 'eventDate', 'eventScope']) {
         node(`jmService-${field}`).value = record?.[field] || '';
@@ -507,14 +544,12 @@
       if (!data || busy || !serviceOpen) return;
       const draft = serviceDraft();
       if (!draft.confirmedCompleted) { node('jmServiceError').textContent = 'Confirm actual completed service before submitting.'; return; }
-      if (!confirm(serviceId ? 'Save this correction and reset verification? The record must be verified again.' :
-        'Submit this actual completed service as pending experience?')) return;
+      if (!confirm('Submit this actual completed service as pending experience?')) return;
       node('jmServiceError').textContent = '';
-      const saved = await write(serviceId ? `/api/judge-management/experience/${serviceId}` : '/api/judge-management/experience',
-        serviceId ? 'PUT' : 'POST', { associationId: draft.associationId, confirmedCompleted: true,
-          ...(serviceId ? { record: draft } : { records: [{ ...draft, source: 'MANUAL' }] }) },
-        serviceId ? 'Service corrected; verification reset and progression recalculated.' :
-          (result) => result.duplicates ? 'Service already recorded; no duplicate credit added.' : 'Actual service recorded as pending experience. Verify after review.');
+      const saved = await write('/api/judge-management/experience', 'POST',
+        { associationId: draft.associationId, confirmedCompleted: true,
+          records: [{ ...draft, source: 'MANUAL' }] },
+        (result) => result.duplicates ? 'Service already recorded; no duplicate credit added.' : 'Actual service recorded as pending experience. Verify after review.');
       if (saved) { serviceOpen = false; node('jmServiceForm').hidden = true; }
     });
     node('jmExperienceRecords').addEventListener('input', (event) => updateRecordRows(event, 'experience', '[data-exp-record]', 'data-exp-field'));

@@ -88,6 +88,23 @@ test('volunteer CRUD, CSV atomic upsert, type references, scope, revision and op
   assert.equal(data.volunteers[0].parentName, 'Guardian');
   assert.equal(data.volunteers[0].gender, 'Female');
   assert.equal(data.volunteers[0].email, 'judge@example.test');
+  const splitParentCsv = [
+    [...Object.keys(headers), 'Parent First Name', 'Parent Last Name'].join(','),
+    ['Minor', 'Doe', '2012-01-09', 'D102', 'School', 'G5', '', 'Setup', '', 'Taylor', 'Doe'].join(',')
+  ].join('\n');
+  updated = await write('volunteers/import', { revision: data.revision, csv: splitParentCsv });
+  assert.equal(updated.status, 200);
+  data = await updated.json();
+  assert.equal(data.volunteers.find((row) => row.associationNumber === 'D102').parentName, 'Taylor Doe');
+  const incompleteParentCsv = [
+    [...Object.keys(headers), 'Parent First Name', 'Parent Last Name'].join(','),
+    ['Minor', 'Doe', '2012-01-09', 'D103', 'School', 'G5', '', 'Setup', '', 'Taylor', ''].join(',')
+  ].join('\n');
+  const beforeIncompleteParent = data.revision;
+  updated = await write('volunteers/import', { revision: beforeIncompleteParent, csv: incompleteParentCsv });
+  assert.equal(updated.status, 400);
+  assert.match((await updated.json()).error, /Parent first and last names must be provided together/);
+  assert.equal((await get()).revision, beforeIncompleteParent);
   const persisted = await new Promise((resolve, reject) => {
     const db = new sqlite3.Database(path.join(root, 'A', 'tournament.db'));
     db.get('SELECT gender, email FROM volunteers WHERE id = ?', [originalId], (error, row) => {
