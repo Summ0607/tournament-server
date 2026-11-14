@@ -304,7 +304,14 @@ test('completed integrated pages explain each primary, next-step and maintenance
     assert.match(tag[0], /(?:data-help|title)="[^"]+"/, id);
   }
   assert.equal((html.match(/\bdata-help-root\b/g) || []).length, 1);
-  assert.equal((html.match(/\bdata-help-page=/g) || []).length, 15);
+  assert.deepEqual(
+    Array.from(html.matchAll(/\bdata-help-page="([^"]+)"/g), (match) => match[1]),
+    [
+      'event-setup', 'import', 'groups', 'ring-assignment', 'head-table', 'competitors',
+      'teams', 'team-settings', 'visual-definitions', 'schools', 'ranks', 'volunteers',
+      'judge-assignments', 'ring-judges', 'results', 'competition-settings', 'judge-management'
+    ]
+  );
 });
 
 test('volunteer CSV import stays visible and detailed instructions are in page help', () => {

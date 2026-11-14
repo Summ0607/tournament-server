@@ -137,6 +137,7 @@ async function loadPage(options = {}) {
     CompetitionSettingsWorkspace: require('../tournament-management/competition-settings'),
     TournamentResultsWorkspace: require('../tournament-management/results'),
     RingJudgesWorkspace: require('../tournament-management/ring-judges'),
+    JudgeAssignmentsWorkspace: require('../tournament-management/judge-assignments'),
     JudgeManagementWorkspace: require('../tournament-management/judge-management'),
     VolunteersWorkspace: require('../tournament-management/volunteers'),
     DivisionRules: require('../assets/division-rules'),
@@ -167,6 +168,16 @@ async function loadPage(options = {}) {
     },
     document: {
       getElementById: (id) => {
+        const dynamicParent = {
+          jaAvailabilityList: 'jaAvailabilityPanel',
+          jaArbitrators: 'jaRingPlanning',
+          jaArbitratorList: 'jaRingPlanning'
+        }[id];
+        if (dynamicParent && !elements.has(id)) {
+          const parent = elements.get(dynamicParent);
+          if (!parent.innerHTML.includes(`id="${id}"`)) return null;
+          elements.set(id, element());
+        }
         assert.ok(elements.has(id), `Missing element ${id}`);
         return elements.get(id);
       },
@@ -664,7 +675,7 @@ test('navigation destinations have stable IDs, approved labels and native Admini
     'event-setup': 'Tournament', competitors: 'Competitors', volunteers: 'Volunteers', 'volunteer-types': 'Volunteer Types', groups: 'Divisions',
     results: 'Results', 'team-management': 'Teams', 'team-settings': 'Settings', 'ring-judges': 'Ring Judges',
     'judge-assignments': 'Judge Assignments', 'tablet-pairing': 'Ring Assignment', 'ring-assignment': 'Division Assignments',
-    'head-table': 'Head Table', 'audience-viewer': 'Audience Viewer', printing: 'Printing', 'csv-settings': 'CSV Settings',
+    'division-qr': 'Division QR Codes', 'head-table': 'Head Table', 'audience-viewer': 'Audience Viewer', printing: 'Printing', 'csv-settings': 'CSV Settings',
     'judge-management': 'Judges', 'judge-testing': 'Testing', 'judge-eligibility': 'Eligibility',
     'judge-experience': 'Experience', 'judge-csv-settings': 'CSV Settings', 'clinic-management': 'Clinic Management',
     'event-history': 'Event History', 'your-account': 'Your Account', 'visual-definitions': 'Visual Definitions',
@@ -1013,8 +1024,7 @@ test('Planned destinations are explicit, independently addressable and never loa
   assert.doesNotMatch(html, /class="nav-planned"/);
   const page = await loadPage({ activeEvent: spring });
   const before = page.requests.length;
-  for (const id of ['judge-assignments', 'printing',
-    'csv-settings', 'clinic-management', 'event-history']) {
+  for (const id of ['printing', 'csv-settings', 'clinic-management', 'event-history']) {
     assert.equal(page.nav(id).getAttribute('data-nav-planned'), 'true');
     await page.navigate(id);
     assert.equal(page.element('placeholderView').hidden, false);
@@ -1028,10 +1038,9 @@ test('Planned destinations are explicit, independently addressable and never loa
     }
   }
   assert.equal(page.requests.slice(before).some((request) => request.init || request.path.startsWith('/api/rings')), false);
-  const direct = await loadPage({ search: '?view=judge-assignments' });
-  assert.equal(direct.element('placeholderTitle').textContent, 'Judge Assignments');
-  assert.match(direct.element('placeholderMessage').textContent, /No active tournament/);
-  assert.equal(direct.element('navRingsChildren').hidden, false);
+  const direct = await loadPage({ search: '?view=printing' });
+  assert.equal(direct.element('placeholderTitle').textContent, 'Printing');
+  assert.equal(direct.element('placeholderView').hidden, false);
   assert.equal(direct.requests.some((request) => request.init), false);
 });
 
@@ -1348,7 +1357,7 @@ test('day-of banner uses active event and date across all day-of sections, not s
     draft: { eventName: winter, groups: [] }
   });
   assert.equal(page.element('bannerEventStatus').textContent, 'Unsaved changes');
-  for (const id of ['ring-assignment', 'head-table', 'judge-assignments']) {
+  for (const id of ['ring-assignment', 'head-table']) {
     await page.openDayOf(id);
     assert.equal(page.element('bannerEventLabel').textContent, 'Active Event:');
     assert.equal(page.element('bannerEventName').textContent, spring);
@@ -1356,6 +1365,11 @@ test('day-of banner uses active event and date across all day-of sections, not s
     assert.equal(page.element('bannerEventStatus').textContent, 'Active');
     assert.equal(page.element('bannerMetadata').getAttribute('aria-label'), 'Active event metadata');
   }
+  await page.navigate('judge-assignments');
+  assert.equal(page.element('bannerEventLabel').textContent, 'Selected Event:');
+  assert.equal(page.element('bannerEventName').textContent, winter);
+  assert.equal(page.element('bannerEventDate').textContent, '2027-01-16');
+  assert.equal(page.element('tournamentReferenceLabel').textContent, 'Tournament for this page');
   await page.openDayOf('competitors');
   assert.equal(page.element('bannerEventLabel').textContent, 'Selected Event:');
   assert.equal(page.element('bannerEventName').textContent, winter);
@@ -1852,7 +1866,8 @@ test('ring assignment direct link, search, empty state, errors and event switchi
   await page.click('raRefreshBtn');
   assert.equal(page.element('detailsPanel').hidden, true);
   assert.equal(page.element('raEvent').textContent, spring);
-  assert.match(page.element('raDivisions').innerHTML, /No saved divisions/);
+  assert.match(page.element('raDivisions').innerHTML,
+    /No saved division configuration for Spring Tournament 2027\. Open Divisions, build and save groups for this tournament, then refresh Ring Assignment\./);
   page.setActiveEvent('');
   await page.click('raRefreshBtn');
   assert.match(page.element('raNotice').textContent, /No active tournament/);
@@ -2938,8 +2953,8 @@ test('each tournament workspace shows the shared selection while live ring pages
   assert.equal(page.requests.some((request) => request.path.includes('/activate')), false);
 });
 
-test('all Ring Management selectors activate only after confirmation and preserve preparation context', async () => {
-  for (const view of ['tablet-pairing', 'ring-assignment', 'head-table', 'judge-assignments']) {
+test('all live Ring Management selectors activate only after confirmation and preserve preparation context', async () => {
+  for (const view of ['tablet-pairing', 'ring-assignment', 'head-table']) {
     const page = await loadPage({ activeEvent: winter, selectedEvent: spring, confirm: true });
     await page.navigate(view);
     assert.equal(page.element('tournamentReferenceLabel').textContent, 'Active Tournament');
@@ -2970,6 +2985,16 @@ test('all Ring Management selectors activate only after confirmation and preserv
   }
 });
 
+test('Judge Assignments stays scoped to the selected tournament without changing the active event', async () => {
+  const page = await loadPage({ activeEvent: spring, selectedEvent: winter });
+  await page.navigate('judge-assignments');
+  assert.equal(page.element('judgeAssignmentsView').hidden, false);
+  assert.equal(page.element('tournamentReferenceLabel').textContent, 'Tournament for this page');
+  assert.equal(page.element('tournamentReferenceSelect').value, winter);
+  assert.equal(page.activeEvent(), spring);
+  assert.equal(page.requests.some((request) => request.path === '/api/events/activate'), false);
+});
+
 test('cancelled and failed live activation retain the previous active tournament and browsing selection', async () => {
   for (const failActivation of [false, true]) {
     const page = await loadPage({ activeEvent: winter, selectedEvent: spring, confirm: failActivation, failActivation });
@@ -2986,8 +3011,8 @@ test('cancelled and failed live activation retain the previous active tournament
   }
 });
 
-test('no active tournament allows every Ring Management chooser and activation never changes browsing selection', async () => {
-  for (const view of ['ring-assignment', 'head-table', 'judge-assignments']) {
+test('no active tournament allows every live Ring Management chooser and activation never changes browsing selection', async () => {
+  for (const view of ['ring-assignment', 'head-table']) {
     const page = await loadPage({ selectedEvent: winter, confirm: true });
     await page.navigate(view);
     assert.equal(page.nav(view).getAttribute('aria-disabled'), 'false');

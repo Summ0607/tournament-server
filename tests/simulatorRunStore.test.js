@@ -64,7 +64,9 @@ function fixture(t, { buildResultPacket, assignments: savedAssignments, groups: 
   fs.writeFileSync(path.join(activeEventDir, 'results', 'active-result.json'), '{"sentinel":"active"}');
   fs.writeFileSync(path.join(activeEventDir, 'ring-assignments.json'), '{"sentinel":"active assignments"}');
   fs.writeFileSync(path.join(eventDir, 'tournament.db'), 'db placeholder');
-  fs.writeFileSync(path.join(eventDir, 'event-config.json'), JSON.stringify({ tournamentDays, date: '2027-01-09' }));
+  fs.writeFileSync(path.join(eventDir, 'event-config.json'), JSON.stringify({
+    tournamentDays, date: '2027-01-09', scope: 'regional'
+  }));
   const sourceAssignments = {
     config: { letterCount: 1, numberCount: 2 },
     eventStartedAt: '2026-10-26T12:00:00.000Z',
