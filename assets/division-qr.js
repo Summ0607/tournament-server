@@ -1,4 +1,4 @@
-/* global window, document, fetch */
+/* global window, document, fetch, DivisionRules */
 (async () => {
   const division = document.getElementById('division'), status = document.getElementById('status');
   const display = document.getElementById('display'), code = document.getElementById('code');
@@ -57,7 +57,7 @@
     if (busy) return;
     busy = true; controls(); status.textContent = ''; pages.replaceChildren();
     try {
-      const data = await generate();
+      const data = await generate([...division.options].map((option) => option.value));
       const failed = data.codes.filter((entry) => entry.error);
       if (failed.length) {
         throw new Error(`No sheets were printed. Fix these divisions first: ${failed
@@ -88,7 +88,8 @@
     eventName = (requestedEvent || '').trim() || (await json('/api/events/active')).activeEvent || '';
     if (!eventName) throw new Error('Activate a tournament or open this page with ?event=<name>.');
     const data = await json(`/api/groups?eventName=${encodeURIComponent(eventName)}`);
-    for (const group of data.groups || []) {
+    const groups = (data.groups || []).slice().sort(DivisionRules.compareRunningOrder);
+    for (const group of groups) {
       const option = document.createElement('option');
       option.value = group.groupDivisionNumber != null ? String(group.groupDivisionNumber) : String(group.groupId || group.id || '');
       const label = group.groupDivisionNumber != null ? `Division ${group.groupDivisionNumber}` : (group.name || option.value);

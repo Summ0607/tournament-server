@@ -308,7 +308,10 @@ Under **Ring Management**, open **Division QR Codes**, directly below **Division
 Assignments** (direct access at `/division-qr/`, optionally with
 `?event=<name>&division=<number>`). Administrators, Event Coordinators and
 Tournament Operators can display one saved division's QR code, **Print selected
-division**, or **Print all divisions** as one labeled sheet per division. Each
+division**, or **Print all divisions** as one labeled sheet per division.
+The division selector and all-division print sheets use the same running-order
+rule as Division Assignments: Black Belts oldest first, then Tiny Tigers/Special
+Dragons and Gup youngest first, with division numbers breaking ties. Each
 code is self-contained: it carries the compressed, checksummed division roster
 (`type: tournament-division-qr`), so a tablet can load the division by scanning
 alone, with no network connection. Codes can be printed in advance for any saved

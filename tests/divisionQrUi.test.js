@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-async function harness({ oversizeDivision = false, noDivisions = false, noEvent = false, failImage = false } = {}) {
+async function harness({ oversizeDivision = false, noDivisions = false, noEvent = false, failImage = false,
+  savedDivisions } = {}) {
   const nodes = new Map(), requests = [], prints = [], events = {}, classes = new Set();
   class Node {
     constructor(tag = '') { this.tag = tag; this.children = []; this.handlers = {}; this.value = ''; this.disabled = false; this.hidden = false; }
@@ -20,9 +21,9 @@ async function harness({ oversizeDivision = false, noDivisions = false, noEvent 
   for (const id of ['division', 'status', 'display', 'code', 'print', 'printAll', 'printPages', 'title', 'details', 'qr']) {
     nodes.set(id, new Node(id === 'division' ? 'select' : id === 'qr' ? 'img' : ''));
   }
-  const divisions = noDivisions ? [] : [
-    { groupId: 'group-20', groupDivisionNumber: 20, name: 'Youth Gup A', competitors: Array.from({ length: 4 }) },
-    { groupId: 'group-21', groupDivisionNumber: 21, name: 'Youth Gup B', competitors: Array.from({ length: 13 }) }
+  const divisions = noDivisions ? [] : savedDivisions || [
+    { groupId: 'group-20', groupDivisionNumber: 20, name: 'Youth Gup A', competitors: Array.from({ length: 4 }, () => ({})) },
+    { groupId: 'group-21', groupDivisionNumber: 21, name: 'Youth Gup B', competitors: Array.from({ length: 13 }, () => ({})) }
   ];
   function codeEntry(requested) {
     const group = divisions.find((division) => String(division.groupDivisionNumber) === String(requested));
@@ -34,6 +35,7 @@ async function harness({ oversizeDivision = false, noDivisions = false, noEvent 
   }
   const context = vm.createContext({
     URLSearchParams,
+    DivisionRules: require('../assets/division-rules'),
     document: {
       getElementById: (id) => nodes.get(id), createElement: (tag) => new Node(tag),
       body: { classList: { add: (value) => classes.add(value), remove: (value) => classes.delete(value) } }
@@ -95,6 +97,43 @@ test('print all generates one labeled sheet per division and clears print mode a
   assert.equal(h.classes.has('printing-all'), false);
   assert.equal(h.nodes.get('printPages').children.length, 0);
   assert.equal(h.nodes.get('printAll').disabled, false);
+});
+
+test('division selector and print-all sheets use numeric division order when running-order categories are unknown', async () => {
+  const h = await harness({
+    savedDivisions: [21, '3', 10, '2', 20].map((number) => ({
+      groupId: `group-${number}`, groupDivisionNumber: number,
+      name: `Test division ${number}`, competitors: Array.from({ length: 4 }, () => ({}))
+    }))
+  });
+  assert.deepEqual(h.nodes.get('division').options.map((option) => option.value), ['2', '3', '10', '20', '21']);
+  assert.equal(h.nodes.get('division').value, '21');
+  await h.click('printAll');
+  assert.deepEqual(h.requests.at(-1).body.groupIds, ['2', '3', '10', '20', '21']);
+  assert.deepEqual(h.prints[0].sheets.map((sheet) => sheet.title),
+    ['Division 2', 'Division 3', 'Division 10', 'Division 20', 'Division 21']);
+});
+
+test('division QR selector and print sheets match assignment running order across ranks and ages', async () => {
+  const savedDivisions = [
+    { groupDivisionNumber: 2, rank: 'G5', age: 8 },
+    { groupDivisionNumber: 10, rank: 'D1', age: 12 },
+    { groupDivisionNumber: 3, rank: 'D2', age: 40 },
+    { groupDivisionNumber: 21, rank: 'G1', age: 40 },
+    { groupDivisionNumber: 20, rank: 'TTLD', age: 4 }
+  ].map(({ groupDivisionNumber, rank, age }) => ({
+    groupId: `group-${groupDivisionNumber}`, groupDivisionNumber,
+    name: `Test division ${groupDivisionNumber}`,
+    competitors: Array.from({ length: 4 }, () => ({ rank, age }))
+  }));
+  const h = await harness({ savedDivisions });
+  assert.deepEqual(h.nodes.get('division').options.map((option) => option.value), ['3', '10', '20', '2', '21']);
+  await h.click('printAll');
+  assert.deepEqual(h.prints[0].sheets.map((sheet) => sheet.title),
+    ['Division 3', 'Division 10', 'Division 20', 'Division 2', 'Division 21']);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'division-qr', 'index.html'), 'utf8');
+  const rulesScript = html.indexOf('src="/assets/division-rules.js"');
+  assert.ok(rulesScript >= 0 && rulesScript < html.indexOf('src="/assets/division-qr.js"'));
 });
 
 test('an oversize division or undecodable image never prints a partial batch', async () => {
