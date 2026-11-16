@@ -1802,6 +1802,9 @@ existing PIN. Set the PIN before operational use locks assignment changes.
 `GET /api/rings/<ringId>/judge-plan?phase=P1|P2` returns the assigned roster,
 assignment and source revisions, arbitrator reserves, and hidden PIN verifier;
 the verifier is not included in the Judge Assignments browser response.
+The roster endpoint accepts operational tablet ring IDs such as `ring-a-1`
+and maps them to saved assignment labels such as `A1`. Its response retains
+the requested ring ID so tablet authorization and local attendance stay aligned.
 
 Ring Judges' competitor population now uses certified directory matches when
 running the normal server. Its review note identifies potential candidates.
@@ -1851,8 +1854,11 @@ Paired tablets can read `GET /api/rings/<ringId>/judge-plan?phase=P1|P2`.
 The read-only slice returns the saved assignment revision and qualified officials
 for one ring/phase; a stale qualification revision is rejected, and this request
 never changes the saved assignment or records experience. Tablets independently
-record actual service by division, including seating, replacement, role swaps and
-removals, then consolidate those histories into one durable packet per ring and
+record actual service by division: marking an assigned judge Present records
+service in their planned role, with no separate seating step. Unchecked means
+absent; departures, replacements and role swaps retain prior service history.
+The compact check-in lists name, rank code and Association ID; change/transfer
+controls are separate from that list. Tablets consolidate those histories into one durable packet per ring and
 phase. `POST /api/rings/<ringId>/service-packets` is ring-authorized and stores
 the packet outside static web content. The tablet persists its submission ID
 before sending and retains it until a matching receipt is saved.

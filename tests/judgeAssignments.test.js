@@ -95,7 +95,7 @@ test('realistic 200-member directory supplies event volunteers only; 8, 16 and 2
 });
 
 test('ring judge plan slices are read-only and preserve the saved qualification revision', async (t) => {
-  const { request } = await setup(t);
+  const { request, eventsRoot } = await setup(t);
   const data = (await request(url)).data;
   const center = data.judges.find((judge) => judge.roles.center);
   const corner = data.judges.find((judge) => judge.roles.corner && judge.id !== center.id);
@@ -125,6 +125,23 @@ test('ring judge plan slices are read-only and preserve the saved qualification 
   assert.deepEqual(plan.data.positions.center.map((judge) => judge.associationId), [center.id]);
   assert.deepEqual(plan.data.positions.corner.map((judge) => judge.associationId), [corner.id]);
   assert.equal(plan.data.assigned, true);
+  const tabletPlan = await request('/rings/ring-a-1/judge-plan?eventName=A&phase=P1');
+  assert.equal(tabletPlan.status, 200);
+  assert.deepEqual(tabletPlan.data, { ...plan.data, ringId: 'ring-a-1' });
+  const tabletSecondRing = await request('/rings/ring-a-2/judge-plan?eventName=A&phase=P1');
+  assert.equal(tabletSecondRing.status, 200);
+  assert.equal(tabletSecondRing.data.ringId, 'ring-a-2');
+  assert.equal(tabletSecondRing.data.assigned, true);
+  assert.deepEqual(tabletSecondRing.data.positions, { center: [], corner: [], sktk: [] });
+  const tabletUnplanned = await request('/rings/ring-a-1/judge-plan?eventName=A&phase=P2');
+  assert.equal(tabletUnplanned.status, 200);
+  assert.equal(tabletUnplanned.data.assigned, false);
+  assert.deepEqual(tabletUnplanned.data.positions, { center: [], corner: [], sktk: [] });
+  for (const invalidRing of ['ring-z-1', 'ring-a-0', 'ring-a-01', 'unknown']) {
+    const rejected = await request(`/rings/${invalidRing}/judge-plan?eventName=A&phase=P1`);
+    assert.equal(rejected.status, 404);
+    assert.match(rejected.data.error, /Ring is not configured/);
+  }
   assert.equal(apiRoles('GET', `/api/rings/${ringId}/judge-plan`).includes('tournament-operator'), true);
   assert.equal(isTabletEndpoint('GET', `/api/rings/${ringId}/judge-plan`), true);
   const secondRing = await request(`/rings/${encodeURIComponent(draft.rings[1] || ringId)}/judge-plan?eventName=A&phase=P1`);
@@ -143,6 +160,12 @@ test('ring judge plan slices are read-only and preserve the saved qualification 
     phases: saved.data.phases
   });
   assert.equal(nonTextPin.status, 400);
+  const configFile = path.join(eventsRoot, 'A', 'event-config.json');
+  const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+  fs.writeFileSync(configFile, JSON.stringify({ ...config, ringConfigX: 5 }));
+  const stalePlan = await request('/rings/ring-a-1/judge-plan?eventName=A&phase=P1');
+  assert.equal(stalePlan.status, 409);
+  assert.match(stalePlan.data.error, /Reload and save the assignment plan/);
 });
 
 test('certified competitors are potential candidates; agreement is per phase, duplicate role identities merge, and ring population uses directory certification', async (t) => {

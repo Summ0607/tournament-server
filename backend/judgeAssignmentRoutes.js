@@ -8,7 +8,7 @@ const { assignmentCandidates } = require('./judgeAssignmentCandidates');
 const { DEFAULT_JUDGE_DATABASE } = require('../db/judgeManagement');
 const { judgeRankOptions } = require('../db/judgeCertification');
 const { POSITIONS, preferred, autoAssign } = require('./judgeAssignmentAlgorithm');
-const { buildRingLabel } = require('../group-server-helpers');
+const { buildRingId, buildRingLabel } = require('../group-server-helpers');
 const phases = ['P1', 'P2'];
 const fail = (message, statusCode = 400) => { throw Object.assign(new Error(message), { statusCode }); };
 const emptyPhase = (discipline) => ({ discipline, rings: [], available: [], arbitrators: [], assignments: {} });
@@ -119,7 +119,9 @@ function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DAT
       const phaseName = req.query.phase;
       if (!phases.includes(phaseName)) fail('phase must be P1 or P2.');
       const ringId = String(req.params.ringId || '').trim();
-      if (!state.rings.includes(ringId)) fail('Ring is not configured for this event.', 404);
+      const ringLabel = state.rings.find((label) =>
+        label === ringId || buildRingId(label[0], label.slice(1)) === ringId);
+      if (!ringLabel) fail('Ring is not configured for this event.', 404);
       const phase = state.phases[phaseName];
       if (!phase) fail('The requested phase has no saved judge assignment.', 404);
       if (state.assignmentSourceRevision && state.assignmentSourceRevision !== state.sourceRevision) {
@@ -127,8 +129,8 @@ function createJudgeAssignmentRouter({ eventsRoot, judgeFile = DEFAULT_JUDGE_DAT
       }
       const candidates = new Map(state.judges.map((judge) => [judge.id, judge]));
       const checked = validatePhase(phase, state.rings, state.judges);
-      const planned = checked.rings.includes(ringId);
-      const ids = planned ? checked.assignments[ringId] : null;
+      const planned = checked.rings.includes(ringLabel);
+      const ids = planned ? checked.assignments[ringLabel] : null;
       const officials = (role) => (ids?.[role] || []).map((id) => {
         const judge = candidates.get(id);
         return { associationId: judge.associationId, name: judge.name, rank: judge.rank, certification: judge.certification };
