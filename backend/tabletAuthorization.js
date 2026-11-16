@@ -4,7 +4,7 @@ const path = require('node:path');
 const sqlite3 = require('sqlite3');
 const express = require('express');
 const QRCode = require('qrcode');
-const { isTabletEndpoint, hasRole, apiRoles } = require('./browserPermissions');
+const { isTabletEndpoint, isAppUpdateEndpoint, hasRole, apiRoles } = require('./browserPermissions');
 
 const TOKEN = /^[a-f0-9]{64}$/;
 const digest = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -143,6 +143,7 @@ function createTabletRouter({ store, security, getContext, serverOrigins, allowe
     } catch (error) { next(error); }
   });
   router.use(async (req, res, next) => {
+    if (isAppUpdateEndpoint(req.method, req.path)) return next();
     if (!req.get('authorization')) return next();
     try {
       if (!req.socket.encrypted) fail('Tablet authorization requires HTTPS.', 426);

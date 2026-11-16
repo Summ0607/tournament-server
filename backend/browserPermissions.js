@@ -77,12 +77,15 @@ rule('GET', /^\/api\/simulator\/runs\/[^/]+\/(head-table|ring-assignment)$/, DAY
 rule('GET', /^\/api\/simulator\/runs\/[^/]+\/results$/, EVENT);
 rule('GET POST DELETE', /^\/api\/simulator\/runs(?:\/[^/]+(?:\/(?:log|step|start|pause|resume|speed|stop|run|reset|schedule\/day2))?)?$/, ['administrator']);
 rule('GET POST', /^\/api\/server-control\/(status|restart)$/, ['administrator']);
-rule('GET', /^\/(?:api\/version|download-app)$/, Object.keys(ROLE_LABELS).filter((role) => role !== 'viewer'));
+rule('GET', /^\/(?:api\/version|download-app)$/, Object.keys(ROLE_LABELS));
 
 function apiRoles(method, pathname) {
   const normalizedMethod = method === 'HEAD' ? 'GET' : method;
   const matches = rules.filter((entry) => entry.methods.includes(normalizedMethod) && entry.pattern.test(pathname));
   return matches.length ? [...new Set(matches.flatMap((entry) => entry.roles))] : null;
+}
+function isAppUpdateEndpoint(method, pathname) {
+  return ['GET', 'HEAD'].includes(method) && ['/api/version', '/download-app'].includes(pathname);
 }
 function isTabletEndpoint(method, pathname) {
   if (method === 'GET') return /^\/(?:api\/(?:health|version|events\/active|rings\/config)|download-app)$/.test(pathname) ||
@@ -106,4 +109,4 @@ function pageView(pathname) {
   if (['/tournament-setup', '/tournament-mgmt', '/setup', '/event-administration', '/tournament-setup/event-definition'].includes(name)) return 'event-setup';
   return null;
 }
-module.exports = { ROLE_LABELS, VIEW_ROLES, hasRole, allowedViews, homePath, apiRoles, isTabletEndpoint, pageView };
+module.exports = { ROLE_LABELS, VIEW_ROLES, hasRole, allowedViews, homePath, apiRoles, isAppUpdateEndpoint, isTabletEndpoint, pageView };

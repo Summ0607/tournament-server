@@ -191,4 +191,8 @@ test('real HTTPS routes enforce roles, pairing, ring scope and denial of unauthe
   const replacement = await request('/api/tablet/pair', { method: 'POST', body: p.input({ deviceId: crypto.randomUUID(), replace: true }) });
   assert.equal(replacement.status, 200);
   assert.equal((await request('/api/rings/config', { headers: auth })).status, 401);
+  assert.equal((await request('/api/version', { headers: auth })).status, 200);
+  assert.equal((await request('/api/version')).status, 200);
+  assert.equal((await request('/api/version', { headers: auth, plain: true })).status, 426);
+  assert.equal((await request('/api/version', { headers: { ...auth, Origin: 'https://evil.test' } })).status, 403);
 });

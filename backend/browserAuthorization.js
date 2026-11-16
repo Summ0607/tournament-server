@@ -1,5 +1,5 @@
 const {
-  apiRoles, hasRole, VIEW_ROLES, homePath, pageView
+  apiRoles, hasRole, VIEW_ROLES, homePath, pageView, isAppUpdateEndpoint
 } = require('./browserPermissions');
 
 function createBrowserAuthorization({ config, security }) {
@@ -25,6 +25,7 @@ function createBrowserAuthorization({ config, security }) {
     }
     try {
       security.verifyRequest(req);
+      if (isAppUpdateEndpoint(req.method, pathname)) return next();
       const session = await security.authenticate(req, res);
       const roles = session.account.roles;
       if (isApi) {

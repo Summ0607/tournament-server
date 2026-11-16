@@ -38,6 +38,11 @@ maintained manually on the server.
    bytes, with `X-App-Version-Code` and `X-App-SHA256` headers. Both endpoints
    use `Cache-Control: no-store`; missing/incomplete/corrupted releases return
    **503 with an explicit error**, never version zero or the old root APK.
+   These two endpoints allow unauthenticated `GET`/`HEAD` requests so tablets
+   can update before scanning a ring QR code, including when a saved daily
+   credential has expired. HTTPS, configured server addresses, and browser
+   same-origin checks still apply. Tournament data and write operations remain
+   protected. Restart the server processes after deploying this access change.
 5. To test the Wi-Fi update, leave tablet **1.44 (45)** installed, publish
    **1.45 (46)**, restart the server processes as above, and check:
 

@@ -64,7 +64,7 @@ function request(server, { secure = true, pathname = '/', method = 'GET', body,
       res.setEncoding('utf8');
       res.on('data', (data) => { raw += data; });
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, raw,
-        json: res.headers['content-type']?.includes('application/json') ? JSON.parse(raw) : null }));
+        json: raw && res.headers['content-type']?.includes('application/json') ? JSON.parse(raw) : null }));
     });
     req.on('error', reject);
     req.end(payload);
@@ -90,6 +90,7 @@ async function setup(t, enabled = true) {
   app.get('/api/events/list', (_req, res) => res.json({ events: [] }));
   app.get('/api/rings/config', (_req, res) => res.json({ allowedRings: [] }));
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
+  app.get('/download-app', (_req, res) => res.type('application/vnd.android.package-archive').send('test APK'));
   app.use('/api', (_req, res) => res.json({ reachedHandler: true }));
   registerPageRoutes(app, path.resolve(__dirname, '..'), path.resolve(__dirname, '..', 'head-table'), 'pre');
   const tlsServer = https.createServer(loadHttpsConfig(configFile).options, app).listen(0, '127.0.0.1');
@@ -149,6 +150,24 @@ async function roleLogin(server, userId) {
   return { Cookie: response.headers['set-cookie'][0].split(';')[0], 'X-CSRF-Token': response.json.csrfToken };
 }
 
+test('only update reads are public, with HTTPS and configured same-origin checks still enforced', async (t) => {
+  const { tlsServer, httpServer } = await setup(t);
+  for (const pathname of ['/api/version', '/download-app']) {
+    for (const method of ['GET', 'HEAD']) {
+      const response = await request(tlsServer, { pathname, method });
+      assert.equal(response.status, 200, `${method} ${pathname}`);
+      assert.equal(response.headers['cache-control'], 'no-store');
+    }
+    assert.equal((await request(httpServer, { secure: false, pathname })).status, 426);
+    assert.equal((await request(tlsServer, { pathname, host: 'evil.example:3443' })).status, 403);
+    assert.equal((await request(tlsServer, { pathname, headers: { Origin: 'https://evil.example' } })).status, 403);
+    assert.equal((await request(tlsServer, { pathname, method: 'POST', body: {} })).status, 401);
+  }
+  for (const pathname of ['/api/rings/config', '/api/groups', '/api/tablet/session']) {
+    assert.equal((await request(tlsServer, { pathname })).status, 401, pathname);
+  }
+});
+
 test('browser page aliases require sign-in and deny disallowed roles; raw repository files cannot bypass authorization', async (t) => {
   const { tlsServer, httpServer, store } = await setup(t);
   await store.createAccount({ userId: 'viewer', password: 'A long administrator test phrase1!', roles: ['viewer'], actor: 'test' });
@@ -195,7 +214,7 @@ test('all five roles have enforced API permissions, including union of roles and
   }
   const cases = [
     ['GET', '/api/events/list', ['administrator', 'event-coordinator', 'judging-coordinator', 'tournament-operator']],
-    ['GET', '/api/version', ['administrator', 'event-coordinator', 'judging-coordinator', 'tournament-operator']],
+    ['GET', '/api/version', Object.keys(ROLE_LABELS)],
     ['POST', '/api/events/create', ['administrator', 'event-coordinator']],
     ['GET', '/api/groups', ['administrator', 'event-coordinator', 'tournament-operator']],
     ['GET', '/api/rings/monitor', ['administrator', 'event-coordinator', 'tournament-operator', 'viewer']],
