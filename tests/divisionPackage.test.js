@@ -38,14 +38,14 @@ test('packaged divisions keep only tablet fields and never contact details', () 
   assert.ok(!JSON.stringify(division).includes('555-0100'));
 });
 
-test('divisions above the 12-competitor tablet cap or without competitors are rejected', () => {
-  assert.throws(() => packageDivision(savedGroup(20, 13)), /Division 20 has 13 competitors.*at most 12/);
+test('divisions above the 13-competitor tablet cap or without competitors are rejected', () => {
+  assert.throws(() => packageDivision(savedGroup(20, 14)), /Division 20 has 14 competitors.*at most 13/);
   assert.throws(() => packageDivision(savedGroup(21, 0)), /Division 21 has no competitors/);
-  assert.equal(MAX_TABLET_DIVISION_COMPETITORS, 12);
+  assert.equal(MAX_TABLET_DIVISION_COMPETITORS, 13);
 });
 
-test('division QR payloads round-trip and a full 12-competitor division fits one QR code', () => {
-  const group = savedGroup(20, 12);
+test('division QR payloads round-trip and a full 13-competitor division fits one QR code', () => {
+  const group = savedGroup(20, 13);
   const payload = buildDivisionQrPayload({ eventName: 'Winter Tournament 2027', group });
   assert.equal(payload.type, DIVISION_QR_TYPE);
   assert.equal(payload.version, DIVISION_PACKAGE_VERSION);
@@ -114,16 +114,16 @@ test('ring division package rejects unknown rings, missing divisions, and oversi
   assert.equal(missing.status, 409);
   assert.match((await missing.json()).error, /not found: 21/);
 
-  const oversizeBase = await startApp(t, ringDeps(new Map([['20', savedGroup(20, 13)]]), {
+  const oversizeBase = await startApp(t, ringDeps(new Map([['20', savedGroup(20, 14)]]), {
     ringLabel: 'A1', currentGroupId: '20', queuedGroupDivisionNumbers: []
   }));
   const oversize = await fetch(`${oversizeBase}/api/rings/ring-a-1/division-package`);
   assert.equal(oversize.status, 409);
-  assert.match((await oversize.json()).error, /Division 20 has 13 competitors/);
+  assert.match((await oversize.json()).error, /Division 20 has 14 competitors/);
 });
 
 test('division QR codes endpoint prints all or selected divisions and flags oversize ones', async (t) => {
-  const groups = new Map([['20', savedGroup(20, 4)], ['21', savedGroup(21, 13)]]);
+  const groups = new Map([['20', savedGroup(20, 4)], ['21', savedGroup(21, 14)]]);
   const base = await startApp(t, ringDeps(groups, {}));
   const all = await fetch(`${base}/api/divisions/qr-codes`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
@@ -135,7 +135,7 @@ test('division QR codes endpoint prints all or selected divisions and flags over
   assert.match(allBody.codes[0].image, /^data:image\/png/);
   assert.equal(allBody.codes[0].competitorCount, 4);
   assert.equal(allBody.codes[1].image, undefined);
-  assert.match(allBody.codes[1].error, /Division 21 has 13 competitors/);
+  assert.match(allBody.codes[1].error, /Division 21 has 14 competitors/);
 
   const selected = await fetch(`${base}/api/divisions/qr-codes`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -3,11 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ring Assignment - Daily QR Codes</title>
+  <title>Ring QR Codes</title>
+  <script src="/assets/embedded-administration.js"></script>
   <script src="/assets/browser-session.js"></script>
   <script src="/assets/tablet-pairing.js" defer></script>
   <style>
     body { font: 18px system-ui, sans-serif; margin: 24px auto; max-width: 760px; padding: 0 16px; }
+    html.embedded-administration #browserSessionBar { display: none; }
     label, button, select { font: inherit; margin: 8px; }
     img { display: block; width: min(100%, 640px); height: auto; margin: auto; }
     #status { color: #b91c1c; }
@@ -26,7 +28,7 @@
   </style>
 </head>
 <body data-auth-workspace="tablet-pairing">
-  <h1>Ring Assignment</h1>
+  <h1>Ring QR Codes</h1>
   <p class="intro">Authorize each tablet by scanning its ring's daily QR code. Display one ring,
     print the selected ring, or print a labeled sheet for every configured ring.</p>
   <div class="controls">

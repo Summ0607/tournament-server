@@ -81,7 +81,7 @@
   window.addEventListener('afterprint', () => {
     document.body.classList.remove('printing-all'); pages.replaceChildren();
   });
-  division.addEventListener('change', invalidate);
+  division.addEventListener('change', show);
   controls();
   try {
     const requestedEvent = new URLSearchParams(window.location.search).get('event');

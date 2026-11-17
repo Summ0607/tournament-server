@@ -674,7 +674,7 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   const expected = {
     'event-setup': 'Tournament', competitors: 'Competitors', volunteers: 'Volunteers', 'volunteer-types': 'Volunteer Types', groups: 'Divisions',
     results: 'Results', 'team-management': 'Teams', 'team-settings': 'Settings', 'ring-judges': 'Ring Judges',
-    'judge-assignments': 'Judge Assignments', 'tablet-pairing': 'Ring Assignment', 'ring-assignment': 'Division Assignments',
+    'judge-assignments': 'Judge Assignments', 'tablet-pairing': 'Ring QR Codes', 'ring-assignment': 'Division Assignments',
     'division-qr': 'Division QR Codes', 'head-table': 'Head Table', 'audience-viewer': 'Audience Viewer', printing: 'Printing', 'csv-settings': 'CSV Settings',
     'judge-management': 'Judges', 'judge-testing': 'Testing', 'judge-eligibility': 'Eligibility',
     'judge-experience': 'Experience', 'judge-csv-settings': 'CSV Settings', 'clinic-management': 'Clinic Management',
@@ -766,12 +766,12 @@ test('Judge Management preview opens Add and Import screens and returns to their
   assert.equal(page.requests.some((request) => request.init && request.init.method !== 'GET'), false);
 });
 
-test('Ring Assignment opens daily QR tools inside the shell and unloads on navigation', async () => {
+test('Ring QR Codes opens daily QR tools inside the shell and unloads on navigation', async () => {
   const page = await loadPage({ activeEvent: spring, search: '?view=tablet-pairing' });
   assert.equal(page.element('administrationToolView').hidden, false);
   assert.equal(page.element('administrationToolFrame').getAttribute('src'), '/tablet-pairing/?embedded=1');
-  assert.equal(page.element('administrationToolFrame').getAttribute('title'), 'Ring Assignment');
-  assert.equal(page.element('workspaceTitle').textContent, 'Ring Assignment');
+  assert.equal(page.element('administrationToolFrame').getAttribute('title'), 'Ring QR Codes');
+  assert.equal(page.element('workspaceTitle').textContent, 'Ring QR Codes');
   assert.equal(page.element('tournamentReferenceLabel').textContent, 'Active Tournament');
   await page.openDayOf();
   assert.equal(page.element('ringAssignmentView').hidden, false);

@@ -6,7 +6,7 @@ const QRCode = require('qrcode');
 const DIVISION_PACKAGE_TYPE = 'tournament-division-package';
 const DIVISION_QR_TYPE = 'tournament-division-qr';
 const DIVISION_PACKAGE_VERSION = 1;
-const MAX_TABLET_DIVISION_COMPETITORS = 12;
+const MAX_TABLET_DIVISION_COMPETITORS = 13;
 const CHECKSUM_LENGTH = 16;
 
 function fail(message, statusCode = 400) {

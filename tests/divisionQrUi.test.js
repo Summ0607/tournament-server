@@ -23,13 +23,13 @@ async function harness({ oversizeDivision = false, noDivisions = false, noEvent 
   }
   const divisions = noDivisions ? [] : savedDivisions || [
     { groupId: 'group-20', groupDivisionNumber: 20, name: 'Youth Gup A', competitors: Array.from({ length: 4 }, () => ({})) },
-    { groupId: 'group-21', groupDivisionNumber: 21, name: 'Youth Gup B', competitors: Array.from({ length: 13 }, () => ({})) }
+    { groupId: 'group-21', groupDivisionNumber: 21, name: 'Youth Gup B', competitors: Array.from({ length: 14 }, () => ({})) }
   ];
   function codeEntry(requested) {
     const group = divisions.find((division) => String(division.groupDivisionNumber) === String(requested));
     const entry = { groupId: group.groupId, groupDivisionNumber: group.groupDivisionNumber,
       name: group.name, competitorCount: group.competitors.length };
-    if (oversizeDivision && group.groupDivisionNumber === 21) entry.error = 'Division 21 has 13 competitors; tablet divisions allow at most 12.';
+    if (oversizeDivision && group.groupDivisionNumber === 21) entry.error = 'Division 21 has 14 competitors; tablet divisions allow at most 13.';
     else entry.image = `data:image/png;base64,division-${group.groupDivisionNumber}`;
     return entry;
   }
@@ -64,23 +64,27 @@ async function harness({ oversizeDivision = false, noDivisions = false, noEvent 
   await ready;
   return { nodes, requests, prints, classes,
     click: (id) => nodes.get(id).handlers.click(),
-    change(id, value) { nodes.get(id).value = value; nodes.get(id).handlers.change(); } };
+    change(id, value) { nodes.get(id).value = value; return nodes.get(id).handlers.change(); } };
 }
 
 test('requested division is selected, displayed with details, and printable', async () => {
   const h = await harness();
   assert.equal(h.nodes.get('division').value, '21');
   assert.equal(h.nodes.get('title').textContent, 'Division 21');
-  assert.match(h.nodes.get('details').textContent, /Test Tournament - Youth Gup B - 13 competitors/);
+  assert.match(h.nodes.get('details').textContent, /Test Tournament - Youth Gup B - 14 competitors/);
   assert.equal(h.nodes.get('print').disabled, false);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'division-qr', 'index.html'), 'utf8'),
     /data-auth-workspace="division-qr"/);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'division-qr', 'index.html'), 'utf8');
+  assert.match(html, /embedded-administration\.js/);
+  assert.match(html, /html\.embedded-administration #browserSessionBar\s*\{\s*display:\s*none;/);
   await h.click('print');
   assert.equal(h.prints.length, 1);
   assert.equal(h.prints[0].all, false);
-  h.change('division', '20');
-  assert.equal(h.nodes.get('code').hidden, true);
-  assert.equal(h.nodes.get('print').disabled, true);
+  await h.change('division', '20');
+  assert.equal(h.nodes.get('code').hidden, false);
+  assert.equal(h.nodes.get('title').textContent, 'Division 20');
+  assert.equal(h.nodes.get('print').disabled, false);
 });
 
 test('print all generates one labeled sheet per division and clears print mode afterward', async () => {
@@ -149,7 +153,7 @@ test('an oversize division or undecodable image never prints a partial batch', a
 
 test('oversize division errors are shown when displayed individually', async () => {
   const h = await harness({ oversizeDivision: true });
-  assert.match(h.nodes.get('status').textContent, /13 competitors/);
+  assert.match(h.nodes.get('status').textContent, /14 competitors/);
   assert.equal(h.nodes.get('code').hidden, true);
   assert.equal(h.nodes.get('print').disabled, true);
 });

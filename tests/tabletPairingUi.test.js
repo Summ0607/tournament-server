@@ -67,6 +67,10 @@ test('selected ring display and printing use QR details and invalidate on addres
   assert.match(h.nodes.get('details').textContent, /192\.168\.4\.42:3443/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'tablet-pairing', 'index.html'), 'utf8'),
     /id="address"><option value="ip">/);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tablet-pairing', 'index.html'), 'utf8');
+  assert.match(html, /<title>Ring QR Codes<\/title>/);
+  assert.match(html, /embedded-administration\.js/);
+  assert.match(html, /html\.embedded-administration #browserSessionBar\s*\{\s*display:\s*none;/);
   await h.click('print');
   assert.equal(h.prints.length, 1);
   assert.equal(h.prints[0].all, false);

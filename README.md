@@ -315,7 +315,7 @@ Dragons and Gup youngest first, with division numbers breaking ties. Each
 code is self-contained: it carries the compressed, checksummed division roster
 (`type: tournament-division-qr`), so a tablet can load the division by scanning
 alone, with no network connection. Codes can be printed in advance for any saved
-event. Tablet divisions are limited to **12 competitors per code**; oversize
+event. Tablet divisions are limited to **13 competitors per code**; oversize
 divisions are reported (and block all-division printing) without changing
 group-builder sizing rules — split the division, then reprint. Packaged rosters
 carry only competitor id, name, studio, rank, age and height — never contact or
@@ -324,7 +324,7 @@ registration details.
 Paired tablets can instead fetch the same content over the network from
 `GET /api/rings/<ringId>/division-package`, which returns the ring's current and
 queued divisions (`type: tournament-division-package`) under the same
-12-competitor limit. `POST /api/divisions/qr-codes` generates the printable
+13-competitor limit. `POST /api/divisions/qr-codes` generates the printable
 codes for the browser page. Validate with `npm run test:division-package`.
 
 `backend/accountSessions.js` stores accounts and browser sessions in SQLite at an
