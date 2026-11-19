@@ -57,7 +57,7 @@ test('CSV import shows high-contrast success and places Back to Judges in the im
   assert.deepEqual(JSON.parse(calls.at(-1).options.body).ids, [1]);
 });
 
-test('tablet service intake imports packets only as pending experience and supports USB receipts', async () => {
+test('tablet service intake imports packets only as pending experience', async () => {
   const nodes = new Map(), calls = [];
   const node = (id) => {
     if (!nodes.has(id)) nodes.set(id, {
@@ -75,23 +75,11 @@ test('tablet service intake imports packets only as pending experience and suppo
     packet: { divisions: [{ seats: { center: [{ associationId: 'ID1' }] }, history: [] }] }
   };
   const workspace = create({
-    document: {
-      getElementById: node,
-      createElement: () => ({ click() {} })
-    },
+    document: { getElementById: node },
     confirm: () => true, showPanel() {},
     request: async (url, options) => {
       calls.push({ url, options });
       if (url === '/api/judge-management/service-packets') return { packets: [record] };
-      if (url === '/api/judge-management/service-packets/usb') {
-        return {
-          type: 'tournament-judge-service-receipt',
-          submissionId: record.submissionId,
-          accepted: true,
-          serverRecordId: 'server-record',
-          receivedAt: '2026-01-15T12:00:00.000Z'
-        };
-      }
       return { ...state, added: 1, duplicates: 0 };
     }
   });
@@ -113,18 +101,6 @@ test('tablet service intake imports packets only as pending experience and suppo
   assert.equal(JSON.parse(request.options.body).eventName, 'Event A');
   assert.doesNotMatch(request.options.body, /logVerified|verified/);
 
-  const envelope = {
-    type: 'tournament-judge-service-transfer',
-    schemaVersion: 1,
-    eventName: 'Event A',
-    packet: { ringId: 'ring-a-1', phase: 'P1' }
-  };
-  node('jmServicePacketsUsbFile').files = [{ text: async () => JSON.stringify(envelope) }];
-  await node('jmServicePacketsUsbFile').handlers.change({ target: node('jmServicePacketsUsbFile') });
-  const usbRequest = calls.find((call) => call.url.endsWith('/service-packets/usb'));
-  assert.ok(usbRequest);
-  assert.deepEqual(JSON.parse(usbRequest.options.body), envelope);
-  assert.match(node('jmServicePacketsNotice').textContent, /import that receipt on the tablet/);
 });
 
 test('flagged tablet replacements require saved affected-party decisions before import', async () => {

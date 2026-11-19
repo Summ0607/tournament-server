@@ -237,48 +237,6 @@
         node('jmServicePacketsReload').disabled = false;
       }
     }
-    async function importUsbServicePacket(file) {
-      if (!file || busy) return;
-      busy = true;
-      node('jmServicePacketsUsbImport').disabled = true;
-      try {
-        const envelope = JSON.parse(await file.text());
-        if (envelope?.type !== 'tournament-judge-service-transfer' || envelope.schemaVersion !== 1 ||
-            !envelope.eventName || !envelope.packet?.ringId || !envelope.packet?.phase) {
-          throw new Error('The selected file is not a valid tablet service packet.');
-        }
-        if (!confirm(`Accept ${envelope.eventName}, ${envelope.packet.ringId}, ${envelope.packet.phase}? ` +
-            'This finalizes the ring-phase packet; a different packet cannot be accepted later.')) return;
-        const receipt = await request('/api/judge-management/service-packets/usb', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(envelope)
-        });
-        if (!receipt.accepted || !receipt.submissionId || !receipt.serverRecordId) {
-          throw new Error('The server did not return a valid service receipt.');
-        }
-        const download = document.createElement('a');
-        const downloadUrl = URL.createObjectURL(new Blob([JSON.stringify(receipt, null, 2)], {
-          type: 'application/json'
-        }));
-        download.href = downloadUrl;
-        download.download = `${receipt.submissionId}.receipt.json`;
-        document.body?.appendChild(download);
-        download.click();
-        download.remove?.();
-        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-        await loadServicePackets();
-        node('jmServicePacketsNotice').textContent =
-          `Service packet acknowledged. Copy ${download.download} to USB, then import that receipt on the tablet.`;
-      } catch (error) {
-        node('jmServicePacketsNotice').textContent = error.message || 'Unable to import the USB service packet.';
-        node('jmServicePacketsNotice').setAttribute('data-state', 'error');
-      } finally {
-        busy = false;
-        node('jmServicePacketsUsbImport').disabled = false;
-        node('jmServicePacketsUsbFile').value = '';
-      }
-    }
     function begin(source, judge = null) {
       if (busy || !data) return;
       if (serviceOpen && !canLeave()) return;
@@ -421,10 +379,6 @@
       }
     });
     node('jmServicePacketsReload').addEventListener('click', () => loadServicePackets());
-    node('jmServicePacketsUsbImport').addEventListener('click', () => node('jmServicePacketsUsbFile').click());
-    node('jmServicePacketsUsbFile').addEventListener('change', (event) => {
-      return importUsbServicePacket(event.target.files?.[0]);
-    });
     node('jmServicePacketsBody').addEventListener('click', async (event) => {
       const saveReviewsButton = event.target.closest('[data-jm-replacement-reviews-save]');
       if (saveReviewsButton) {

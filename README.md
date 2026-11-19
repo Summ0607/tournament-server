@@ -327,6 +327,14 @@ queued divisions (`type: tournament-division-package`) under the same
 13-competitor limit. `POST /api/divisions/qr-codes` generates the printable
 codes for the browser page. Validate with `npm run test:division-package`.
 
+### Offline division-result retry
+
+The tablet saves each completed division locally until the server confirms its
+original submission ID. When network access returns, pending results are sent
+oldest first; a rejected result stops the queue so a later division cannot bypass
+ring-assignment validation. Division results remain separate from judge-service
+transfer and coordinator verification.
+
 `backend/accountSessions.js` stores accounts and browser sessions in SQLite at an
 explicit absolute path **outside this repository**. Browser access is allowlisted,
 but private account/certificate material must still never be placed in the repository.
@@ -1903,15 +1911,6 @@ preserved, and an older combined SK/TK record requires the coordinator to select
 its actual role. The existing **Verify** action remains the sole verification
 decision; intake, packet receipts and saved assignments never verify experience
 or grant certification.
-
-For offline USB transfer, the tablet can save a self-contained service packet
-from **Judge Service > Save packet to USB**. In the active tournament's Judge
-Management workspace, **Import packet from USB** accepts that file, checks its
-event and configured ring, stores it through the same duplicate-safe packet
-store, and downloads a receipt. Import the receipt on the tablet with **Import
-USB receipt**; the tablet verifies its submission ID and stores the
-acknowledgment durably. USB receipt does not import judge experience by itself:
-the coordinator still performs the separate intake and verification steps.
 
 Focused validation:
 `node --test tests/judgeServicePackets.test.js tests/judgeAssignments.test.js tests/judgeManagementRoutes.test.js tests/judgeManagementUi.test.js`.

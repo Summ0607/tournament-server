@@ -288,8 +288,7 @@ function createJudgeManagementRouter({
   allowSimulation = false,
   servicePacketStore,
   readActiveEvent,
-  readEventConfig,
-  isKnownRing
+  readEventConfig
 }) {
   const router = express.Router();
   async function handle(req, res, operation, write = false) {
@@ -365,43 +364,6 @@ function createJudgeManagementRouter({
     } catch (error) {
       console.error('Unable to list judge service packets:', error);
       res.status(500).json({ error: 'Unable to list judge service packets. Check the server log.' });
-    }
-  });
-  router.post('/judge-management/service-packets/usb', async (req, res) => {
-    try {
-      if (!servicePacketStore) throw new Error('Judge service packet storage is not configured.');
-      if (typeof readActiveEvent !== 'function' || typeof readEventConfig !== 'function' ||
-          typeof isKnownRing !== 'function') {
-        throw new Error('USB judge service intake is not configured.');
-      }
-      const activeEventName = readActiveEvent();
-      if (!activeEventName) throw invalid('Activate the tournament before importing a tablet service packet.', 409);
-      const envelope = req.body;
-      if (!envelope || envelope.type !== 'tournament-judge-service-transfer' ||
-          envelope.schemaVersion !== 1 || envelope.eventName !== activeEventName ||
-          !envelope.packet || typeof envelope.packet !== 'object') {
-        throw invalid('The USB file is not a service packet for the active tournament.', 409);
-      }
-      const ringId = String(envelope.packet.ringId || '').trim();
-      if (!isKnownRing(ringId)) throw invalid(`The service packet ring '${ringId}' is not configured for this event.`, 409);
-      const config = readEventConfig(activeEventName);
-      const scope = String(config.scope || '').toUpperCase().replace(/-/g, '_');
-      const accepted = await servicePacketStore.accept(activeEventName, envelope.packet, ringId, {
-        date: config.date, scope, location: config.location || ''
-      });
-      res.json({
-        type: 'tournament-judge-service-receipt',
-        schemaVersion: 1,
-        eventName: activeEventName,
-        ringId,
-        phase: envelope.packet.phase,
-        ...accepted
-      });
-    } catch (error) {
-      if (!error.statusCode) console.error('Unable to import USB judge service packet:', error);
-      res.status(error.statusCode || 500).json({
-        error: error.statusCode ? error.message : 'Unable to import USB judge service packet. Check the server log.'
-      });
     }
   });
   router.put('/judge-management/service-packets/:submissionId/replacement-reviews', endpoint(async (req) => {

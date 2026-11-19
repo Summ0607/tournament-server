@@ -226,8 +226,7 @@ app.use('/api', createJudgeManagementRouter({
   file: DEFAULT_JUDGE_DATABASE,
   servicePacketStore: judgeServicePacketStore,
   readActiveEvent,
-  readEventConfig,
-  isKnownRing: (ringId) => Object.hasOwn(readAssignmentsState().rings, ringId)
+  readEventConfig
 }));
 app.use('/api/server-control', createServerControl({
   allowedHosts: httpsConfig ? httpsOrigins(httpsConfig, ACTIVE_SURFACE).map((origin) => new URL(origin).host) : [],

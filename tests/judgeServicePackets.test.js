@@ -170,51 +170,6 @@ test('tablet service intake persists, replays acknowledgements and binds ring au
   assert.equal(isTabletEndpoint('POST', '/api/rings/ring-a-2/service-packets'), true);
 });
 
-test('coordinator USB intake validates the active event and returns a duplicate-safe receipt', async (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-usb-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const judgeFile = path.join(root, 'judges.db');
-  await initializeJudgeDatabase(judgeFile);
-  const store = createJudgeServicePacketStore({ root: path.join(root, 'packets') });
-  let activeEvent = 'Event A';
-  const app = express();
-  app.use(express.json());
-  app.use('/api', createJudgeManagementRouter({
-    file: judgeFile,
-    servicePacketStore: store,
-    readActiveEvent: () => activeEvent,
-    readEventConfig: () => ({ date: '2026-01-15', scope: 'regional', location: 'Venue' }),
-    isKnownRing: (ringId) => ringId === 'ring-a-1'
-  }));
-  const base = await listen(app, t);
-  const envelope = {
-    type: 'tournament-judge-service-transfer',
-    schemaVersion: 1,
-    eventName: 'Event A',
-    packet: packet()
-  };
-  const post = (body) => fetch(`${base}/judge-management/service-packets/usb`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-  });
-  const acceptedResponse = await post(envelope);
-  assert.equal(acceptedResponse.status, 200);
-  const accepted = await acceptedResponse.json();
-  assert.equal(accepted.accepted, true);
-  assert.equal(accepted.eventName, 'Event A');
-  assert.equal(accepted.type, 'tournament-judge-service-receipt');
-  const retryResponse = await post(envelope);
-  assert.equal((await retryResponse.json()).serverRecordId, accepted.serverRecordId);
-  assert.equal((await post({ ...envelope, eventName: 'Other Event' })).status, 409);
-  assert.equal((await post({
-    ...envelope,
-    packet: { ...envelope.packet, ringId: 'ring-a-2' }
-  })).status, 409);
-  assert.deepEqual(apiRoles('POST', '/api/judge-management/service-packets/usb'),
-    ['administrator', 'judging-coordinator']);
-  activeEvent = '';
-  assert.equal((await post(envelope)).status, 409);
-});
-
 test('coordinator intake creates unverified tournament experience from the full service timeline', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-intake-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

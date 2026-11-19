@@ -172,7 +172,7 @@ test('division QR codes endpoint requires an event and saved divisions', async (
   assert.match((await noGroups.json()).error, /No saved divisions/);
 });
 
-test('division package routes are classified for browsers, tablets, and the QR page', () => {
+test('division package routes are classified for tablets and the QR page', () => {
   assert.ok(apiRoles('GET', '/api/rings/ring-a-1/division-package').includes('tournament-operator'));
   assert.ok(apiRoles('POST', '/api/divisions/qr-codes').includes('tournament-operator'));
   assert.equal(isTabletEndpoint('GET', '/api/rings/ring-a-1/division-package'), true);
