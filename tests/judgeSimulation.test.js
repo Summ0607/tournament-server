@@ -279,7 +279,7 @@ test('isolated preparation persists explicit participants, shared identities and
   assert.equal(adjusted.logVerified, 0, 'credited-role adjustment remains pending verification');
   assert.equal(adjusted.judgeId, replacement.id, 'credit adjustment does not reassign the judge');
   assert.equal(adjusted.phase, service.phase, 'credit adjustment preserves the phase');
-  assert.equal(buildReview(state.config, plan, actualState).actual[0].role, 'TIMEKEEPER');
+  assert.equal(buildReview(state.config, plan, actualState).actual[0].role, 'SK_TK');
   response = await request(`/api/judge-management/experience/${entry.id}`, 'DELETE', {
     revision: actualState.revision, confirmedWithdrawal: true
   });

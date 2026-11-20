@@ -31,7 +31,7 @@ test('standalone judge database initializes safely and enforces member IDs and s
   await Promise.all([initializeJudgeDatabase(file), initializeJudgeDatabase(file)]);
   const db = await open(file);
   try {
-    assert.equal((await get(db, 'PRAGMA user_version')).user_version, 5);
+    assert.equal((await get(db, 'PRAGMA user_version')).user_version, 6);
     const judgeColumns = await new Promise((resolve, reject) =>
       db.all('PRAGMA table_info(judges)', (error, rows) => error ? reject(error) : resolve(rows)));
     assert.ok(judgeColumns.some((column) => column.name === 'date_of_birth'));
@@ -127,6 +127,43 @@ test('version 4 experience migrates with stable identities, original verificatio
     assert.equal(row.source, 'MANUAL');
     assert.equal(row.source_id, null);
     assert.equal(row.phase, '');
-    assert.equal((await get(upgraded, 'PRAGMA user_version')).user_version, 5);
+    assert.equal((await get(upgraded, 'PRAGMA user_version')).user_version, 6);
+  } finally { await close(upgraded); }
+});
+
+test('version 5 databases preserve existing experience and accept the shared SK/TK role', async (t) => {
+  const file = temporary(t);
+  await initializeJudgeDatabase(file);
+  const db = await open(file);
+  try {
+    await run(db, "INSERT INTO judges(id,association_id,first_name,last_name) VALUES(1,'LEGACY','Old','Judge')");
+    await run(db, 'DROP TABLE judge_experience');
+    await run(db, `CREATE TABLE judge_experience(
+      id INTEGER PRIMARY KEY,judge_id INTEGER NOT NULL REFERENCES judges(id) ON DELETE CASCADE,
+      event_name TEXT NOT NULL,event_date TEXT NOT NULL,location TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL CHECK (role IN ('JUDGE','CORNER_JUDGE','CENTER_JUDGE','SCOREKEEPER','TIMEKEEPER','ARBITRATOR')),
+      event_scope TEXT NOT NULL,log_verified INTEGER NOT NULL DEFAULT 0,event_id TEXT NOT NULL,
+      phase TEXT NOT NULL DEFAULT '',source TEXT NOT NULL DEFAULT 'MANUAL',source_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(judge_id,source_id),UNIQUE(judge_id,event_id,role,phase))`);
+    await run(db, `INSERT INTO judge_experience
+      (id,judge_id,event_name,event_date,location,role,event_scope,log_verified,event_id,phase,source,source_id,created_at)
+      VALUES (8,1,'Regional Championship','2025-01-01','Venue','TIMEKEEPER','REGIONAL',0,'event-1','P1','SIMULATION','source-1','2025-01-02')`);
+    await run(db, 'PRAGMA user_version=5');
+  } finally { await close(db); }
+
+  await initializeJudgeDatabase(file);
+  const upgraded = await open(file);
+  try {
+    const oldRecord = await get(upgraded, 'SELECT * FROM judge_experience WHERE id=8');
+    assert.equal(oldRecord.role, 'TIMEKEEPER');
+    assert.equal(oldRecord.source_id, 'source-1');
+    await run(upgraded, `INSERT INTO judge_experience
+      (judge_id,event_name,event_date,role,event_scope,event_id,phase,source,source_id)
+      VALUES (1,'Simulated Regional','2025-02-01','SK_TK','REGIONAL','event-2','P1','SIMULATION','source-2')`);
+    await assert.rejects(run(upgraded, `INSERT INTO judge_experience
+      (judge_id,event_name,event_date,role,event_scope,event_id,phase)
+      VALUES (1,'Invalid Role','2025-02-01','INVALID','REGIONAL','event-3','P1')`), /CHECK/);
+    assert.equal((await get(upgraded, 'PRAGMA user_version')).user_version, 6);
   } finally { await close(upgraded); }
 });

@@ -59,7 +59,7 @@ function experienceRole(judge) {
     case 'CORNER': return 'CORNER_JUDGE';
     case 'REGIONAL':
     case 'INTERNATIONAL': return 'CENTER_JUDGE';
-    case 'SK_TK': return hashText(judge.associationId) % 2 ? 'TIMEKEEPER' : 'SCOREKEEPER';
+    case 'SK_TK': return 'SK_TK';
     default: return null;
   }
 }

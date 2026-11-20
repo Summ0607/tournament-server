@@ -41,7 +41,7 @@ function fixtures(today) {
     { name: 'Young Candidate', certification: 'UNCERTIFIED', rank: 'G5', birth: offset(-15 * 365) },
     { name: 'New Scorekeeper', certification: 'SK_TK', rank: 'D1' },
     { name: 'Corner Ready', certification: 'SK_TK', rank: 'D1',
-      experience: [experience('Regional One', 'SCOREKEEPER')], tests: tests('CORNER') },
+      experience: [experience('Regional One', 'SK_TK')], tests: tests('CORNER') },
     { name: 'Corner Developing', certification: 'CORNER', rank: 'D2',
       experience: [regional], tests: tests('REGIONAL', 79, false) },
     { name: 'Regional Ready', certification: 'CORNER', rank: 'D2',
@@ -52,7 +52,7 @@ function fixtures(today) {
     { name: 'International Current', certification: 'INTERNATIONAL', rank: 'D4' },
     { name: 'Regional Expired', certification: 'REGIONAL', rank: 'D3', expiration: offset(-1) },
     { name: 'Verification Pending', certification: 'SK_TK', rank: 'D1',
-      experience: [experience('Regional One', 'SCOREKEEPER', 'REGIONAL', false)] },
+      experience: [experience('Regional One', 'SK_TK', 'REGIONAL', false)] },
     { name: 'InHouse Experience', certification: 'CORNER', rank: 'D2',
       experience: [experience('In House', 'CORNER_JUDGE', 'IN_HOUSE')] }
   ].map((item, index) => {

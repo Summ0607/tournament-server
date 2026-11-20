@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeRank } = require('../db/rankNormalization');
-const { normalizeCertification, certificationLevels, formatCertificationForDisplay,
+const { normalizeCertification, normalizeExperienceRole, certificationLevels, formatCertificationForDisplay,
   meetsMinimumCertification, certificationRankIssue, certificationAgeIssue, isJudgeRank, JUDGE_RANKS, judgeRankOptions } = require('../db/judgeCertification');
 
 test('judge rank options use readable Gup and Korean Dan names while retaining canonical codes', () => {
@@ -42,6 +42,14 @@ test('free-text certification normalizes through aliases; unrecognized falls bac
   assert.equal(bad.code, 'UNKNOWN');
   assert.equal(bad.recognized, false);
   assert.equal(bad.raw, 'Master Judge');
+});
+
+test('experience role aliases normalize to the shared SK/TK identifier', () => {
+  for (const input of ['SK/TK', 'SK_TK', 'SK TK', 'sktk', 'Scorekeeper', 'Timekeeper']) {
+    assert.equal(normalizeExperienceRole(input), 'SK_TK', input);
+  }
+  assert.equal(normalizeExperienceRole('Center Judge'), 'CENTER_JUDGE');
+  assert.equal(normalizeExperienceRole('unknown role'), null);
 });
 
 test('certification comparisons and rank minimums follow the shared order and G5-D8 envelope', () => {

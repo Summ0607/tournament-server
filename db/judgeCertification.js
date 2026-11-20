@@ -38,6 +38,19 @@ const ALIASES = {
   international: 'INTERNATIONAL', internationaljudge: 'INTERNATIONAL'
 };
 
+const EXPERIENCE_ROLE_CODES = new Set([
+  'JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE', 'SK_TK', 'ARBITRATOR'
+]);
+const EXPERIENCE_ROLE_ALIASES = {
+  judge: 'JUDGE',
+  corner: 'CORNER_JUDGE', cornerjudge: 'CORNER_JUDGE',
+  center: 'CENTER_JUDGE', centerjudge: 'CENTER_JUDGE',
+  sk: 'SK_TK', tk: 'SK_TK', sktk: 'SK_TK',
+  scorekeeper: 'SK_TK', timekeeper: 'SK_TK',
+  scorekeepertimekeeper: 'SK_TK', timekeeperscorekeeper: 'SK_TK',
+  arbitrator: 'ARBITRATOR'
+};
+
 const byCode = new Map(LEVELS.map((level) => [level.code, level]));
 
 function isJudgeRank(code) {
@@ -54,6 +67,14 @@ function normalizeCertification(value) {
   const compact = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
   const code = ALIASES[compact] || (byCode.has(raw.toUpperCase().replace(/[^A-Z0-9]/g, '_')) ? raw.toUpperCase().replace(/[^A-Z0-9]/g, '_') : '');
   return code ? { code, recognized: true, raw } : { code: 'UNKNOWN', recognized: false, raw };
+}
+
+function normalizeExperienceRole(value) {
+  const raw = value === null || value === undefined ? '' : String(value).trim();
+  const compact = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const code = EXPERIENCE_ROLE_ALIASES[compact] ||
+    raw.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return EXPERIENCE_ROLE_CODES.has(code) ? code : null;
 }
 
 /** Ordered level list for API payloads and UI dropdowns. */
@@ -103,6 +124,7 @@ module.exports = {
   JUDGE_RANKS,
   judgeRankOptions,
   normalizeCertification,
+  normalizeExperienceRole,
   certificationLevels,
   formatCertificationForDisplay,
   meetsMinimumCertification,

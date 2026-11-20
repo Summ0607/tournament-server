@@ -363,7 +363,7 @@ test('a Center/Corner swap credits both judges with Center service only', async 
   assert.ok(imported.experience.every((entry) => entry.logVerified === 0));
 });
 
-test('legacy combined SK/TK service requires an explicit actual role during coordinator intake', async (t) => {
+test('SK/TK service variants import under the shared role without coordinator role selection', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-service-sktk-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const judgeFile = path.join(root, 'judges.db');
@@ -373,14 +373,26 @@ test('legacy combined SK/TK service requires an explicit actual role during coor
     (association_id,first_name,last_name,rank,certification,status)
     VALUES ('ID1','Score','Judge','D1','SK_TK','Active')`,
   (error) => error ? reject(error) : resolve()));
+  await new Promise((resolve, reject) => db.run(`INSERT INTO judges
+    (association_id,first_name,last_name,rank,certification,status)
+    VALUES ('ID2','Time','Judge','D1','SK_TK','Active')`,
+  (error) => error ? reject(error) : resolve()));
+  await new Promise((resolve, reject) => db.run(`INSERT INTO judges
+    (association_id,first_name,last_name,rank,certification,status)
+    VALUES ('ID3','Shared','Judge','D1','SK_TK','Active')`,
+  (error) => error ? reject(error) : resolve()));
   await new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
   const servicePacketStore = createJudgeServicePacketStore({ root: path.join(root, 'packets') });
   const legacy = packet();
-  legacy.divisions[0].seats = { sktk: [{ associationId: 'ID1', name: 'Score Judge', rank: 'D1' }] };
-  legacy.divisions[0].history = [{
-    at: '2026-01-15T09:00:00.000Z', action: 'SEATED', role: 'sktk',
-    judgeAssociationId: 'ID1', previousJudgeAssociationId: null
-  }];
+  legacy.divisions[0].seats = {
+    scorekeeper: [{ associationId: 'ID1', name: 'Score Judge', rank: 'D1' }],
+    timekeeper: [{ associationId: 'ID2', name: 'Time Judge', rank: 'D1' }],
+    sktk: [{ associationId: 'ID3', name: 'Shared Judge', rank: 'D1' }]
+  };
+  legacy.divisions[0].history = ['scorekeeper', 'timekeeper', 'sktk'].map((role, index) => ({
+    at: `2026-01-15T09:0${index}:00.000Z`, action: 'SEATED', role,
+    judgeAssociationId: `ID${index + 1}`, previousJudgeAssociationId: null
+  }));
   await servicePacketStore.accept('Event A', legacy, 'ring-a-1', {
     date: '2026-01-15', scope: 'REGIONAL', location: ''
   });
@@ -393,13 +405,9 @@ test('legacy combined SK/TK service requires an explicit actual role during coor
     });
     return { status: response.status, data: await response.json() };
   };
-  let state = await fetch(`${base}/judge-management`).then((response) => response.json());
-  const missingRole = await request({ revision: state.revision, eventName: 'Event A', confirmImport: true });
-  assert.equal(missingRole.status, 409);
-  assert.match(missingRole.data.error, /Select SCOREKEEPER or TIMEKEEPER/);
-  const imported = await request({ revision: state.revision, eventName: 'Event A',
-    confirmImport: true, sktkRoles: { ID1: 'TIMEKEEPER' } });
+  const state = await fetch(`${base}/judge-management`).then((response) => response.json());
+  const imported = await request({ revision: state.revision, eventName: 'Event A', confirmImport: true });
   assert.equal(imported.status, 200);
-  assert.equal(imported.data.experience[0].role, 'TIMEKEEPER');
-  assert.equal(imported.data.experience[0].logVerified, 0);
+  assert.deepEqual(imported.data.experience.map((entry) => entry.role), ['SK_TK', 'SK_TK', 'SK_TK']);
+  assert.ok(imported.data.experience.every((entry) => entry.logVerified === 0));
 });

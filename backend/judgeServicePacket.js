@@ -2,12 +2,19 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { writeJsonAtomicSync } = require('./atomicJsonFile');
+const { normalizeExperienceRole } = require('../db/judgeCertification');
 
 const packetType = 'tournament-judge-service';
-const serviceRoles = ['center', 'corner', 'scorekeeper', 'timekeeper', 'sktk', 'arbitrator'];
+const serviceRoles = ['center', 'corner', 'sktk', 'arbitrator'];
 const actions = ['SEATED', 'REPLACED', 'SWAPPED'];
 const phaseNames = ['P1', 'P2'];
 const fail = (message, statusCode = 400) => { throw Object.assign(new Error(message), { statusCode }); };
+const packetRoleByExperienceRole = {
+  CENTER_JUDGE: 'center', CORNER_JUDGE: 'corner', SK_TK: 'sktk', ARBITRATOR: 'arbitrator'
+};
+function normalizeServiceRole(value) {
+  return packetRoleByExperienceRole[normalizeExperienceRole(value)] || null;
+}
 
 function boundedText(value, label, maximum, optional = false) {
   if (optional && (value === undefined || value === null || value === '')) return '';
@@ -49,24 +56,32 @@ function validateServicePacket(input, ringId) {
     const seats = {};
     const seatedIds = new Set();
     for (const [role, list] of Object.entries(division.seats)) {
-      if (!serviceRoles.includes(role) || !Array.isArray(list) || list.length > 20) fail('Invalid service role or seat list.');
-      seats[role] = list.map((judge) => {
+      const normalizedRole = normalizeServiceRole(role);
+      if (!normalizedRole || !Array.isArray(list) || (seats[normalizedRole] || []).length + list.length > 20) {
+        fail('Invalid service role or seat list.');
+      }
+      const judges = list.map((judge) => {
         const valid = validateJudge(judge, 'Seated judge');
         if (seatedIds.has(valid.associationId.toUpperCase())) fail('A judge cannot occupy multiple service roles in one division.');
         seatedIds.add(valid.associationId.toUpperCase());
         return valid;
       });
+      seats[normalizedRole] = [...(seats[normalizedRole] || []), ...judges];
     }
     if (!Array.isArray(division.history) || division.history.length > 5000) fail('Invalid division service history.');
     historyCount += division.history.length;
     if (historyCount > 20000) fail('Service history exceeds the packet limit.');
     const history = division.history.map((entry) => {
+      const role = normalizeServiceRole(entry?.role);
       if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
-          !actions.includes(entry.action) || !serviceRoles.includes(entry.role)) fail('Invalid service history entry.');
+          !actions.includes(entry.action) || !role) fail('Invalid service history entry.');
       const at = boundedText(entry.at, 'Service history timestamp', 40);
       if (!Number.isFinite(Date.parse(at))) fail('Service history timestamps must be valid dates.');
       const judgeAssociationId = boundedText(entry.judgeAssociationId || '', 'Service history Association ID', 100, true);
-      const previousJudgeAssociationId = boundedText(entry.previousJudgeAssociationId || '', 'Previous service identity', 100, true);
+      let previousJudgeAssociationId = boundedText(entry.previousJudgeAssociationId || '', 'Previous service identity', 100, true);
+      if (entry.action === 'SWAPPED') {
+        previousJudgeAssociationId = normalizeServiceRole(previousJudgeAssociationId) || '';
+      }
       if (entry.action === 'SEATED' && !judgeAssociationId) fail('A seating history entry must identify the judge.');
       if (entry.action === 'REPLACED' && !judgeAssociationId && !previousJudgeAssociationId) fail('A removal history entry must identify the outgoing judge.');
       if (entry.action === 'SWAPPED' && (!judgeAssociationId || !serviceRoles.includes(previousJudgeAssociationId))) {
@@ -96,20 +111,19 @@ function validateServicePacket(input, ringId) {
         const swapPartnerAssociationId = boundedText(
           entry.swapPartnerAssociationId, 'Swap partner Association ID', 100
         );
-        const otherRole = boundedText(entry.otherRole, 'Other swapped role', 20);
-        const creditedRole = boundedText(entry.creditedRole, 'Role-swap credit role', 20);
+        const otherRole = normalizeServiceRole(boundedText(entry.otherRole, 'Other swapped role', 20));
+        const creditedRole = normalizeServiceRole(boundedText(entry.creditedRole, 'Role-swap credit role', 20));
         if (swapPartnerAssociationId.toUpperCase() === judgeAssociationId.toUpperCase() ||
-            !serviceRoles.includes(otherRole) || !serviceRoles.includes(creditedRole) ||
-            entry.previousJudgeAssociationId !== otherRole ||
-            ![entry.role, otherRole].includes('center') ||
-            ![entry.role, otherRole].includes('corner') ||
+            !otherRole || !creditedRole || previousJudgeAssociationId !== otherRole ||
+            ![role, otherRole].includes('center') ||
+            ![role, otherRole].includes('corner') ||
             creditedRole !== 'center') {
           fail('A Center/Corner swap must identify its partner and award Center service only.');
         }
         swapMetadata = { swapPartnerAssociationId, otherRole, creditedRole };
       }
       return {
-        at, action: entry.action, role: entry.role, judgeAssociationId, previousJudgeAssociationId,
+        at, action: entry.action, role, judgeAssociationId, previousJudgeAssociationId,
         ...replacementMetadata, ...swapMetadata
       };
     });
@@ -147,25 +161,19 @@ function flaggedReplacements(packet) {
     }));
 }
 
-function actualServiceRoles(packet, sktkRoles = {}, replacementReviews = []) {
+function actualServiceRoles(packet, replacementReviews = []) {
   const participants = new Map();
-  const sktkRoleById = new Map(Object.entries(sktkRoles).map(([id, role]) => [id.toUpperCase(), role]));
   const reviewById = new Map(replacementReviews.map((review) => [review.replacementId, review]));
   const add = (associationId, role) => {
     if (!associationId) return;
-    let actualRole = role;
-    if (role === 'sktk') {
-      actualRole = sktkRoleById.get(associationId.toUpperCase());
-      if (!['SCOREKEEPER', 'TIMEKEEPER'].includes(actualRole)) {
-        fail(`Select SCOREKEEPER or TIMEKEEPER for ${associationId} before importing this legacy SK/TK service.`, 409);
-      }
-    }
+    const actualRole = normalizeExperienceRole(role);
+    if (!actualRole) fail(`Unrecognized judge service role for ${associationId}.`);
     const key = `${associationId.toUpperCase()}\u0000${actualRole}`;
     participants.set(key, { associationId, role: actualRole });
   };
   const roleNames = {
-    center: 'CENTER_JUDGE', corner: 'CORNER_JUDGE', scorekeeper: 'SCOREKEEPER',
-    timekeeper: 'TIMEKEEPER', arbitrator: 'ARBITRATOR'
+    center: 'CENTER_JUDGE', corner: 'CORNER_JUDGE', sktk: 'SK_TK',
+    scorekeeper: 'SK_TK', timekeeper: 'SK_TK', arbitrator: 'ARBITRATOR'
   };
   for (const division of packet.divisions) {
     const rejectedIds = new Set(division.history.flatMap((entry, historyIndex) => {

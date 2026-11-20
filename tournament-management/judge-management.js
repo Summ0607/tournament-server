@@ -3,15 +3,17 @@
     const node = (id) => document.getElementById(id);
     const fields = ['associationId', 'firstName', 'lastName', 'school', 'rank', 'certification', 'expiration', 'status', 'notes'];
     const levels = ['SK_TK', 'CORNER', 'REGIONAL', 'INTERNATIONAL'];
-    const roles = ['JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE', 'SCOREKEEPER', 'TIMEKEEPER', 'ARBITRATOR'];
-    const creditRoleTiers = [['JUDGE'], ['SCOREKEEPER', 'TIMEKEEPER'], ['CORNER_JUDGE'], ['CENTER_JUDGE']];
+    const roles = ['JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE', 'SK_TK', 'ARBITRATOR'];
+    const creditRoleTiers = [['JUDGE'], ['SK_TK'], ['CORNER_JUDGE'], ['CENTER_JUDGE']];
     const creditRoleOptions = (role) => {
       const tier = creditRoleTiers.findIndex((rolesInTier) => rolesInTier.includes(role));
       return tier < 0 ? [] : [role, ...creditRoleTiers.slice(0, tier).reverse().flat()];
     };
     const scopes = ['REGIONAL', 'NATIONAL', 'WORLD', 'IN_HOUSE'];
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const pretty = (value) => String(value || '').replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+    const pretty = (value) => ['SKTK', 'SCOREKEEPER', 'TIMEKEEPER'].includes(
+      String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+    ) ? 'SK/TK' : String(value || '').replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
     let data = null, busy = false, token = 0, editing = false, editId = null, baseline = '', aliasesBaseline = '', origin = 'judge-management';
     let servicePackets = [];
     let testRecords = [], experienceRecords = [];
@@ -160,27 +162,13 @@
         setData(result); notice(''); return true;
       } catch (error) { if (current === token) notice(error.message, 'error'); return false; }
     }
-    function legacySktkIds(packet) {
-      const ids = new Set();
-      for (const division of packet.divisions || []) {
-        for (const judge of division.seats?.sktk || []) if (judge.associationId) ids.add(judge.associationId);
-        for (const entry of division.history || []) {
-          if (entry.role === 'sktk' && entry.judgeAssociationId) ids.add(entry.judgeAssociationId);
-          if (entry.role === 'sktk' && entry.action === 'REPLACED' && entry.previousJudgeAssociationId) ids.add(entry.previousJudgeAssociationId);
-        }
-      }
-      return [...ids];
-    }
     function renderServicePackets() {
       node('jmServicePacketsBody').innerHTML = servicePackets.map((record) => {
-        const packet = record.packet, legacy = legacySktkIds(packet);
+        const packet = record.packet;
         const historyCount = (packet.divisions || []).reduce((count, division) => count + (division.history || []).length, 0);
         const roles = Object.entries((packet.divisions || []).flatMap((division) =>
           Object.entries(division.seats || {}).flatMap(([role, judges]) => judges.map((judge) => `${role}: ${judge.associationId}`)))
           .reduce((counts, value) => { counts[value] = (counts[value] || 0) + 1; return counts; }, {}));
-        const legacyControls = legacy.map((associationId) => `<label>${esc(associationId)} actual SK/TK role
-          <select data-jm-packet-sktk="${esc(associationId)}"><option value="">Select</option>
-          <option value="SCOREKEEPER">Scorekeeper</option><option value="TIMEKEEPER">Timekeeper</option></select></label>`).join('');
         const replacementReviews = record.replacementReviews || [];
         const replacementControls = replacementReviews.map((review) => {
           const locked = Boolean(record.importedAt);
@@ -207,8 +195,7 @@
         return `<article class="jm-card" data-jm-service-packet="${esc(record.submissionId)}">
           <h4>${esc(record.eventName)} — Ring ${esc(record.ringId)} — ${esc(record.phase)}</h4>
           <p>${esc(record.event?.date)} · ${esc(pretty(record.event?.scope))} · ${packet.divisions.length} division(s) · ${historyCount} history change(s)</p>
-          <p>${esc(roles.map(([role, count]) => `${role} (${count})`).join(', ') || 'No seated judges')}</p>
-          ${legacyControls}
+          <p>${esc(roles.map(([role, count]) => `${pretty(role)} (${count})`).join(', ') || 'No seated judges')}</p>
           ${replacementReviews.length
             ? `<section aria-label="Flagged replacement reviews">
               <h5>Coordinator replacement reconciliation</h5>
@@ -424,16 +411,9 @@
         node('jmServicePacketsNotice').setAttribute('data-state', 'error');
         return;
       }
-      const card = button.closest('[data-jm-service-packet]');
-      const selections = [...card.querySelectorAll('[data-jm-packet-sktk]')];
-      const sktkRoles = Object.fromEntries(selections.map((select) => [select.getAttribute('data-jm-packet-sktk'), select.value]));
-      if (legacySktkIds(record.packet).some((associationId) => !sktkRoles[associationId])) {
-        node('jmServicePacketsNotice').textContent = 'Select Scorekeeper or Timekeeper for every legacy SK/TK service entry.';
-        return;
-      }
       if (!confirm(`Import actual service for Ring ${record.ringId}, ${record.phase} as pending, unverified experience?`)) return;
       const imported = await write(`/api/judge-management/service-packets/${encodeURIComponent(record.submissionId)}/import`,
-        'POST', { eventName: record.eventName, confirmImport: true, sktkRoles },
+        'POST', { eventName: record.eventName, confirmImport: true },
         (result) => `${result.added || 0} pending experience record(s) added; ${result.duplicates || 0} duplicate(s) skipped. ` +
           `${result.approvedReplacements || 0} replacement(s) approved, ${result.rejectedReplacements || 0} rejected. ` +
           'Certification verification remains a separate coordinator action.');
@@ -469,7 +449,7 @@
         node('jmServiceTitle').textContent = 'Review Planned Assignment - Confirm Actual Service';
         node('jmServiceContext').textContent = `${planned.context}. This is a saved plan, not proof of service. ` +
           'Confirm the actual judge (or replacement), phase and role; leave absent officials unrecorded. ' +
-          'For SK/TK, explicitly choose Scorekeeper or Timekeeper. Ring context is not stored in the experience record.';
+          'For SK/TK, use the shared SK/TK role. Ring context is not stored in the experience record.';
         node('jmServiceContext').hidden = false;
       }
     }

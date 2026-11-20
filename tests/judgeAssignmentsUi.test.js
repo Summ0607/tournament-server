@@ -453,7 +453,7 @@ test('service review filters retain original action indexes and independent plan
   } } });
   assert.equal(opened[0].associationId, 'MEMBER3');
   assert.equal(opened[0].phase, 'P2');
-  assert.equal(opened[0].role, '', 'SK/TK still requires the actual role');
+  assert.equal(opened[0].role, 'SK_TK');
   node('srSearch').value = 'not-found'; node('srSearch').handlers.input();
   assert.match(node('srBody').innerHTML, /No matching planned service/);
   assert.match(node('srActual').innerHTML, /No matching actual service/);
@@ -471,7 +471,7 @@ test('service review maps saved plans without credit, preserves event identities
   assert.equal(review.rows[0].seed.role, 'ARBITRATOR');
   assert.equal(review.rows[1].seed.role, 'CENTER_JUDGE');
   assert.equal(review.rows[2].missing, true);
-  assert.equal(review.rows[3].seed.role, '', 'SK/TK must explicitly choose actual role');
+  assert.equal(review.rows[3].seed.role, 'SK_TK');
   assert.equal(review.rows[4].seed.role, 'CORNER_JUDGE');
   assert.equal(review.rows[5].seed.phase, 'P2');
   assert.deepEqual({ plan, directory }, before, 'building a review never mutates plans or experience');
@@ -524,7 +524,7 @@ test('service review is read-only, guards stale plans and failures, escapes valu
   assert.equal(opened.length, 0, 'missing directory member cannot seed service');
   await click(3);
   assert.equal(opened.length, 1);
-  assert.equal(opened[0][0].role, '');
+  assert.equal(opened[0][0].role, 'SK_TK');
   assert.equal(opened[0][0].phase, 'P1');
   assert.equal(opened[0][1], 3);
   fixture.plan.revision = 'changed';

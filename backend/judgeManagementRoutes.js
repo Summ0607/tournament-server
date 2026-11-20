@@ -5,7 +5,7 @@ const { Readable } = require('node:stream');
 const crypto = require('node:crypto');
 const { normalizeRank } = require('../db/rankNormalization');
 const { CSV_HEADER_ALIASES, createCsvHeaderMapper, inspectMappedCsvHeaders, normalizeCsvHeader } = require('../db/csvHeaderAliases');
-const { normalizeCertification, certificationLevels, judgeRankOptions, JUDGE_RANKS, isJudgeRank } = require('../db/judgeCertification');
+const { normalizeCertification, normalizeExperienceRole, certificationLevels, judgeRankOptions, JUDGE_RANKS, isJudgeRank } = require('../db/judgeCertification');
 const { validDate } = require('./tournamentAge');
 const { actualServiceRoles, eventIdFor, flaggedReplacements } = require('./judgeServicePacket');
 
@@ -26,11 +26,13 @@ const columns = { associationId: 'association_id', firstName: 'first_name', last
   rank: 'rank', certification: 'certification', expiration: 'certification_expiration', status: 'status', notes: 'notes',
   dateOfBirth: dateOfBirthColumn };
 const levels = ['SK_TK', 'CORNER', 'REGIONAL', 'INTERNATIONAL'];
-const experienceRoles = ['JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE', 'SCOREKEEPER', 'TIMEKEEPER', 'ARBITRATOR'];
-const creditRoleTiers = [['JUDGE'], ['SCOREKEEPER', 'TIMEKEEPER'], ['CORNER_JUDGE'], ['CENTER_JUDGE']];
+const experienceRoles = ['JUDGE', 'CORNER_JUDGE', 'CENTER_JUDGE', 'SK_TK', 'ARBITRATOR'];
+const creditRoleTiers = [['JUDGE'], ['SK_TK'], ['CORNER_JUDGE'], ['CENTER_JUDGE']];
 const isLowerCreditRole = (current, next) => {
-  const currentTier = creditRoleTiers.findIndex((tier) => tier.includes(current));
-  const nextTier = creditRoleTiers.findIndex((tier) => tier.includes(next));
+  const currentRole = normalizeExperienceRole(current);
+  const nextRole = normalizeExperienceRole(next);
+  const currentTier = creditRoleTiers.findIndex((tier) => tier.includes(currentRole));
+  const nextTier = creditRoleTiers.findIndex((tier) => tier.includes(nextRole));
   return currentTier > nextTier && nextTier >= 0;
 };
 const scopes = ['REGIONAL', 'NATIONAL', 'WORLD', 'IN_HOUSE'];
@@ -194,13 +196,14 @@ function validateExperience(input, today) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalid('Experience details are required.');
   if (typeof input.eventName !== 'string' || !input.eventName.trim() || input.eventName.trim().length > 200) throw invalid('Event name is required and must be at most 200 characters.');
   if (typeof input.location !== 'string' || input.location.trim().length > 200) throw invalid('Location must be at most 200 characters.');
-  if (!experienceRoles.includes(input.role)) throw invalid('Select a valid judging experience role.');
+  const role = normalizeExperienceRole(input.role);
+  if (!experienceRoles.includes(role)) throw invalid('Select a valid judging experience role.');
   if (!scopes.includes(input.eventScope)) throw invalid('Select a valid event scope.');
   if (typeof input.logVerified !== 'boolean') throw invalid('Confirm whether the experience log was verified.');
   const eventDate = date(input.eventDate, 'Event date');
   if (eventDate > today) throw invalid('Event date cannot be in the future.');
   return { eventName: input.eventName.trim(), eventDate,
-    location: input.location.trim(), role: input.role, eventScope: input.eventScope, logVerified: Number(input.logVerified) };
+    location: input.location.trim(), role, eventScope: input.eventScope, logVerified: Number(input.logVerified) };
 }
 
 function validateAliases(input) {
@@ -249,7 +252,8 @@ async function replaceRecords(db, judgeId, body, today) {
       const [existing] = await all(db, `SELECT event_name AS eventName,event_date AS eventDate,
         location,role,event_scope AS eventScope,log_verified AS logVerified
         FROM judge_experience WHERE judge_id = ? AND source_id = ?`, [judgeId, record.sourceId]);
-      if (!existing || Object.keys(validated).some((field) => validated[field] !== existing[field])) {
+      if (!existing || Object.keys(validated).some((field) =>
+        validated[field] !== (field === 'role' ? normalizeExperienceRole(existing[field]) : existing[field]))) {
         throw invalid('API service records are read-only here. Use the experience verification action.', 409);
       }
     }
@@ -321,10 +325,15 @@ function createJudgeManagementRouter({
         const tests = await all(db, `SELECT id, judge_id AS judgeId, target_level AS targetLevel, written_date AS writtenDate,
           written_score AS writtenScore, practical_date AS practicalDate, practical_passed AS practicalPassed
           FROM judge_test_attempts ORDER BY written_date DESC, practical_date DESC, id DESC`);
-        const experience = await all(db, `SELECT id, judge_id AS judgeId, event_name AS eventName, event_date AS eventDate,
+        const experienceRows = await all(db, `SELECT id, judge_id AS judgeId, event_name AS eventName, event_date AS eventDate,
           location, role, event_scope AS eventScope, log_verified AS logVerified,
           event_id AS eventId, phase, source, source_id AS sourceId
           FROM judge_experience ORDER BY event_date DESC, id DESC`);
+        const experience = experienceRows.map((row) => {
+          const role = normalizeExperienceRole(row.role);
+          if (!role) throw new Error(`Judge experience record ${row.id} has an unrecognized role.`);
+          return { ...row, role };
+        });
         const eligibility = judges.map((judge) => evaluateEligibility(judge, tests, experience, today));
         const publicJudges = judges.map(({ dateOfBirth, ...judge }) => judge);
         if (write) {
@@ -399,8 +408,6 @@ function createJudgeManagementRouter({
     if (!scopes.includes(eventScope) || event.id !== eventIdFor(event.name, eventDate)) {
       throw invalid('Stored tablet service packet has invalid event metadata.', 409);
     }
-    const sktkRoles = req.body.sktkRoles ?? {};
-    if (!sktkRoles || typeof sktkRoles !== 'object' || Array.isArray(sktkRoles)) throw invalid('SK/TK role selections must be an object.');
     const requiredReviews = flaggedReplacements(packet);
     const replacementReviews = stored.replacementReviews || [];
     if (replacementReviews.length !== requiredReviews.length ||
@@ -409,7 +416,7 @@ function createJudgeManagementRouter({
           review.reviewedWithAffectedParties !== true || !review.reviewedAt)) {
       throw invalid('Review every flagged replacement with the affected parties before importing this service packet.', 409);
     }
-    const participants = actualServiceRoles(packet, sktkRoles, replacementReviews);
+    const participants = actualServiceRoles(packet, replacementReviews);
     const [existingEvent] = await all(db, `SELECT event_name,event_date,event_scope,event_id FROM judge_experience
       WHERE event_id = ? OR (event_name = ? COLLATE NOCASE AND event_date = ?) LIMIT 1`,
     [event.id, event.name, eventDate]);
@@ -423,15 +430,19 @@ function createJudgeManagementRouter({
       const sourceId = `tournament:${crypto.createHash('sha256')
         .update(JSON.stringify([event.id, packet.phase, participant.associationId.toUpperCase(), participant.role]))
         .digest('hex')}`;
-      const [existing] = await all(db, `SELECT event_name,event_date,location,role,event_scope,event_id,phase,source,source_id
-        FROM judge_experience WHERE judge_id = ? AND
-        (source_id = ? OR (event_id = ? AND role = ? AND phase = ?))`,
-      [judgeId, sourceId, event.id, participant.role, packet.phase]);
+      const candidates = await all(db, `SELECT event_name,event_date,location,role,event_scope,event_id,phase,source,source_id
+        FROM judge_experience WHERE judge_id = ? AND (source_id = ? OR (event_id = ? AND phase = ?))`,
+      [judgeId, sourceId, event.id, packet.phase]);
+      const roleMatches = candidates.filter((row) => normalizeExperienceRole(row.role) === participant.role);
+      if (roleMatches.length > 1) {
+        throw invalid(`Multiple legacy SK/TK records need reconciliation for ${participant.associationId}.`, 409);
+      }
+      const existing = candidates.find((row) => row.source_id === sourceId) || roleMatches[0];
       if (existing) {
         if (existing.event_name !== event.name || existing.event_date !== eventDate ||
-            existing.location !== event.location || existing.role !== participant.role ||
+            existing.location !== event.location || normalizeExperienceRole(existing.role) !== participant.role ||
             existing.event_scope !== eventScope || existing.event_id !== event.id ||
-            existing.phase !== packet.phase || existing.source !== 'TOURNAMENT' || existing.source_id !== sourceId) {
+            existing.phase !== packet.phase || existing.source !== 'TOURNAMENT') {
           throw invalid(`Experience already exists with conflicting details for ${participant.associationId}.`, 409);
         }
         duplicates++;
@@ -462,6 +473,8 @@ function createJudgeManagementRouter({
         if (req.body.confirmedCompleted !== true) throw invalid('Confirm actual completed service; assignments or check-in alone do not qualify.');
         if (typeof input.eventId !== 'string' || !input.eventId.trim() || input.eventId.length > 200) throw invalid('eventId is required and must be at most 200 characters.');
         if (!['P1', 'P2'].includes(input.phase)) throw invalid('Select P1 or P2 for completed service.');
+        input.role = normalizeExperienceRole(input.role);
+        if (!input.role) throw invalid('Select a valid judging experience role.');
         input.sourceId = manualSourceId(input.eventId.trim(), input.role, input.phase);
       }
       const record = validateExperience({ ...input, logVerified: false }, today);
@@ -473,11 +486,19 @@ function createJudgeManagementRouter({
       if (!['', 'P1', 'P2'].includes(input.phase ?? '')) throw invalid('Phase must be blank, P1 or P2.');
       const values = [record.eventName, record.eventDate, record.location, record.role, record.eventScope,
         input.eventId.trim(), input.phase || '', input.source, input.sourceId.trim()];
-      const [existing] = await all(db, `SELECT event_name,event_date,location,role,event_scope,event_id,phase,source,source_id
-        FROM judge_experience WHERE judge_id = ? AND (source_id = ? OR (event_id = ? AND role = ? AND phase = ?))`,
-      [judge.id, values[8], values[5], values[3], values[6]]);
+      const candidates = await all(db, `SELECT event_name,event_date,location,role,event_scope,event_id,phase,source,source_id
+        FROM judge_experience WHERE judge_id = ? AND (source_id = ? OR (event_id = ? AND phase = ?))`,
+      [judge.id, values[8], values[5], values[6]]);
+      const roleMatches = candidates.filter((row) => normalizeExperienceRole(row.role) === record.role);
+      if (roleMatches.length > 1) throw invalid('Multiple legacy role records need reconciliation before this experience can be added.', 409);
+      const existing = candidates.find((row) => row.source_id === values[8]) || roleMatches[0];
       if (existing) {
-        if (JSON.stringify(Object.values(existing)) !== JSON.stringify(values)) throw invalid('Experience identity already exists with different details.', 409);
+        const existingValues = [existing.event_name, existing.event_date, existing.location,
+          normalizeExperienceRole(existing.role), existing.event_scope, existing.event_id,
+          existing.phase, existing.source];
+        if (JSON.stringify(existingValues) !== JSON.stringify(values.slice(0, 8))) {
+          throw invalid('Experience identity already exists with different details.', 409);
+        }
         duplicates++; continue;
       }
       const [event] = await all(db, `SELECT event_name,event_date,event_scope,event_id FROM judge_experience

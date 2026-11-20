@@ -1,6 +1,9 @@
 (function (root) {
-  const roleMap = { center: 'CENTER_JUDGE', corner: 'CORNER_JUDGE', sktk: '', arbitrator: 'ARBITRATOR' };
-  const labels = { center: 'Center', corner: 'Corner', sktk: 'SK/TK (choose actual role)', arbitrator: 'Arbitrator' };
+  const roleMap = { center: 'CENTER_JUDGE', corner: 'CORNER_JUDGE', sktk: 'SK_TK', arbitrator: 'ARBITRATOR' };
+  const labels = { center: 'Center', corner: 'Corner', sktk: 'SK/TK', arbitrator: 'Arbitrator' };
+  const normalizedRole = (role) => ['SKTK', 'SCOREKEEPER', 'TIMEKEEPER'].includes(
+    String(role || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  ) ? 'SK_TK' : role;
   function buildReview(config, plan, directory) {
     const records = directory.experience || [];
     const eventScope = config.scope.toUpperCase().replace('-', '_');
@@ -23,7 +26,7 @@
       const add = (ring, role, associationId) => {
         const judge = judges.get(associationId.toUpperCase());
         const matching = actual.filter((row) => row.judgeId === judge?.id && row.phase === phase &&
-          (role === 'sktk' ? ['SCOREKEEPER', 'TIMEKEEPER'].includes(row.role) : row.role === roleMap[role]));
+          normalizedRole(row.role) === roleMap[role]);
         rows.push({ phase, ring, role, associationId: judge?.associationId || associationId,
           name: judge ? `${judge.lastName}, ${judge.firstName}` : 'Missing directory member',
           missing: !judge, matching, seed: { ...event, associationId: judge?.associationId || associationId,

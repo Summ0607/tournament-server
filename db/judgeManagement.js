@@ -4,7 +4,7 @@ const sqlite3 = require('sqlite3');
 const { JUDGE_RANKS, certificationLevels } = require('./judgeCertification');
 
 const APPLICATION_ID = 0x4a4d4744;
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 const DEFAULT_JUDGE_DATABASE = path.join(__dirname, '..', 'judge-management-data', 'judges.db');
 
 function open(file, flags) {
@@ -123,6 +123,30 @@ async function initializeJudgeDatabase(file = DEFAULT_JUDGE_DATABASE) {
           (id,judge_id,event_name,event_date,location,role,event_scope,log_verified,event_id,created_at)
           SELECT id,judge_id,event_name,event_date,location,role,event_scope,log_verified,
           'legacy:' || lower(trim(event_name)) || ':' || event_date,created_at FROM judge_experience_previous`);
+        await run(db, 'DROP TABLE judge_experience_previous');
+        await run(db, 'CREATE INDEX idx_judge_experience_judge ON judge_experience(judge_id,event_date)');
+      }
+      if (version < 6) {
+        await run(db, 'ALTER TABLE judge_experience RENAME TO judge_experience_previous');
+        await run(db, `CREATE TABLE judge_experience (
+          id INTEGER PRIMARY KEY,
+          judge_id INTEGER NOT NULL REFERENCES judges(id) ON DELETE CASCADE,
+          event_name TEXT NOT NULL CHECK (length(trim(event_name)) > 0),
+          event_date TEXT NOT NULL, location TEXT NOT NULL DEFAULT '',
+          role TEXT NOT NULL CHECK (role IN ('JUDGE','CORNER_JUDGE','CENTER_JUDGE','SK_TK','SCOREKEEPER','TIMEKEEPER','ARBITRATOR')),
+          event_scope TEXT NOT NULL CHECK (event_scope IN ('REGIONAL','NATIONAL','WORLD','IN_HOUSE')),
+          log_verified INTEGER NOT NULL DEFAULT 0 CHECK (log_verified IN (0,1)),
+          event_id TEXT NOT NULL CHECK (length(trim(event_id)) > 0), phase TEXT NOT NULL DEFAULT '',
+          source TEXT NOT NULL DEFAULT 'MANUAL' CHECK (source IN ('MANUAL','SIMULATION','TOURNAMENT')),
+          source_id TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(judge_id, source_id),
+          UNIQUE(judge_id, event_id, role, phase)
+        )`);
+        await run(db, `INSERT INTO judge_experience
+          (id,judge_id,event_name,event_date,location,role,event_scope,log_verified,event_id,phase,source,source_id,created_at)
+          SELECT id,judge_id,event_name,event_date,location,role,event_scope,log_verified,event_id,phase,source,source_id,created_at
+          FROM judge_experience_previous`);
         await run(db, 'DROP TABLE judge_experience_previous');
         await run(db, 'CREATE INDEX idx_judge_experience_judge ON judge_experience(judge_id,event_date)');
       }

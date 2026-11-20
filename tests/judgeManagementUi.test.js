@@ -237,7 +237,7 @@ test('lifecycle table filters retain independent counts, visible rank and explic
     judges: [1, 2].map((id) => ({ id, associationId: `MEMBER${id}`, firstName: 'Test', lastName: id === 1 ? '<Ready>' : 'Pending',
       school: 'School', rank: id === 1 ? 'D1' : 'CDB', certification: 'SK_TK', status: 'Active' })),
     tests: [{ judgeId: 1, targetLevel: 'CORNER', writtenScore: 80 }, { judgeId: 2, targetLevel: 'SK_TK', writtenScore: 79 }],
-    experience: [1, 2].map((id) => ({ id, judgeId: id, eventName: 'Regional', role: 'TIMEKEEPER', eventScope: 'REGIONAL', logVerified: id === 1 })),
+    experience: [1, 2].map((id) => ({ id, judgeId: id, eventName: 'Regional', role: 'SK_TK', eventScope: 'REGIONAL', logVerified: id === 1 })),
     eligibility: [1, 2].map((id) => ({ judgeId: id, targetLevel: 'CORNER', eligible: true, writtenPassed: id === 1, practicalPassed: true })) };
   const workspace = create({ document: { getElementById: node }, confirm: () => true, showPanel() {},
     request: async (url, options) => { calls.push({ url, options }); return state; } });
@@ -260,7 +260,7 @@ test('lifecycle table filters retain independent counts, visible rank and explic
   assert.equal(node('jmTestingCount').textContent, '1 of 2 test records');
   assert.doesNotMatch(node('jmTestingBody').innerHTML, /MEMBER2/);
   node('jmExperienceVerified').value = 'pending'; node('jmExperienceVerified').handlers.change();
-  node('jmExperienceSearch').value = 'timekeeper'; node('jmExperienceSearch').handlers.input();
+  node('jmExperienceSearch').value = 'sk/tk'; node('jmExperienceSearch').handlers.input();
   assert.equal(node('jmExperienceCount').textContent, '1 of 2 service records');
   assert.match(node('jmExperienceBody').innerHTML, /MEMBER2/);
   node('jmExperienceClear').handlers.click();
@@ -391,14 +391,14 @@ test('coordinator service form guards drafts, attestation, failures, inline role
   const action = (attribute) => ({ target: { closest: (selector) =>
     selector === `[${attribute}]` ? { getAttribute: () => '21' } : null } });
   await node('jmExperienceBody').handlers.change({ target: { closest: (selector) =>
-    selector === '[data-jm-credit-role]' ? { getAttribute: () => '21', value: 'TIMEKEEPER' } : null } });
+    selector === '[data-jm-credit-role]' ? { getAttribute: () => '21', value: 'SK_TK' } : null } });
   assert.equal(calls.at(-1).url, '/api/judge-management/experience/21');
   assert.equal(calls.at(-1).options.method, 'PUT');
   const adjustment = JSON.parse(calls.at(-1).options.body);
-  assert.deepEqual(adjustment.record, { role: 'TIMEKEEPER' });
+  assert.deepEqual(adjustment.record, { role: 'SK_TK' });
   assert.equal(adjustment.confirmedRoleAdjustment, true);
   assert.equal(adjustment.associationId, undefined);
-  service.role = 'TIMEKEEPER';
+  service.role = 'SK_TK';
   await node('jmExperienceBody').handlers.click(action('data-jm-service-delete'));
   assert.equal(calls.at(-1).options.method, 'DELETE');
   assert.equal(JSON.parse(calls.at(-1).options.body).confirmedWithdrawal, true);
@@ -452,13 +452,13 @@ test('assignment seed opens guarded actual-service draft with no implicit role, 
   assert.ok(calls.every((call) => call.options === undefined));
   await node('jmServiceForm').handlers.submit({ preventDefault() {} });
   assert.match(node('jmServiceError').textContent, /Confirm actual completed service/);
-  node('jmService-role').value = 'TIMEKEEPER';
+  node('jmService-role').value = 'SK_TK';
   node('jmServiceCompleted').checked = true;
   accept = true;
   await node('jmServiceForm').handlers.submit({ preventDefault() {} });
   const body = JSON.parse(calls.at(-1).options.body);
   assert.equal(body.confirmedCompleted, true);
-  assert.equal(body.records[0].role, 'TIMEKEEPER');
+  assert.equal(body.records[0].role, 'SK_TK');
   assert.equal(body.records[0].source, 'MANUAL');
   assert.equal(body.records[0].eventId, seed.eventId);
   assert.equal(body.records[0].phase, 'P2');

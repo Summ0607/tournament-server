@@ -1595,8 +1595,7 @@ first. Loading/reloading review never writes experience, attendance or awards.
 Choose **Review actual service** beside a planned official. The normal Experience
 form opens with judge, event, phase and suggested role filled in, but completion
 is **unchecked**. Confirm the actual judge (or replacement), phase and role;
-SK/TK intentionally leaves the actual role blank so the coordinator must select
-Scorekeeper or Timekeeper. Leave an absent official unrecorded; absence decisions
+SK/TK uses the shared `SK_TK` role. Leave an absent official unrecorded; absence decisions
 are not persisted as a separate attendance log. Ring labels are context only,
 not new fields in the experience/result contract.
 
@@ -1678,10 +1677,11 @@ npm run judge:simulation-data -- experience --url http://127.0.0.1:3451 --percen
 The target count is rounded from the Judge DB row count excluding both
 `UNKNOWN` and `UNCERTIFIED` certification entries. Roles are derived from
 certification: Corner receives `CORNER_JUDGE`, Regional and International
-receive `CENTER_JUDGE`, and SK/TK receives `SCOREKEEPER` or `TIMEKEEPER`.
+receive `CENTER_JUDGE`, and SK/TK receives the shared `SK_TK` experience role.
 Uncertified judges are not assigned experience for now. The script errors if
 there are too few role-compatible entries to meet the target; it never assigns
-center experience to Corner judges or judge experience to SK/TK officials.
+center experience to Corner judges or center/corner judging experience to
+SK/TK officials.
 
 The script requires the isolated local simulation, preflights selected
 profiles, and uses the shared API. It never writes SQLite directly, changes

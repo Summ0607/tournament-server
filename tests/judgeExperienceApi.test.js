@@ -67,7 +67,7 @@ test('experience setup reads the Judge DB, selects 70 percent, and derives compa
       assert.notEqual(experience.role, 'CORNER_JUDGE');
     }
     if (judge.certification === 'SK_TK') {
-      assert.ok(['SCOREKEEPER', 'TIMEKEEPER'].includes(experience.role));
+      assert.equal(experience.role, 'SK_TK');
       assert.notEqual(experience.role, 'CORNER_JUDGE');
       assert.notEqual(experience.role, 'CENTER_JUDGE');
     }
@@ -92,6 +92,44 @@ test('unknown and uncertified judges are excluded from the percentage denominato
   assert.deepEqual(selection.selected.map((judge) => judge.associationId), ['SIM-CORNER']);
   assert.equal(experienceRole(judges[0]), null);
   assert.equal(experienceRole(judges[1]), null);
+});
+
+test('experience API stores SK/TK aliases under the shared SK_TK role', async (t) => {
+  const { request, profile } = await setup(t);
+  const aliases = ['SK/TK', 'SK_TK', 'SK TK', 'sktk', 'SCOREKEEPER', 'TIMEKEEPER'];
+  const state = await profile('SIM-003');
+  const records = aliases.map((role, index) => record({
+    eventId: `sktk-alias-${index}`,
+    eventName: `SK/TK Alias Event ${index}`,
+    eventDate: `2026-01-${String(10 - index).padStart(2, '0')}`,
+    sourceId: `sktk-alias-source-${index}`,
+    role
+  }));
+  const response = await request('/experience', 'POST', {
+    associationId: 'SIM-003', revision: state.revision, records
+  });
+  assert.equal(response.status, 200);
+  const saved = response.data.experience.filter((item) => item.sourceId?.startsWith('sktk-alias-source-'));
+  assert.equal(saved.length, aliases.length);
+  assert.ok(saved.every((item) => item.role === 'SK_TK'));
+
+  const legacyRecord = record({
+    eventId: 'sktk-alias-idempotency',
+    eventName: 'SK/TK Alias Idempotency',
+    sourceId: 'legacy-role-source',
+    role: 'TIMEKEEPER'
+  });
+  const inserted = await request('/experience', 'POST', {
+    associationId: 'SIM-003', revision: response.data.revision, records: [legacyRecord]
+  });
+  assert.equal(inserted.status, 200);
+  const retried = await request('/experience', 'POST', {
+    associationId: 'SIM-003',
+    revision: inserted.data.revision,
+    records: [{ ...legacyRecord, role: 'SK/TK', sourceId: 'shared-role-source' }]
+  });
+  assert.equal(retried.status, 200);
+  assert.equal(retried.data.duplicates, 1);
 });
 
 test('200-judge CSV import seeds exactly 70 percent of the current role-compatible database roster', async (t) => {
@@ -124,7 +162,7 @@ test('200-judge CSV import seeds exactly 70 percent of the current role-compatib
     assert.ok(judge);
     if (judge.certification === 'CORNER') assert.equal(experience.role, 'CORNER_JUDGE');
     if (['REGIONAL', 'INTERNATIONAL'].includes(judge.certification)) assert.equal(experience.role, 'CENTER_JUDGE');
-    if (judge.certification === 'SK_TK') assert.ok(['SCOREKEEPER', 'TIMEKEEPER'].includes(experience.role));
+    if (judge.certification === 'SK_TK') assert.equal(experience.role, 'SK_TK');
     assert.ok(experience.eventDate < state.asOf);
     assert.equal(experience.logVerified, 0);
   }
@@ -305,7 +343,7 @@ test('coordinator actual service supports phase details, role lowering, withdraw
   assert.equal(adjusted.judgeId, p1.judgeId);
   assert.equal(adjusted.phase, 'P1');
   assert.equal(adjusted.location, p1.location);
-  assert.equal(adjusted.role, 'TIMEKEEPER');
+  assert.equal(adjusted.role, 'SK_TK');
   state = await profile('SIM-005');
   assert.equal(state.eligibility.experienceCount, 1);
   result = await request(`/experience/${p1.id}`, 'DELETE', { revision: state.revision, confirmedWithdrawal: true });
@@ -398,7 +436,7 @@ test('coordinator service requires attestation and valid identity; role increase
   assert.equal(adjusted.judgeId, state.experience[0].judgeId);
   assert.equal(adjusted.phase, 'P1');
   assert.equal(adjusted.location, manual.location);
-  assert.equal(adjusted.role, 'TIMEKEEPER');
+  assert.equal(adjusted.role, 'SK_TK');
   state = await profile('SIM-003');
   result = await append({ records: [{ ...manual, role: 'TIMEKEEPER' }] });
   assert.equal(result.status, 200);
