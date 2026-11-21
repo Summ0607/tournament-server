@@ -4,7 +4,7 @@ const sqlite3 = require('sqlite3');
 const { JUDGE_RANKS, certificationLevels } = require('./judgeCertification');
 
 const APPLICATION_ID = 0x4a4d4744;
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 const DEFAULT_JUDGE_DATABASE = path.join(__dirname, '..', 'judge-management-data', 'judges.db');
 
 function open(file, flags) {
@@ -150,6 +150,14 @@ async function initializeJudgeDatabase(file = DEFAULT_JUDGE_DATABASE) {
         await run(db, 'DROP TABLE judge_experience_previous');
         await run(db, 'CREATE INDEX idx_judge_experience_judge ON judge_experience(judge_id,event_date)');
       }
+      if (version < 7) {
+        if (!await hasColumn('judge_experience', 'rejected_at')) {
+          await run(db, 'ALTER TABLE judge_experience ADD COLUMN rejected_at TEXT');
+        }
+        if (!await hasColumn('judge_experience', 'rejection_reason')) {
+          await run(db, 'ALTER TABLE judge_experience ADD COLUMN rejection_reason TEXT');
+        }
+      }
       if (version < SCHEMA_VERSION) await run(db, `PRAGMA user_version = ${SCHEMA_VERSION}`);
       await run(db, 'COMMIT');
     } catch (error) {
@@ -192,6 +200,13 @@ async function verifyJudgeDatabase(file) {
         const columns = await new Promise((resolve, reject) =>
           db.all('PRAGMA table_info(judge_experience)', (error, rows) => error ? reject(error) : resolve(rows)));
         for (const name of ['event_id', 'phase', 'source', 'source_id']) {
+          if (!columns.some((column) => column.name === name)) throw new Error(`Judge Management experience is missing ${name}.`);
+        }
+      }
+      if (version >= 7) {
+        const columns = await new Promise((resolve, reject) =>
+          db.all('PRAGMA table_info(judge_experience)', (error, rows) => error ? reject(error) : resolve(rows)));
+        for (const name of ['rejected_at', 'rejection_reason']) {
           if (!columns.some((column) => column.name === name)) throw new Error(`Judge Management experience is missing ${name}.`);
         }
       }

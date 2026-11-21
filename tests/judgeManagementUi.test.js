@@ -326,6 +326,94 @@ test('API experience remains read-only in edits and coordinator verification use
   });
 });
 
+test('pending experience exposes audited rejection and rejected entries cannot be verified', async () => {
+  const nodes = new Map(), calls = [], prompts = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', innerHTML: '', textContent: '', handlers: {},
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {} });
+    return nodes.get(id);
+  };
+  const judge = { id: 1, associationId: 'ID1', firstName: 'Test', lastName: 'Judge',
+    certification: 'CORNER', school: '', status: 'Active' };
+  const service = { id: 12, judgeId: 1, eventId: 'event-1', eventName: 'Regional',
+    eventDate: '2026-01-01', location: '', role: 'CORNER_JUDGE', eventScope: 'REGIONAL',
+    source: 'TOURNAMENT', sourceId: 'service-1', logVerified: 0 };
+  const state = { asOf: '2026-01-15', revision: 3, aliases: defaults, ranks: judgeRankOptions(),
+    certificationLevels: certificationLevels(), judges: [judge], experience: [service], tests: [], eligibility: [] };
+  const rejectedState = { ...state, revision: 4, experience: [{
+    ...service, rejectedAt: '2026-01-15T12:00:00.000Z', rejectionReason: 'Wrong upload path.'
+  }] };
+  const workspace = create({ document: { getElementById: node }, confirm: () => true,
+    prompt: (message) => { prompts.push(message); return 'Wrong upload path.'; }, showPanel() {},
+    request: async (url, options) => {
+      calls.push({ url, options });
+      return url.endsWith('/reject') ? rejectedState : state;
+    } });
+  await workspace.load();
+  assert.match(node('jmExperienceBody').innerHTML, /data-jm-experience-reject="12"/);
+  await node('jmExperienceBody').handlers.click({ target: { closest(selector) {
+    return selector === '[data-jm-experience-reject]' ? {
+      disabled: false, getAttribute: () => '12'
+    } : null;
+  } } });
+  assert.match(prompts[0], /Why is this pending experience/);
+  assert.equal(calls.at(-1).url, '/api/judge-management/experience/12/reject');
+  assert.equal(calls.at(-1).options.method, 'POST');
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), { reason: 'Wrong upload path.', revision: 3 });
+  assert.match(node('jmExperienceBody').innerHTML, /Rejected/);
+  assert.match(node('jmExperienceBody').innerHTML, /Wrong upload path/);
+  assert.doesNotMatch(node('jmExperienceBody').innerHTML, /data-jm-experience-reject="12"/);
+  assert.doesNotMatch(node('jmExperienceBody').innerHTML, /data-jm-verify="12"/);
+});
+
+test('simulation reset selects pending, verified and rejected entries for one event', async () => {
+  const nodes = new Map(), calls = [];
+  const node = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { value: '', checked: false, innerHTML: '', textContent: '', handlers: {},
+      addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {} });
+    return nodes.get(id);
+  };
+  const state = { asOf: '2026-01-15', revision: 7, simulationMode: true, aliases: defaults,
+    ranks: judgeRankOptions(), certificationLevels: certificationLevels(),
+    judges: [
+      { id: 1, associationId: 'SIM-1', firstName: 'A', lastName: 'Judge', certification: 'CORNER', status: 'Active' },
+      { id: 2, associationId: 'SIM-2', firstName: 'B', lastName: 'Judge', certification: 'CORNER', status: 'Active' }
+    ],
+    experience: [
+      { id: 21, judgeId: 1, eventId: 'sim-event-1', eventName: 'Simulated Event', eventDate: '2026-01-01',
+        location: '', role: 'CORNER_JUDGE', eventScope: 'REGIONAL', source: 'SIMULATION', logVerified: 1 },
+      { id: 22, judgeId: 2, eventId: 'sim-event-1', eventName: 'Simulated Event', eventDate: '2026-01-01',
+        location: '', role: 'CORNER_JUDGE', eventScope: 'REGIONAL', source: 'TOURNAMENT', logVerified: 0 },
+      { id: 23, judgeId: 1, eventId: 'sim-event-1', eventName: 'Simulated Event', eventDate: '2026-01-01',
+        location: '', role: 'CORNER_JUDGE', eventScope: 'REGIONAL', source: 'TOURNAMENT', logVerified: 0,
+        rejectedAt: '2026-01-02T00:00:00Z', rejectionReason: 'Rejected in test.' }
+    ], tests: [], eligibility: [] };
+  const resetState = { ...state, revision: 8, experience: [], removed: 3 };
+  const workspace = create({ document: { getElementById: node }, confirm: () => true, showPanel() {},
+    request: async (url, options) => {
+      calls.push({ url, options });
+      return url.endsWith('/simulation-reset') ? resetState : state;
+    } });
+  await workspace.load();
+  assert.equal(node('jmExperienceResetSimulation').hidden, false);
+  assert.match(node('jmExperienceBody').innerHTML, /data-jm-simulation-reset="21"/);
+  for (const [id, judgeId] of [[21, 1], [22, 2], [23, 1]]) {
+    const checkbox = { checked: true, getAttribute: (name) =>
+      ({ 'data-jm-simulation-reset': String(id) })[name] };
+    await node('jmExperienceBody').handlers.change({ target: {
+      ...checkbox, closest: (selector) => selector === '[data-jm-simulation-reset]' ? checkbox : null
+    } });
+  }
+  assert.match(node('jmExperienceResetSelection').textContent, /3 entries selected/);
+  await node('jmExperienceResetSimulation').handlers.click();
+  assert.equal(calls.at(-1).url, '/api/judge-management/experience/simulation-reset');
+  assert.equal(calls.at(-1).options.method, 'DELETE');
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
+    confirmedReset: true, eventId: 'sim-event-1', experienceIds: [21, 22, 23], revision: 7
+  });
+  assert.match(node('jmNotice').textContent, /Reset 3 simulated service entries/);
+});
+
 test('coordinator service form guards drafts, attestation, failures, inline role reductions, verification and withdrawal', async () => {
   const nodes = new Map(), calls = [];
   const node = (id) => {

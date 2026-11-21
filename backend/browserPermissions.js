@@ -61,7 +61,10 @@ rule('GET', /^\/api\/judge-management\/service-packets$/, ['administrator', 'jud
 rule('PUT', /^\/api\/judge-management\/service-packets\/[a-f0-9-]{36}\/replacement-reviews$/, ['administrator', 'judging-coordinator']);
 rule('POST', /^\/api\/judge-management\/service-packets\/[a-f0-9-]{36}\/import$/, ['administrator', 'judging-coordinator']);
 rule('PUT DELETE', /^\/api\/judge-management\/experience\/[1-9]\d*$/, ['administrator', 'judging-coordinator']);
+rule('POST', /^\/api\/judge-management\/experience\/[1-9]\d*\/reject$/, ['administrator', 'judging-coordinator']);
+rule('DELETE', /^\/api\/judge-management\/experience\/simulation-reset$/, ['administrator', 'judging-coordinator']);
 rule('GET', /^\/api\/rings\/monitor$/, AUDIENCE);
+rule('GET', /^\/api\/tablet\/server-addresses$/, DAY);
 rule('POST', /^\/api\/tablet\/codes$/, DAY);
 rule('GET', /^\/(?:status|api\/rings(?:\/(?:config|estimates))?)$/, DAY);
 rule('POST', /^\/api\/rings\/config$/, EVENT);

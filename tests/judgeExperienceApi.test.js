@@ -5,7 +5,7 @@ const path = require('node:path');
 const os = require('node:os');
 const express = require('express');
 const { initializeJudgeDatabase } = require('../db/judgeManagement');
-const { createJudgeManagementRouter } = require('../backend/judgeManagementRoutes');
+const { createJudgeManagementRouter, evaluateEligibility } = require('../backend/judgeManagementRoutes');
 const { createSimulationApp, initializeSimulation } = require('../backend/judgeSimulation');
 const { regionalDataset, experienceRole, selectExperienceJudges, setupExperience } = require('../backend/judgeSimulationData');
 const { apiRoles } = require('../backend/browserPermissions');
@@ -281,6 +281,133 @@ test('role details and phases do not inflate championship credit; invalid writes
   for (const [method, suffix] of [['GET', '/profile'], ['POST', '/experience'], ['POST', '/experience-verify']]) {
     assert.deepEqual(apiRoles(method, '/api/judge-management' + suffix), ['administrator', 'judging-coordinator']);
   }
+});
+
+test('pending experience can be rejected with an audit reason and can no longer be verified', async (t) => {
+  const { request, profile } = await setup(t);
+  const judge = (await request('')).data.judges[0];
+  let state = await profile(judge.associationId);
+  const service = record({ eventId: 'reject-audit-event', eventName: 'Reject Audit Event',
+    eventDate: '2026-01-10', source: 'SIMULATION', sourceId: 'reject-audit-source' });
+  let response = await request('/experience', 'POST', {
+    associationId: judge.associationId, revision: state.revision, records: [service]
+  });
+  assert.equal(response.status, 200);
+  const entry = response.data.experience.find((item) => item.sourceId === service.sourceId);
+  assert.ok(entry);
+
+  response = await request(`/experience/${entry.id}/reject`, 'POST', {
+    revision: response.data.revision, reason: 'Used to test the wrong upload path.'
+  });
+  assert.equal(response.status, 200);
+  state = await profile(judge.associationId);
+  const rejected = state.experience.find((item) => item.id === entry.id);
+  assert.ok(rejected.rejectedAt);
+  assert.equal(rejected.rejectionReason, 'Used to test the wrong upload path.');
+  assert.equal(state.eligibility.experienceCount, 0);
+  assert.equal((await request('/experience-verify', 'POST', {
+    associationId: judge.associationId, revision: state.revision, ids: [entry.id], verified: true
+  })).status, 409);
+  assert.equal((await request(`/experience/${entry.id}/reject`, 'POST', {
+    revision: state.revision, reason: 'Duplicate rejection.'
+  })).status, 409);
+  const retry = await request('/experience', 'POST', {
+    associationId: judge.associationId, revision: state.revision, records: [service]
+  });
+  assert.equal(retry.status, 200);
+  assert.equal(retry.data.duplicates, 1);
+  assert.ok(retry.data.experience.find((item) => item.id === entry.id).rejectedAt);
+  assert.deepEqual(apiRoles('POST', `/api/judge-management/experience/${entry.id}/reject`),
+    ['administrator', 'judging-coordinator']);
+
+  const eligibilityJudge = { id: 1, certification: 'CORNER', rank: 'D5', expiration: '2030-01-01' };
+  const exemptRecord = { judgeId: 1, eventId: 'exempt-event', eventName: 'Exempt Event',
+    eventDate: '2025-01-01', role: 'CORNER_JUDGE', eventScope: 'REGIONAL', logVerified: 0 };
+  assert.equal(evaluateEligibility(eligibilityJudge, [], [exemptRecord], '2026-01-15').experienceCount, 1);
+  assert.equal(evaluateEligibility(eligibilityJudge, [], [{ ...exemptRecord, rejectedAt: rejected.rejectedAt }],
+    '2026-01-15').experienceCount, 0);
+});
+
+test('simulation reset removes only selected judges for one event and allows the same run to be retried', async (t) => {
+  const { base, request } = await setup(t);
+  const firstRun = await setupExperience(base, { seed: 'same-judge-set-retest' });
+  assert.equal(firstRun.added, firstRun.selectedCount);
+  let state = (await request('')).data;
+  assert.equal(state.simulationMode, true);
+  const selectedIds = new Set(firstRun.selectedIds);
+  const otherJudge = state.judges.find((judge) =>
+    !selectedIds.has(judge.associationId) && experienceRole(judge));
+  assert.ok(otherJudge);
+  const otherRole = experienceRole(otherJudge);
+  let extra = await request('/experience', 'POST', { associationId: otherJudge.associationId,
+    revision: state.revision, records: [{ eventId: firstRun.eventId,
+      eventName: `SIMULATED Regional ${firstRun.eventDate}`, eventDate: firstRun.eventDate,
+      location: 'Fabricated regional venue', role: otherRole, eventScope: 'REGIONAL', phase: 'P1',
+      source: 'SIMULATION', sourceId: `${otherJudge.associationId}:${firstRun.eventId}:${otherRole}:P1` }] });
+  assert.equal(extra.status, 200);
+  state = extra.data;
+  const judgeIds = state.judges.filter((judge) => selectedIds.has(judge.associationId)).map((judge) => judge.id);
+  const uploadedJudge = state.judges.find((judge) => judge.associationId === firstRun.selectedIds[0]);
+  const uploadedRole = experienceRole(uploadedJudge);
+  extra = await request('/experience', 'POST', { associationId: uploadedJudge.associationId,
+    revision: state.revision, records: [{ eventId: firstRun.eventId,
+      eventName: `SIMULATED Regional ${firstRun.eventDate}`, eventDate: firstRun.eventDate,
+      location: 'Fabricated regional venue', role: uploadedRole, eventScope: 'REGIONAL', phase: 'P2',
+      source: 'TOURNAMENT', sourceId: 'same-event-upload-path-p2' }] });
+  assert.equal(extra.status, 200);
+  state = extra.data;
+  const rejectedEntry = state.experience.find((item) => item.eventId === firstRun.eventId &&
+    item.judgeId === judgeIds[0]);
+  const rejected = await request(`/experience/${rejectedEntry.id}/reject`, 'POST', {
+    revision: state.revision, reason: 'Rejected during simulator retest.'
+  });
+  assert.equal(rejected.status, 200);
+  state = rejected.data;
+  const experienceIds = state.experience.filter((item) => item.eventId === firstRun.eventId &&
+    judgeIds.includes(item.judgeId)).map((item) => item.id);
+  const reset = await request('/experience/simulation-reset', 'DELETE', {
+    revision: state.revision, confirmedReset: true, eventId: firstRun.eventId, experienceIds
+  });
+  assert.equal(reset.status, 200);
+  assert.equal(reset.data.removed, firstRun.selectedCount + 1);
+  assert.equal(reset.data.judgeCount, firstRun.selectedCount);
+  state = reset.data;
+  const remaining = (await request('')).data.experience.filter((item) => item.eventId === firstRun.eventId);
+  assert.deepEqual(remaining.map((item) => item.judgeId), [otherJudge.id]);
+
+  const retry = await setupExperience(base, { seed: 'same-judge-set-retest' });
+  assert.deepEqual(retry.selectedIds, firstRun.selectedIds);
+  assert.equal(retry.added, firstRun.selectedCount);
+  assert.equal(retry.duplicates, 0);
+  const retriedState = (await request('')).data;
+  const verifiedJudge = retriedState.judges.find((judge) => judge.associationId === retry.selectedIds[0]);
+  const verifiedProfile = await request(`/profile?associationId=${encodeURIComponent(verifiedJudge.associationId)}`);
+  const retryRecord = verifiedProfile.data.experience.find((item) => item.eventId === firstRun.eventId);
+  const verified = await request('/experience-verify', 'POST', {
+    revision: verifiedProfile.data.revision, associationId: verifiedJudge.associationId,
+    ids: [retryRecord.id], verified: true
+  });
+  assert.equal(verified.status, 200);
+  const verifiedReset = await request('/experience/simulation-reset', 'DELETE', {
+    revision: verified.data.revision, confirmedReset: true, eventId: firstRun.eventId,
+    experienceIds: [retryRecord.id]
+  });
+  assert.equal(verifiedReset.status, 200);
+  assert.equal(verifiedReset.data.removed, 1);
+  assert.ok(!(await request(`/profile?associationId=${encodeURIComponent(verifiedJudge.associationId)}`))
+    .data.experience.find((item) => item.id === retryRecord.id));
+  const repeatedRetry = await setupExperience(base, { seed: 'same-judge-set-retest' });
+  assert.equal(repeatedRetry.added, 1);
+  assert.equal(repeatedRetry.duplicates, firstRun.selectedCount - 1);
+  assert.deepEqual(apiRoles('DELETE', '/api/judge-management/experience/simulation-reset'),
+    ['administrator', 'judging-coordinator']);
+
+  const normal = await setup(t, false);
+  const normalState = (await normal.request('')).data;
+  const deniedOutsideSimulation = await normal.request('/experience/simulation-reset', 'DELETE', {
+    revision: normalState.revision, confirmedReset: true, eventId: firstRun.eventId, experienceIds: [1]
+  });
+  assert.equal(deniedOutsideSimulation.status, 403);
 });
 
 test('normal management uses real dates, rejects simulation submissions and accepts the same completed-service format', async (t) => {

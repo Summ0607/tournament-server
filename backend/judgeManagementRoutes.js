@@ -88,7 +88,7 @@ function evaluateEligibility(judge, tests, experience, today = new Date().toISOS
   const grantedAt = judge.grantedAt || '';
   const logExempt = rankIndex >= JUDGE_RANKS.indexOf('D5');
   const records = experience.filter((item) => item.judgeId === judge.id && item.role !== 'ARBITRATOR' &&
-    (item.logVerified || logExempt) &&
+    !item.rejectedAt && (item.logVerified || logExempt) &&
     item.eventDate <= today && item.eventScope !== 'IN_HOUSE' && (!grantedAt || item.eventDate >= grantedAt));
   const minimumRank = target === 'INTERNATIONAL' ? JUDGE_RANKS.indexOf('D2') :
     ['CORNER', 'REGIONAL'].includes(target) ? JUDGE_RANKS.indexOf('D1') : 0;
@@ -327,7 +327,8 @@ function createJudgeManagementRouter({
           FROM judge_test_attempts ORDER BY written_date DESC, practical_date DESC, id DESC`);
         const experienceRows = await all(db, `SELECT id, judge_id AS judgeId, event_name AS eventName, event_date AS eventDate,
           location, role, event_scope AS eventScope, log_verified AS logVerified,
-          event_id AS eventId, phase, source, source_id AS sourceId
+          event_id AS eventId, phase, source, source_id AS sourceId,
+          rejected_at AS rejectedAt, rejection_reason AS rejectionReason
           FROM judge_experience ORDER BY event_date DESC, id DESC`);
         const experience = experienceRows.map((row) => {
           const role = normalizeExperienceRole(row.role);
@@ -341,7 +342,8 @@ function createJudgeManagementRouter({
           committed = true;
         }
         if (afterCommit) await afterCommit();
-        const payload = { asOf: today, revision: next.revision, aliases: Object.keys(JSON.parse(next.aliases)).length ? JSON.parse(next.aliases) : defaults,
+        const payload = { asOf: today, revision: next.revision, simulationMode: allowSimulation,
+          aliases: Object.keys(JSON.parse(next.aliases)).length ? JSON.parse(next.aliases) : defaults,
           judges: publicJudges, tests, experience, eligibility, certificationLevels: certificationLevels(), ranks: judgeRankOptions(), ...extra };
         if (req.path === '/judge-management/profile') {
           const judge = publicJudges.find((row) => row.associationId.toUpperCase() === String(req.query.associationId || '').trim().toUpperCase());
@@ -512,6 +514,18 @@ function createJudgeManagementRouter({
     }
     return { added, duplicates };
   }, true));
+  router.post('/judge-management/experience/:id/reject', endpoint(async (req, db) => {
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason || reason.length > 500) throw invalid('Provide a rejection reason of at most 500 characters.');
+    const [existing] = await all(db, 'SELECT log_verified AS logVerified, rejected_at AS rejectedAt FROM judge_experience WHERE id=?', [req.params.id]);
+    if (!existing) throw invalid('Experience record not found.', 404);
+    if (existing.logVerified) throw invalid('Verified experience cannot be rejected; unverify it first.', 409);
+    if (existing.rejectedAt) throw invalid('Experience record has already been rejected.', 409);
+    await run(db, `UPDATE judge_experience
+      SET rejected_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), rejection_reason=?
+      WHERE id=?`, [reason, req.params.id]);
+    return {};
+  }, true));
   router.put('/judge-management/experience/:id', endpoint(async (req, db, _aliases, today) => {
     const [existing] = await all(db, 'SELECT * FROM judge_experience WHERE id = ?', [req.params.id]);
     if (!existing) throw invalid('Experience record not found.', 404);
@@ -535,11 +549,35 @@ function createJudgeManagementRouter({
     }
     return {};
   }, true));
+  router.delete('/judge-management/experience/simulation-reset', endpoint(async (req, db) => {
+    if (!allowSimulation) throw invalid('Simulation experience can only be reset in the isolated judge simulator.', 403);
+    if (req.body?.confirmedReset !== true) throw invalid('Confirm resetting the selected simulation experience.');
+    const eventId = typeof req.body?.eventId === 'string' ? req.body.eventId.trim() : '';
+    const experienceIds = req.body?.experienceIds;
+    if (!eventId || eventId.length > 200) throw invalid('Select a valid simulated event.');
+    if (!Array.isArray(experienceIds) || !experienceIds.length || experienceIds.length > 200 ||
+        new Set(experienceIds).size !== experienceIds.length ||
+        experienceIds.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+      throw invalid('Select 1 to 200 distinct experience entries for the simulation reset.');
+    }
+    const placeholders = experienceIds.map(() => '?').join(',');
+    const entries = await all(db, `SELECT id, judge_id AS judgeId
+      FROM judge_experience WHERE event_id=? AND id IN (${placeholders})`, [eventId, ...experienceIds]);
+    if (entries.length !== experienceIds.length) {
+      throw invalid('One or more selected simulation entries changed. Reload and select the entries again.', 409);
+    }
+    const selectedJudges = new Set(entries.map((entry) => entry.judgeId));
+    const result = await run(db, `DELETE FROM judge_experience
+      WHERE event_id=? AND id IN (${placeholders})`,
+    [eventId, ...experienceIds]);
+    return { removed: result.changes, eventId, judgeCount: selectedJudges.size };
+  }, true));
   router.delete('/judge-management/experience/:id', endpoint(async (req, db) => {
-    const [existing] = await all(db, 'SELECT source,source_id,log_verified FROM judge_experience WHERE id=?', [req.params.id]);
+    const [existing] = await all(db, 'SELECT source,source_id,log_verified,rejected_at FROM judge_experience WHERE id=?', [req.params.id]);
     if (!existing) throw invalid('Experience record not found.', 404);
     if (existing.source !== 'MANUAL' || !existing.source_id) throw invalid('Only coordinator-recorded completed service can be withdrawn here.', 409);
     if (existing.log_verified) throw invalid('Unverify the record before withdrawing it.', 409);
+    if (existing.rejected_at) throw invalid('Rejected experience is retained for audit and cannot be withdrawn.', 409);
     if (req.body.confirmedWithdrawal !== true) throw invalid('Confirm withdrawal of this service and its experience credit.');
     await run(db, 'DELETE FROM judge_experience WHERE id=?', [req.params.id]);
     return {};
@@ -549,6 +587,12 @@ function createJudgeManagementRouter({
     const ids = req.body.ids;
     if (!Array.isArray(ids) || !ids.length || ids.length > 200 || new Set(ids).size !== ids.length ||
         ids.some((id) => !Number.isSafeInteger(id) || id < 1) || typeof req.body.verified !== 'boolean') throw invalid('Select distinct experience IDs and a verification decision.');
+    const selected = await all(db, `SELECT id, rejected_at AS rejectedAt FROM judge_experience
+      WHERE judge_id=? AND id IN (${ids.map(() => '?').join(',')})`, [judge.id, ...ids]);
+    if (selected.length !== ids.length) throw invalid('One or more experience records do not belong to this judge.', 409);
+    if (selected.some((record) => record.rejectedAt)) {
+      throw invalid('Rejected experience cannot be changed through verification.', 409);
+    }
     const result = await run(db, `UPDATE judge_experience SET log_verified = ? WHERE judge_id = ? AND id IN (${ids.map(() => '?').join(',')})`,
       [Number(req.body.verified), judge.id, ...ids]);
     if (result.changes !== ids.length) throw invalid('One or more experience records do not belong to this judge.', 409);
@@ -587,7 +631,7 @@ function createJudgeManagementRouter({
     const tests = await all(db, `SELECT judge_id AS judgeId, target_level AS targetLevel, written_date AS writtenDate,
       written_score AS writtenScore, practical_date AS practicalDate, practical_passed AS practicalPassed FROM judge_test_attempts WHERE judge_id = ?`, [id]);
     const experience = await all(db, `SELECT judge_id AS judgeId, event_name AS eventName, event_id AS eventId, event_date AS eventDate, role, event_scope AS eventScope,
-      log_verified AS logVerified FROM judge_experience WHERE judge_id = ?`, [id]);
+      log_verified AS logVerified, rejected_at AS rejectedAt FROM judge_experience WHERE judge_id = ?`, [id]);
     const eligibility = evaluateEligibility(judge, tests, experience, grantDate);
     if (!eligibility.eligible || !eligibility.writtenPassed || !eligibility.practicalPassed) throw invalid('On the grant date, the judge must meet eligibility requirements and have passed the required written and practical tests before certification can be granted.', 409);
     const certification = eligibility.targetLevel;

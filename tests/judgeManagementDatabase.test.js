@@ -17,6 +17,9 @@ function run(db, sql, params = []) {
 function get(db, sql) {
   return new Promise((resolve, reject) => db.get(sql, (error, row) => error ? reject(error) : resolve(row)));
 }
+function all(db, sql) {
+  return new Promise((resolve, reject) => db.all(sql, (error, rows) => error ? reject(error) : resolve(rows)));
+}
 function close(db) {
   return new Promise((resolve, reject) => db.close((error) => error ? reject(error) : resolve()));
 }
@@ -31,7 +34,10 @@ test('standalone judge database initializes safely and enforces member IDs and s
   await Promise.all([initializeJudgeDatabase(file), initializeJudgeDatabase(file)]);
   const db = await open(file);
   try {
-    assert.equal((await get(db, 'PRAGMA user_version')).user_version, 6);
+    assert.equal((await get(db, 'PRAGMA user_version')).user_version, 7);
+    const experienceColumns = await all(db, 'PRAGMA table_info(judge_experience)');
+    assert.ok(experienceColumns.some((column) => column.name === 'rejected_at'));
+    assert.ok(experienceColumns.some((column) => column.name === 'rejection_reason'));
     const judgeColumns = await new Promise((resolve, reject) =>
       db.all('PRAGMA table_info(judges)', (error, rows) => error ? reject(error) : resolve(rows)));
     assert.ok(judgeColumns.some((column) => column.name === 'date_of_birth'));
@@ -127,7 +133,7 @@ test('version 4 experience migrates with stable identities, original verificatio
     assert.equal(row.source, 'MANUAL');
     assert.equal(row.source_id, null);
     assert.equal(row.phase, '');
-    assert.equal((await get(upgraded, 'PRAGMA user_version')).user_version, 6);
+    assert.equal((await get(upgraded, 'PRAGMA user_version')).user_version, 7);
   } finally { await close(upgraded); }
 });
 
@@ -158,12 +164,14 @@ test('version 5 databases preserve existing experience and accept the shared SK/
     const oldRecord = await get(upgraded, 'SELECT * FROM judge_experience WHERE id=8');
     assert.equal(oldRecord.role, 'TIMEKEEPER');
     assert.equal(oldRecord.source_id, 'source-1');
+    assert.equal(oldRecord.rejected_at, null);
+    assert.equal(oldRecord.rejection_reason, null);
     await run(upgraded, `INSERT INTO judge_experience
       (judge_id,event_name,event_date,role,event_scope,event_id,phase,source,source_id)
       VALUES (1,'Simulated Regional','2025-02-01','SK_TK','REGIONAL','event-2','P1','SIMULATION','source-2')`);
     await assert.rejects(run(upgraded, `INSERT INTO judge_experience
       (judge_id,event_name,event_date,role,event_scope,event_id,phase)
       VALUES (1,'Invalid Role','2025-02-01','INVALID','REGIONAL','event-3','P1')`), /CHECK/);
-    assert.equal((await get(upgraded, 'PRAGMA user_version')).user_version, 6);
+    assert.equal((await get(upgraded, 'PRAGMA user_version')).user_version, 7);
   } finally { await close(upgraded); }
 });

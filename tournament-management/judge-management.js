@@ -1,5 +1,5 @@
 (function (root) {
-  function create({ document, request, confirm, showPanel }) {
+  function create({ document, request, confirm, prompt = root.prompt?.bind(root), showPanel }) {
     const node = (id) => document.getElementById(id);
     const fields = ['associationId', 'firstName', 'lastName', 'school', 'rank', 'certification', 'expiration', 'status', 'notes'];
     const levels = ['SK_TK', 'CORNER', 'REGIONAL', 'INTERNATIONAL'];
@@ -17,6 +17,7 @@
     let data = null, busy = false, token = 0, editing = false, editId = null, baseline = '', aliasesBaseline = '', origin = 'judge-management';
     let servicePackets = [];
     let testRecords = [], experienceRecords = [];
+    const simulationResetSelection = new Map();
     const serviceFields = ['associationId', 'eventId', 'eventName', 'eventDate', 'eventScope', 'location', 'phase', 'role'];
     let serviceOpen = false, serviceBaseline = '';
     const serviceDraft = () => ({ ...Object.fromEntries(serviceFields.map((field) => [field, node(`jmService-${field}`).value])),
@@ -81,9 +82,18 @@
       const experience = (data.experience || []).filter((record) => {
         const judge = judges.get(record.judgeId), verification = node('jmExperienceVerified').value;
         return judge && matches('jmExperienceSearch', [...identity(judge), record.eventName, record.eventId, record.role, pretty(record.role), record.phase]) &&
-          (!verification || (verification === 'verified' ? Boolean(record.logVerified) : !record.logVerified));
+          (!verification || (verification === 'verified' ? Boolean(record.logVerified)
+            : verification === 'rejected' ? Boolean(record.rejectedAt) : !record.logVerified && !record.rejectedAt));
       });
       node('jmExperienceCount').textContent = `${experience.length} of ${(data.experience || []).length} service records`;
+      node('jmExperienceResetHeading').hidden = !data.simulationMode;
+      node('jmExperienceResetSimulation').hidden = !data.simulationMode;
+      node('jmExperienceResetSimulation').disabled = busy || !data.simulationMode || !simulationResetSelection.size;
+      const resetSelection = [...simulationResetSelection.values()];
+      node('jmExperienceResetSelection').hidden = !data.simulationMode;
+      node('jmExperienceResetSelection').textContent = resetSelection.length
+        ? `${resetSelection.length} ${resetSelection.length === 1 ? 'entry' : 'entries'} selected for ${resetSelection[0].eventName}.`
+        : '';
       node('jmExperienceBody').innerHTML = experience.map((record) => {
         const judge = judges.get(record.judgeId);
         if (!judge) return '';
@@ -92,8 +102,20 @@
         const roleCell = manual && roleOptions.length > 1
           ? `<select data-jm-credit-role="${record.id}" aria-label="Credited role for ${esc(judge.firstName)} ${esc(judge.lastName)}" ${busy || record.logVerified ? 'disabled' : ''}>${roleOptions.map((role) => `<option value="${role}" ${role === record.role ? 'selected' : ''}>${esc(pretty(role))}</option>`).join('')}</select>`
           : `${esc(pretty(record.role))}${record.role === 'ARBITRATOR' ? ' (no experience credit)' : ''}`;
-        return `<tr><td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(record.eventName)}${record.phase ? ` (${esc(record.phase)})` : ''}<br>${esc(record.eventId || '')}${manual ? '<br>Coordinator-recorded actual service' : ''}</td><td>${esc(record.eventDate)}</td><td>${esc(record.location)}</td><td>${roleCell}</td><td>${esc(pretty(record.eventScope))}</td><td>${record.logVerified ? 'Verified' : 'Not verified'} <button type="button" data-jm-verify="${record.id}" data-judge="${judge.id}" ${busy ? 'disabled' : ''}>${record.logVerified ? 'Unverify' : 'Verify'}</button>${manual ? ` <button type="button" data-jm-service-delete="${record.id}" ${busy || record.logVerified ? 'disabled' : ''}>Withdraw</button>` : ''}</td></tr>`;
-      }).join('') || '<tr><td colspan="8">No matching experience records.</td></tr>';
+        const status = record.rejectedAt
+          ? `Rejected ${esc(record.rejectedAt)}<br><span title="${esc(record.rejectionReason)}">${esc(record.rejectionReason)}</span>`
+          : record.logVerified ? 'Verified' : 'Pending';
+        const verifyAction = record.rejectedAt ? ''
+          : ` <button type="button" data-jm-verify="${record.id}" data-judge="${judge.id}" ${busy ? 'disabled' : ''}>${record.logVerified ? 'Unverify' : 'Verify'}</button>`;
+        const rejectAction = !record.logVerified && !record.rejectedAt
+          ? ` <button type="button" data-jm-experience-reject="${record.id}" ${busy ? 'disabled' : ''}>Reject</button>` : '';
+        const withdrawAction = manual && !record.rejectedAt
+          ? ` <button type="button" data-jm-service-delete="${record.id}" ${busy || record.logVerified ? 'disabled' : ''}>Withdraw</button>` : '';
+        const simulationSelection = data.simulationMode
+            ? `<td><input type="checkbox" data-jm-simulation-reset="${record.id}" data-event-id="${esc(record.eventId)}" data-event-name="${esc(record.eventName)}" data-judge-id="${judge.id}" aria-label="Select ${esc(judge.associationId)} for simulated event reset" ${simulationResetSelection.has(record.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}></td>`
+          : '';
+        return `<tr>${simulationSelection}<td>${esc(judge.associationId)}</td><td>${esc(judge.firstName)} ${esc(judge.lastName)}</td><td>${esc(record.eventName)}${record.phase ? ` (${esc(record.phase)})` : ''}<br>${esc(record.eventId || '')}${manual ? '<br>Coordinator-recorded actual service' : ''}</td><td>${esc(record.eventDate)}</td><td>${esc(record.location)}</td><td>${roleCell}</td><td>${esc(pretty(record.eventScope))}</td><td>${status}${verifyAction}${rejectAction}${withdrawAction}</td></tr>`;
+      }).join('') || `<tr><td colspan="${data.simulationMode ? 9 : 8}">No matching experience records.</td></tr>`;
       const eligibility = (data.eligibility || []).filter((item) => {
         const judge = judges.get(item.judgeId), readiness = node('jmEligibilityReady').value;
         const ready = Boolean(item.eligible && item.writtenPassed && item.practicalPassed);
@@ -138,6 +160,7 @@
       grantDates.clear();
       data = value;
       selected.clear();
+      simulationResetSelection.clear();
       options('jm-rank', data.ranks.map((r) => ({ value: r.code, label: r.label })), '-- Select --');
       options('jm-certification', data.certificationLevels.map((c) => ({ value: c.code, label: c.label })));
       options('jmFilterCertification', data.certificationLevels.map((c) => ({ value: c.code, label: c.label })), 'Any');
@@ -322,6 +345,26 @@
       }
     });
     node('jmExperienceBody').addEventListener('change', async (event) => {
+      const simulationTarget = event.target.closest('[data-jm-simulation-reset]');
+      if (simulationTarget) {
+        if (!data?.simulationMode || busy) return;
+        const id = Number(simulationTarget.getAttribute('data-jm-simulation-reset'));
+        const record = data.experience.find((item) => item.id === id);
+        if (!record) { render(); return; }
+        if (simulationTarget.checked) {
+          const selectedEvent = simulationResetSelection.values().next().value?.eventId;
+          if (selectedEvent && selectedEvent !== record.eventId) {
+            notice('Select entries from one simulated event at a time.', 'error');
+            render();
+            return;
+          }
+          simulationResetSelection.set(id, {
+            eventId: record.eventId, eventName: record.eventName, judgeId: record.judgeId
+          });
+        } else simulationResetSelection.delete(id);
+        render();
+        return;
+      }
       const target = event.target.closest('[data-jm-credit-role]');
       if (!target || busy) return;
       const record = data.experience.find((item) => item.id === Number(target.getAttribute('data-jm-credit-role')));
@@ -341,8 +384,49 @@
         { confirmedRoleAdjustment: true, record: { role } },
         'Credited role lowered; the record remains pending verification.');
     });
+    node('jmExperienceResetSimulation').addEventListener('click', () => {
+      if (!data?.simulationMode || busy || !simulationResetSelection.size) return;
+      const selectedEntries = [...simulationResetSelection.values()];
+      const eventId = selectedEntries[0].eventId;
+      if (selectedEntries.some((entry) => entry.eventId !== eventId)) {
+        notice('Select entries from one simulated event at a time.', 'error');
+        return;
+      }
+      const judgeIds = [...new Set(selectedEntries.map((entry) => entry.judgeId))];
+      const entryLabel = selectedEntries.length === 1 ? 'entry' : 'entries';
+      const selectedJudges = data.judges.filter((judge) => judgeIds.includes(judge.id))
+        .map((judge) => `${judge.associationId} (${judge.firstName} ${judge.lastName})`);
+      if (!confirm(`Reset ${selectedEntries.length} simulated service ${entryLabel} for ${selectedJudges.join(', ')} from ${selectedEntries[0].eventName}? This deletes only selected entries in the isolated simulator.`)) return;
+      if (!canLeave()) return;
+      return write('/api/judge-management/experience/simulation-reset', 'DELETE',
+        { confirmedReset: true, eventId, experienceIds: [...simulationResetSelection.keys()] },
+        (result) => `Reset ${result.removed} simulated service ${result.removed === 1 ? 'entry' : 'entries'}. You can now repeat the test.`);
+    });
     node('jmExperienceBody').addEventListener('click', (event) => {
       if (busy) return;
+      const rejectButton = event.target.closest('[data-jm-experience-reject]');
+      if (rejectButton) {
+        if (rejectButton.disabled) return;
+        const record = data.experience.find((item) => item.id === Number(rejectButton.getAttribute('data-jm-experience-reject')));
+        const judge = data.judges.find((item) => item.id === record?.judgeId);
+        if (!record || record.logVerified || record.rejectedAt) return;
+        if (typeof prompt !== 'function') {
+          notice('A rejection reason is required, but a reason prompt is unavailable.', 'error');
+          return;
+        }
+        const reason = prompt(`Why is this pending experience for ${judge?.firstName || ''} ${judge?.lastName || ''} being rejected?`);
+        if (reason === null) return;
+        if (typeof reason !== 'string' || !reason.trim()) {
+          notice('Provide a rejection reason.', 'error');
+          return;
+        }
+        if (confirm(`Reject this pending service entry for ${judge?.firstName || ''} ${judge?.lastName || ''}? The entry will remain in the audit history and cannot be verified.`)) {
+          if (!canLeave()) return;
+          return write(`/api/judge-management/experience/${record.id}/reject`, 'POST',
+            { reason: reason.trim() }, 'Service entry rejected and excluded from experience credit.');
+        }
+        return;
+      }
       const withdrawal = event.target.closest('[data-jm-service-delete]');
       if (withdrawal) {
         if (withdrawal.disabled) return;

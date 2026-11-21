@@ -1856,9 +1856,15 @@ a mistaken entry or replacement; if both judges actually served, retain both
 records instead. **Withdraw** removes a mistaken service record and its credit.
 Event identity cannot be edited in a correction: withdraw an entry under the
 wrong event and record it again under the correct event. Other API-created and
-legacy records cannot be corrected or withdrawn through these new controls.
-These operations require Administrator or Judging Coordinator access and use
-the same database revision checks as the rest of Judge Management.
+legacy records cannot be corrected or withdrawn through these controls.
+Any pending experience entry can instead be **Rejected** with a required reason.
+Rejected entries remain in the audit history, cannot be verified, and never
+contribute to experience credit. In the isolated Judge Simulation only, select
+entries for one event and the intended judge set, then **Reset selected simulation
+entries** to remove those test records, including rejected or verified entries, and
+rerun the same event/data. Production records remain in the audit history. These operations require
+Administrator or Judging Coordinator access and use the same database revision
+checks as the rest of Judge Management.
 
 Separate roles/phases are retained, but a qualifying championship counts only
 once per judge for the applicable progression requirement. In-House experience

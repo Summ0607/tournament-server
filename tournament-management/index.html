@@ -1620,7 +1620,7 @@
             <div id="navRingsChildren" class="sidebar-children" hidden>
               <button class="sidebar-item" type="button" data-nav-id="ring-judges" data-nav-label="Ring Judges" data-nav-parents="tournament rings">Ring Judges</button>
               <button class="sidebar-item" type="button" data-nav-id="judge-assignments" data-nav-label="Judge Assignments" data-nav-parents="tournament rings">Judge Assignments</button>
-              <button class="sidebar-item" type="button" data-nav-id="tablet-pairing" data-nav-label="Ring QR Codes" data-nav-parents="tournament rings">Ring QR Codes</button>
+              <button class="sidebar-item" type="button" data-nav-id="tablet-pairing" data-nav-label="Tablet Pairing" data-nav-parents="tournament rings">Tablet Pairing</button>
               <button class="sidebar-item" type="button" data-nav-id="ring-assignment" data-nav-label="Division Assignments" data-nav-parents="tournament rings">Division Assignments</button>
               <button class="sidebar-item" type="button" data-nav-id="division-qr" data-nav-label="Division QR Codes" data-nav-parents="tournament rings">Division QR Codes</button>
               <button class="sidebar-item" type="button" data-nav-id="head-table" data-nav-label="Head Table" data-nav-parents="tournament rings">Head Table</button>
@@ -2171,8 +2171,8 @@
                   <button type="submit" id="jmServiceSave">Submit Pending Experience</button>
                   <button type="button" id="jmServiceCancel">Cancel</button>
                 </form>
-                <div class="jm-toolbar"><label>Search experience (name, ID, event or role)<input type="search" id="jmExperienceSearch"></label><label>Verification<select id="jmExperienceVerified"><option value="">All records</option><option value="pending">Not verified</option><option value="verified">Verified</option></select></label><button type="button" id="jmExperienceClear">Clear filters</button><span id="jmExperienceCount" role="status"></span></div>
-                <div class="table-wrap"><table aria-label="Judge experience"><thead><tr><th scope="col">WTSDA ID</th><th scope="col">Judge</th><th scope="col">Event</th><th scope="col">Date</th><th scope="col">Location</th><th scope="col">Credited role</th><th scope="col">Scope</th><th scope="col">Log</th></tr></thead><tbody id="jmExperienceBody"><tr><td colspan="8">Loading experience records...</td></tr></tbody></table></div>
+                <div class="jm-toolbar"><label>Search experience (name, ID, event or role)<input type="search" id="jmExperienceSearch"></label><label>Verification<select id="jmExperienceVerified"><option value="">All records</option><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select></label><button type="button" id="jmExperienceClear">Clear filters</button><button type="button" id="jmExperienceResetSimulation" hidden disabled>Reset selected simulation entries</button><span id="jmExperienceResetSelection" role="status"></span><span id="jmExperienceCount" role="status"></span></div>
+                <div class="table-wrap"><table aria-label="Judge experience"><thead><tr><th id="jmExperienceResetHeading" scope="col" hidden>Reset</th><th scope="col">WTSDA ID</th><th scope="col">Judge</th><th scope="col">Event</th><th scope="col">Date</th><th scope="col">Location</th><th scope="col">Credited role</th><th scope="col">Scope</th><th scope="col">Log</th></tr></thead><tbody id="jmExperienceBody"><tr><td colspan="9">Loading experience records...</td></tr></tbody></table></div>
               </section>
               <section id="jmCsvSettings" hidden>
                 <div class="jm-panel"><h2>CSV Field Mapping</h2><p class="jm-note">Built-in aliases cover common registration and record-keeping headers. Matching ignores case, spaces and punctuation; saved aliases add to the built-in set.</p>

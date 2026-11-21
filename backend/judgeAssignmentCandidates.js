@@ -27,7 +27,7 @@ async function judgeSnapshot(file, date) {
     const tests = await all(db, `SELECT judge_id AS judgeId,target_level AS targetLevel,written_date AS writtenDate,
       written_score AS writtenScore,practical_date AS practicalDate,practical_passed AS practicalPassed FROM judge_test_attempts`);
     const experience = await all(db, `SELECT judge_id AS judgeId,event_id AS eventId,event_name AS eventName,event_date AS eventDate,
-      role,event_scope AS eventScope,log_verified AS logVerified FROM judge_experience`);
+      role,event_scope AS eventScope,log_verified AS logVerified,rejected_at AS rejectedAt FROM judge_experience`);
     await all(db, 'COMMIT');
     return { revision: settings.revision, judges: judges.map((judge) => {
       const { dateOfBirth, ...publicJudge } = judge;
