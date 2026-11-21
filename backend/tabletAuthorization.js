@@ -120,6 +120,25 @@ function createTabletRouter({ store, security, getContext, serverOrigins, allowe
     if (!allowedOrigins.includes(`https://${req.get('host')}`)) return res.status(403).json({ error: 'Use the configured HTTPS server address.' });
     next();
   });
+  router.get('/api/tablet/server-addresses', async (req, res, next) => {
+    try {
+      security.verifyRequest(req);
+      const session = await security.authenticate(req, res);
+      const roles = apiRoles('GET', req.path);
+      if (!roles || !hasRole(session.account.roles, roles)) fail('Ring Assignment permission required.', 403);
+      const addresses = serverOrigins.map((server, index) => {
+        const host = new URL(server).hostname;
+        const label = index === 0 ? `DNS name (${host})`
+          : index === 1 ? `Primary IP (${host})`
+            : `Alternative IP ${index - 1} (${host})`;
+        return { index, label };
+      });
+      res.json({
+        addresses,
+        defaultAddressIndex: Math.min(1, addresses.length - 1)
+      });
+    } catch (error) { next(error); }
+  });
   router.post('/api/tablet/codes', express.json({ limit: '2kb' }), async (req, res, next) => {
     try {
       security.verifyRequest(req);
@@ -127,10 +146,17 @@ function createTabletRouter({ store, security, getContext, serverOrigins, allowe
       if (!hasRole(session.account.roles, apiRoles('POST', '/api/tablet/codes'))) fail('Ring Assignment permission required.', 403);
       const context = getContext(), ring = req.body.ringId;
       if (req.body.useIp !== undefined && typeof req.body.useIp !== 'boolean') fail('Select DNS or IP for the QR address.');
+      const addressIndex = req.body.serverAddressIndex;
+      if (addressIndex !== undefined &&
+          (!Number.isSafeInteger(addressIndex) || addressIndex < 0 || addressIndex >= serverOrigins.length)) {
+        fail('Select a configured server address.');
+      }
       if (!context.event) fail('Activate a tournament before displaying ring QR codes.');
       if (typeof ring !== 'string' || !Object.hasOwn(context.rings, ring)) fail('Select a configured ring.');
       const payload = store.code({ event: context.event, ring, ringLabel: context.rings[ring].ringLabel || ring,
-        server: serverOrigins[req.body.useIp === false ? 0 : 1] });
+        server: addressIndex === undefined
+          ? serverOrigins[req.body.useIp === false ? 0 : 1]
+          : serverOrigins[addressIndex] });
       res.json({ ringId: ring, ringLabel: payload.ringLabel, event: payload.event, day: payload.day,
         server: payload.server, expiresAt: payload.expiresAt,
         image: await QRCode.toDataURL(JSON.stringify(payload), { width: 640, margin: 4, errorCorrectionLevel: 'M' }) });

@@ -25,7 +25,7 @@
   function generate(ringId) {
     return json('/api/tablet/codes', { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ringId, useIp: address.value === 'ip' }) });
+      body: JSON.stringify({ ringId, serverAddressIndex: Number(address.value) }) });
   }
   function details(data) {
     return `${data.event} - ${data.day} (server laptop date) - ${data.server}`;
@@ -81,6 +81,12 @@
   address.addEventListener('change', invalidate);
   controls();
   try {
+    const serverData = await json('/api/tablet/server-addresses');
+    for (const entry of serverData.addresses) {
+      const option = document.createElement('option');
+      option.value = String(entry.index); option.textContent = entry.label; address.append(option);
+    }
+    address.value = String(serverData.defaultAddressIndex);
     const data = await json('/api/rings/config');
     for (const entry of data.allowedRings) {
       const option = document.createElement('option');

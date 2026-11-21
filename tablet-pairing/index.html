@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ring QR Codes</title>
+  <title>Tablet Pairing</title>
   <script src="/assets/embedded-administration.js"></script>
   <script src="/assets/browser-session.js"></script>
   <script src="/assets/tablet-pairing.js" defer></script>
@@ -28,12 +28,13 @@
   </style>
 </head>
 <body data-auth-workspace="tablet-pairing">
-  <h1>Ring QR Codes</h1>
+  <h1>Tablet Pairing</h1>
   <p class="intro">Authorize each tablet by scanning its ring's daily QR code. Display one ring,
     print the selected ring, or print a labeled sheet for every configured ring.</p>
   <div class="controls">
     <label>Ring <select id="ring"></select></label>
-    <label>Server address <select id="address"><option value="ip">Fixed IP (no DNS)</option><option value="dns">DNS name</option></select></label>
+    <label>Server address <select id="address"></select></label>
+    <span>Choose the primary IP for the normal LAN or an alternative IP for USB/RNDIS.</span>
     <button id="display" type="button">Display QR code</button>
     <button id="print" type="button">Print selected ring</button>
     <button id="printAll" type="button">Print all rings</button>

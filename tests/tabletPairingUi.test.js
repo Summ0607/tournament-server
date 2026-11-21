@@ -20,7 +20,6 @@ async function harness({ failRing = '', changeEvent = false, noRings = false, fa
   for (const id of ['ring', 'status', 'display', 'code', 'print', 'printAll', 'address', 'printPages', 'title', 'details', 'qr']) {
     nodes.set(id, new Node(['ring', 'address'].includes(id) ? 'select' : id === 'qr' ? 'img' : ''));
   }
-  nodes.get('address').value = 'ip';
   const context = vm.createContext({
     URLSearchParams,
     document: {
@@ -41,13 +40,22 @@ async function harness({ failRing = '', changeEvent = false, noRings = false, fa
     fetch: async (url, options) => {
       const body = options ? JSON.parse(options.body) : null;
       requests.push({ url, body });
+      if (url === '/api/tablet/server-addresses') return { ok: true, json: async () => ({
+        addresses: [
+          { index: 0, label: 'DNS name (tourn-svr.home.arpa)' },
+          { index: 1, label: 'Primary IP (192.168.4.42)' },
+          { index: 2, label: 'Alternative IP 1 (10.90.111.23)' }
+        ],
+        defaultAddressIndex: 1
+      }) };
       if (url === '/api/rings/config') return { ok: true, json: async () => ({
         allowedRings: noRings ? [] : [{ ringId: 'ring-a-1', ringLabel: 'A1' }, { ringId: 'ring-a-2', ringLabel: 'A2' }]
       }) };
       return { ok: body.ringId !== failRing, status: 500, json: async () => ({
         error: 'QR generation failed', ringLabel: body.ringId === 'ring-a-1' ? 'A1' : 'A2',
         event: changeEvent && body.ringId === 'ring-a-2' ? 'Changed Tournament' : 'Test Tournament',
-        day: '2026-11-05', server: body.useIp ? 'https://192.168.4.42:3443' : 'https://tourn-svr.home.arpa:3443',
+        day: '2026-11-05',
+        server: ['https://tourn-svr.home.arpa:3443', 'https://192.168.4.42:3443', 'https://10.90.111.23:3443'][body.serverAddressIndex],
         image: 'data:image/png;base64,test'
       }) };
     }
@@ -62,23 +70,33 @@ async function harness({ failRing = '', changeEvent = false, noRings = false, fa
 test('selected ring display and printing use QR details and invalidate on address/ring changes', async () => {
   const h = await harness();
   assert.equal(h.nodes.get('ring').value, 'ring-a-2');
+  assert.equal(h.nodes.get('address').value, '1');
+  assert.deepEqual(h.nodes.get('address').options.map((option) => option.textContent), [
+    'DNS name (tourn-svr.home.arpa)',
+    'Primary IP (192.168.4.42)',
+    'Alternative IP 1 (10.90.111.23)'
+  ]);
   assert.equal(h.nodes.get('title').textContent, 'Ring A2');
   assert.equal(h.nodes.get('print').disabled, false);
   assert.match(h.nodes.get('details').textContent, /192\.168\.4\.42:3443/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'tablet-pairing', 'index.html'), 'utf8'),
-    /id="address"><option value="ip">/);
   const html = fs.readFileSync(path.join(__dirname, '..', 'tablet-pairing', 'index.html'), 'utf8');
-  assert.match(html, /<title>Ring QR Codes<\/title>/);
+  assert.match(html, /<title>Tablet Pairing<\/title>/);
+  assert.match(html, /id="address"><\/select>/);
+  assert.match(html, /alternative IP for USB\/RNDIS/);
   assert.match(html, /embedded-administration\.js/);
   assert.match(html, /html\.embedded-administration #browserSessionBar\s*\{\s*display:\s*none;/);
   await h.click('print');
   assert.equal(h.prints.length, 1);
   assert.equal(h.prints[0].all, false);
-  h.change('address', 'dns');
+  h.change('address', '0');
   assert.equal(h.nodes.get('code').hidden, true);
   assert.equal(h.nodes.get('print').disabled, true);
   await h.click('display');
   assert.match(h.nodes.get('details').textContent, /tourn-svr\.home\.arpa:3443/);
+  h.change('address', '2');
+  await h.click('display');
+  assert.match(h.nodes.get('details').textContent, /10\.90\.111\.23:3443/);
+  assert.equal(h.requests.filter((request) => request.url === '/api/tablet/codes').at(-1).body.serverAddressIndex, 2);
   h.change('ring', 'ring-a-1');
   assert.equal(h.nodes.get('print').disabled, true);
 });

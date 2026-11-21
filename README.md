@@ -103,9 +103,11 @@ The directory must remain outside the web-served repository.
 | `accounts.db` | Account/session database, created by account setup or HTTPS startup |
 
 The server certificate's SAN covers **DNS `tourn-svr.home.arpa` and IP
-`192.168.4.42`**. OpenSSL creates a self-signed CA, then a separate server certificate
-signed by that CA, and verifies both names. Setup uses Git for Windows' OpenSSL;
-override `-OpenSslPath` if necessary. Private keys are unencrypted on disk and
+`192.168.4.42`**. Use `-AdditionalIpAddresses` to include additional explicit server
+IPv4 addresses, such as a known RNDIS address; a subnet cannot be used as an IP SAN.
+OpenSSL creates a self-signed CA, then a separate server certificate signed by that
+CA, and verifies each name and address. Setup uses Git for Windows' OpenSSL; override
+`-OpenSslPath` if necessary. Private keys are unencrypted on disk and
 protected by Windows ACLs; securely back up the CA key offline, not in Git or a
 shared folder. The running server uses only the files in `https`, not the CA key.
 Setup creates no user/password and **does not install trust, change DNS/firewall
@@ -268,9 +270,10 @@ Give each ring its code for that day. Codes are stable
 across service restarts and may be scanned repeatedly until **midnight using the
 laptop's local date/time**. Changing the active tournament also prevents use of
 credentials from a different tournament.
-The QR page defaults to **Fixed IP (no DNS)**. **DNS name** remains optional
-for networks where tablet DNS resolves correctly; both retain HTTPS and
-certificate verification.
+The **Tablet Pairing** page defaults to the primary IP for the normal LAN. Its
+address selector also lists DNS and each configured alternative IP; choose the
+RNDIS IP for USB-network pairing. The selected address is encoded in the QR.
+All choices retain HTTPS and certificate verification.
 
 On app **1.46 (47)** or later, tap **Scan daily ring QR code** and allow camera
 access. Scanning authorizes and automatically connects that tablet to the coded

@@ -22,11 +22,18 @@ function requirePrivateFile(file, rootDir = path.resolve(__dirname, '..')) {
 function loadHttpsConfig(file) {
   if (!file) throw new Error('HTTPS configuration is required. Run setup-https.ps1 and set TOURNAMENT_HTTPS_CONFIG, or use launch-surfaces.ps1. HTTP-only startup is no longer supported.');
   const config = JSON.parse(fs.readFileSync(requirePrivateFile(file), 'utf8'));
-  const keys = ['hostname', 'ipAddress', 'keyFile', 'certFile', 'caFile', 'accountDatabase', 'sourceLimit'];
+  const keys = ['hostname', 'ipAddress', 'additionalIpAddresses', 'keyFile', 'certFile', 'caFile', 'accountDatabase', 'sourceLimit'];
+  const requiredKeys = keys.filter((key) => key !== 'additionalIpAddresses');
   if (!config || typeof config !== 'object' || Array.isArray(config) ||
       Object.keys(config).some((key) => !keys.includes(key)) ||
-      keys.some((key) => !Object.hasOwn(config, key))) {
+      requiredKeys.some((key) => !Object.hasOwn(config, key))) {
     throw new Error('HTTPS configuration has missing or unknown fields.');
+  }
+  const additionalIpAddresses = config.additionalIpAddresses ?? [];
+  if (!Array.isArray(additionalIpAddresses) ||
+      additionalIpAddresses.some((address) => typeof address !== 'string' || require('node:net').isIP(address) !== 4) ||
+      new Set([config.ipAddress, ...additionalIpAddresses]).size !== additionalIpAddresses.length + 1) {
+    throw new Error('HTTPS configuration additionalIpAddresses must contain unique IPv4 addresses.');
   }
   if (typeof config.hostname !== 'string' ||
       !/^(?=.{1,253}$)[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(config.hostname) ||
@@ -56,16 +63,17 @@ function loadHttpsConfig(file) {
   if (serverCertificate.ca || !rootCertificate.ca || !rootCertificate.verify(rootCertificate.publicKey) ||
       !serverCertificate.verify(rootCertificate.publicKey) ||
       !serverCertificate.checkHost(config.hostname, { subject: 'never' }) ||
-      !serverCertificate.checkIP(config.ipAddress)) {
-    throw new Error('HTTPS certificate must be signed by the configured Root CA and cover the configured DNS name and IP.');
+  ![config.ipAddress, ...additionalIpAddresses].every((address) => serverCertificate.checkIP(address))) {
+    throw new Error('HTTPS certificate must be signed by the configured Root CA and cover the configured DNS name and all IP addresses.');
   }
   const options = { key, cert, minVersion: 'TLSv1.2' };
   tls.createSecureContext(options);
-  return { ...config, options, certificateExpiresAt: serverCertificate.validTo };
+  return { ...config, additionalIpAddresses, options, certificateExpiresAt: serverCertificate.validTo };
 }
 
 function httpsOrigins(config, surface) {
-  return [config.hostname, config.ipAddress].map((host) => `https://${host}:${HTTPS_PORTS[surface]}`);
+  return [config.hostname, config.ipAddress, ...(config.additionalIpAddresses || [])]
+    .map((host) => `https://${host}:${HTTPS_PORTS[surface]}`);
 }
 
 module.exports = { HTTPS_PORTS, requirePrivateFile, loadHttpsConfig, httpsOrigins };

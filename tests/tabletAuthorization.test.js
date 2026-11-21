@@ -149,8 +149,16 @@ test('real HTTPS routes enforce roles, pairing, ring scope and denial of unauthe
     const allowed = !['judging-coordinator', 'viewer'].includes(role);
     const result = await request('/api/tablet/codes', { method: 'POST', body: { ringId: 'ring-a-1' }, headers });
     assert.equal(result.status, allowed ? 200 : 403);
+    const addresses = await request('/api/tablet/server-addresses', { headers });
+    assert.equal(addresses.status, allowed ? 200 : 403);
     assert.equal((await request('/tablet-pairing/', { headers })).status, allowed ? 200 : 403);
     if (allowed) {
+      assert.deepEqual(addresses.data.addresses, [
+        { index: 0, label: 'DNS name (tourn-svr.home.arpa)' },
+        { index: 1, label: 'Primary IP (192.168.4.42)' },
+        { index: 2, label: 'Alternative IP 1 (10.90.111.23)' }
+      ]);
+      assert.equal(addresses.data.defaultAddressIndex, 1);
       assert.match(result.data.image, /^data:image\/png;base64,/);
       const png = Buffer.from(result.data.image.split(',')[1], 'base64');
       assert.equal(png.readUInt32BE(16), 640);
@@ -166,6 +174,13 @@ test('real HTTPS routes enforce roles, pairing, ring scope and denial of unauthe
         body: { ringId: 'ring-a-1', useIp: false }, headers });
       assert.equal(dnsCode.status, 200);
       assert.equal(dnsCode.data.server, 'https://tourn-svr.home.arpa:3443');
+      const additionalIpCode = await request('/api/tablet/codes', { method: 'POST',
+        body: { ringId: 'ring-a-1', serverAddressIndex: 2 }, headers });
+      assert.equal(additionalIpCode.status, 200);
+      assert.equal(additionalIpCode.data.server, 'https://10.90.111.23:3443');
+      const invalidAddress = await request('/api/tablet/codes', { method: 'POST',
+        body: { ringId: 'ring-a-1', serverAddressIndex: 9 }, headers });
+      assert.equal(invalidAddress.status, 400);
     }
     assert.equal((await request('/api/tablet/codes', { method: 'POST', body: { ringId: 'ring-a-1' },
       headers: { ...headers, 'X-CSRF-Token': '' } })).status, 403);

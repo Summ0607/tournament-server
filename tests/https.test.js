@@ -26,7 +26,19 @@ test('HTTPS config loads external CA-signed DNS/IP certificates and stable surfa
   assert.equal(HTTPS_PORTS.pre, 3443);
   assert.equal(HTTPS_PORTS.monitoring, 3445);
   assert.equal(HTTPS_PORTS.adminProgress, 3447);
-  assert.deepEqual(httpsOrigins(loaded, 'pre'), ['https://tourn-svr.home.arpa:3443', 'https://192.168.4.42:3443']);
+  assert.deepEqual(httpsOrigins(loaded, 'pre'), [
+    'https://tourn-svr.home.arpa:3443',
+    'https://192.168.4.42:3443',
+    'https://10.90.111.23:3443'
+  ]);
+  const legacyConfigFile = path.join(root, 'legacy.json');
+  const legacyConfig = { ...config };
+  delete legacyConfig.additionalIpAddresses;
+  fs.writeFileSync(legacyConfigFile, JSON.stringify(legacyConfig));
+  assert.deepEqual(httpsOrigins(loadHttpsConfig(legacyConfigFile), 'pre'), [
+    'https://tourn-svr.home.arpa:3443',
+    'https://192.168.4.42:3443'
+  ]);
   assert.throws(() => loadHttpsConfig(undefined), /HTTPS configuration is required/);
 });
 
@@ -38,6 +50,9 @@ test('HTTPS config rejects repository files, missing files, bad SANs, keys, CA a
   for (const [changes, expected] of [
     [{ hostname: 'other.home.arpa' }, /cover/],
     [{ ipAddress: '192.168.4.43' }, /cover/],
+    [{ additionalIpAddresses: ['10.90.111.24'] }, /cover/],
+    [{ additionalIpAddresses: ['10.90.111.23', '10.90.111.23'] }, /unique IPv4/],
+    [{ additionalIpAddresses: ['not-an-ip'] }, /unique IPv4/],
     [{ sourceLimit: { maxAttempts: 0, windowMs: 900000 } }, /rate limit/],
     [{ keyFile: path.join(root, 'ca-key.pem') }, /key values mismatch/],
     [{ caFile: config.certFile }, /signed by/],

@@ -2,6 +2,7 @@ param(
   [string]$PrivateDirectory = "C:\TournamentPrivate",
   [string]$Hostname = "tourn-svr.home.arpa",
   [string]$IpAddress = "192.168.4.42",
+  [string[]]$AdditionalIpAddresses = @(),
   [string]$OpenSslPath = "C:\Program Files\Git\usr\bin\openssl.exe"
 )
 
@@ -12,6 +13,18 @@ if ($Hostname -notmatch '^(?=.{1,253}$)[a-z0-9]+(?:[.-][a-z0-9]+)*$') { throw "I
 $parsedIp = $null
 if (![System.Net.IPAddress]::TryParse($IpAddress, [ref]$parsedIp) -or
     $parsedIp.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) { throw "Invalid IPv4 address." }
+$additionalIpAddresses = @()
+foreach ($address in $AdditionalIpAddresses) {
+  $parsedAdditionalIp = $null
+  if (![System.Net.IPAddress]::TryParse($address, [ref]$parsedAdditionalIp) -or
+      $parsedAdditionalIp.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
+    throw "Invalid additional IPv4 address: $address"
+  }
+  if ($address -eq $IpAddress -or $additionalIpAddresses -contains $address) {
+    throw "Duplicate HTTPS IP address: $address"
+  }
+  $additionalIpAddresses += $address
+}
 $repoRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path.TrimEnd('\')
 $privateRoot = [System.IO.Path]::GetFullPath($PrivateDirectory).TrimEnd('\')
 if ($privateRoot -eq $repoRoot -or $privateRoot.StartsWith($repoRoot + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -48,24 +61,30 @@ $serverKey = Join-Path $tlsDirectory "server-key.pem"
 $serverCert = Join-Path $tlsDirectory "server.pem"
 $csr = Join-Path $tlsDirectory "server.csr"
 $serial = Join-Path $caDirectory "root-ca.srl"
+$sanEntries = @("DNS:$Hostname", "IP:$IpAddress") + @($additionalIpAddresses | ForEach-Object { "IP:$_" })
+$subjectAltName = "subjectAltName=$($sanEntries -join ',')"
 
 Invoke-OpenSsl -Arguments @('req', '-x509', '-newkey', 'rsa:4096', '-nodes', '-sha256', '-days', '3650',
   '-subj', '/CN=Tournament Local Root CA', '-addext', 'basicConstraints=critical,CA:TRUE,pathlen:0',
   '-addext', 'keyUsage=critical,keyCertSign,cRLSign', '-keyout', $caKey, '-out', $caCert)
 Invoke-OpenSsl -Arguments @('req', '-new', '-newkey', 'rsa:2048', '-nodes', '-sha256',
-  '-subj', "/CN=$Hostname", '-addext', "subjectAltName=DNS:$Hostname,IP:$IpAddress",
+  '-subj', "/CN=$Hostname", '-addext', $subjectAltName,
   '-addext', 'basicConstraints=critical,CA:FALSE', '-addext', 'keyUsage=critical,digitalSignature,keyEncipherment',
   '-addext', 'extendedKeyUsage=serverAuth', '-keyout', $serverKey, '-out', $csr)
 Invoke-OpenSsl -Arguments @('x509', '-req', '-in', $csr, '-CA', $caCert, '-CAkey', $caKey,
   '-CAserial', $serial, '-CAcreateserial', '-days', '397', '-sha256', '-copy_extensions', 'copy', '-out', $serverCert)
 Invoke-OpenSsl -Arguments @('verify', '-CAfile', $caCert, '-verify_hostname', $Hostname, $serverCert)
 Invoke-OpenSsl -Arguments @('verify', '-CAfile', $caCert, '-verify_ip', $IpAddress, $serverCert)
+foreach ($address in $additionalIpAddresses) {
+  Invoke-OpenSsl -Arguments @('verify', '-CAfile', $caCert, '-verify_ip', $address, $serverCert)
+}
 Remove-Item -LiteralPath $csr
 Copy-Item -LiteralPath $caCert -Destination (Join-Path $tlsDirectory "root-ca.pem")
 $configFile = Join-Path $tlsDirectory "server.json"
 @{
   hostname = $Hostname
   ipAddress = $IpAddress
+  additionalIpAddresses = $additionalIpAddresses
   keyFile = $serverKey
   certFile = $serverCert
   caFile = (Join-Path $tlsDirectory "root-ca.pem")
