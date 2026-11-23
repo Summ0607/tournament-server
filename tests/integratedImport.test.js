@@ -679,7 +679,8 @@ test('navigation destinations have stable IDs, approved labels and native Admini
     'judge-management': 'Judges', 'judge-testing': 'Testing', 'judge-eligibility': 'Eligibility',
     'judge-experience': 'Experience', 'judge-csv-settings': 'CSV Settings', 'clinic-management': 'Clinic Management',
     'event-history': 'Event History', 'your-account': 'Your Account', 'visual-definitions': 'Visual Definitions',
-    'server-maintenance': 'Server Maintenance', simulator: 'Simulator', schools: 'Schools', ranks: 'Ranks',
+    'server-maintenance': 'Server Maintenance', 'simulation-setup': 'Simulation Setup',
+    simulator: 'Tournament Simulator', schools: 'Schools', ranks: 'Ranks',
     'competition-types': 'Competition Types', 'grand-champion-categories': 'Grand Champion Categories', 'medal-points': 'Medal Points',
     users: 'Users', 'user-account-settings': 'User Account Settings'
   };
@@ -688,6 +689,9 @@ test('navigation destinations have stable IDs, approved labels and native Admini
   assert.equal(page.externalLinks.length, 0);
   assert.equal(page.nav('import'), undefined);
   assert.equal(page.nav('competitors').getAttribute('data-nav-parents'), 'tournament');
+  assert.equal(page.nav('simulator').getAttribute('data-nav-parents'), 'simulation');
+  assert.ok(html.indexOf('data-nav-group="simulation"') < html.indexOf('data-nav-group="administration"'));
+  assert.doesNotMatch(html, /data-nav-id="simulator"[^>]*data-nav-parents="administration"/);
   assert.doesNotMatch(html, /id="navCompetitors"|id="navCompetitorsChildren"/);
   assert.equal(page.nav('ring-assignment').getAttribute('data-nav-parents'), 'tournament rings');
   assert.ok(html.indexOf('data-nav-id="tablet-pairing"') < html.indexOf('data-nav-id="ring-assignment"'));
@@ -811,13 +815,17 @@ test('revoked workspaces retain edits and block controls without disabling permi
   assert.equal(page.element('eventNameInput').value, 'Retained tournament draft');
 });
 
-test('Administration tools stay in the shell, unload on exit, and obey unsaved draft guards', async () => {
+test('Embedded tools stay in the shell, unload on exit, and obey unsaved draft guards', async () => {
   const page = await loadPage({ activeEvent: spring, search: '?view=simulator' });
   assert.equal(page.element('administrationToolView').hidden, false);
   assert.equal(page.element('administrationToolFrame').getAttribute('src'), '/simulator/?embedded=1');
   assert.equal(page.element('tournamentReference').hidden, true);
-  assert.equal(page.element('navAdministration').getAttribute('aria-expanded'), 'true');
+  assert.equal(page.element('navSimulation').getAttribute('aria-expanded'), 'true');
+  assert.equal(page.element('navAdministration').getAttribute('aria-expanded'), 'false');
   assert.equal(page.nav('simulator').getAttribute('aria-current'), 'page');
+  await page.navigate('simulation-setup');
+  assert.equal(page.element('administrationToolFrame').getAttribute('src'), '/simulation-setup/?embedded=1');
+  assert.equal(page.nav('simulation-setup').getAttribute('aria-current'), 'page');
   await page.navigate('server-maintenance');
   assert.equal(page.element('administrationToolFrame').getAttribute('src'), '/admin/?embedded=1');
   assert.equal(page.element('administrationToolFrame').getAttribute('title'), 'Server Maintenance');

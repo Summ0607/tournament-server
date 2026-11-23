@@ -165,6 +165,7 @@ ring-assignments.json
 /ranks.json
 /judge-management-data/
 /judge-simulation-data/
+/simulation-workspaces/
 
 # Executables
 *.apk

@@ -9,6 +9,9 @@ function registerPageRoutes(app, rootDir, controlBoardDir, activeSurface) {
   app.get(['/simulator', '/simulator/'], (_req, res) => {
     res.sendFile(path.join(rootDir, 'simulator', 'index.html'));
   });
+  app.get(['/simulation-setup', '/simulation-setup/'], (_req, res) => {
+    res.sendFile(path.join(rootDir, 'simulation-setup', 'index.html'));
+  });
   app.get(['/admin', '/admin/'], (_req, res) => {
     res.sendFile(path.join(rootDir, 'admin', 'index.html'));
   });

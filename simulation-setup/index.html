@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulation Setup</title>
+  <script src="/assets/embedded-administration.js"></script>
+  <script src="/assets/browser-session.js"></script>
+  <style>
+    :root { color-scheme: light; font-family: "Segoe UI", Arial, sans-serif; color: #17212b; background: #f3f6f9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; }
+    main { max-width: 1000px; margin: 0 auto; }
+    h1, h2 { margin: 0 0 12px; }
+    p { line-height: 1.5; }
+    .intro, .panel { padding: 22px; background: #fff; border: 1px solid #d5dee7; border-radius: 12px; }
+    .intro { margin-bottom: 18px; border-left: 5px solid #2463a5; }
+    .intro p { margin: 0; color: #3e4d5b; }
+    .panel + .panel { margin-top: 18px; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    label { display: grid; gap: 6px; font-weight: 600; }
+    input, select, button { font: inherit; }
+    input, select { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #8a9baa; border-radius: 6px; background: #fff; }
+    .preview { margin: 18px 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .metric { padding: 12px; border-radius: 8px; background: #edf4fb; }
+    .metric span { display: block; color: #415261; font-size: .9rem; }
+    .metric strong { display: block; margin-top: 5px; font-size: 1.25rem; }
+    .metric small { display: block; margin-top: 4px; color: #526270; line-height: 1.35; }
+    button, .open-link { display: inline-block; min-height: 42px; padding: 9px 16px; border: 0; border-radius: 6px; color: #fff; background: #185b96; font-weight: 700; text-decoration: none; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: progress; }
+    .secondary { color: #185b96; background: #e7f0f8; }
+    #notice { min-height: 1.5em; margin: 12px 0 0; }
+    #notice[data-state="error"] { color: #a32121; }
+    #notice[data-state="success"] { color: #17613c; }
+    .workspace-list { display: grid; gap: 12px; padding: 0; list-style: none; }
+    .workspace-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid #d5dee7; border-radius: 8px; }
+    .workspace-item p { margin: 4px 0; color: #415261; }
+    .workspace-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .muted { color: #526270; }
+    @media (max-width: 720px) {
+      body { padding: 12px; }
+      .form-grid, .preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .workspace-item { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body data-auth-workspace="simulation-setup">
+  <main>
+    <section class="intro">
+      <h1>Simulation Setup</h1>
+      <p>Create a durable, isolated event with generated competitors, volunteers, the fixed 180-judge pool, and starting experience. Live tournament and Judge Management data are not used or changed. The simulation opens in a separate local window.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="createHeading">
+      <h2 id="createHeading">Create a simulation</h2>
+      <form id="setupForm">
+        <div class="form-grid">
+          <label>Event name
+            <input id="eventName" name="name" required maxlength="80" value="Regional Simulation">
+          </label>
+          <label>Event date
+            <input id="eventDate" name="eventDate" type="date" min="2020-01-01" required>
+          </label>
+          <label>Event type
+            <select id="scope" name="scope">
+              <option value="regional">Regional</option>
+              <option value="national">National</option>
+              <option value="world">World</option>
+              <option value="in-house">In-House</option>
+            </select>
+          </label>
+          <label>Tournament days
+            <select id="tournamentDays" name="tournamentDays">
+              <option value="1">One day</option>
+              <option value="2">Two days</option>
+            </select>
+          </label>
+          <label>Competitors
+            <input id="competitorCount" name="competitorCount" type="number" min="1" max="646" step="1" value="600" required>
+          </label>
+        </div>
+        <div class="preview" aria-live="polite">
+          <div class="metric"><span>Calculated rings</span><strong id="ringPreview">20</strong></div>
+          <div class="metric"><span>Judge coverage target</span><strong id="judgeTargetPreview">168</strong><small id="judgeCoverageBreakdown">122 event volunteers + 46 competitors</small></div>
+          <div class="metric"><span>Added support volunteers</span><strong id="supportPreview">30-33</strong><small>Setup/teardown, security, operations, awards, medical</small></div>
+          <div class="metric"><span>Event volunteers</span><strong id="volunteerPreview">152-155</strong></div>
+        </div>
+        <p class="muted">Each simulation still has the fixed 180-judge directory and 54 starting experience records. Eligible competitor judges count toward coverage and are not duplicated as judging volunteers.</p>
+        <button id="createButton" type="submit">Create isolated simulation</button>
+        <p id="notice" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="existingHeading">
+      <h2 id="existingHeading">Saved simulations</h2>
+      <p class="muted">Saved workspaces remain available after a server restart. Open one to start its isolated local simulator.</p>
+      <ul id="workspaceList" class="workspace-list"></ul>
+      <p id="emptyState" class="muted" hidden>No simulations have been created yet.</p>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const byId = (id) => document.getElementById(id);
+      const form = byId('setupForm');
+      const notice = byId('notice');
+      const list = byId('workspaceList');
+      const emptyState = byId('emptyState');
+      const today = new Date();
+      byId('eventDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+      function ringCount(count) {
+        return Math.max(4, Math.ceil((count * 0.65 / 21) / 4) * 4);
+      }
+
+      function updatePreview() {
+        const count = Number(byId('competitorCount').value);
+        const rings = Number.isSafeInteger(count) && count > 0 ? ringCount(count) : 0;
+        byId('ringPreview').textContent = rings ? String(rings) : '—';
+        if (!rings) {
+          byId('judgeTargetPreview').textContent = '—';
+          byId('judgeCoverageBreakdown').textContent = 'Enter a competitor count';
+          byId('supportPreview').textContent = '—';
+          byId('volunteerPreview').textContent = '—';
+          return;
+        }
+        const blackBeltCount = Math.round(count * 0.35);
+        const competitorJudgeCount = Math.round(blackBeltCount * 0.2) + Math.round((count - blackBeltCount) * 0.01);
+        const judgeTarget = Math.ceil(rings * 7 * 1.2);
+        const judgingVolunteerCount = Math.max(0, judgeTarget - competitorJudgeCount);
+        const securityCount = Math.min(10, Math.max(2, Math.ceil(rings / 2)));
+        const operationsCount = Math.min(10, Math.max(4, Math.ceil(rings / 2) + 2));
+        const supportMinimum = 6 + securityCount + operationsCount + 4;
+        const supportMaximum = 9 + securityCount + operationsCount + 4;
+        byId('judgeTargetPreview').textContent = String(judgeTarget);
+        byId('judgeCoverageBreakdown').textContent =
+          `${judgingVolunteerCount} event volunteers + ${competitorJudgeCount} competitors`;
+        byId('supportPreview').textContent = `${supportMinimum}-${supportMaximum}`;
+        byId('volunteerPreview').textContent =
+          `${judgingVolunteerCount + supportMinimum}-${judgingVolunteerCount + supportMaximum}`;
+      }
+
+      function showNotice(message, state = '') {
+        notice.textContent = message;
+        notice.dataset.state = state;
+      }
+
+      function api(path, options = {}) {
+        return fetch(`/api/simulation-workspaces${path}`, {
+          ...options,
+          headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers }
+        }).then(async (response) => {
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `Request failed (${response.status}).`);
+          return result;
+        });
+      }
+
+      function addOpenLink(container, url, label) {
+        const link = document.createElement('a');
+        link.className = 'open-link';
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = label;
+        container.append(link);
+      }
+
+      function renderActions(item, actions, url = '') {
+        actions.replaceChildren();
+        if (url) addOpenLink(actions, url, 'Open simulation');
+        else {
+          const button = document.createElement('button');
+          button.className = 'secondary';
+          button.type = 'button';
+          button.textContent = item.running ? 'Open simulation' : 'Start simulation';
+          button.addEventListener('click', () => openWorkspace(item, actions));
+          actions.append(button);
+        }
+        if (url || item.running) {
+          const stop = document.createElement('button');
+          stop.className = 'secondary';
+          stop.type = 'button';
+          stop.textContent = 'Stop simulation';
+          stop.addEventListener('click', () => stopWorkspace(item, actions, stop));
+          actions.append(stop);
+        }
+      }
+
+      async function openWorkspace(item, actions) {
+        const button = actions.querySelector('button');
+        button.disabled = true;
+        button.textContent = 'Starting…';
+        try {
+          const result = await api(`/${encodeURIComponent(item.id)}/open`, { method: 'POST' });
+          renderActions({ ...item, running: true }, actions, result.url);
+        } catch (error) {
+          renderActions(item, actions);
+          showNotice(error.message, 'error');
+        }
+      }
+
+      async function stopWorkspace(item, actions, button) {
+        button.disabled = true;
+        button.textContent = 'Stopping…';
+        try {
+          await api(`/${encodeURIComponent(item.id)}/stop`, { method: 'POST' });
+          renderActions({ ...item, running: false }, actions);
+          showNotice(`${item.name} is stopped. Its data remains saved.`, 'success');
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Stop simulation';
+          showNotice(error.message, 'error');
+        }
+      }
+
+      function renderWorkspace(item, url = '') {
+        const li = document.createElement('li');
+        li.className = 'workspace-item';
+        const details = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = item.name;
+        const summary = document.createElement('p');
+        const staffing = Number.isSafeInteger(item.judgingVolunteerCount) &&
+          Number.isSafeInteger(item.supportVolunteerCount)
+          ? ` (${item.judgingVolunteerCount} judging + ${item.supportVolunteerCount} support)` : '';
+        summary.textContent = `${item.eventDate} · ${item.competitorCount} competitors · ${item.ringCount} rings · ${item.judgeCount} judges · ${item.volunteerCount} volunteers${staffing}`;
+        details.append(title, summary);
+        const actions = document.createElement('div');
+        actions.className = 'workspace-actions';
+        renderActions(item, actions, url);
+        li.append(details, actions);
+        list.prepend(li);
+      }
+
+      async function loadWorkspaces() {
+        try {
+          const result = await api('');
+          list.replaceChildren();
+          for (const item of result.workspaces) renderWorkspace(item);
+          emptyState.hidden = result.workspaces.length > 0;
+        } catch (error) {
+          showNotice(error.message, 'error');
+        }
+      }
+
+      byId('competitorCount').addEventListener('input', updatePreview);
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const button = byId('createButton');
+        button.disabled = true;
+        showNotice('Generating the isolated judge database and event roster. This may take a moment.');
+        try {
+          const result = await api('', { method: 'POST', body: JSON.stringify({
+            name: byId('eventName').value,
+            eventDate: byId('eventDate').value,
+            competitorCount: Number(byId('competitorCount').value),
+            scope: byId('scope').value,
+            tournamentDays: Number(byId('tournamentDays').value)
+          }) });
+          renderWorkspace(result.workspace, result.url);
+          emptyState.hidden = true;
+          showNotice(`Created ${result.workspace.name}: ${result.workspace.competitorCount} competitors, ${result.workspace.judgeTargetCount} judge candidates, ${result.workspace.volunteerCount} volunteers, and ${result.workspace.ringCount} rings.`, 'success');
+        } catch (error) {
+          showNotice(error.message, 'error');
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      updatePreview();
+      loadWorkspaces();
+    })();
+  </script>
+</body>
+</html>

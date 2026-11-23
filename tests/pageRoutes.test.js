@@ -178,27 +178,29 @@ test('/admin/ serves the administration page', async () => {
   assert.match(response.body, /Tournament Administration/);
 });
 
-test('simulator bulk deletion excludes running runs, handles partial failures, and clears the viewed run', async () => {
+test('simulator history only permits deleting the latest tournament and retains earlier runs', async () => {
   const runs = [
-    { runId: 'old-1', sourceEventName: 'Source', status: 'complete' },
-    { runId: 'old-2', sourceEventName: 'Source', status: 'stopped' },
-    { runId: 'old-3', sourceEventName: 'Source', status: 'paused' },
-    { runId: 'live', sourceEventName: 'Source', status: 'running' }
+    { runId: 'latest', sourceEventName: 'Source', tournamentDate: '2027-01-01', status: 'complete' },
+    { runId: 'old-1', sourceEventName: 'Source', tournamentDate: '2026-01-01', status: 'complete' },
+    { runId: 'old-2', sourceEventName: 'Source', tournamentDate: '2025-01-01', status: 'stopped' },
+    { runId: 'live', sourceEventName: 'Source', tournamentDate: '2024-01-01', status: 'running' }
   ];
-  const { nodes, requests, context, storage } = simulatorPageHarness({ runs, failDelete: 'old-2' });
+  const { nodes, requests, context, storage } = simulatorPageHarness({ runs });
   await new Promise(setImmediate);
-  vm.runInContext("selectRun('old-1')", context);
+  vm.runInContext("selectRun('latest')", context);
   nodes.get('selectAllRunsButton').handlers.click();
-  assert.equal(nodes.get('deleteSelectedRunsButton').textContent, 'Delete selected (3)');
+  assert.equal(nodes.get('deleteSelectedRunsButton').disabled, false);
+  assert.equal(nodes.get('runHistory').options[0].options[0].disabled, false);
+  assert.equal(nodes.get('runHistory').options[1].options[0].disabled, true);
+  assert.equal(nodes.get('runHistory').options[2].options[0].disabled, true);
   assert.equal(nodes.get('runHistory').options[3].options[0].disabled, true);
   await nodes.get('deleteSelectedRunsButton').handlers.click();
   assert.deepEqual(requests.filter((request) => request.method === 'DELETE').map((request) => request.url),
-    ['/api/simulator/runs/old-1', '/api/simulator/runs/old-2', '/api/simulator/runs/old-3']);
-  assert.match(nodes.get('notice').textContent, /Deleted 2 of 3.*old-2: Deletion failed/);
+    ['/api/simulator/runs/latest']);
+  assert.match(nodes.get('notice').textContent, /Deleted 1 of 1/);
   assert.equal(storage.has('tournament-simulator-current-run'), false);
   assert.equal(nodes.get('runLogContext').textContent, 'No run selected.');
-  assert.equal(nodes.get('deleteSelectedRunsButton').textContent, 'Delete selected (1)');
-  assert.equal(nodes.get('runHistory').options.length, 2);
+  assert.equal(nodes.get('runHistory').options.length, 3);
   nodes.get('clearRunSelectionButton').handlers.click();
   assert.equal(nodes.get('deleteSelectedRunsButton').disabled, true);
 });
@@ -275,7 +277,13 @@ test('simulator history loads saved runs, deletes only the selected run and clea
       if (options.method === 'DELETE') runs = [];
       const data = url === '/api/simulator/runs' ? { runs }
         : url === '/api/events/list' ? { events: ['Source'] }
-          : url === '/api/events/active' ? { activeEvent: 'Source' } : {};
+          : url === '/api/events/active' ? { activeEvent: 'Source' }
+            : url === '/api/simulator/judge-lifecycle' ? { records: [
+              { associationId: 'SIM-R-001', judgeName: 'Test1 Regional001', eventId: 'event-one',
+                eventDate: '2027-01-01', eventScope: 'REGIONAL', role: 'CENTER_JUDGE', phase: 'P1' },
+              { associationId: 'SIM-R-001', judgeName: 'Test1 Regional001', eventId: 'event-two',
+                eventDate: '2028-01-01', eventScope: 'REGIONAL', role: 'CENTER_JUDGE', phase: 'P1' }
+            ] } : {};
       return { ok: true, json: async () => data };
     }
   });
@@ -284,6 +292,7 @@ test('simulator history loads saved runs, deletes only the selected run and clea
   assert.equal(storage.has('tournament-simulator-current-run'), false);
   assert.match(nodes.get('notice').textContent, /no longer exists/);
   assert.ok(nodes.get('runSelect').options.some((option) => option.value === 'old-run'));
+  assert.match(nodes.get('judgeLifecycleSelect').options[1].textContent, /2 events/);
   vm.runInContext("selectRun('old-run')", context);
   nodes.get('deleteButton').disabled = false;
   for (const id of ['rings', 'availableDivisions', 'runLog']) nodes.get(id).textContent = 'Old run data';
@@ -388,6 +397,16 @@ test('simulator control page is available as an isolated standalone route', asyn
   assert.doesNotMatch(response.body, /ring\.currentPhase \|\| 'Waiting'/);
   assert.match(response.body, /Paused - resume for estimate/);
   assert.doesNotMatch(response.body, /addMetric\(summary, 'Virtual time'/);
+});
+
+test('simulation setup page is served by its standalone route', async () => {
+  const response = await requestPath('pre', '/simulation-setup/');
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Simulation Setup/);
+  assert.match(response.body, /Create isolated simulation/);
+  assert.match(response.body, /Live tournament and Judge Management data are not used or changed/);
+  assert.match(response.body, /browser-session\.js/);
+  assert.match(response.body, /data-auth-workspace="simulation-setup"/);
 });
 
 test('simulator selector displays the saved run speed rather than the markup default', async () => {

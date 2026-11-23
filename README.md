@@ -1,6 +1,82 @@
 # tournament-server
 Tournament Management Server Source
 
+## Generate a simulation setup
+
+For the guided workflow, open **Simulation → Simulation Setup** in the
+Tournament Management menu. Enter the event details and competitor count to
+preview ring capacity, then create the isolated workspace with one action. It
+loads the generated competitors, volunteers, fixed judge pool, and starting
+experience into separate simulation databases. Saved workspaces survive server
+restarts and can be reopened from the same page. The simulator opens on
+`127.0.0.1`; use the browser on the server computer, and do not expose that
+local-only port to the network. The live tournament and Judge Management
+databases are not used or changed. Stop a running workspace from the setup page
+without deleting its saved data.
+
+The prepare-only command remains available to create JSON, import-format CSVs,
+and a grouped judge-experience API payload without database writes or API calls:
+
+```powershell
+npm run simulator:setup -- --event-date 2027-02-13 --seed "sim-tournament-2027-02-13-v1" --competitors 600 --output-dir "C:\Karate4\simulator-output\setup-2027-02-13"
+```
+
+The default profile creates 600 competitors. Ring count is derived by rounding
+up `(competitors * 65% / 21)` to the next multiple of four, with a 20-ring
+maximum; the default is 20 rings arranged as four rows by five columns. The
+fixed simulation judge pool has 180 judges: 30 SK/TK, 95 Corner, 35 Regional,
+and 20 International. It starts with experience for 30% of the pool (54 judges).
+Event judge coverage is 120% of seven positions per ring. Eligible competitor
+judges count toward that target and are not duplicated as judging volunteers;
+the remaining positions are filled from the fixed judge pool. Support staffing
+is additional: security is `ceil(rings / 2)` (2-10), operations is
+`ceil(rings / 2) + 2` (4-10), and awards and medical each have two volunteers.
+Setup and teardown each have 3-6 volunteers, with overlap capped so no more
+than nine unique people cover those two roles. At 20 rings, the target is 168
+judge candidates; for 600 competitors this is 46 competitor judges plus 122
+judging volunteers, with 30-33 additional support volunteers.
+Use `--competitors` to change the event size. Keep the event date, seed, and
+competitor count the same to reproduce the same data. The output directory's
+parent must exist and the output directory itself must be new; existing output
+is never overwritten. The package contains `setup.json`, three import-format
+rosters (`competitors.csv`, `volunteers.csv`, `judges.csv`), and
+`experience-api.json` with requests for the 54 judges who have starting
+experience. Experience records are not sent automatically; the apply/API step
+is separate. Competitor Black Belts are limited to D1-D3; D4 and higher are not
+generated as competitors.
+The same judge identities and starting experience are reused across event
+setups; event-specific judging volunteers are selected to meet the coverage
+target, and support-volunteer records vary with the event setup.
+The judge pool is anchored to January 1, 2020, so earlier event dates are not
+accepted.
+
+Prepare files from an existing JSON package without regenerating the roster:
+
+```powershell
+npm run simulator:setup:export -- --input "C:\path\to\simulation-setup.json" --output-dir "C:\path\to\simulation-setup-csv"
+```
+
+This also creates a new output directory; its parent directory must already exist.
+The exporter validates package counts, identity links, ranks, certifications,
+volunteer types, and service records before writing the files. Competitor,
+volunteer, and judge CSV headers match the existing import formats.
+The API payload is provided as JSON because there is no CSV import endpoint for
+judge experience. The competitor importer may flag higher Dan ranks as
+ineligible for competition and require review.
+
+After importing the judge CSV into the isolated Judge Lifecycle Simulation,
+apply its experience payload as a separate, explicit step:
+
+```powershell
+npm run judge:simulation-data -- apply --url http://127.0.0.1:3450 --input "C:\Karate4\simulator-output\setup-2027-02-13\experience-api.json"
+```
+
+The apply command accepts only the local isolated simulation server, verifies
+simulation mode and that every judge is present, then submits requests
+sequentially with a fresh Judge Management revision. It stops with a partial
+receipt on error; retrying the same payload uses the API's duplicate protection.
+It does not import the CSVs or write to the production Judge Management DB.
+
 ## Publishing Android app updates
 
 The Android app and this server remain separate repositories. The server does
@@ -1082,7 +1158,13 @@ The simulated Head Table uses the same event-start, estimated tournament
 completion, and ring-availability presentation as the live Head Table. Its
 estimates come exclusively from the selected simulator run and reflect simulator
 speed; paused or unreliable runs show unavailable estimates. Simulation remains
-clearly labeled and read-only.
+clearly labeled and read-only. Simulator history is ordered by event date; only
+the latest simulated tournament can be reset or deleted. Earlier tournaments
+remain in the history so judge-lifecycle records cannot be silently invalidated.
+Each completed run creates fabricated, unverified judge-service history in its
+isolated run directory, keyed by that run's GUID. The simulator's Judge Life view
+shows the same fabricated judge across completed runs; these records are not
+written to the production Judge Management database or coordinator-verified.
 
 The standalone audience display is available
 at **`https://tourn-svr.home.arpa:3443/audience-monitor/`** (or the same path on the
@@ -1447,8 +1529,9 @@ Its hierarchy is:
   - **Head Table**
   - **Printing** and **CSV Settings** — Planned
 - **Judge Management** → **Judges**, **Testing**, **Eligibility**, **Experience**, **CSV Settings**
+- **Simulation** → **Simulation Setup** and **Tournament Simulator**
 - **Clinic Management**, **Event History** — Planned
-- **Administration**: **Server Maintenance** (`/admin/`) and **Simulator** (`/simulator/`)
+- **Administration**: **Server Maintenance** (`/admin/`)
 - **Your Account** — Planned
 
 Judges supports adding, editing, filtering, and deleting records in the separate
@@ -1631,28 +1714,26 @@ No new tablet/server contract or live preparation route is introduced.
 Focused validation:
 `node --test tests/judgeSimulation.test.js tests/judgeAssignmentsUi.test.js tests/judgeManagementUi.test.js tests/judgeExperienceApi.test.js`.
 
-##### Regional population and shared experience API
+##### Shared simulation judge pool and starting experience
 
 The reusable import file is
-[`regional-judges-200.csv`](test-data/judge-simulation/regional-judges-200.csv).
-It is entirely fabricated, based on a January 15, 2026 simulation start:
+[`simulation-judges-180.csv`](test-data/judge-simulation/simulation-judges-180.csv).
+It is entirely fabricated. The fixed pool is shared across simulation events
+so the same judges can accumulate experience:
 
 | Certification | Count |
 | --- | ---: |
-| International (D5, arbitrator candidates) | 8 |
-| Regional Center | 32 |
-| Corner | 100 |
-| SK/TK | 48 |
-| Uncertified candidates | 12 |
+| SK/TK (G1, CDB, or D1; age 16+) | 30 |
+| Corner (D1-D2) | 95 |
+| Regional (D2-D4) | 35 |
+| International (D4-D7) | 20 |
 
-Eight certified records are deliberately expired (four Corner and four SK/TK).
-Other certified records start current. The pool supports staffing scenarios from
-8 through 20 rings, with reserve officials and candidates; it does not assert
-attendance or assign arbitrators. Explicitly selected volunteers and potential
-competitor officials are matched to this directory by Association ID.
-No out-of-region scenarios are used.
+The total supports up to 20 rings at seven roles per ring. Corner, Regional,
+and International judges are D1-D7 and meet the supplied rank-age floors. The
+pool has exactly 54 starting experience records (30%); the rest start without
+experience. The pool does not assert attendance or assign officials.
 
-To review a clean 200-person directory without the original 11 scenario records:
+To review a clean 180-person directory without the original 11 scenario records:
 
 ```powershell
 npm run judge:simulation -- init --date 2026-01-15 --directory C:\Karate4\tournament-server\judge-simulation-data\regional --population empty
@@ -1668,13 +1749,13 @@ generate a new CSV (output must not already exist):
 npm run judge:simulation-data -- csv --date 2030-01-15 --output C:\TournamentTests\regional-judges-2030.csv
 ```
 
-After importing, generate one starting experience record for 70% of the judges
+After importing, generate one starting experience record for 30% of the judges
 currently in the Judge DB. The script reads the roster from the isolated
 simulation, calculates the count from the database size, and selects judges
 without replacement. Use `--percent` or `--seed` to override the defaults:
 
 ```powershell
-npm run judge:simulation-data -- experience --url http://127.0.0.1:3451 --percent 70 --seed regional-experience-v1
+npm run judge:simulation-data -- experience --url http://127.0.0.1:3451 --percent 30 --seed simulation-experience-v1
 ```
 
 The target count is rounded from the Judge DB row count excluding both
@@ -2029,6 +2110,14 @@ include an optional `DOB`, `date_of_birth`, `dateOfBirth` or `birthDate` column
 in a CSV import. Existing blank CSV values preserve saved data. Certification
 history is changed only by the coordinator award action; all expiration dates
 are five years from the recorded grant date.
+
+The **Judge Management → Judges → Import Judges** action writes to the database
+shown as its Import target. In the main tournament-management app this is
+`judge-management-data/judges.db`; the isolated simulator uses the directory
+selected when its listener was started. **Reset Judge Database** clears all
+judges and their testing and experience records in that active database while
+preserving its schema and CSV import settings. It requires typing `CLEAR ALL
+JUDGES`; make an offline backup first if the records might be needed.
 
 To back up, **stop all three server services and any other process accessing this
 database** and allow them to finish shutting down. Copy the file to a protected

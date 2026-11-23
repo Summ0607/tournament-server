@@ -1628,6 +1628,11 @@
             <button class="sidebar-item" type="button" data-nav-id="printing" data-nav-label="Printing" data-nav-parents="tournament" data-nav-planned="true">Printing</button>
             <button class="sidebar-item" type="button" data-nav-id="csv-settings" data-nav-label="CSV Settings" data-nav-parents="tournament" data-nav-planned="true">CSV Settings</button>
           </div>
+          <button id="navSimulation" class="sidebar-disclosure" type="button" data-nav-group="simulation" aria-expanded="false" aria-controls="navSimulationChildren">Simulation</button>
+          <div id="navSimulationChildren" class="sidebar-children" hidden>
+            <button class="sidebar-item" type="button" data-nav-id="simulation-setup" data-nav-label="Simulation Setup" data-nav-parents="simulation">Simulation Setup</button>
+            <button class="sidebar-item" type="button" data-nav-id="simulator" data-nav-label="Tournament Simulator" data-nav-parents="simulation">Tournament Simulator</button>
+          </div>
           <button class="sidebar-item" type="button" data-nav-id="audience-viewer" data-nav-label="Audience Viewer">Audience Viewer</button>
           <button id="navJudgeManagement" class="sidebar-disclosure" type="button" data-nav-group="judge-management" aria-expanded="false" aria-controls="navJudgeManagementChildren">Judge Management</button>
           <div id="navJudgeManagementChildren" class="sidebar-children" hidden>
@@ -1647,7 +1652,6 @@
             <button class="sidebar-item" type="button" data-nav-id="server-maintenance" data-nav-label="Server Maintenance" data-nav-parents="administration">Server Maintenance</button>
             <button class="sidebar-item" type="button" data-nav-id="users" data-nav-label="Users" data-nav-parents="administration">Users</button>
             <button class="sidebar-item" type="button" data-nav-id="user-account-settings" data-nav-label="User Account Settings" data-nav-parents="administration">User Account Settings</button>
-            <button class="sidebar-item" type="button" data-nav-id="simulator" data-nav-label="Simulator" data-nav-parents="administration">Simulator</button>
           </div>
           <button class="sidebar-item" type="button" data-nav-id="your-account" data-nav-label="Your Account">Your Account</button>
         </nav>
@@ -2115,6 +2119,7 @@
               <p id="jmNotice" class="jm-note" role="status" aria-live="polite"></p>
               <section id="jmJudges" hidden>
                 <div class="jm-toolbar"><button type="button" id="jmAddJudge">Add Judge</button><button type="button" id="jmImportJudges">Import Judges</button></div>
+                <p id="jmDataSource" class="jm-note" role="status"></p>
                 <div class="jm-panel"><div class="jm-filters">
                   <label>Search name or WTSDA ID<input id="jmSearch" type="search"></label>
                   <label>Status<select id="jmFilterStatus"><option value="">Any</option></select></label>
@@ -2125,7 +2130,7 @@
                 </div></div>
                 <p id="jmCount" class="jm-note" role="status"></p>
                 <div class="table-wrap"><table aria-label="Judges"><thead><tr><th scope="col"><input id="jmSelectAll" type="checkbox" aria-label="Select all filtered judges" data-help="Select or clear all judges currently shown by the selected filters."></th><th scope="col">Details</th><th scope="col">WTSDA ID</th><th scope="col">Last Name</th><th scope="col">First Name</th><th scope="col">School</th><th scope="col">Rank</th><th scope="col">Certification</th><th scope="col">Expiration</th><th scope="col">Status</th></tr></thead><tbody id="jmBody"><tr><td colspan="10">Loading judges...</td></tr></tbody></table></div>
-                <div class="jm-actions"><button type="button" disabled>Merge Records</button><button type="button" id="jmDelete" disabled>Delete Selected</button></div>
+                <div class="jm-actions"><button type="button" disabled>Merge Records</button><button type="button" id="jmDelete" disabled>Delete Selected</button><button type="button" id="jmResetDatabase" class="danger">Reset Judge Database</button></div>
               </section>
               <section id="jmTesting" hidden>
                 <div class="jm-toolbar"><button type="button" disabled>Generate Submission Sheet</button><button type="button" id="jmTestingAdd">Add Judge</button></div>
@@ -3414,6 +3419,7 @@
         document.getElementById('judgeManagementView').hidden = !Object.hasOwn(judgeManagementPanels, view);
         document.getElementById('volunteersView').hidden = !['volunteers', 'volunteer-types'].includes(view);
         const toolPaths = { 'server-maintenance': '/admin/?embedded=1', simulator: '/simulator/?embedded=1',
+          'simulation-setup': '/simulation-setup/?embedded=1',
           users: '/account/users?embedded=1', 'user-account-settings': '/account/settings?embedded=1',
           'audience-viewer': '/audience-monitor/?embedded=1', 'your-account': '/account/profile?embedded=1',
           'tablet-pairing': '/tablet-pairing/?embedded=1', 'division-qr': '/division-qr/?embedded=1' };

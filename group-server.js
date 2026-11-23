@@ -31,6 +31,7 @@ const { createResultPacketStore } = require('./backend/resultPacket');
 const { createSimulatorRunStore } = require('./backend/simulatorRunStore');
 const { createSimulatorRunRouter } = require('./backend/simulatorRunRoutes');
 const { createSimulatorRunClientFactory } = require('./backend/simulatorRunAdapter');
+const { createSimulationWorkspaceRouter } = require('./backend/simulationWorkspaceRoutes');
 const { resolveSurfaceName } = require('./backend/surfacePorts');
 const { registerPageRoutes } = require('./backend/pages');
 const { createServerControl } = require('./backend/serverControl');
@@ -65,6 +66,9 @@ const SURFACE_ENTRY_PATH = ACTIVE_SURFACE === 'adminProgress'
 const ROOT_DIR = __dirname;
 const judgeServicePacketStore = createJudgeServicePacketStore({
   root: path.join(ROOT_DIR, 'judge-management-data', 'service-packets')
+});
+const simulationWorkspaceRouter = createSimulationWorkspaceRouter({
+  root: path.join(ROOT_DIR, 'simulation-workspaces')
 });
 const CONTROL_BOARD_DIR = path.join(ROOT_DIR, 'head-table');
 const DISCONNECT_AFTER_MS = 90 * 1000;
@@ -224,6 +228,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use('/api', createJudgeManagementRouter({
   file: DEFAULT_JUDGE_DATABASE,
+  databaseLabel: 'Live Judge Management (judge-management-data\\judges.db)',
   servicePacketStore: judgeServicePacketStore,
   readActiveEvent,
   readEventConfig
@@ -823,6 +828,7 @@ function saveUploadedDivisionPacket(ringId, packet) {
 
 app.use(createAppReleaseRouter());
 app.use('/app-releases', (_req, res) => res.status(404).json({ error: 'Use the app update endpoints.' }));
+app.use('/api', simulationWorkspaceRouter);
 registerPageRoutes(app, ROOT_DIR, CONTROL_BOARD_DIR, ACTIVE_SURFACE);
 
 app.get('/api/health', (req, res) => {
