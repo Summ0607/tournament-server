@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
 const { createSimulationApp, initializeSimulation, readSimulation } = require('../backend/judgeSimulation');
+const { generateSimulationSetup } = require('../backend/simulatorSetupGenerator');
 
 async function setup(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-simulation-'));
@@ -153,7 +154,7 @@ test('isolated preparation persists explicit participants, shared identities and
   const directory = await setup(t);
   const { request } = await start(t, directory);
   const initial = (await request('/api/judge-management')).data;
-  for (const [index, ringCount] of [8, 16, 20].entries()) {
+  for (const [index, ringCount] of [8, 12, 16, 20].entries()) {
     const result = await request('/api/simulation/events', 'POST', {
       name: `Regional ${index + 1}`, date: '2040-01-15', scope: 'regional', tournamentDays: index === 1 ? 2 : 1, ringCount
     });
@@ -223,7 +224,7 @@ test('isolated preparation persists explicit participants, shared identities and
   assert.deepEqual(plan.phases.P2, draft);
   assert.deepEqual((await request('/api/judge-management')).data, initial, 'preparation must never create service or awards');
   const restarted = await start(t, directory);
-  assert.equal((await restarted.request('/api/simulation/events')).data.events.length, 3);
+  assert.equal((await restarted.request('/api/simulation/events')).data.events.length, 4);
   assert.deepEqual((await restarted.request(url)).data, state);
   assert.deepEqual((await restarted.request(planUrl)).data.phases, plan.phases);
   const { buildReview } = require('../tournament-management/judge-service-review');
@@ -293,7 +294,7 @@ test('simulation participation rejects invalid, stale and concurrent writes atom
   const { request } = await start(t, directory);
   const event = { name: 'Isolated', date: '2040-01-15', scope: 'regional', tournamentDays: 1, ringCount: 8 };
   for (const overrides of [{ name: '..' }, { name: 'CON' }, { name: 'escape\\event' }, { date: '2040-02-30' },
-    { scope: '' }, { ringCount: 12 }, { tournamentDays: 3 }]) {
+    { scope: '' }, { ringCount: 10 }, { tournamentDays: 3 }]) {
     assert.equal((await request('/api/simulation/events', 'POST', { ...event, ...overrides })).status, 400);
   }
   assert.equal((await request('/api/simulation/events', 'POST', event)).status, 200);
@@ -341,6 +342,51 @@ test('simulation participation rejects invalid, stale and concurrent writes atom
   }
   assert.equal((await request('/api/simulation/participation?eventName=unknown')).status, 404);
   assert.equal((await request(url, 'POST', body([member]), { Origin: 'https://other.example' })).status, 403);
+});
+
+test('generated simulation setup imports a complete event roster atomically without persisting birth dates', async (t) => {
+  const directory = await setup(t);
+  const { request } = await start(t, directory);
+  const generated = generateSimulationSetup({ eventDate: '2040-01-15', seed: 'generated-event-roster', competitorCount: 130 });
+  const created = await request('/api/simulation/events', 'POST', {
+    name: 'Generated Event', date: generated.profile.eventDate, scope: 'regional',
+    tournamentDays: 1, ringCount: generated.profile.ringCount
+  });
+  assert.equal(created.status, 200);
+  const endpoint = '/api/simulation/events/import-setup?eventName=Generated%20Event';
+  const imported = await request(endpoint, 'POST', generated);
+  assert.equal(imported.status, 200, JSON.stringify(imported.data));
+  assert.deepEqual(imported.data, {
+    addedCompetitors: generated.competitors.length,
+    addedVolunteers: generated.volunteers.length
+  });
+  const roster = (await request('/api/simulation/participation?eventName=Generated%20Event')).data;
+  assert.equal(roster.competitors.length, generated.competitors.length);
+  assert.equal(roster.volunteers.length, generated.volunteers.length);
+  assert.ok(roster.competitors.every((row) => row.ageAsOf === generated.profile.eventDate));
+  assert.equal((await request(endpoint, 'POST', generated)).status, 409);
+
+  const sqlite3 = require('sqlite3');
+  const file = path.join(directory, 'events', 'Generated Event', 'tournament.db');
+  const db = new sqlite3.Database(file, sqlite3.OPEN_READONLY);
+  try {
+    const columns = await new Promise((resolve, reject) => db.all('PRAGMA table_info(competitors)',
+      (error, rows) => error ? reject(error) : resolve(rows.map((row) => row.name))));
+    assert.ok(!columns.some((column) => /dob|birth/i.test(column)));
+    const competitorJudgeIds = new Set(generated.competitors
+      .filter((person) => person.certification).map((person) => person.associationId));
+    assert.ok(generated.volunteers.filter((person) => person.primaryType === 'judging')
+      .every((person) => !competitorJudgeIds.has(person.associationNumber)));
+    const personIds = await new Promise((resolve, reject) => db.all(`SELECT personId AS personId FROM competitors
+      UNION ALL SELECT person_id AS personId FROM volunteers`, (error, rows) =>
+      error ? reject(error) : resolve(rows.map((row) => row.personId))));
+    assert.equal(new Set(personIds).size, generated.competitors.length + generated.volunteers.length);
+  } finally { await new Promise((resolve) => db.close(resolve)); }
+
+  const restarted = await start(t, directory);
+  const recovered = (await restarted.request('/api/simulation/participation?eventName=Generated%20Event')).data;
+  assert.equal(recovered.competitors.length, generated.competitors.length);
+  assert.equal(recovered.volunteers.length, generated.volunteers.length);
 });
 
 test('candidates introduced between events retain history through repeated service, duplicate retries and recertification', async (t) => {

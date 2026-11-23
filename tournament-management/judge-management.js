@@ -49,6 +49,8 @@
     const identity = (judge) => [judge.firstName, judge.lastName, judge.associationId];
     function render() {
       if (!data) return;
+      node('jmDataSource').textContent = `Import target: ${data.databaseLabel || (data.simulationMode ? 'Isolated simulation database' : 'Live Judge Management database')}`;
+      node('jmResetDatabase').disabled = busy;
       const text = node('jmSearch').value.trim().toLowerCase();
       const status = node('jmFilterStatus').value, school = node('jmFilterSchool').value;
       const certification = node('jmFilterCertification').value, days = node('jmFilterExpiration').value;
@@ -330,6 +332,13 @@
     });
     node('jmDelete').addEventListener('click', () => {
       if (selected.size && confirm(`Permanently delete ${selected.size} selected judge(s)?`)) return write('/api/judge-management/delete', 'POST', { ids: [...selected] }, 'Selected judges deleted.');
+    });
+    node('jmResetDatabase').addEventListener('click', () => {
+      if (!data || busy || typeof prompt !== 'function') return;
+      const answer = prompt(`This clears every judge, testing record, and service-history record from:\n${data.databaseLabel || 'the active Judge Management database'}\n\nCSV import settings and the database structure will remain. Type CLEAR ALL JUDGES to continue.`);
+      if (answer !== 'CLEAR ALL JUDGES') return;
+      return write('/api/judge-management/reset', 'POST', { confirmation: answer },
+        'All judge, testing, and service-history records cleared. CSV import settings were kept.');
     });
     node('jmEligibilityBody').addEventListener('change', (event) => {
       const id = Number(event.target.getAttribute('data-jm-grant-date'));

@@ -9,7 +9,7 @@ const express = require('express');
 const { HTTPS_PORTS, requirePrivateFile, loadHttpsConfig, httpsOrigins } = require('../backend/httpsConfig');
 const { createAccountWeb } = require('../backend/accountWeb');
 const { createAccountSessions } = require('../backend/accountSessions');
-const { ROLE_LABELS, allowedViews, apiRoles, hasRole, isTabletEndpoint } = require('../backend/browserPermissions');
+const { ROLE_LABELS, VIEW_ROLES, allowedViews, apiRoles, hasRole, isTabletEndpoint, pageView } = require('../backend/browserPermissions');
 const { registerPageRoutes } = require('../backend/pages');
 const { createHttpsFixture } = require('./helpers/httpsFixture');
 
@@ -243,6 +243,7 @@ test('all five roles have enforced API permissions, including union of roles and
     ['POST', '/api/rings/ring-a-1/heartbeat', ['administrator', 'event-coordinator', 'tournament-operator']],
     ['PUT', '/api/visual-definitions', ['administrator']],
     ['GET', '/api/simulator/runs', ['administrator', 'event-coordinator', 'tournament-operator', 'viewer']],
+    ['GET', '/api/simulator/judge-lifecycle', ['administrator']],
     ['GET', '/api/simulator/runs/rehearsal/log', ['administrator']],
     ['GET', '/api/simulator/runs/rehearsal/audience', ['administrator', 'event-coordinator', 'tournament-operator', 'viewer']],
     ['POST', '/api/simulator/runs/rehearsal/start', ['administrator']],
@@ -356,6 +357,14 @@ test('Dalvik user agents no longer bypass authorization on either listener', asy
   assert.equal(isTabletEndpoint('GET', '/api/rings/ring-a-1/bootstrap'), false);
   assert.equal(apiRoles('DELETE', '/api/events/list'), null);
   assert.equal(hasRole(['viewer'], apiRoles('GET', '/api/rings/monitor')), true);
+  assert.equal(pageView('/simulation-setup/'), 'simulation-setup');
+  assert.ok(allowedViews(['administrator']).includes('simulation-setup'));
+  assert.equal(hasRole(['administrator'], VIEW_ROLES['simulation-setup']), true);
+  assert.equal(hasRole(['event-coordinator'], VIEW_ROLES['simulation-setup']), false);
+  assert.deepEqual(apiRoles('GET', '/api/simulation-workspaces'), ['administrator']);
+  assert.deepEqual(apiRoles('POST', '/api/simulation-workspaces'), ['administrator']);
+  assert.deepEqual(apiRoles('POST', '/api/simulation-workspaces/123e4567-e89b-12d3-a456-426614174000/open'), ['administrator']);
+  assert.deepEqual(apiRoles('POST', '/api/simulation-workspaces/123e4567-e89b-12d3-a456-426614174000/stop'), ['administrator']);
 });
 
 test('mounted account API applies its size/origin/CSRF checks before legacy parsers and CORS', async (t) => {

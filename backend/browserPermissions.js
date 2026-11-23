@@ -23,7 +23,8 @@ const VIEW_ROLES = {
   printing: EVENT, 'csv-settings': EVENT, 'event-history': EVENT,
   schools: ['administrator'], ranks: ['administrator'], 'visual-definitions': ['administrator'],
   users: ['administrator'], 'user-account-settings': ['administrator'],
-  'server-maintenance': ['administrator'], simulator: ['administrator'], 'your-account': Object.keys(ROLE_LABELS)
+  'server-maintenance': ['administrator'], simulator: ['administrator'],
+  'simulation-setup': ['administrator'], 'your-account': Object.keys(ROLE_LABELS)
 };
 function hasRole(roles, allowed) {
   return roles.some((role) => allowed.includes(role));
@@ -74,10 +75,12 @@ rule('GET', new RegExp(`^/api/rings/${segment}/(?:current|division-package|judge
 rule('POST', new RegExp(`^/api/rings/${segment}/(?:request-group|heartbeat|complete|service-packets|assistance)$`), DAY);
 rule('POST', /^\/api\/reset$/, ['administrator']);
 rule('GET', /^\/api\/simulator\/runs$/, AUDIENCE);
+rule('GET', /^\/api\/simulator\/judge-lifecycle$/, ['administrator']);
 rule('GET', /^\/api\/simulator\/runs\/[^/]+\/audience$/, AUDIENCE);
 rule('GET', /^\/api\/simulator\/runs\/[^/]+\/(head-table|ring-assignment)$/, DAY);
 rule('GET', /^\/api\/simulator\/runs\/[^/]+\/results$/, EVENT);
 rule('GET POST DELETE', /^\/api\/simulator\/runs(?:\/[^/]+(?:\/(?:log|step|start|pause|resume|speed|stop|run|reset|schedule\/day2))?)?$/, ['administrator']);
+rule('GET POST', /^\/api\/simulation-workspaces(?:\/[a-f0-9-]{36}\/(?:open|stop))?$/, ['administrator']);
 rule('GET POST', /^\/api\/server-control\/(status|restart)$/, ['administrator']);
 rule('GET', /^\/(?:api\/version|download-app)$/, Object.keys(ROLE_LABELS));
 
@@ -105,6 +108,7 @@ function pageView(pathname) {
   if (name === '/competitors') return 'competitors';
   if (name === '/head-table/search' || name === '/dashboard/search') return 'competitors';
   if (name === '/simulator') return 'simulator';
+  if (name === '/simulation-setup') return 'simulation-setup';
   if (name === '/admin') return 'server-maintenance';
   if (name === '/group-builder' || /^\/tournament-setup\/(?:build-groups|review-save)$/.test(name)) return 'groups';
   if (name === '/tournament-setup/import') return 'import';

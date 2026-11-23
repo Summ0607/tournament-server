@@ -45,6 +45,9 @@ function fixture(t, { completeAfter = Infinity, failRing, failPersistence, befor
       groups: [],
       assignments: { rings: Object.fromEntries(rings.map((ring) => [ring.ringId, {}])) }
     }),
+    isLatestRun() { return true; },
+    getJudgeExperience: () => ({ records: [] }),
+    saveJudgeExperience() {},
     resetRun() {},
     deleteRun() {},
     updateRun(_runId, patch) {

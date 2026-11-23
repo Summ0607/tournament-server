@@ -20,8 +20,11 @@ test('CSV import shows high-contrast success and places Back to Judges in the im
   const importPanel = importSection.match(/<div class="jm-panel">([\s\S]*?)<\/div>/)?.[1] || '';
   assert.match(importPanel, /id="jmImportCancel">Back to Judges/);
   assert.match(html, /#judgeManagementView #jmNotice\[data-state="success"\][^{]*\{[^}]*color:\s*#166116/);
+  assert.match(html, /id="jmResetDatabase"[^>]*>Reset Judge Database/);
+  assert.match(html, /id="jmDataSource"/);
 
   const nodes = new Map(), calls = [];
+  let resetPhrase = null;
   const node = (id) => {
     if (!nodes.has(id)) nodes.set(id, {
       value: '', innerHTML: '', textContent: '', handlers: {}, files: [], disabled: false,
@@ -33,9 +36,11 @@ test('CSV import shows high-contrast success and places Back to Judges in the im
   const judge = { id: 1, associationId: 'NEW-1', firstName: 'New', lastName: 'Judge',
     school: 'School', rank: 'D1', certification: 'CORNER', status: 'Active' };
   const state = { revision: 1, aliases: defaults, ranks: judgeRankOptions(),
+    databaseLabel: 'Live Judge Management (judge-management-data\\judges.db)',
     certificationLevels: certificationLevels(), judges: [], tests: [], experience: [], eligibility: [] };
   const updated = { ...state, revision: 2, judges: [judge], added: 1, updated: 0 };
-  const workspace = create({ document: { getElementById: node }, confirm: () => true, showPanel() {},
+  const workspace = create({ document: { getElementById: node }, confirm: () => true,
+    prompt: () => resetPhrase, showPanel() {},
     request: async (url, options) => {
       calls.push({ url, options });
       return url === '/api/judge-management' ? state : updated;
@@ -45,6 +50,7 @@ test('CSV import shows high-contrast success and places Back to Judges in the im
   await node('jmImportRun').handlers.click();
 
   assert.equal(calls.at(-1).url, '/api/judge-management-import');
+  assert.equal(node('jmDataSource').textContent, `Import target: ${state.databaseLabel}`);
   assert.match(node('jmNotice').textContent, /Import complete: 1 added, 0 updated/);
   assert.equal(node('jmNotice').attributes['data-state'], 'success');
   assert.match(node('jmBody').innerHTML, /NEW-1/);
@@ -55,6 +61,14 @@ test('CSV import shows high-contrast success and places Back to Judges in the im
   await node('jmDelete').handlers.click();
   assert.equal(calls.at(-1).url, '/api/judge-management/delete');
   assert.deepEqual(JSON.parse(calls.at(-1).options.body).ids, [1]);
+
+  const beforeCancel = calls.length;
+  await node('jmResetDatabase').handlers.click();
+  assert.equal(calls.length, beforeCancel, 'cancelling the confirmation must not send a reset');
+  resetPhrase = 'CLEAR ALL JUDGES';
+  await node('jmResetDatabase').handlers.click();
+  assert.equal(calls.at(-1).url, '/api/judge-management/reset');
+  assert.equal(JSON.parse(calls.at(-1).options.body).confirmation, 'CLEAR ALL JUDGES');
 });
 
 test('tablet service intake imports packets only as pending experience', async () => {

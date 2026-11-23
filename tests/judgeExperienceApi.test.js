@@ -7,16 +7,18 @@ const express = require('express');
 const { initializeJudgeDatabase } = require('../db/judgeManagement');
 const { createJudgeManagementRouter, evaluateEligibility } = require('../backend/judgeManagementRoutes');
 const { createSimulationApp, initializeSimulation } = require('../backend/judgeSimulation');
-const { regionalDataset, experienceRole, selectExperienceJudges, setupExperience } = require('../backend/judgeSimulationData');
+const { regionalDataset, experienceRole, selectExperienceJudges, setupExperience, applyExperiencePayload, main } = require('../backend/judgeSimulationData');
+const { generateSimulationSetup } = require('../backend/simulatorSetupGenerator');
+const { buildPreparationFiles } = require('../backend/simulatorSetupCsvExport');
 const { apiRoles } = require('../backend/browserPermissions');
 
-async function setup(t, simulation = true, empty = false) {
+async function setup(t, simulation = true, empty = false, date = '2026-01-15') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-experience-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const directory = path.join(root, 'data');
   let app;
   if (simulation) {
-    await initializeSimulation(directory, '2026-01-15', { empty });
+    await initializeSimulation(directory, date, { empty });
     app = createSimulationApp(directory);
   } else {
     fs.mkdirSync(directory);
@@ -44,16 +46,56 @@ const record = (overrides = {}) => ({ eventId: 'championship-1', eventName: 'Reg
   eventDate: '2026-01-10', location: 'Venue', role: 'CORNER_JUDGE', eventScope: 'REGIONAL',
   phase: 'P1', source: 'TOURNAMENT', sourceId: 'service-1', ...overrides });
 
-test('experience setup reads the Judge DB, selects 70 percent, and derives compatible roles', async (t) => {
+test('prepared experience payload applies only to the isolated simulation with fresh revisions', async (t) => {
+  const { base, request } = await setup(t, true, true, '2027-02-13');
+  const setupPackage = generateSimulationSetup({ eventDate: '2027-02-13', seed: 'prepared-api-test' });
+  const preparation = buildPreparationFiles(setupPackage);
+  let state = (await request('')).data;
+  const imported = await request('-import', 'POST', {
+    revision: state.revision,
+    csv: preparation.files['judges.csv']
+  });
+  assert.equal(imported.status, 200);
+  assert.equal(imported.data.added, 180);
+
+  const payload = JSON.parse(preparation.files['experience-api.json']);
+  const payloadDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'experience-api-payload-'));
+  t.after(() => fs.rmSync(payloadDirectory, { recursive: true, force: true }));
+  const payloadFile = path.join(payloadDirectory, 'experience-api.json');
+  fs.writeFileSync(payloadFile, JSON.stringify(payload), 'utf8');
+  const result = await main(['apply', '--url', base, '--input', payloadFile]);
+  assert.equal(result.requestCount, 54);
+  assert.equal(result.added, 54);
+  assert.equal(result.duplicates, 0);
+  state = (await request('')).data;
+  const saved = state.experience.filter((item) => item.eventId === setupPackage.profile.priorEventId);
+  assert.equal(saved.length, 54);
+  assert.ok(saved.every((item) => item.logVerified === 0 && item.source === 'SIMULATION'));
+
+  const retry = await applyExperiencePayload(base, payload);
+  assert.equal(retry.added, 0);
+  assert.equal(retry.duplicates, 54);
+  await assert.rejects(applyExperiencePayload('https://example.com', payload), /local isolated simulation URL/);
+});
+
+test('prepared experience apply preflights every judge before writing any record', async (t) => {
+  const { base, request } = await setup(t, true, true, '2027-02-13');
+  const setupPackage = generateSimulationSetup({ eventDate: '2027-02-13', seed: 'missing-judge-api-test' });
+  const payload = JSON.parse(buildPreparationFiles(setupPackage).files['experience-api.json']);
+  await assert.rejects(applyExperiencePayload(base, payload), /not imported into the isolated Judge DB/);
+  assert.equal((await request('')).data.experience.length, 0);
+});
+
+test('experience setup reads the Judge DB, selects 30 percent, and derives compatible roles', async (t) => {
   const { base, request } = await setup(t);
   const result = await setupExperience(base, { seed: 'judge-role-check' });
   assert.equal(result.judgeCount, 11);
   assert.equal(result.eligibleJudgeCount, 9);
-  assert.equal(result.selectedCount, 6);
-  assert.equal(result.added, 6);
+  assert.equal(result.selectedCount, 3);
+  assert.equal(result.added, 3);
   const state = (await request('')).data;
   const generated = state.experience.filter((item) => item.eventId === result.eventId);
-  assert.equal(generated.length, 6);
+  assert.equal(generated.length, 3);
   const judgesById = new Map(state.judges.map((judge) => [judge.id, judge]));
   for (const experience of generated) {
     const judge = judgesById.get(experience.judgeId);
@@ -132,30 +174,31 @@ test('experience API stores SK/TK aliases under the shared SK_TK role', async (t
   assert.equal(retried.data.duplicates, 1);
 });
 
-test('200-judge CSV import seeds exactly 70 percent of the current role-compatible database roster', async (t) => {
+test('180-judge CSV import seeds exactly 30 percent of the role-compatible database roster', async (t) => {
   const { base, request, profile } = await setup(t, true, true);
   const dataset = regionalDataset('2026-01-15');
-  assert.equal(dataset.judges.length, 200);
-  assert.equal(new Set(dataset.judges.map((j) => j.associationId)).size, 200);
-  const counts = Object.fromEntries(['INTERNATIONAL', 'REGIONAL', 'CORNER', 'SK_TK', 'UNCERTIFIED']
+  assert.equal(dataset.judges.length, 180);
+  assert.equal(dataset.priorExperience.length, 54);
+  assert.equal(new Set(dataset.judges.map((j) => j.associationId)).size, 180);
+  const counts = Object.fromEntries(['INTERNATIONAL', 'REGIONAL', 'CORNER', 'SK_TK']
     .map((level) => [level, dataset.judges.filter((j) => j.certification === level).length]));
-  assert.deepEqual(counts, { INTERNATIONAL: 8, REGIONAL: 32, CORNER: 100, SK_TK: 48, UNCERTIFIED: 12 });
-  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'test-data', 'judge-simulation', 'regional-judges-200.csv'), 'utf8'), dataset.csv);
+  assert.deepEqual(counts, { INTERNATIONAL: 20, REGIONAL: 35, CORNER: 95, SK_TK: 30 });
+  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'test-data', 'judge-simulation', 'simulation-judges-180.csv'), 'utf8'), dataset.csv);
   let state = (await request('')).data;
   let response = await request('-import', 'POST', { revision: state.revision, csv: dataset.csv });
   assert.equal(response.status, 200);
-  assert.equal(response.data.added, 200);
+  assert.equal(response.data.added, 180);
   const result = await setupExperience(base);
-  assert.equal(result.judgeCount, 200);
-  assert.equal(result.eligibleJudgeCount, 188);
-  assert.equal(result.selectedCount, 132);
-  assert.equal(result.selectedIds.length, 132);
-  assert.equal(new Set(result.selectedIds).size, 132);
-  assert.equal(result.added, 132);
+  assert.equal(result.judgeCount, 180);
+  assert.equal(result.eligibleJudgeCount, 180);
+  assert.equal(result.selectedCount, 54);
+  assert.equal(result.selectedIds.length, 54);
+  assert.equal(new Set(result.selectedIds).size, 54);
+  assert.equal(result.added, 54);
   assert.equal(result.duplicates, 0);
   state = (await request('')).data;
   const generated = state.experience.filter((item) => item.eventId === result.eventId);
-  assert.equal(generated.length, 132);
+  assert.equal(generated.length, 54);
   const judgesById = new Map(state.judges.map((judge) => [judge.id, judge]));
   for (const experience of generated) {
     const judge = judgesById.get(experience.judgeId);
@@ -191,7 +234,7 @@ test('200-judge CSV import seeds exactly 70 percent of the current role-compatib
   state = (await request('')).data;
   response = await request('-import', 'POST', { revision: state.revision, csv: dataset.csv });
   assert.equal(response.status, 200);
-  assert.equal(response.data.updated, 200);
+  assert.equal(response.data.updated, 180);
   assert.deepEqual((await profile(selectedId)).experience, before.experience);
   await assert.rejects(setupExperience('https://example.com'), /local isolated/);
 });

@@ -13,6 +13,7 @@ const { createRingJudgeRouter } = require('../backend/ringJudgeRoutes');
 const { readVolunteerDirectory, replaceVolunteerDirectory } = require('../backend/volunteerStore');
 const { autoAssign, progressionOpportunity, minimums } = require('../backend/judgeAssignmentAlgorithm');
 const { regionalDataset } = require('../backend/judgeSimulationData');
+const { ageOnDate } = require('../backend/tournamentAge');
 const { apiRoles, isTabletEndpoint } = require('../backend/browserPermissions');
 const run = (db, sql, args = []) => new Promise((resolve, reject) => db.run(sql, args, (error) => error ? reject(error) : resolve()));
 
@@ -44,14 +45,37 @@ async function setup(t) {
     return { status: response.status, data: await response.json() };
   };
   const csv = regionalDataset('2026-01-15');
-  const imported = await request('/judge-management-import', 'POST', { revision: 0, csv: csv.csv });
+  const international = csv.judges.filter((judge) => judge.certification === 'INTERNATIONAL');
+  const regional = csv.judges.filter((judge) => judge.certification === 'REGIONAL');
+  const corner = csv.judges.filter((judge) => judge.certification === 'CORNER')
+    .sort((a, b) => Number(b.rank === 'D1') - Number(a.rank === 'D1') ||
+      ageOnDate(b.dateOfBirth, '2026-01-15') - ageOnDate(a.dateOfBirth, '2026-01-15'));
+  const sktk = csv.judges.filter((judge) => judge.certification === 'SK_TK');
+  const ordered = [...international.slice(0, 8), ...regional.slice(0, 32), ...corner, ...sktk,
+    ...international.slice(8), ...regional.slice(32)];
+  const judges = ordered.map((judge, index) => ({
+    ...judge,
+    associationId: `SIM-R-${String(index + 1).padStart(3, '0')}`,
+    ...(index >= 40 && index <= 44 ? { rank: 'D1' } : {})
+  }));
+  const headers = ['idNumber', 'firstName', 'lastName', 'studioName', 'rank', 'level',
+    'judgingLevelExpDate', 'status', 'DOB', 'notes'];
+  const quote = (value) => `"${String(value).replaceAll('"', '""')}"`;
+  const judgeCsv = [headers.join(','), ...judges.map((judge) => [
+    judge.associationId, judge.firstName, judge.lastName, judge.school, judge.rank, judge.certification,
+    judge.expiration, judge.status, judge.dateOfBirth, judge.notes
+  ].map(quote).join(','))].join('\r\n') + '\r\n';
+  const imported = await request('/judge-management-import', 'POST', { revision: 0, csv: judgeCsv });
   assert.equal(imported.status, 200);
+  const judgeDb = new sqlite3.Database(judgeFile);
+  try { await run(judgeDb, "UPDATE judges SET certification_expiration='2026-01-14' WHERE association_id='SIM-R-137'"); }
+  finally { await new Promise((resolve) => judgeDb.close(resolve)); }
   let directory = await readVolunteerDirectory(eventFile);
-  directory.volunteers = csv.judges.slice(0, 188).map((judge, index) => ({
+  directory.volunteers = judges.map((judge, index) => ({
     id: `v${index}`, firstName: judge.firstName, lastName: judge.lastName, associationNumber: judge.associationId.toLowerCase(),
     school: judge.school, rank: judge.rank, certification: 'UNKNOWN', primaryType: 'judging', secondaryType: '',
-    age: index < 140 ? 25 + (index + 1) % 25 : judge.rank === 'CDB' ? 14 + (index + 1) % 8 : 16 + (index + 1) % 12,
-    ageAsOf: '2026-01-15', parentName: '', contactNumber: '', gender: '', email: ''
+    age: ageOnDate(judge.dateOfBirth, '2026-01-15'),
+    ageAsOf: '2026-01-15', parentName: '', contactNumber: judge.contactNumber, gender: judge.gender, email: ''
   }));
   await replaceVolunteerDirectory(eventFile, directory.revision, directory);
   return { request, eventsRoot, eventFile, judgeFile };
@@ -61,16 +85,16 @@ const phase = (data, available, discipline = 'black-belt', count = 20) => ({
   discipline, rings: data.rings.slice(0, count), available, arbitrators: [], assignments: {}
 });
 
-test('realistic 200-member directory supplies event volunteers only; 8, 16 and 20 rings can be staffed with arbitrator reserves', async (t) => {
+test('fixed 180-member directory supplies event volunteers only; 8, 16 and 20 rings can be staffed with reserves', async (t) => {
   const { request } = await setup(t);
   const response = await request(url);
   assert.equal(response.status, 200);
   const data = response.data;
-  assert.equal(data.judges.length, 188);
+  assert.equal(data.judges.length, 180);
   assert.deepEqual(data.judgeRanks.find((rank) => rank.code === 'D1'), { code: 'D1', label: 'Cho Dan' });
   assert.ok(data.judges.every((judge) => !Object.hasOwn(judge, 'dateOfBirth')));
-  assert.equal(data.judges.filter((judge) => judge.roles.center).length, 40);
-  assert.equal(data.judges.filter((judge) => judge.roles.corner).length, 136);
+  assert.equal(data.judges.filter((judge) => judge.roles.center).length, 55);
+  assert.equal(data.judges.filter((judge) => judge.roles.corner).length, 150);
   assert.ok(data.judges.find((judge) => judge.id === 'SIM-R-137').qualificationIssue.includes('expires'));
   const available = data.judges.map((judge) => judge.id);
   for (const count of [8, 16, 20]) {
@@ -171,14 +195,17 @@ test('ring judge plan slices are read-only and preserve the saved qualification 
 test('certified competitors are potential candidates; agreement is per phase, duplicate role identities merge, and ring population uses directory certification', async (t) => {
   const { request, eventFile } = await setup(t);
   let directory = await readVolunteerDirectory(eventFile);
+  const identity41 = directory.volunteers.find((row) => row.associationNumber.toUpperCase() === 'SIM-R-041');
+  const identity42 = directory.volunteers.find((row) => row.associationNumber.toUpperCase() === 'SIM-R-042');
   directory.volunteers = directory.volunteers.filter((row) => row.associationNumber.toUpperCase() !== 'SIM-R-041');
   await replaceVolunteerDirectory(eventFile, directory.revision, directory);
   const db = new sqlite3.Database(eventFile);
   try {
     await run(db, `INSERT INTO competitors(id,firstName,lastName,associationNumber,rank,age,ageAsOf)
-      VALUES(1,'Test41','Regional041','SIM-R-041','D1',30,'2026-01-15'),
-      (2,'Test42','Regional042','SIM-R-042','D1',42,'2026-01-15'),
-      (3,'Unmatched','Competitor','OTHER','D1',30,'2026-01-15')`);
+      VALUES(1,?,?, 'SIM-R-041','D1',30,'2026-01-15'),
+      (2,?,?,'SIM-R-042','D1',42,'2026-01-15'),
+      (3,'Unmatched','Competitor','OTHER','D1',30,'2026-01-15')`,
+    [identity41.firstName, identity41.lastName, identity42.firstName, identity42.lastName]);
   } finally { await new Promise((resolve) => db.close(resolve)); }
   let data = (await request(url)).data;
   const candidate = data.judges.find((judge) => judge.id === 'SIM-R-041');
@@ -204,7 +231,8 @@ test('certified competitors are potential candidates; agreement is per phase, du
   const rj = await request('/ring-judges?eventName=A');
   result = await request('/ring-judges/populate?eventName=A', 'POST', { revision: rj.data.revision });
   assert.equal(result.status, 200);
-  assert.equal(result.data.judges.length, 2);
+  assert.equal(result.data.judges.length, 1);
+  assert.equal(result.data.judges[0].associationNumber, 'SIM-R-041');
   assert.equal(result.data.certificationReadOnly, true);
   assert.ok(result.data.judges.every((judge) => judge.certification === 'CORNER'));
   assert.match(result.data.judges[0].reviewNotes, /potential judge/);

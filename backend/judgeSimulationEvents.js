@@ -4,10 +4,12 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const sqlite3 = require('sqlite3');
 const initializeDatabase = require('../db/init');
+const { normalizeCompetitorRow } = require('../db/import-csv');
 const { createEventConfigStore } = require('./eventConfig');
 const { resolveMemberPerson } = require('./eventPeople');
 const { ageOnDate, validDate, lockAgeDate, assertNoBirthDates } = require('./tournamentAge');
 const { validateVolunteer } = require('./volunteerRoutes');
+const { validateSetup } = require('./simulatorSetupCsvExport');
 
 const fail = (message, statusCode = 400) => { throw Object.assign(new Error(message), { statusCode }); };
 const all = (db, sql, args = []) => new Promise((resolve, reject) => db.all(sql, args, (error, rows) => error ? reject(error) : resolve(rows)));
@@ -76,7 +78,7 @@ function createSimulationEventRouter({ directory }) {
     const name = nameOf(req.body?.name);
     if (typeof req.body.date !== 'string') fail('A valid tournament date is required.');
     try { validDate(req.body.date); } catch (error) { fail(error.message); }
-    if (![1, 2].includes(req.body.tournamentDays) || ![8, 16, 20].includes(req.body.ringCount)) fail('Select one/two days and 8, 16 or 20 rings.');
+    if (![1, 2].includes(req.body.tournamentDays) || ![4, 8, 12, 16, 20].includes(req.body.ringCount)) fail('Select one/two days and 4, 8, 12, 16 or 20 rings.');
     if (!['regional', 'national', 'world', 'in-house'].includes(req.body.scope)) fail('Select an event scope.');
     const dir = path.join(eventsRoot, name);
     try { fs.mkdirSync(dir); }
@@ -90,6 +92,62 @@ function createSimulationEventRouter({ directory }) {
       fs.rmSync(dir, { recursive: true, force: true });
       throw error;
     }
+  }));
+  router.post('/simulation/events/import-setup', handle(async (req) => {
+    const { name, file, config } = event(req.query.eventName);
+    if (configurationStatus(name).configurationLocked) fail('Event preparation is locked.', 409);
+    const setup = validateSetup(req.body);
+    if (setup.profile.eventDate !== config.date || setup.profile.ringCount !== config.ringConfigX * config.ringConfigY) {
+      fail('Generated setup does not match the isolated event date and ring count.', 409);
+    }
+    return database(file, sqlite3.OPEN_READWRITE, async (db) => {
+      await run(db, 'PRAGMA foreign_keys=ON');
+      await run(db, 'BEGIN IMMEDIATE');
+      try {
+        const current = await participants(db);
+        if (current.volunteers.length || current.competitors.length) fail('Event already contains participants.', 409);
+        const types = await all(db, 'SELECT id,name FROM volunteer_types');
+        let addedCompetitors = 0, addedVolunteers = 0;
+        for (const [index, person] of setup.competitors.entries()) {
+          const row = normalizeCompetitorRow({ ...person, associationNumber: person.associationId,
+            id: person.competitorId }, index + 1, config.date);
+          if (row.rankWarning) fail(`Competitor ${row.associationNumber} has a rank that requires review.`);
+          const personId = await resolveMemberPerson(db, { associationNumber: row.associationNumber,
+            firstName: row.firstName, lastName: row.lastName });
+          await run(db, `INSERT INTO competitors
+            (firstName,lastName,parentFirstName,parentLastName,email,phone,age,ageAsOf,associationNumber,gender,rank,studio,specialNeeds,height,personId)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [row.firstName, row.lastName, row.parentFirstName, row.parentLastName, row.email, row.phone,
+            row.age, row.ageAsOf, row.associationNumber, row.gender, row.rank, row.studio,
+            row.specialNeeds, row.height, personId]);
+          addedCompetitors++;
+        }
+        for (const person of setup.volunteers) {
+          const member = { associationNumber: person.associationNumber, firstName: person.firstName, lastName: person.lastName };
+          const personId = await resolveMemberPerson(db, member);
+          let volunteer;
+          try {
+            volunteer = validateVolunteer({ ...person, school: person.school || person.studio,
+              ageAsOf: config.date }, types, config.date, false, config.scope);
+          } catch (error) { fail(error.message); }
+          await run(db, `INSERT INTO volunteers
+            (id,person_id,association_id,first_name,last_name,school,rank,certification,primary_type,secondary_type,age,age_as_of,parent_name,contact_number,gender,email)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [crypto.randomUUID(), personId, volunteer.associationNumber, volunteer.firstName, volunteer.lastName,
+            volunteer.school, volunteer.rank, volunteer.certification, volunteer.primaryType,
+            volunteer.secondaryType || null, volunteer.age, volunteer.ageAsOf, volunteer.parentName,
+            volunteer.contactNumber, volunteer.gender, volunteer.email]);
+          addedVolunteers++;
+        }
+        if (addedVolunteers) await run(db, 'UPDATE volunteer_settings SET revision=? WHERE id=1', [crypto.randomUUID()]);
+        await run(db, 'COMMIT');
+        lockAgeDate(path.join(eventsRoot, name), config.date);
+        return { addedCompetitors, addedVolunteers };
+      } catch (error) {
+        await run(db, 'ROLLBACK');
+        throw error;
+      }
+    });
   }));
   router.get('/simulation/participation', handle(async (req) => {
     const { file, config } = event(req.query.eventName);

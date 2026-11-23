@@ -4,6 +4,7 @@ const path = require('path');
 const { createDayOfSimulator } = require('./dayOfSimulator');
 const { createSimulatorResultPacket } = require('./simulatorResultPacket');
 const { createResultPacketStore } = require('./resultPacket');
+const { buildSimulatorJudgeExperience } = require('./simulatorJudgeExperience');
 const { TIMING_MODEL_VERSION, estimateDivisionTiming } = require('./simulatorTiming');
 const { buildSimulatorAudienceMonitor } = require('./audienceMonitor');
 const { normalizeEventName } = require('./simulatorRunStore');
@@ -32,9 +33,12 @@ function createSimulatorRunRouter({
       typeof simulatorRunStore.getRun !== 'function' ||
       typeof simulatorRunStore.listRuns !== 'function' ||
       typeof simulatorRunStore.getRunWorkspace !== 'function' ||
+      typeof simulatorRunStore.isLatestRun !== 'function' ||
+      typeof simulatorRunStore.getJudgeExperience !== 'function' ||
+      typeof simulatorRunStore.saveJudgeExperience !== 'function' ||
       typeof simulatorRunStore.resetRun !== 'function' ||
       typeof simulatorRunStore.deleteRun !== 'function') {
-    throw new Error('simulatorRunStore must implement createRun(), getRun(), listRuns(), getRunWorkspace(), resetRun(), and deleteRun()');
+    throw new Error('simulatorRunStore must implement createRun(), getRun(), listRuns(), getRunWorkspace(), isLatestRun(), getJudgeExperience(), saveJudgeExperience(), resetRun(), and deleteRun()');
   }
   if (typeof loadGroupsFromDatabase !== 'function') {
     throw new Error('loadGroupsFromDatabase is required');
@@ -59,6 +63,15 @@ function createSimulatorRunRouter({
     } catch (error) {
       console.error('Failed to list simulator runs:', error);
       return res.status(500).json({ error: 'Failed to list simulator runs' });
+    }
+  });
+
+  router.get('/simulator/judge-lifecycle', (_req, res) => {
+    try {
+      return res.json({ records: simulatorRunStore.listJudgeExperience() });
+    } catch (error) {
+      console.error('Failed to read simulated judge lifecycle:', error);
+      return res.status(500).json({ error: 'Failed to read simulated judge lifecycle' });
     }
   });
 
@@ -162,6 +175,10 @@ function createSimulatorRunRouter({
           operationWaitSpeed: pending ? pending.speed : controller.speed
         };
       });
+    }
+    if (controller.status === 'complete' && !simulatorRunStore.getJudgeExperience(runId)) {
+      const workspace = simulatorRunStore.getRunWorkspace(runId);
+      simulatorRunStore.saveJudgeExperience(runId, buildSimulatorJudgeExperience(workspace.manifest));
     }
     if (controller.status === 'complete' && controller.wallClockStartedAt && !controller.wallClockCompletedAt) {
       controller.wallClockCompletedAt = new Date().toISOString();
@@ -540,9 +557,12 @@ function createSimulatorRunRouter({
       }
       const assignments = JSON.parse(fs.readFileSync(actualAssignmentsPath, 'utf8'));
       const groups = await loadGroupsFromDatabase(actualDbPath);
+      const eventConfig = readEventConfig(eventName);
       const run = simulatorRunStore.createRun({ eventName, groups, assignments,
-        tournamentDate: readEventConfig(eventName).date,
-        tournamentDays: readEventConfig(eventName).tournamentDays });
+        tournamentDate: eventConfig.date,
+        tournamentDays: eventConfig.tournamentDays,
+        tournamentScope: String(eventConfig.scope || 'REGIONAL').toUpperCase().replace(/-/g, '_')
+      });
       return res.status(201).json(run);
     } catch (error) {
       console.error('Failed to create simulator run:', error);
@@ -859,6 +879,14 @@ function createSimulatorRunRouter({
   router.post('/simulator/runs/:runId/reset', async (req, res) => {
     const runId = String(req.params.runId || '');
     try {
+      if (!simulatorRunStore.getRunWorkspace(runId)) {
+        return res.status(404).json({ error: 'Simulator run not found' });
+      }
+      if (!simulatorRunStore.isLatestRun(runId)) {
+        return res.status(409).json({
+          error: 'Only the latest simulated tournament by event date can be reset. Reset or remove later tournaments first.'
+        });
+      }
       const controller = controllers.get(runId);
       if (controller) await stopRunner(controller, 'stopped');
       const reset = simulatorRunStore.resetRun(runId);
@@ -868,13 +896,23 @@ function createSimulatorRunRouter({
       return res.json(reset);
     } catch (error) {
       console.error(`Failed to reset simulator run ${runId}:`, error);
-      return res.status(500).json({ error: 'Failed to reset simulator run' });
+      return res.status(error.statusCode || 500).json({
+        error: error.statusCode ? error.message : 'Failed to reset simulator run'
+      });
     }
   });
 
   router.delete('/simulator/runs/:runId', async (req, res) => {
     const runId = String(req.params.runId || '');
     try {
+      if (!simulatorRunStore.getRunWorkspace(runId)) {
+        return res.status(404).json({ error: 'Simulator run not found' });
+      }
+      if (!simulatorRunStore.isLatestRun(runId)) {
+        return res.status(409).json({
+          error: 'Only the latest simulated tournament by event date can be deleted. Delete later tournaments first.'
+        });
+      }
       const controller = controllers.get(runId);
       if (controller) await stopRunner(controller, 'stopped');
       if (!simulatorRunStore.deleteRun(runId)) {
@@ -885,7 +923,9 @@ function createSimulatorRunRouter({
       return res.json({ ok: true, runId });
     } catch (error) {
       console.error(`Failed to delete simulator run ${runId}:`, error);
-      return res.status(500).json({ error: 'Failed to delete simulator run' });
+      return res.status(error.statusCode || 500).json({
+        error: error.statusCode ? error.message : 'Failed to delete simulator run'
+      });
     }
   });
 

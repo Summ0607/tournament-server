@@ -203,7 +203,10 @@ function createSimulatorRunStore({ runsRoot }) {
     return path.join(runsRoot, normalizedRunId);
   }
 
-  function createRun({ eventName: sourceEventName, groups, assignments, tournamentDate, tournamentDays = 1, now = () => new Date() }) {
+  function createRun({
+    eventName: sourceEventName, groups, assignments, tournamentDate, tournamentDays = 1,
+    tournamentScope = 'REGIONAL', now = () => new Date()
+  }) {
     const eventName = normalizeEventName(sourceEventName);
     if (!Array.isArray(groups) || groups.length === 0) {
       const error = new Error(`Event has no saved groups to simulate: ${eventName}`);
@@ -216,7 +219,7 @@ function createSimulatorRunStore({ runsRoot }) {
       throw error;
     }
     if (typeof now !== 'function') throw new Error('now must be a function');
-    const createdAt = now().toISOString();
+    const createdAt = nextCreatedAt(now());
     const runId = crypto.randomUUID();
     const runDirectory = path.join(runsRoot, runId);
     const temporaryDirectory = path.join(runsRoot, `.creating-${runId}`);
@@ -244,6 +247,7 @@ function createSimulatorRunStore({ runsRoot }) {
       runId,
       sourceEventName: eventName,
       tournamentDate,
+      tournamentScope,
       createdAt,
       status: 'created',
       speed: 600,
@@ -285,16 +289,46 @@ function createSimulatorRunStore({ runsRoot }) {
     return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   }
 
-  function listRuns() {
+  function nextCreatedAt(value) {
+    const candidate = new Date(value).getTime();
+    if (!Number.isFinite(candidate)) throw new Error('now must return a valid date');
+    const newestCreatedAt = allRunManifests()
+      .reduce((latest, run) => Math.max(latest, Date.parse(run.createdAt) || 0), 0);
+    return new Date(Math.max(candidate, newestCreatedAt + 1)).toISOString();
+  }
+
+  function allRunManifests() {
     if (!fs.existsSync(runsRoot)) return [];
     return fs.readdirSync(runsRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => getRun(entry.name))
-      .filter(Boolean)
-      .map(({ runId, sourceEventName, createdAt, status, speed }) => ({
-        runId, sourceEventName, createdAt, status, speed
-      }))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .filter(Boolean);
+  }
+
+  function compareChronology(left, right) {
+    return String(left.tournamentDate || '').localeCompare(String(right.tournamentDate || '')) ||
+      String(left.createdAt || '').localeCompare(String(right.createdAt || '')) ||
+      String(left.runId).localeCompare(String(right.runId));
+  }
+
+  function isLatestRun(runId) {
+    const latest = allRunManifests().sort(compareChronology).at(-1);
+    return latest?.runId === String(runId);
+  }
+
+  function requireLatestRun(runId) {
+    if (isLatestRun(runId)) return;
+    const error = new Error('Only the latest simulated tournament by event date can be reset or deleted. Reset or remove later tournaments first.');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  function listRuns() {
+    return allRunManifests()
+      .sort((a, b) => compareChronology(b, a))
+      .map(({ runId, sourceEventName, createdAt, status, speed, tournamentDate }) => ({
+        runId, sourceEventName, createdAt, status, speed, tournamentDate
+      }));
   }
 
   function getRunWorkspace(runId) {
@@ -317,9 +351,42 @@ function createSimulatorRunStore({ runsRoot }) {
     return nextManifest;
   }
 
+  function saveJudgeExperience(runId, experience) {
+    const workspace = getRunWorkspace(runId);
+    if (!workspace) return null;
+    if (!experience || experience.eventId !== workspace.manifest.runId ||
+        !Array.isArray(experience.records)) {
+      throw new Error('Simulated judge experience must be scoped to its simulator run GUID.');
+    }
+    const filePath = path.join(workspace.runDirectory, 'judge-experience.json');
+    writeJsonAtomicSync(filePath, experience);
+    return experience;
+  }
+
+  function getJudgeExperience(runId) {
+    const workspace = getRunWorkspace(runId);
+    if (!workspace) return null;
+    const filePath = path.join(workspace.runDirectory, 'judge-experience.json');
+    return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf8')) : null;
+  }
+
+  function listJudgeExperience() {
+    return allRunManifests()
+      .filter((run) => run.status === 'complete')
+      .flatMap((run) => {
+        const filePath = path.join(runDirectoryFor(run.runId), 'judge-experience.json');
+        if (!fs.existsSync(filePath)) return [];
+        const experience = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        return experience.records.map((record) => ({ ...record, simulatorRunId: run.runId }));
+      })
+      .sort((a, b) => b.eventDate.localeCompare(a.eventDate) ||
+        a.associationId.localeCompare(b.associationId) || a.phase.localeCompare(b.phase));
+  }
+
   function resetRun(runId) {
     const workspace = getRunWorkspace(runId);
     if (!workspace || workspace.manifest.runId !== String(runId)) return null;
+    requireLatestRun(runId);
     const initialAssignmentsPath = path.join(workspace.runDirectory, 'initial-ring-assignments.json');
     const initialAssignments = JSON.parse(fs.readFileSync(initialAssignmentsPath, 'utf8'));
     const assignmentsPath = path.join(workspace.runDirectory, 'ring-assignments.json');
@@ -328,11 +395,14 @@ function createSimulatorRunStore({ runsRoot }) {
     const resultsPath = path.join(workspace.runDirectory, 'results');
     fs.rmSync(resultsPath, { recursive: true, force: true });
     fs.mkdirSync(resultsPath);
+    fs.rmSync(path.join(workspace.runDirectory, 'judge-experience.json'), { force: true });
 
     const resetManifest = {
       schemaVersion: workspace.manifest.schemaVersion,
       runId: workspace.manifest.runId,
       sourceEventName: workspace.manifest.sourceEventName,
+      tournamentDate: workspace.manifest.tournamentDate,
+      tournamentScope: workspace.manifest.tournamentScope,
       createdAt: workspace.manifest.createdAt,
       status: 'created',
       speed: workspace.manifest.speed,
@@ -350,11 +420,15 @@ function createSimulatorRunStore({ runsRoot }) {
   function deleteRun(runId) {
     const workspace = getRunWorkspace(runId);
     if (!workspace || workspace.manifest.runId !== String(runId)) return false;
+    requireLatestRun(runId);
     fs.rmSync(workspace.runDirectory, { recursive: true, force: false });
     return true;
   }
 
-  return { createRun, getRun, listRuns, getRunWorkspace, updateRun, resetRun, deleteRun };
+  return {
+    createRun, getRun, listRuns, getRunWorkspace, isLatestRun, updateRun,
+    saveJudgeExperience, getJudgeExperience, listJudgeExperience, resetRun, deleteRun
+  };
 }
 
 module.exports = {

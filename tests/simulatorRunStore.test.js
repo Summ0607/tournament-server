@@ -784,8 +784,8 @@ test('serves a run-scoped read-only Head Table snapshot without exposing active-
 test('supports speed, start, pause, resume, stop, reset, and run-scoped deletion', async (t) => {
   const data = fixture(t);
   const server = await data.serverPromise;
-  const first = await requestJson(server, 'POST', '/api/simulator/runs', { eventName: data.eventName });
   const second = await requestJson(server, 'POST', '/api/simulator/runs', { eventName: data.eventName });
+  const first = await requestJson(server, 'POST', '/api/simulator/runs', { eventName: data.eventName });
 
   const invalidSpeed = await requestJson(
     server, 'POST', `/api/simulator/runs/${first.body.runId}/speed`, { speed: 3601 }
@@ -839,6 +839,36 @@ test('supports speed, start, pause, resume, stop, reset, and run-scoped deletion
   assert.equal(deleted.status, 200);
   assert.equal(fs.existsSync(firstRunDirectory), false);
   assert.ok(fs.existsSync(path.join(data.runsRoot, second.body.runId)));
+});
+
+test('lifecycle reset order follows tournament dates, not run creation order', async (t) => {
+  const data = fixture(t);
+  const server = await data.serverPromise;
+  const configPath = path.join(data.eventsRoot, data.eventName, 'event-config.json');
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const setTournamentDate = (date) => {
+    fs.writeFileSync(configPath, JSON.stringify({ ...config, date }));
+    for (const group of data.groups) {
+      for (const competitor of group.competitors) competitor.ageAsOf = date;
+    }
+  };
+  setTournamentDate('2028-01-15');
+  const latest = await requestJson(server, 'POST', '/api/simulator/runs', { eventName: data.eventName });
+  setTournamentDate('2027-01-15');
+  const earlier = await requestJson(server, 'POST', '/api/simulator/runs', { eventName: data.eventName });
+  assert.equal(latest.status, 201);
+  assert.equal(earlier.status, 201);
+
+  const history = await requestJson(server, 'GET', '/api/simulator/runs');
+  assert.deepEqual(history.body.runs.map((run) => run.runId), [latest.body.runId, earlier.body.runId]);
+  assert.equal(data.store.isLatestRun(latest.body.runId), true);
+  assert.equal(data.store.isLatestRun(earlier.body.runId), false);
+  assert.equal((await requestJson(server, 'DELETE', `/api/simulator/runs/${earlier.body.runId}`)).status, 409);
+
+  const resetLatest = await requestJson(server, 'POST', `/api/simulator/runs/${latest.body.runId}/reset`, {});
+  assert.equal(resetLatest.status, 200);
+  assert.equal(resetLatest.body.tournamentDate, '2028-01-15');
+  assert.equal(data.store.isLatestRun(latest.body.runId), true);
 });
 
 test('reset preserves each selected simulator time scale in the saved run', async (t) => {
@@ -903,12 +933,38 @@ test('keeps competing run assignments and results isolated and deletion scoped',
   assert.equal(firstRecord.packetBlock.simulation.runId, first.body.runId);
   assert.equal(secondRecord.packetBlock.simulation.runId, second.body.runId);
   assert.notEqual(firstRecord.packetBlock.simulation.seed, secondRecord.packetBlock.simulation.seed);
+  const generatedExperience = await requestJson(server, 'GET', '/api/simulator/judge-lifecycle');
+  const firstExperience = generatedExperience.body.records.filter((record) => record.simulatorRunId === first.body.runId);
+  const secondExperience = generatedExperience.body.records.filter((record) => record.simulatorRunId === second.body.runId);
+  assert.equal(firstExperience.length, 252);
+  assert.equal(secondExperience.length, 252);
+  assert.ok(firstExperience.every((record) =>
+    record.eventId === first.body.runId && record.source === 'SIMULATION' && record.logVerified === false));
+  assert.ok(secondExperience.every((record) =>
+    record.eventId === second.body.runId && record.source === 'SIMULATION' && record.logVerified === false));
+  const firstJudgeIds = new Set(firstExperience.map((record) => record.associationId));
+  assert.ok(secondExperience.some((record) => firstJudgeIds.has(record.associationId)));
 
-  const deleted = await requestJson(server, 'DELETE', `/api/simulator/runs/${first.body.runId}`);
+  const [latest, earlier] = data.store.listRuns();
+  const resetEarlier = await requestJson(server, 'POST', `/api/simulator/runs/${earlier.runId}/reset`, {});
+  assert.equal(resetEarlier.status, 409);
+  const deleteEarlier = await requestJson(server, 'DELETE', `/api/simulator/runs/${earlier.runId}`);
+  assert.equal(deleteEarlier.status, 409);
+  assert.equal(fs.existsSync(path.join(data.runsRoot, earlier.runId)), true);
+
+  const resetLatest = await requestJson(server, 'POST', `/api/simulator/runs/${latest.runId}/reset`, {});
+  assert.equal(resetLatest.status, 200);
+  assert.equal(data.store.getJudgeExperience(latest.runId), null);
+  assert.equal(data.store.listJudgeExperience().length, 252);
+  assert.ok(data.store.listJudgeExperience().every((record) => record.simulatorRunId === earlier.runId));
+
+  const deleted = await requestJson(server, 'DELETE', `/api/simulator/runs/${latest.runId}`);
   assert.equal(deleted.status, 200);
-  assert.equal(fs.existsSync(path.join(data.runsRoot, first.body.runId)), false);
-  assert.equal(fs.existsSync(path.join(data.runsRoot, second.body.runId)), true);
-  assert.equal(fs.readdirSync(path.join(data.runsRoot, second.body.runId, 'results')).length, 3);
+  assert.equal(fs.existsSync(path.join(data.runsRoot, latest.runId)), false);
+  assert.equal(fs.existsSync(path.join(data.runsRoot, earlier.runId)), true);
+  assert.equal(fs.readdirSync(path.join(data.runsRoot, earlier.runId, 'results')).length, 3);
+  assert.equal(data.store.listJudgeExperience().length, 252);
+  assert.ok(data.store.listJudgeExperience().every((record) => record.simulatorRunId === earlier.runId));
   assert.equal(fs.readFileSync(data.sourceAssignmentsPath, 'utf8'), sourceAssignmentsBefore);
   assert.equal(fs.readFileSync(path.join(data.activeEventDir, 'results', 'active-result.json'), 'utf8'), activeResultsBefore);
 });

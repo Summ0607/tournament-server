@@ -109,6 +109,10 @@
     .panel-heading button { min-height: 28px; padding: 3px 10px; font-size: 12px; font-weight: 600; border-radius: 5px; }
     .run-history { max-height: 280px; overflow-y: auto; margin-top: 12px; }
     .run-history label { display: flex; align-items: center; padding: 8px 0; }
+    #judgeLifecycleHistory { overflow-x: auto; }
+    #judgeLifecycleHistory table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    #judgeLifecycleHistory th, #judgeLifecycleHistory td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; }
+    #judgeLifecycleHistory td { overflow-wrap: anywhere; }
     input[type="checkbox"] { width: auto; min-height: auto; }
     #runLog li { margin-bottom: 8px; overflow-wrap: anywhere; }
     dialog { max-width: 560px; border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
@@ -152,14 +156,25 @@
         <select id="runSelect"><option value="">Select a saved simulation</option></select>
       </label>
       <button id="refreshRunsButton" type="button">Refresh history</button>
-      <p class="subtle">Choose a run above to view it. Check runs below to delete several at once. Running simulations must be paused or stopped before selecting them for deletion. Saved event selects the source tournament for a new run.</p>
+      <p class="subtle">Runs are ordered by tournament date. Only the latest simulated tournament can be reset or deleted, so earlier tournaments remain in the judge lifecycle history. Stop a running simulation before resetting or deleting it. Saved event selects the source tournament for a new run.</p>
       <div class="actions">
-        <button id="selectAllRunsButton" type="button">Select all deletable</button>
+        <button id="selectAllRunsButton" type="button">Select latest</button>
         <button id="clearRunSelectionButton" type="button">Clear selection</button>
-        <button id="deleteSelectedRunsButton" type="button" class="danger" disabled>Delete selected (0)</button>
+        <button id="deleteSelectedRunsButton" type="button" class="danger" disabled>Delete latest tournament</button>
       </div>
       <div id="runHistory" class="run-history">Loading history...</div>
       </div>
+    </section>
+    <section class="panel" aria-labelledby="judgeLifecycleTitle">
+      <div class="panel-heading">
+        <h2 id="judgeLifecycleTitle">Simulated judge life</h2>
+        <button id="refreshJudgeLifecycleButton" type="button">Refresh judge history</button>
+      </div>
+      <p class="subtle">Fabricated, unverified judge service is created only when a simulation completes. Each event uses its run GUID and remains separate from production judge records.</p>
+      <label>Fabricated judge
+        <select id="judgeLifecycleSelect"><option value="">Complete a simulated tournament first</option></select>
+      </label>
+      <div id="judgeLifecycleHistory" class="run-history">No simulated judge experience loaded.</div>
     </section>
     <section class="panel" aria-labelledby="setup-title">
       <h2 id="setup-title">Create a run</h2>
@@ -239,6 +254,7 @@
     let speedChangePending = false;
     let selectionVersion = 0;
     let savedRuns = [];
+    let judgeLifecycleRecords = [];
     const selectedRunIds = new Set();
     let deletingRuns = false;
     let displayedRun = null;
@@ -266,18 +282,19 @@
       history.replaceChildren();
       if (!savedRuns.length) history.textContent = 'No saved simulations.';
       for (const run of savedRuns) {
+        const isLatest = run.runId === savedRuns[0].runId;
         const label = document.createElement('label');
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.checked = selectedRunIds.has(run.runId);
-        checkbox.disabled = deletingRuns || run.status === 'running';
+        checkbox.disabled = deletingRuns || run.status === 'running' || !isLatest;
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) selectedRunIds.add(run.runId);
           else selectedRunIds.delete(run.runId);
           updateHistoryButtons();
         });
         const text = document.createElement('span');
-        text.textContent = runHistoryLabel(run);
+        text.textContent = `${runHistoryLabel(run)}${isLatest ? ' - latest; reset/delete allowed' : ' - earlier; retained for judge history'}`;
         label.append(checkbox, text);
         history.append(label);
       }
@@ -285,15 +302,85 @@
     }
 
     function updateHistoryButtons() {
-      $('deleteSelectedRunsButton').textContent = `Delete selected (${selectedRunIds.size})`;
-      $('deleteSelectedRunsButton').disabled = deletingRuns || !selectedRunIds.size;
-      $('selectAllRunsButton').disabled = deletingRuns || !savedRuns.some((run) => run.status !== 'running');
+      const latest = savedRuns[0];
+      if (latest && (selectedRunIds.size !== 1 || !selectedRunIds.has(latest.runId))) {
+        selectedRunIds.clear();
+      }
+      $('deleteSelectedRunsButton').disabled = deletingRuns || !latest ||
+        latest.status === 'running' || !selectedRunIds.has(latest.runId);
+      $('selectAllRunsButton').disabled = deletingRuns || !latest || latest.status === 'running';
       $('clearRunSelectionButton').disabled = deletingRuns || !selectedRunIds.size;
       $('refreshRunsButton').disabled = deletingRuns;
     }
 
     function runHistoryLabel(run) {
-      return `${run.sourceEventName} - ${run.status} - ${run.runId.slice(0, 8)}${run.createdAt ? ` - ${new Date(run.createdAt).toLocaleString()}` : ''}`;
+      const date = run.tournamentDate ? `${run.tournamentDate} - ` : '';
+      return `${date}${run.sourceEventName} - ${run.status} - ${run.runId.slice(0, 8)}${run.createdAt ? ` - ${new Date(run.createdAt).toLocaleString()}` : ''}`;
+    }
+
+    function renderJudgeLifecycle() {
+      const select = $('judgeLifecycleSelect');
+      const selectedId = select.value;
+      const judges = new Map();
+      for (const record of judgeLifecycleRecords) {
+        if (!judges.has(record.associationId)) {
+          judges.set(record.associationId, {
+            name: record.judgeName,
+            recordCount: 0,
+            eventIds: new Set()
+          });
+        }
+        const judge = judges.get(record.associationId);
+        judge.recordCount += 1;
+        judge.eventIds.add(record.eventId);
+      }
+      select.replaceChildren();
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = judges.size ? 'Select a fabricated judge' : 'Complete a simulated tournament first';
+      select.append(placeholder);
+      for (const [associationId, judge] of [...judges].sort(([a], [b]) => a.localeCompare(b))) {
+        const option = document.createElement('option');
+        option.value = associationId;
+        option.textContent = `${judge.name} (${associationId}) - ${judge.eventIds.size} events`;
+        select.append(option);
+      }
+      if (judges.has(selectedId)) select.value = selectedId;
+      const history = $('judgeLifecycleHistory');
+      history.replaceChildren();
+      const records = judgeLifecycleRecords.filter((record) => record.associationId === select.value);
+      if (!records.length) {
+        history.textContent = 'Select a fabricated judge to view service across simulated tournaments.';
+        return;
+      }
+      const table = document.createElement('table');
+      const headers = ['Event date', 'Event GUID', 'Type', 'Role', 'Phase', 'Verification'];
+      const head = document.createElement('tr');
+      for (const title of headers) {
+        const cell = document.createElement('th');
+        cell.textContent = title;
+        head.append(cell);
+      }
+      table.append(head);
+      for (const record of records) {
+        const row = document.createElement('tr');
+        for (const value of [
+          record.eventDate, record.eventId, record.eventScope, record.role, record.phase, 'Not verified'
+        ]) {
+          const cell = document.createElement('td');
+          cell.textContent = value;
+          row.append(cell);
+        }
+        table.append(row);
+      }
+      history.append(table);
+    }
+
+    async function loadJudgeLifecycle() {
+      const data = await api('/api/simulator/judge-lifecycle');
+      if (!Array.isArray(data.records)) throw new Error('Invalid simulated judge history returned by server.');
+      judgeLifecycleRecords = data.records;
+      renderJudgeLifecycle();
     }
 
     function clearRunDisplay() {
@@ -323,7 +410,8 @@
       if (!Array.isArray(data.runs)) throw new Error('Invalid simulator history returned by server.');
       savedRuns = data.runs;
       for (const id of selectedRunIds) {
-        if (!savedRuns.some((run) => run.runId === id && run.status !== 'running')) selectedRunIds.delete(id);
+        if (savedRuns[0]?.runId !== id ||
+            !savedRuns.some((run) => run.runId === id && run.status !== 'running')) selectedRunIds.delete(id);
       }
       renderHistorySelection();
       const select = $('runSelect');
@@ -510,8 +598,9 @@
       $('pauseButton').disabled = run.status !== 'running';
       $('resumeButton').disabled = run.status !== 'paused';
       $('stopButton').disabled = !['running', 'paused', 'created'].includes(run.status);
-      $('resetButton').disabled = !hasRun || ['running'].includes(run.status);
-      $('deleteButton').disabled = !hasRun || ['running'].includes(run.status);
+      const latestRun = savedRuns[0]?.runId === run.runId;
+      $('resetButton').disabled = !hasRun || run.status === 'running' || !latestRun;
+      $('deleteButton').disabled = !hasRun || run.status === 'running' || !latestRun;
       renderRunLog(run);
       if (['complete', 'failed', 'stopped', 'day-break'].includes(run.status)) clearInterval(refreshTimer);
     }
@@ -547,7 +636,9 @@
     });
 
     $('selectAllRunsButton').addEventListener('click', () => {
-      for (const run of savedRuns) if (run.status !== 'running') selectedRunIds.add(run.runId);
+      selectedRunIds.clear();
+      const latest = savedRuns[0];
+      if (latest && latest.status !== 'running') selectedRunIds.add(latest.runId);
       renderHistorySelection();
     });
     $('clearRunSelectionButton').addEventListener('click', () => {
@@ -555,9 +646,19 @@
       renderHistorySelection();
     });
     $('deleteSelectedRunsButton').addEventListener('click', async () => {
-      if (deletingRuns || !selectedRunIds.size) return;
+      const latest = savedRuns[0];
+      if (deletingRuns) return;
+      if (latest?.status === 'running') {
+        showNotice('Run is running; pause or stop it first.', true);
+        renderHistorySelection();
+        return;
+      }
+      if (selectedRunIds.size !== 1 || !latest || !selectedRunIds.has(latest.runId)) {
+        showNotice('Only the latest simulated tournament can be deleted.', true);
+        return;
+      }
       const ids = [...selectedRunIds];
-      if (!confirm(`Delete ${ids.length} selected simulator runs and their isolated data? This cannot be undone. The real tournament is unchanged.`)) return;
+      if (!confirm(`Delete the latest simulated tournament, ${latest.sourceEventName} (${latest.tournamentDate || 'date unavailable'}), and its isolated data? Earlier simulated tournaments are retained for the judge lifecycle. This cannot be undone; the real tournament is unchanged.`)) return;
       deletingRuns = true;
       renderHistorySelection();
       const failures = [];
@@ -729,8 +830,14 @@
         if (activeRunId) beginPolling();
       } catch (error) { showNotice(error.message); }
     });
+    $('judgeLifecycleSelect').addEventListener('change', renderJudgeLifecycle);
+    $('refreshJudgeLifecycleButton').addEventListener('click', async () => {
+      try { await loadJudgeLifecycle(); }
+      catch (error) { $('judgeLifecycleHistory').textContent = error.message; }
+    });
 
     updateAudienceViewLink();
+    loadJudgeLifecycle().catch((error) => { $('judgeLifecycleHistory').textContent = error.message; });
     Promise.all([loadEvents(), loadRuns()]).then(() => { if (activeRunId) beginPolling(); })
       .catch((error) => showNotice(error.message));
   </script>

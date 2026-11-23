@@ -290,6 +290,7 @@ function createJudgeManagementRouter({
   file,
   currentDate = () => new Date().toISOString().slice(0, 10),
   allowSimulation = false,
+  databaseLabel = allowSimulation ? 'Isolated simulation database' : 'Live Judge Management database',
   servicePacketStore,
   readActiveEvent,
   readEventConfig
@@ -342,7 +343,7 @@ function createJudgeManagementRouter({
           committed = true;
         }
         if (afterCommit) await afterCommit();
-        const payload = { asOf: today, revision: next.revision, simulationMode: allowSimulation,
+        const payload = { asOf: today, revision: next.revision, simulationMode: allowSimulation, databaseLabel,
           aliases: Object.keys(JSON.parse(next.aliases)).length ? JSON.parse(next.aliases) : defaults,
           judges: publicJudges, tests, experience, eligibility, certificationLevels: certificationLevels(), ranks: judgeRankOptions(), ...extra };
         if (req.path === '/judge-management/profile') {
@@ -645,6 +646,11 @@ function createJudgeManagementRouter({
     const result = await run(db, `DELETE FROM judges WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
     if (result.changes !== ids.length) throw invalid('One or more judges no longer exist.', 409);
     return {};
+  }, true));
+  router.post('/judge-management/reset', endpoint(async (req, db) => {
+    if (req.body.confirmation !== 'CLEAR ALL JUDGES') throw invalid('Type CLEAR ALL JUDGES to confirm the database reset.');
+    const result = await run(db, 'DELETE FROM judges');
+    return { reset: true, deleted: result.changes };
   }, true));
   router.put('/judge-management-settings', endpoint(async (req, db) => {
     const aliases = withCommonAliases(req.body.aliases);

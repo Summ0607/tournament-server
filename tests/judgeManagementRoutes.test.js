@@ -215,3 +215,60 @@ test('effective-date eligibility evaluates written/practical attempts independen
   result = evaluateEligibility(judge, tests, [arbitrator], '2026-01-15');
   assert.equal(result.experienceCount, 0);
 });
+
+test('database reset requires explicit confirmation, clears linked records, and preserves CSV settings', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-reset-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'judges.db');
+  await initializeJudgeDatabase(file);
+  const app = express(); app.use(express.json());
+  app.use('/api', createJudgeManagementRouter({ file, databaseLabel: 'Test judge database' }));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}/api`;
+  const request = async (endpoint, method = 'GET', body) => {
+    const response = await fetch(base + endpoint, { method,
+      ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) });
+    return { status: response.status, data: await response.json() };
+  };
+  const today = new Date().toISOString().slice(0, 10);
+  let state = (await request('/judge-management')).data;
+  assert.equal(state.databaseLabel, 'Test judge database');
+  let response = await request('/judge-management', 'POST', {
+    revision: state.revision,
+    judge: { associationId: 'RESET-1', firstName: 'Reset', lastName: 'Judge',
+      rank: 'D1', certification: 'UNKNOWN', status: 'Active' },
+    tests: [{ targetLevel: 'SK_TK', writtenDate: today, writtenScore: 80 }],
+    experience: [{ eventName: 'Reset Test Event', eventDate: today, location: 'Venue',
+      role: 'JUDGE', eventScope: 'REGIONAL', logVerified: false }]
+  });
+  assert.equal(response.status, 200, JSON.stringify(response.data));
+  state = response.data;
+  assert.equal(state.judges.length, 1);
+  assert.equal(state.tests.length, 1);
+  assert.equal(state.experience.length, 1);
+  response = await request('/judge-management-settings', 'PUT', {
+    revision: state.revision,
+    aliases: { ...state.aliases, associationId: [...state.aliases.associationId, 'Reset Test ID'] }
+  });
+  assert.equal(response.status, 200);
+  state = response.data;
+
+  response = await request('/judge-management/reset', 'POST',
+    { revision: state.revision, confirmation: 'RESET' });
+  assert.equal(response.status, 400);
+  assert.equal(response.data.judges, undefined);
+  assert.equal((await request('/judge-management')).data.judges.length, 1);
+
+  state = (await request('/judge-management')).data;
+  response = await request('/judge-management/reset', 'POST',
+    { revision: state.revision, confirmation: 'CLEAR ALL JUDGES' });
+  assert.equal(response.status, 200, JSON.stringify(response.data));
+  assert.equal(response.data.reset, true);
+  assert.equal(response.data.deleted, 1);
+  assert.equal(response.data.judges.length, 0);
+  assert.equal(response.data.tests.length, 0);
+  assert.equal(response.data.experience.length, 0);
+  assert.ok(response.data.aliases.associationId.includes('Reset Test ID'));
+});

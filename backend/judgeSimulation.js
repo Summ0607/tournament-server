@@ -107,7 +107,8 @@ function createSimulationApp(directory) {
     res.once('finish', finish); res.once('close', finish);
     next();
   }, createJudgeManagementRouter({ file: path.join(directory, 'judges.db'),
-    currentDate: () => readSimulation(directory).date, allowSimulation: true }));
+    currentDate: () => readSimulation(directory).date, allowSimulation: true,
+    databaseLabel: `Isolated simulation (${path.relative(process.cwd(), path.join(directory, 'judges.db'))})` }));
   const eventsRoot = path.join(directory, 'events'), judgeFile = path.join(directory, 'judges.db');
   app.use('/api', createSimulationEventRouter({ directory }));
   const { configurationStatus } = createEventConfigStore(eventsRoot);
